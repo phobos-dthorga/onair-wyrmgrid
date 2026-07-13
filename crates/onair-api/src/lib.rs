@@ -12,11 +12,13 @@ use uuid::Uuid;
 use wyrmgrid_domain::{CompanyId, CompanySummary};
 
 const API_KEY_HEADER: &str = "oa-apikey";
+const COMPANY_ID_HEADER: &str = "CompanyUniqueId";
 pub const DEFAULT_BASE_URL: &str = "https://server1.onair.company/api/v1";
 
 pub struct OnAirClient {
     http: Client,
     base_url: Url,
+    company_id: Uuid,
     api_key: SecretString,
 }
 
@@ -25,6 +27,7 @@ impl std::fmt::Debug for OnAirClient {
         formatter
             .debug_struct("OnAirClient")
             .field("base_url", &self.base_url)
+            .field("company_id", &"[REDACTED]")
             .field("api_key", &"[REDACTED]")
             .finish()
     }
@@ -34,8 +37,8 @@ impl std::fmt::Debug for OnAirClient {
 pub enum ClientError {
     #[error("invalid OnAir API base URL: {0}")]
     InvalidBaseUrl(#[from] url::ParseError),
-    #[error("invalid API key header")]
-    InvalidApiKeyHeader(#[from] header::InvalidHeaderValue),
+    #[error("invalid OnAir request header")]
+    InvalidRequestHeader(#[from] header::InvalidHeaderValue),
     #[error("OnAir request failed: {0}")]
     Transport(#[from] reqwest::Error),
     #[error("OnAir returned HTTP {0}")]
@@ -71,7 +74,11 @@ struct RawCompany {
 }
 
 impl OnAirClient {
-    pub fn new(base_url: &str, api_key: SecretString) -> Result<Self, ClientError> {
+    pub fn new(
+        base_url: &str,
+        company_id: Uuid,
+        api_key: SecretString,
+    ) -> Result<Self, ClientError> {
         let mut parsed = Url::parse(base_url)?;
         if !parsed.path().ends_with('/') {
             parsed.set_path(&format!("{}/", parsed.path()));
@@ -80,12 +87,14 @@ impl OnAirClient {
         Ok(Self {
             http: Client::new(),
             base_url: parsed,
+            company_id,
             api_key,
         })
     }
 
-    pub async fn company_summary(&self, company_id: Uuid) -> Result<CompanySummary, ClientError> {
-        let response: ApiResult<RawCompany> = self.get(&format!("company/{company_id}")).await?;
+    pub async fn company_summary(&self) -> Result<CompanySummary, ClientError> {
+        let response: ApiResult<RawCompany> =
+            self.get(&format!("company/{}", self.company_id)).await?;
         if response.error.is_some_and(|error| !error.trim().is_empty()) {
             return Err(ClientError::ApiRejected);
         }
@@ -99,15 +108,7 @@ impl OnAirClient {
     }
 
     async fn get<T: DeserializeOwned>(&self, path: &str) -> Result<T, ClientError> {
-        let url = self.base_url.join(path)?;
-        let api_key = header::HeaderValue::from_str(self.api_key.expose_secret())?;
-        let response = self
-            .http
-            .get(url)
-            .header(API_KEY_HEADER, api_key)
-            .header(header::ACCEPT, "application/json")
-            .send()
-            .await?;
+        let response = self.http.execute(self.request(path)?).await?;
 
         match response.status() {
             StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => {
@@ -121,6 +122,20 @@ impl OnAirClient {
 
         Ok(response.json().await?)
     }
+
+    fn request(&self, path: &str) -> Result<reqwest::Request, ClientError> {
+        let url = self.base_url.join(path)?;
+        let api_key = header::HeaderValue::from_str(self.api_key.expose_secret())?;
+        let company_id = header::HeaderValue::from_str(&self.company_id.to_string())?;
+
+        Ok(self
+            .http
+            .get(url)
+            .header(API_KEY_HEADER, api_key)
+            .header(COMPANY_ID_HEADER, company_id)
+            .header(header::ACCEPT, "application/json")
+            .build()?)
+    }
 }
 
 #[cfg(test)]
@@ -131,6 +146,7 @@ mod tests {
     fn debug_output_never_contains_the_api_key() {
         let client = OnAirClient::new(
             "https://server1.onair.company/api/v1",
+            Uuid::nil(),
             SecretString::from("super-secret-key".to_owned()),
         )
         .expect("client should be valid");
@@ -138,6 +154,38 @@ mod tests {
         let debug = format!("{client:?}");
         assert!(!debug.contains("super-secret-key"));
         assert!(debug.contains("[REDACTED]"));
+    }
+
+    #[test]
+    fn company_requests_include_both_observed_authentication_headers() {
+        let company_id = Uuid::parse_str("11111111-2222-4333-8444-555555555555")
+            .expect("test company ID should be valid");
+        let client = OnAirClient::new(
+            "https://server1.onair.company/api/v1",
+            company_id,
+            SecretString::from("synthetic-test-key".to_owned()),
+        )
+        .expect("client should be valid");
+
+        let request = client
+            .request(&format!("company/{company_id}"))
+            .expect("request should build");
+
+        assert_eq!(
+            request.headers().get(API_KEY_HEADER),
+            Some(&header::HeaderValue::from_static("synthetic-test-key"))
+        );
+        assert_eq!(
+            request.headers().get(COMPANY_ID_HEADER),
+            Some(
+                &header::HeaderValue::from_str(&company_id.to_string())
+                    .expect("company ID should be a valid header")
+            )
+        );
+        assert_eq!(
+            request.url().as_str(),
+            format!("https://server1.onair.company/api/v1/company/{company_id}")
+        );
     }
 
     #[test]

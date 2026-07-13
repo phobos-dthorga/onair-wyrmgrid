@@ -94,10 +94,14 @@ impl OnAirSession {
             return Err(ConnectionError::EmptyApiKey);
         }
 
-        let client = OnAirClient::new(self.base_url, SecretString::from(api_key.to_owned()))
-            .map_err(classify_client_error)?;
+        let client = OnAirClient::new(
+            self.base_url,
+            company_id,
+            SecretString::from(api_key.to_owned()),
+        )
+        .map_err(classify_client_error)?;
         let company = client
-            .company_summary(company_id)
+            .company_summary()
             .await
             .map_err(classify_client_error)?;
 
