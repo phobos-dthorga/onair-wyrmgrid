@@ -13,4 +13,3 @@ npm run dev
 ```
 
 See the root [development guide](../../docs/development.md) for prerequisites.
-
