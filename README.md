@@ -103,6 +103,11 @@ updating, and live OnAir integration are deliberately enabled.
 ## Licensing and trademarks
 
 Source code and documentation are available under the [MIT License](LICENSE).
+Official desktop builds present the current
+[Application Terms](docs/legal/terms-of-use.md) and
+[Privacy Notice](docs/legal/privacy-notice.md) before external map or optional
+diagnostic connections begin. The Terms govern the official application without
+withdrawing rights already granted under MIT.
 
 OnAir WyrmGrid is an independent community project. It is not affiliated with,
 endorsed by, or sponsored by OnAir Company or the developers of OnAir Airline

@@ -1,0 +1,98 @@
+# Legal and privacy readiness
+
+This is an engineering readiness checklist, not legal advice. It keeps early
+development proportionate while making the points that require professional
+review explicit. The maintainer should record completion evidence in the
+relevant release issue or architecture decision.
+
+## Current foundation-stage posture
+
+- Keep the source and documentation under MIT.
+- Present the versioned Application Terms and Privacy Notice before Atlas or any
+  optional diagnostic connection starts.
+- Keep optional diagnostics off by default and allow later withdrawal.
+- Treat current wording as a transparent engineering draft, not a substitute
+  for professional advice.
+- Do not enable public Sentry DSNs until the observability checklist and the
+  notice's missing operational details are complete.
+
+## Review on every release
+
+- Diff outbound hosts, native sidecars, plugins, imported content, update
+  services, support links, and authentication flows against the third-party
+  service register.
+- Confirm the in-app document versions match the Rust application constants.
+- Decide whether changes require renewed acknowledgement.
+- Verify that no network request occurs before required notice or consent.
+- Generate and inspect the complete direct and transitive software-licence
+  bundle for packaged artifacts.
+- Re-run security, dependency, data-flow, and telemetry-redaction tests.
+
+## Before any public Sentry telemetry
+
+- Execute or otherwise accept the current Sentry Data Processing Addendum.
+- Review Sentry's current subprocessors and international-transfer mechanism.
+- Enable server-side default data scrubbing and IP-address scrubbing for both
+  projects; disable public issue sharing, source scraping, stored native crash
+  reports, AI processing, replay, profiling, tracing, logs, attachments, and
+  feedback unless separately reviewed.
+- Record event retention, access roles, two-factor-authentication requirements,
+  deletion and data-subject-request handling, quota alerts, and a hard overage
+  budget.
+- Verify one synthetic Rust event and one synthetic interface event in the
+  selected region. Confirm that secrets, company identifiers, fleet data, local
+  paths, source lines, and typed user input are absent.
+- Add and verify debug-information upload for each release platform without
+  shipping private source maps or CI credentials.
+- Update and version the Privacy Notice before embedding DSNs in public builds.
+
+## Before the first broadly distributed prerelease
+
+- Establish a private privacy-contact address not dependent on public issues.
+- Decide and document the legal publisher identity and contact jurisdiction.
+- Complete a lightweight privacy impact assessment and data inventory.
+- Replace or formally approve MapLibre's public demonstration tiles, including
+  attribution, acceptable-use limits, retention, and production reliability.
+- Review OnAir's current API terms, brand/trademark requirements, rate limits,
+  and permitted uses without claiming undocumented behaviour.
+- Make local-data deletion discoverable in the application.
+- Validate installer licence notices, attribution, privacy/terms accessibility,
+  and acknowledgement persistence on every supported platform.
+
+## Obtain professional legal review when a trigger is reached
+
+Professional review becomes proportionate before any of the following:
+
+- a stable release or marketing that invites ordinary users to rely on the app;
+- payment, subscriptions, donations tied to benefits, sponsorship, advertising,
+  or other commercial activity;
+- accounts, cloud sync, hosted APIs, mailing lists, or centralized user data;
+- automatic updates, signing, an app store, or distribution by another entity;
+- a public plugin catalogue, paid plugins, executable community plugins, or
+  publisher verification;
+- persistent simulator telemetry, precise location, imported personal data,
+  weather providers, financial integrations, or additional licensed datasets;
+- users or targeted distribution in jurisdictions with materially different
+  privacy, consumer, accessibility, export, or age-assurance rules;
+- formation of a company, hiring contributors or contractors, accepting outside
+  code under new terms, or licensing the product commercially;
+- a security incident, regulator inquiry, material complaint, or uncertainty
+  about whether an external provider is acting as processor or independent
+  controller.
+
+The review should cover the Terms, Privacy Notice, consumer-law limitations,
+publisher structure, intellectual property and trademark posture, third-party
+contracts, international transfers, plugin allocation of responsibility,
+incident obligations, and required accessibility statements.
+
+## Versioning rules
+
+Increase the Terms version and require acknowledgement when user obligations,
+liability allocation, dispute terms, plugin responsibility, payment, or
+termination rights materially change.
+
+Increase the Privacy Notice version and require review when data categories,
+purposes, recipients, regions, retention, identity, legal basis, or user choices
+materially change. A provider-name change with an equivalent documented data
+flow may be recorded as a non-material editorial update, but the decision and
+reason must be written down.

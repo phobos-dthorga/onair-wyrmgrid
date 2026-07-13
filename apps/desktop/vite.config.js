@@ -1,12 +1,38 @@
 import { defineConfig } from "vite";
 import { sveltekit } from "@sveltejs/kit/vite";
+import { sentrySvelteKit } from "@sentry/sveltekit";
+import packageMetadata from "./package.json" with { type: "json" };
 
-// @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
+const sentryRelease =
+  process.env.SENTRY_RELEASE || `onair-wyrmgrid@${packageMetadata.version}`;
+const uploadSentrySourceMaps =
+  process.env.SENTRY_UPLOAD_SOURCEMAPS === "true" &&
+  Boolean(
+    process.env.SENTRY_AUTH_TOKEN &&
+    process.env.SENTRY_ORG &&
+    process.env.SENTRY_UI_PROJECT,
+  );
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
-  plugins: [sveltekit()],
+  plugins: [
+    ...(await sentrySvelteKit({
+      autoInstrument: false,
+      autoUploadSourceMaps: uploadSentrySourceMaps,
+      adapter: "other",
+      authToken: uploadSentrySourceMaps
+        ? process.env.SENTRY_AUTH_TOKEN
+        : undefined,
+      org: uploadSentrySourceMaps ? process.env.SENTRY_ORG : undefined,
+      project: uploadSentrySourceMaps
+        ? process.env.SENTRY_UI_PROJECT
+        : undefined,
+      release: { name: sentryRelease },
+      telemetry: false,
+    })),
+    sveltekit(),
+  ],
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //

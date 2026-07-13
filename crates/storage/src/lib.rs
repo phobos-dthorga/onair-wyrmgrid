@@ -1,20 +1,25 @@
 //! Local-first SQLite storage and migration ownership.
 
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 
 use rusqlite::{Connection, OptionalExtension, params};
 use thiserror::Error;
 
 const INITIAL_SCHEMA: &str = include_str!("../migrations/0001_initial.sql");
+const LEGAL_PREFERENCES_SCHEMA: &str = include_str!("../migrations/0002_legal_preferences.sql");
 
 #[derive(Debug, Error)]
 pub enum StorageError {
     #[error("SQLite operation failed: {0}")]
     Sqlite(#[from] rusqlite::Error),
+    #[error("Local storage state is unavailable")]
+    StateUnavailable,
 }
 
+#[derive(Clone)]
 pub struct Store {
-    connection: Connection,
+    connection: Arc<Mutex<Connection>>,
     persistent: bool,
 }
 
@@ -23,6 +28,14 @@ pub struct ApiSnapshotRecord {
     pub resource_key: String,
     pub observed_at: String,
     pub payload_json: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LegalPreferencesRecord {
+    pub terms_version: String,
+    pub privacy_notice_version: String,
+    pub telemetry_enabled: bool,
+    pub acknowledged_at: String,
 }
 
 impl Store {
@@ -44,8 +57,9 @@ impl Store {
             "PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;",
         )?;
         connection.execute_batch(INITIAL_SCHEMA)?;
+        connection.execute_batch(LEGAL_PREFERENCES_SCHEMA)?;
         Ok(Self {
-            connection,
+            connection: Arc::new(Mutex::new(connection)),
             persistent,
         })
     }
@@ -56,6 +70,8 @@ impl Store {
 
     pub fn schema_version(&self) -> Result<i64, StorageError> {
         self.connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?
             .query_row("SELECT MAX(version) FROM schema_migrations", [], |row| {
                 row.get(0)
             })
@@ -69,7 +85,11 @@ impl Store {
         observed_at: &str,
         payload_json: &str,
     ) -> Result<(), StorageError> {
-        let transaction = self.connection.transaction()?;
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        let transaction = connection.transaction()?;
         transaction.execute(
             "INSERT OR REPLACE INTO api_snapshots
                 (resource_kind, resource_key, observed_at, payload_json)
@@ -129,7 +149,11 @@ impl Store {
             ),
         };
 
-        let mut statement = self.connection.prepare(query)?;
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        let mut statement = connection.prepare(query)?;
         let map_row = |row: &rusqlite::Row<'_>| {
             Ok(ApiSnapshotRecord {
                 resource_key: row.get(0)?,
@@ -150,6 +174,69 @@ impl Store {
     }
 }
 
+impl Store {
+    pub fn load_legal_preferences_record(
+        &self,
+    ) -> Result<Option<LegalPreferencesRecord>, StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection
+            .query_row(
+                "SELECT terms_version, privacy_notice_version, telemetry_enabled, acknowledged_at
+                 FROM legal_preferences WHERE singleton_id = 1",
+                [],
+                |row| {
+                    Ok(LegalPreferencesRecord {
+                        terms_version: row.get(0)?,
+                        privacy_notice_version: row.get(1)?,
+                        telemetry_enabled: row.get(2)?,
+                        acknowledged_at: row.get(3)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(StorageError::from)
+    }
+
+    pub fn save_legal_preferences_record(
+        &self,
+        terms_version: &str,
+        privacy_notice_version: &str,
+        telemetry_enabled: bool,
+    ) -> Result<(), StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection
+            .execute(
+                "INSERT INTO legal_preferences (
+                    singleton_id, terms_version, privacy_notice_version, telemetry_enabled
+                 ) VALUES (1, ?1, ?2, ?3)
+                 ON CONFLICT(singleton_id) DO UPDATE SET
+                    acknowledged_at = CASE
+                        WHEN terms_version <> excluded.terms_version
+                          OR privacy_notice_version <> excluded.privacy_notice_version
+                        THEN CURRENT_TIMESTAMP
+                        ELSE acknowledged_at
+                    END,
+                    terms_version = excluded.terms_version,
+                    privacy_notice_version = excluded.privacy_notice_version,
+                    telemetry_enabled = excluded.telemetry_enabled,
+                    updated_at = CURRENT_TIMESTAMP",
+                params![
+                    terms_version,
+                    privacy_notice_version,
+                    i64::from(telemetry_enabled)
+                ],
+            )
+            .map(|_| ())
+            .map_err(StorageError::from)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -160,7 +247,7 @@ mod tests {
         let store = Store::open_in_memory().expect("in-memory database should open");
         assert_eq!(
             store.schema_version().expect("version should be readable"),
-            1
+            2
         );
     }
 
@@ -232,8 +319,11 @@ mod tests {
             )
             .expect("other company snapshot should save");
 
-        let company_a_count: i64 = store
+        let connection = store
             .connection
+            .lock()
+            .expect("storage connection should be available");
+        let company_a_count: i64 = connection
             .query_row(
                 "SELECT COUNT(*) FROM api_snapshots
                  WHERE resource_kind = 'fleet' AND resource_key = 'company-a'",
@@ -241,8 +331,7 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("retained count should be available");
-        let company_b_count: i64 = store
-            .connection
+        let company_b_count: i64 = connection
             .query_row(
                 "SELECT COUNT(*) FROM api_snapshots
                  WHERE resource_kind = 'fleet' AND resource_key = 'company-b'",
@@ -253,5 +342,28 @@ mod tests {
 
         assert_eq!(company_a_count, 4);
         assert_eq!(company_b_count, 1);
+    }
+
+    #[test]
+    fn persists_legal_acknowledgement_and_telemetry_choice() {
+        let store = Store::open_in_memory().expect("in-memory database should open");
+        assert!(
+            store
+                .load_legal_preferences_record()
+                .expect("preferences should be readable")
+                .is_none()
+        );
+
+        store
+            .save_legal_preferences_record("terms-v1", "privacy-v1", true)
+            .expect("preferences should be saved");
+        let preferences = store
+            .load_legal_preferences_record()
+            .expect("preferences should be readable")
+            .expect("preferences should exist");
+        assert_eq!(preferences.terms_version, "terms-v1");
+        assert_eq!(preferences.privacy_notice_version, "privacy-v1");
+        assert!(preferences.telemetry_enabled);
+        assert!(!preferences.acknowledged_at.is_empty());
     }
 }

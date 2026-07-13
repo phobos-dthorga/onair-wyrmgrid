@@ -42,3 +42,28 @@ Client; update the interface, tests, and API-boundary documentation together.
 Never place either value in source, `.env` files, command history, fixtures,
 screenshots, issue reports, or logs. Authenticated observations must be reduced
 to sanitized behavior before being committed.
+
+## Maintainer-only Sentry testing
+
+Sentry is disabled unless both its DSN and an explicit enable flag are present.
+For a deliberate local test from PowerShell, set the values only in the current
+terminal session before starting Tauri:
+
+```powershell
+$env:WYRMGRID_SENTRY_ENABLED = "true"
+$env:WYRMGRID_SENTRY_TEST_EVENT = "true"
+$env:SENTRY_RUST_DSN = "<Rust project DSN>"
+$env:SENTRY_ENVIRONMENT = "maintainer"
+$env:VITE_WYRMGRID_SENTRY_ENABLED = "true"
+$env:VITE_WYRMGRID_SENTRY_TEST_EVENT = "true"
+$env:VITE_SENTRY_DSN = "<UI project DSN>"
+$env:VITE_SENTRY_ENVIRONMENT = "maintainer"
+npm run dev
+```
+
+Close that terminal to discard the variables. Never place
+`SENTRY_AUTH_TOKEN` in the desktop runtime environment; it belongs only in
+protected GitHub Actions secret storage for release and source-map operations.
+Ordinary development, preview, CI, and public builds keep transmission off.
+The test-event flags emit one bounded synthetic event per runtime at startup;
+remove them after verifying project routing, redaction, and stack traces.

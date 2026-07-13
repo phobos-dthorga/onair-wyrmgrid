@@ -13,6 +13,7 @@
 - plugin trust decisions and signatures;
 - diagnostic events, telemetry preferences, and Sentry report identifiers;
 - release source maps, native debug information, and telemetry upload credentials;
+- legal-document versions, acknowledgement records, and privacy preferences;
 - update integrity and release artifacts.
 
 ## Primary threats
@@ -37,6 +38,8 @@
 - dependency or release-pipeline compromise;
 - sensitive data escaping through diagnostic payloads, attachments, replay,
   logs, traces, or crash dumps;
+- network collection beginning before disclosure or continuing after the user
+  withdraws an optional preference;
 - forged or flooded diagnostic events consuming quota or obscuring failures;
 - telemetry outages delaying application work or degrading offline behaviour;
 - compromise of CI-only Sentry upload credentials;
@@ -97,9 +100,11 @@
 - diagnostic payloads use an allowlist and redaction tests; OnAir keys, raw
   payloads, database rows, local paths, plugin traffic, and simulator data are
   excluded;
-- public builds do not transmit diagnostics until they provide clear disclosure
-  and a user-controlled telemetry setting; deliberate maintainer test builds may
-  enable the adapter explicitly;
+- telemetry is off by default; first-run onboarding prevents Atlas from mounting
+  before the current Terms and Privacy Notice are acknowledged, and stale
+  document versions suppress both Rust and interface diagnostics until review;
+- an optional user preference and a deliberately configured build are both
+  required before diagnostics can be transmitted;
 - Sentry authentication tokens remain CI secrets; DSNs are treated as public
   submission endpoints and restricted to the narrowest required ingress origin
   in desktop content-security policy;
@@ -123,6 +128,12 @@
 Before stable release, the project needs operating-system credential storage,
 signed updates, hardened plugin supervision, abuse-case tests, and a formal
 security review of every external input boundary.
+
+The current Atlas basemap is downloaded from MapLibre's public demonstration
+infrastructure after onboarding. WyrmGrid does not intentionally include OnAir
+payloads in those requests, but ordinary network metadata reaches that service.
+Production suitability, retention, attribution, availability limits, and a
+replacement or approval decision remain stable-release requirements.
 
 ## Residual connection risks
 

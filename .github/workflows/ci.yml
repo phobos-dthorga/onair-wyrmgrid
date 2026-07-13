@@ -47,6 +47,8 @@ jobs:
         run: npm run format:check
       - name: Type-check Svelte
         run: npm run check
+      - name: Test frontend
+        run: npm test --workspace @wyrmgrid/desktop
       - name: Build frontend
         run: npm run build
 

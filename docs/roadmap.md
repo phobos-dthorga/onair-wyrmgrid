@@ -6,6 +6,9 @@
 - Tauri/Svelte/MapLibre application shell
 - Stable domain provenance and plugin manifest v1 groundwork
 - Read-only credential-safe OnAir adapter and SQLite migration ownership
+- Versioned first-run Terms, Privacy Notice, persistent user control, and
+  opt-in privacy-filtered Rust and Svelte error monitoring (implemented);
+  public Sentry operational review and native symbol upload remain
 
 ## Observability foundation
 

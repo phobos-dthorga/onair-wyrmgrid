@@ -110,12 +110,24 @@ nav {
   border-bottom-color: var(--mint);
 }
 .connection-pill {
-  margin-left: auto;
   padding: 8px 11px;
   border: 1px solid var(--line);
   border-radius: 99px;
   color: var(--muted);
   font-size: 12px;
+}
+.legal-pill {
+  margin-left: auto;
+  border: 1px solid transparent;
+  padding: 8px 10px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 11px;
+  cursor: pointer;
+}
+.legal-pill:hover {
+  border-color: var(--line);
+  color: var(--mint);
 }
 .connection-pill span {
   display: inline-block;
@@ -132,6 +144,43 @@ nav {
 .connection-pill.connected span {
   background: var(--mint);
   box-shadow: 0 0 8px rgba(115, 214, 173, 0.6);
+}
+
+.legal-loading {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 14px;
+  width: 100vw;
+  height: 100vh;
+  color: #dce8e4;
+  background:
+    radial-gradient(circle at center, rgba(36, 102, 80, 0.22), transparent 34%),
+    var(--ink);
+}
+.legal-loading .brand-mark {
+  margin-bottom: 6px;
+}
+.legal-loading strong {
+  max-width: 460px;
+  color: var(--muted);
+  text-align: center;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+.legal-loading button {
+  border: 1px solid rgba(115, 214, 173, 0.42);
+  border-radius: 3px;
+  padding: 9px 14px;
+  color: #06100d;
+  background: var(--mint);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.legal-load-error .eyebrow {
+  color: #efb19e;
 }
 
 .workspace {

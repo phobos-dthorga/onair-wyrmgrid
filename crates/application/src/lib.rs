@@ -33,6 +33,135 @@ pub fn platform_status() -> PlatformStatus {
     }
 }
 
+pub const TERMS_VERSION: &str = "2026-07-14";
+pub const PRIVACY_NOTICE_VERSION: &str = "2026-07-14";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PersistedLegalPreferences {
+    pub terms_version: String,
+    pub privacy_notice_version: String,
+    pub telemetry_enabled: bool,
+    pub acknowledged_at: String,
+}
+
+pub trait LegalPreferencesRepository: Send + Sync + 'static {
+    fn load_legal_preferences(
+        &self,
+    ) -> Result<Option<PersistedLegalPreferences>, LegalSettingsError>;
+
+    fn save_legal_preferences(
+        &self,
+        terms_version: &str,
+        privacy_notice_version: &str,
+        telemetry_enabled: bool,
+    ) -> Result<(), LegalSettingsError>;
+}
+
+impl LegalPreferencesRepository for Store {
+    fn load_legal_preferences(
+        &self,
+    ) -> Result<Option<PersistedLegalPreferences>, LegalSettingsError> {
+        self.load_legal_preferences_record()
+            .map(|preferences| {
+                preferences.map(|preferences| PersistedLegalPreferences {
+                    terms_version: preferences.terms_version,
+                    privacy_notice_version: preferences.privacy_notice_version,
+                    telemetry_enabled: preferences.telemetry_enabled,
+                    acknowledged_at: preferences.acknowledged_at,
+                })
+            })
+            .map_err(|_| LegalSettingsError::StorageUnavailable)
+    }
+
+    fn save_legal_preferences(
+        &self,
+        terms_version: &str,
+        privacy_notice_version: &str,
+        telemetry_enabled: bool,
+    ) -> Result<(), LegalSettingsError> {
+        self.save_legal_preferences_record(terms_version, privacy_notice_version, telemetry_enabled)
+            .map_err(|_| LegalSettingsError::StorageUnavailable)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct LegalStatus {
+    pub terms_version: &'static str,
+    pub privacy_notice_version: &'static str,
+    pub acknowledged: bool,
+    pub telemetry_enabled: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub acknowledged_at: Option<String>,
+}
+
+#[derive(Debug, Error, Clone, Copy, PartialEq, Eq)]
+pub enum LegalSettingsError {
+    #[error("WyrmGrid could not read or save its local privacy preferences.")]
+    StorageUnavailable,
+    #[error("Review the current Terms and Privacy Notice before changing this preference.")]
+    AcknowledgementRequired,
+}
+
+pub struct LegalSettingsService<R> {
+    repository: R,
+}
+
+impl<R: LegalPreferencesRepository> LegalSettingsService<R> {
+    pub fn new(repository: R) -> Self {
+        Self { repository }
+    }
+
+    pub fn status(&self) -> Result<LegalStatus, LegalSettingsError> {
+        let stored = self.repository.load_legal_preferences()?;
+        let acknowledged = stored.as_ref().is_some_and(|preferences| {
+            preferences.terms_version == TERMS_VERSION
+                && preferences.privacy_notice_version == PRIVACY_NOTICE_VERSION
+        });
+        let acknowledged_at = if acknowledged {
+            stored
+                .as_ref()
+                .map(|preferences| preferences.acknowledged_at.clone())
+        } else {
+            None
+        };
+
+        Ok(LegalStatus {
+            terms_version: TERMS_VERSION,
+            privacy_notice_version: PRIVACY_NOTICE_VERSION,
+            acknowledged,
+            telemetry_enabled: acknowledged
+                && stored
+                    .as_ref()
+                    .is_some_and(|preferences| preferences.telemetry_enabled),
+            acknowledged_at,
+        })
+    }
+
+    pub fn acknowledge(&self, telemetry_enabled: bool) -> Result<LegalStatus, LegalSettingsError> {
+        self.repository.save_legal_preferences(
+            TERMS_VERSION,
+            PRIVACY_NOTICE_VERSION,
+            telemetry_enabled,
+        )?;
+        self.status()
+    }
+
+    pub fn update_telemetry(
+        &self,
+        telemetry_enabled: bool,
+    ) -> Result<LegalStatus, LegalSettingsError> {
+        if !self.status()?.acknowledged {
+            return Err(LegalSettingsError::AcknowledgementRequired);
+        }
+        self.repository.save_legal_preferences(
+            TERMS_VERSION,
+            PRIVACY_NOTICE_VERSION,
+            telemetry_enabled,
+        )?;
+        self.status()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ConnectionStatus {
     pub connected: bool,
@@ -167,6 +296,66 @@ pub enum ConnectionError {
         "WyrmGrid could not refresh the FBO network. A previous successful observation, if present, remains available."
     )]
     FbosUnavailable,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct OperationError {
+    pub code: &'static str,
+    pub message: String,
+    pub retryable: bool,
+    pub reportable: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub report_id: Option<String>,
+}
+
+impl OperationError {
+    pub fn with_report_id(mut self, report_id: Option<String>) -> Self {
+        self.report_id = report_id;
+        self
+    }
+}
+
+impl From<ConnectionError> for OperationError {
+    fn from(error: ConnectionError) -> Self {
+        let (code, retryable, reportable) = match &error {
+            ConnectionError::InvalidCompanyId => ("onair.invalid_company_id", false, false),
+            ConnectionError::EmptyApiKey => ("onair.empty_api_key", false, false),
+            ConnectionError::AuthenticationRejected => {
+                ("onair.authentication_rejected", false, false)
+            }
+            ConnectionError::CompanyNotFound => ("onair.company_not_found", false, false),
+            ConnectionError::RateLimited => ("onair.rate_limited", true, false),
+            ConnectionError::ServiceUnavailable => ("onair.service_unavailable", true, false),
+            ConnectionError::StateUnavailable => ("application.state_unavailable", true, true),
+            ConnectionError::NotConnected => ("onair.not_connected", false, false),
+            ConnectionError::FleetUnavailable => ("onair.fleet_unavailable", true, false),
+            ConnectionError::FbosUnavailable => ("onair.fbos_unavailable", true, false),
+        };
+
+        Self {
+            code,
+            message: error.to_string(),
+            retryable,
+            reportable,
+            report_id: None,
+        }
+    }
+}
+
+impl From<LegalSettingsError> for OperationError {
+    fn from(error: LegalSettingsError) -> Self {
+        let code = match error {
+            LegalSettingsError::StorageUnavailable => "legal.storage_unavailable",
+            LegalSettingsError::AcknowledgementRequired => "legal.acknowledgement_required",
+        };
+        Self {
+            code,
+            message: error.to_string(),
+            retryable: matches!(error, LegalSettingsError::StorageUnavailable),
+            reportable: false,
+            report_id: None,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -670,9 +859,91 @@ mod tests {
         AircraftId, AirportId, AirportSummary, FboId, Provenance, ProvenanceKind,
     };
 
+    #[derive(Default)]
+    struct MemoryLegalPreferences {
+        value: Mutex<Option<PersistedLegalPreferences>>,
+    }
+
+    impl LegalPreferencesRepository for MemoryLegalPreferences {
+        fn load_legal_preferences(
+            &self,
+        ) -> Result<Option<PersistedLegalPreferences>, LegalSettingsError> {
+            self.value
+                .lock()
+                .map(|value| value.clone())
+                .map_err(|_| LegalSettingsError::StorageUnavailable)
+        }
+
+        fn save_legal_preferences(
+            &self,
+            terms_version: &str,
+            privacy_notice_version: &str,
+            telemetry_enabled: bool,
+        ) -> Result<(), LegalSettingsError> {
+            *self
+                .value
+                .lock()
+                .map_err(|_| LegalSettingsError::StorageUnavailable)? =
+                Some(PersistedLegalPreferences {
+                    terms_version: terms_version.to_owned(),
+                    privacy_notice_version: privacy_notice_version.to_owned(),
+                    telemetry_enabled,
+                    acknowledged_at: "2026-07-14 00:00:00".to_owned(),
+                });
+            Ok(())
+        }
+    }
+
     #[test]
     fn exposes_the_supported_plugin_api() {
         assert_eq!(platform_status().plugin_api_version, 1);
+    }
+
+    #[test]
+    fn legal_documents_require_versioned_acknowledgement() {
+        let service = LegalSettingsService::new(MemoryLegalPreferences::default());
+        assert_eq!(
+            service.status().expect("status should be available"),
+            LegalStatus {
+                terms_version: TERMS_VERSION,
+                privacy_notice_version: PRIVACY_NOTICE_VERSION,
+                acknowledged: false,
+                telemetry_enabled: false,
+                acknowledged_at: None,
+            }
+        );
+
+        let accepted = service
+            .acknowledge(true)
+            .expect("preferences should be saved");
+        assert!(accepted.acknowledged);
+        assert!(accepted.telemetry_enabled);
+        assert_eq!(
+            accepted.acknowledged_at.as_deref(),
+            Some("2026-07-14 00:00:00")
+        );
+
+        let updated = service
+            .update_telemetry(false)
+            .expect("telemetry preference should be saved");
+        assert!(!updated.telemetry_enabled);
+    }
+
+    #[test]
+    fn old_legal_versions_disable_telemetry_until_reviewed() {
+        let repository = MemoryLegalPreferences::default();
+        repository
+            .save_legal_preferences("2026-01-01", "2026-01-01", true)
+            .expect("fixture should be saved");
+        let service = LegalSettingsService::new(repository);
+
+        let status = service.status().expect("status should be available");
+        assert!(!status.acknowledged);
+        assert!(!status.telemetry_enabled);
+        assert!(matches!(
+            service.update_telemetry(true),
+            Err(LegalSettingsError::AcknowledgementRequired)
+        ));
     }
 
     #[test]
@@ -853,5 +1124,21 @@ mod tests {
             classify_resource_error(ClientError::ApiRejected, CompanyDataResource::Fbos),
             ConnectionError::FbosUnavailable
         ));
+    }
+
+    #[test]
+    fn exposes_stable_safe_operation_errors() {
+        assert_eq!(
+            OperationError::from(ConnectionError::RateLimited),
+            OperationError {
+                code: "onair.rate_limited",
+                message: ConnectionError::RateLimited.to_string(),
+                retryable: true,
+                reportable: false,
+                report_id: None,
+            }
+        );
+        assert!(OperationError::from(ConnectionError::StateUnavailable).reportable);
+        assert!(!OperationError::from(ConnectionError::AuthenticationRejected).reportable);
     }
 }
