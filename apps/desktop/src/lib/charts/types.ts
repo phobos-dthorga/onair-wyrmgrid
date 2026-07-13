@@ -1,10 +1,7 @@
 export const CHART_SCHEMA_VERSION = 1 as const;
 
 export type ProvenanceKind =
-  | "on_air_fact"
-  | "external_fact"
-  | "calculated"
-  | "recommendation";
+  "on_air_fact" | "external_fact" | "calculated" | "recommendation";
 
 export type ChartSpec = {
   schema_version: typeof CHART_SCHEMA_VERSION;
