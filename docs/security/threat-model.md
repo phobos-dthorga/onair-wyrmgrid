@@ -4,8 +4,15 @@
 
 - OnAir API credentials and company identifiers;
 - fleet, employee, finance, job, and flight history;
+- SimBrief identifiers and OFPs, SayIntentions API keys, account identity,
+  communications and active-flight files, imported routes, weather caches,
+  online-network activity, and simulator telemetry;
+- Navigraph, IVAO, community-delivery, and future provider tokens or application
+  credentials;
 - local files and operating-system access;
 - plugin trust decisions and signatures;
+- diagnostic events, telemetry preferences, and Sentry report identifiers;
+- release source maps, native debug information, and telemetry upload credentials;
 - update integrity and release artifacts.
 
 ## Primary threats
@@ -15,12 +22,31 @@
 - path traversal and unsafe process arguments;
 - unbounded messages, event storms, hangs, and resource exhaustion;
 - hostile API payloads, imported files, map styles, and URLs;
+- malicious or oversized OFPs, flight-plan files, compressed feeds, navigation
+  packages, weather geometries, and simulator messages;
+- spoofed localhost simulator services, sidecars, callbacks, or OAuth redirect
+  state;
+- provider schema drift, identifier collisions, AIRAC mismatch, and unit or
+  timestamp confusion producing plausible but incorrect plans;
+- personal network data, routes, coordinates, callsigns, or free-form content
+  leaking through persistence, plugins, support output, or diagnostics;
+- embedded desktop application secrets being extracted and abused;
+- a SayIntentions key leaking through query URLs, redirects, HTTP diagnostics,
+  local `flight.json` parsing, support bundles, or automatic retries;
+- external writes or simulator commands occurring without explicit user intent;
 - dependency or release-pipeline compromise;
+- sensitive data escaping through diagnostic payloads, attachments, replay,
+  logs, traces, or crash dumps;
+- forged or flooded diagnostic events consuming quota or obscuring failures;
+- telemetry outages delaying application work or degrading offline behaviour;
+- compromise of CI-only Sentry upload credentials;
 - stale data presented as current fact;
 - historical operational state mistaken for the present state;
 - recommendations mistaken for OnAir-provided facts;
 - accidental or automated request storms against OnAir's public API;
 - disclosure of locally cached company, fleet, and location history;
+- request storms or costly generated actions against SimBrief, SayIntentions,
+  weather, VATSIM, IVAO, or navigation providers;
 
 ## Initial controls
 
@@ -31,14 +57,54 @@
   relaying remote response bodies;
 - current credential guidance directs users to OnAir Client and warns against
   visually similar but not-yet-compatible values from OnAir Companion;
-- read-only API design;
+- read-only OnAir API design;
 - explicit provenance and observation timestamps;
+- raw external payloads remain inside provider adapters and translate into
+  immutable, application-owned snapshots with freshness and provider revision;
+- provider rate limits, caching, request coalescing, timeouts, bounded retries,
+  and offline suspension are enforced in Rust;
+- imported files, compressed feeds, navigation packages, weather geometries,
+  and Bridge messages have strict size, count, nesting, numeric, path, and
+  decompression limits;
+- user tokens belong in the operating-system credential store; shared
+  application secrets are never embedded in desktop binaries or public sites;
+- SayIntentions `flight.json` is read only after opt-in, parsed through a strict
+  allowlist, and never persisted raw; its API key becomes an in-memory secret
+  immediately and its documented HTTPS origin is pinned independently of any
+  hostname in the file;
+- secret-bearing SAPI URLs, redirects, and HTTP client errors are converted to
+  bounded codes before logging, telemetry, persistence, or display;
+- SayIntentions communications and airport mutations require an explicit user
+  action, have no ambiguous automatic retry, and are subject to cooldown,
+  duplicate suppression, content limits, and later per-flight automation
+  budgets;
+- OAuth and browser-return flows require PKCE where supported, exact redirect
+  validation, state verification, and system-browser authentication;
+- public online-network adapters discard names, member IDs, remarks, and other
+  fields not required by the implemented view before persistence or display;
+- Bridge sidecars use versioned handshakes, explicit capabilities, bounded
+  framing, supervised lifecycle, and local-only provider connections;
+- simulator plan loading and every other external mutation require a distinct
+  negotiated capability and explicit user action;
 - deny-by-default plugin capabilities;
 - relative plugin entry-point validation;
 - content security policy for the desktop webview;
 - locked dependencies, dependency updates, audit jobs, and CI-built releases;
+- Sentry is an optional outer adapter; domain and application services do not
+  depend on it, and telemetry failure never blocks normal application work;
+- initial collection is error-only; replay, logs, performance tracing,
+  profiling, attachments, and native minidumps remain disabled by default;
+- diagnostic payloads use an allowlist and redaction tests; OnAir keys, raw
+  payloads, database rows, local paths, plugin traffic, and simulator data are
+  excluded;
+- public builds do not transmit diagnostics until they provide clear disclosure
+  and a user-controlled telemetry setting; deliberate maintainer test builds may
+  enable the adapter explicitly;
+- Sentry authentication tokens remain CI secrets; DSNs are treated as public
+  submission endpoints and restricted to the narrowest required ingress origin
+  in desktop content-security policy;
 - no plugin runtime until framing, lifecycle, limits, and permission review are
-  specified and tested.
+  specified and tested;
 - fleet synchronization is serialized in Rust; trigger-specific quiet periods
   silently return cached state without making another remote request.
 - Hoard stores stable domain snapshots rather than raw API payloads, never stores
@@ -81,3 +147,53 @@ must therefore sanitize or omit `wyrmgrid.db` from support reports. Retention
 limits intraday growth but deliberately preserves one daily historical record,
 so sensitive operational history remains until the user deletes the database or
 a future data-management feature removes it.
+
+## Residual telemetry risks
+
+- Redaction reduces but cannot prove the absence of accidental disclosure. Keep
+  payloads small and structured, and test filters with secret-like canaries
+  before enabling public telemetry.
+- A public DSN can receive spoofed or abusive events. Use Sentry spike controls,
+  project quotas, and alerting, and treat event contents and report identifiers
+  as untrusted input.
+- Source maps and native debug information expose implementation metadata to the
+  telemetry provider. Upload them only from protected CI jobs with
+  least-privilege credentials and controlled retention.
+- Hosted Sentry is a third-party data processor. The organisation currently uses
+  the U.S. data region; record retention, access roles, and privacy disclosures
+  before a public release sends events.
+
+The detailed collection boundary and rollout gates are defined in
+[ADR-0007](../architecture/decisions/0007-hosted-sentry-observability.md) and the
+[observability plan](../operations/observability.md).
+
+## Residual external-integration risks
+
+- A translated snapshot can still be wrong because the provider, captured
+  fixture, mapping, unit conversion, identifier correlation, or local clock is
+  wrong. WyrmGrid exposes source and age and does not market these integrations
+  for real-world operational use.
+- SimBrief's public latest-OFP lookup makes a Pilot ID or username capable of
+  revealing operational plan data. Treat the identifier as private, minimize
+  persistence, and never expose it through telemetry or plugins.
+- SayIntentions places account credentials, email, active-flight identity,
+  route, callsign, coordinates, and configuration in one local file. Allowlisted
+  parsing reduces exposure but cannot protect that file from another process or
+  a compromised local account. Its current query-parameter authentication may
+  also expose the key to infrastructure outside WyrmGrid's control.
+- Public VATSIM and IVAO feeds contain information about identifiable people and
+  current activity. Discarding unnecessary fields reduces but does not eliminate
+  the privacy implications of displaying live callsigns and positions.
+- A localhost API is not inherently trustworthy. Another local process or a
+  compromised host may impersonate a sidecar or simulator, observe traffic, or
+  alter data where the provider has no authentication mechanism.
+- Licensed navigation data may remain accessible in local caches to a user or
+  process with filesystem access. Entitlement checks and application controls do
+  not replace operating-system security or provider licence compliance.
+- A future serverless SimBrief broker would create a public abuse and cost
+  surface. It remains prohibited until Navigraph confirms the required flow and
+  a separate hosting decision defines authentication, quotas, retention,
+  monitoring, incident response, and shutdown controls.
+
+Provider-specific controls and validation gates are recorded in the
+[external integrations programme](../integrations/README.md).

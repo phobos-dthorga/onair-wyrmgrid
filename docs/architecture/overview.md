@@ -1,10 +1,10 @@
 # Architecture overview
 
 ```text
-OnAir API                Simulator sidecars
+External providers       Simulator sidecars
     |                           |
     v                           v
-OnAir adapter            WyrmGrid Bridge
+Rust provider adapters   WyrmGrid Bridge
     |                           |
     +--------> application <----+
                     |
@@ -27,6 +27,11 @@ The dependency direction points inward. Interface and infrastructure adapters
 depend on application-owned domain contracts; domain code does not depend on
 Tauri, SQLite, HTTP, MapLibre, or a plugin language.
 
+External providers include OnAir, SimBrief, SayIntentions.AI, aviation weather,
+online networks, and optional navigation data. Each owns a private raw schema
+and translates into application-owned operational snapshots before another
+module consumes it.
+
 ## Data categories
 
 Every user-facing value should be traceable to one of four categories:
@@ -38,6 +43,39 @@ Every user-facing value should be traceable to one of four categories:
 
 Provenance records the source and observation time. Recommendations should also
 explain their contributing factors rather than presenting an opaque score.
+
+## Operational snapshot boundary
+
+The application reconciles immutable flight-plan, route, weather, network, and
+simulator-session snapshots. Similar fields from different providers remain
+separate until a named application rule explains how they compare. Source,
+generation or validity time, retrieval time, freshness, provider revision, and
+AIRAC are retained where relevant.
+
+The intended complete loop is:
+
+```text
+OnAir plan inputs + SimBrief OFP + weather
+                    |
+                    v
+             WyrmGrid Dispatch
+                    |
+                    v
+          simulator-neutral route ----------> MSFS 2024 Bridge
+                    |                                  |
+                    |                                  v
+                    |                           simulator actuals
+                    |                                  |
+                    +----------------+-----------------+
+                                     |
+SayIntentions context ---------------+
+                                     |
+                                     v
+                         planned-versus-actual analysis
+```
+
+See [ADR-0008](decisions/0008-provider-adapters-and-operational-snapshots.md)
+and the [external integrations programme](../integrations/README.md).
 
 ## Extension boundary
 
@@ -62,3 +100,16 @@ The presentation runs in Tauri's platform webview: Chromium-based WebView2 on
 Windows and WebKit-backed views on macOS and Linux. WRY is the application
 boundary, while cross-engine behaviour is verified rather than replaced by a
 bundled browser runtime. See [ADR-0005](decisions/0005-system-webviews.md).
+
+## Observability boundary
+
+Domain and application types do not depend on Sentry. They expose typed,
+sanitized diagnostic outcomes that optional Rust and SvelteKit adapters can send
+at the desktop composition boundary. Losing the telemetry service must never
+block startup, storage, API access, calculations, or plugin operation.
+
+Community plugins do not receive host DSNs, upload credentials, or a transparent
+path for submitting arbitrary events through the host. The collection policy,
+hosting decision, and rollout gates are documented in
+[ADR-0007](decisions/0007-hosted-sentry-observability.md) and the
+[observability plan](../operations/observability.md).

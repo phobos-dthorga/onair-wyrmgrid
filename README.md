@@ -19,7 +19,7 @@ plugin boundary available to third-party developers.
 - **WyrmGrid Hoard** — local history and cached data
 - **WyrmGrid Forge** — plugin SDK and developer tools
 - **WyrmGrid Aerie** — future community plugin catalogue
-- **WyrmGrid Bridge** — simulator and hardware integration
+- **WyrmGrid Bridge** — MSFS 2024-first simulator and hardware integration
 - **WyrmGrid Oracle** — explainable scoring and recommendations
 - **WyrmGrid Watch** — alerts and monitoring
 - **WyrmGrid Dispatch** — job and route planning
@@ -35,7 +35,7 @@ plugin boundary available to third-party developers.
 | Charts                       | Apache ECharts behind WyrmChart         |
 | Local storage                | SQLite                                  |
 | Plugin boundary              | Out-of-process, versioned JSON messages |
-| Native simulator integration | Separate C++ sidecars where justified   |
+| Native simulator integration | Separate versioned provider sidecars    |
 
 The Rust workspace deliberately starts with only five core libraries:
 
@@ -55,6 +55,8 @@ The Rust workspace deliberately starts with only five core libraries:
 5. Cached data records when and where it was observed.
 6. Plugin permissions are explicit and deny-by-default.
 7. Unsupported browser or UI automation is outside the official platform.
+8. SimBrief, weather, online networks, navigation data, and simulators remain
+   optional providers behind application-owned models.
 
 ## Development
 
@@ -87,7 +89,8 @@ become OnAir's primary client, so this is a temporary compatibility rule that
 must be retested when its API credential support reaches parity.
 
 See [Development](docs/development.md), [Architecture](docs/architecture/overview.md),
-and [Contributing](CONTRIBUTING.md) before making structural changes.
+[External integrations](docs/integrations/README.md), and
+[Contributing](CONTRIBUTING.md) before making structural changes.
 
 ## Releases
 

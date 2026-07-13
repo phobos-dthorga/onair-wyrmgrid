@@ -46,3 +46,8 @@ Those retained observations deliberately form the basis of the future Hoard
 Timeline. Historical queries will resolve resources as-of a selected time and
 preserve each resource's real observation timestamp rather than invent an
 atomic company snapshot.
+
+The later SimBrief, weather, online-network, navigation, and simulator work is
+sequenced in the [external integrations programme](../integrations/README.md).
+Those providers build on this slice's persistence, provenance, and degraded-state
+rules rather than adding shortcuts around them.
