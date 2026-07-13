@@ -218,15 +218,15 @@
     display: grid;
     place-items: center;
     padding: 24px;
-    background: rgba(1, 7, 6, 0.78);
+    background: var(--color-overlay);
     backdrop-filter: blur(7px);
   }
   .connection-dialog {
     width: min(480px, 100%);
-    border: 1px solid var(--line);
+    border: 1px solid var(--color-line-faint);
     padding: 24px;
-    background: #0a1916;
-    box-shadow: 0 28px 90px rgba(0, 0, 0, 0.48);
+    background: var(--color-surface);
+    box-shadow: 0 28px 90px var(--color-shadow);
   }
   header,
   .dialog-actions,
@@ -247,14 +247,14 @@
   .close-button {
     width: 34px;
     height: 34px;
-    border: 1px solid var(--line);
-    color: var(--muted);
+    border: 1px solid var(--color-line-faint);
+    color: var(--color-text-muted);
     background: transparent;
     font-size: 22px;
     cursor: pointer;
   }
   .explanation {
-    color: var(--muted);
+    color: var(--color-text-muted);
     font-size: 13px;
     line-height: 1.55;
   }
@@ -264,7 +264,7 @@
   }
   label {
     margin: 14px 0 7px;
-    color: #cfddd8;
+    color: var(--color-text-muted);
     font-size: 11px;
     font-weight: 700;
     text-transform: uppercase;
@@ -273,17 +273,17 @@
   input {
     width: 100%;
     min-width: 0;
-    border: 1px solid var(--line);
+    border: 1px solid var(--color-line-faint);
     border-radius: 3px;
     padding: 11px 12px;
     outline: none;
-    color: #edf5f2;
-    background: #07110f;
+    color: var(--color-text);
+    background: var(--color-canvas);
     font: inherit;
   }
   input:focus {
-    border-color: rgba(115, 214, 173, 0.58);
-    box-shadow: 0 0 0 2px rgba(115, 214, 173, 0.09);
+    border-color: var(--color-accent-border);
+    box-shadow: 0 0 0 2px var(--color-accent-soft);
   }
   input:disabled {
     opacity: 0.65;
@@ -296,50 +296,50 @@
     border-radius: 3px 0 0 3px;
   }
   .secret-field button {
-    border: 1px solid var(--line);
+    border: 1px solid var(--color-line-faint);
     border-left: 0;
     padding: 0 12px;
-    color: var(--mint);
-    background: #10231f;
+    color: var(--color-accent);
+    background: var(--color-surface-elevated);
     cursor: pointer;
   }
   .session-notice {
     display: grid;
     gap: 3px;
     margin-top: 18px;
-    border-left: 2px solid var(--gold);
+    border-left: 2px solid var(--color-highlight);
     padding: 10px 12px;
-    background: rgba(213, 174, 95, 0.06);
+    background: var(--color-highlight-soft);
     font-size: 11px;
   }
   .session-notice strong {
-    color: var(--gold);
+    color: var(--color-highlight);
   }
   .session-notice span {
-    color: var(--muted);
+    color: var(--color-text-muted);
   }
   .credential-source-warning {
     display: grid;
     gap: 3px;
     margin-top: 14px;
-    border: 1px solid rgba(207, 126, 101, 0.32);
+    border: 1px solid var(--color-danger-border);
     padding: 10px 12px;
-    background: rgba(207, 126, 101, 0.08);
+    background: var(--color-danger-soft);
     font-size: 11px;
     line-height: 1.4;
   }
   .credential-source-warning strong {
-    color: #efb19e;
+    color: var(--color-danger);
   }
   .credential-source-warning span {
-    color: var(--muted);
+    color: var(--color-text-muted);
   }
   .error {
     margin-top: 14px;
-    border: 1px solid rgba(207, 126, 101, 0.32);
+    border: 1px solid var(--color-danger-border);
     padding: 10px 12px;
-    color: #efb19e;
-    background: rgba(207, 126, 101, 0.08);
+    color: var(--color-danger);
+    background: var(--color-danger-soft);
     font-size: 12px;
     line-height: 1.4;
   }
@@ -349,7 +349,7 @@
     margin-top: 22px;
   }
   .dialog-actions button {
-    border: 1px solid var(--line);
+    border: 1px solid var(--color-line-faint);
     border-radius: 3px;
     padding: 9px 14px;
     cursor: pointer;
@@ -359,26 +359,26 @@
     opacity: 0.65;
   }
   .primary {
-    border-color: rgba(115, 214, 173, 0.42) !important;
-    color: #06100d;
-    background: var(--mint);
+    border-color: var(--color-accent-border) !important;
+    color: var(--color-canvas);
+    background: var(--color-accent);
     font-weight: 700;
   }
   .secondary {
-    color: var(--muted);
+    color: var(--color-text-muted);
     background: transparent;
   }
   .danger {
-    border-color: rgba(207, 126, 101, 0.36) !important;
-    color: #efb19e;
-    background: rgba(207, 126, 101, 0.08);
+    border-color: var(--color-danger-border) !important;
+    color: var(--color-danger);
+    background: var(--color-danger-soft);
   }
   .connected-company {
     gap: 12px;
     margin: 8px 0 16px;
-    border: 1px solid rgba(115, 214, 173, 0.24);
+    border: 1px solid var(--color-accent-border);
     padding: 14px;
-    background: rgba(115, 214, 173, 0.05);
+    background: var(--color-accent-soft);
   }
   .connected-company div {
     display: grid;
@@ -386,7 +386,7 @@
   }
   .connected-company span,
   .connected-company small {
-    color: var(--muted);
+    color: var(--color-text-muted);
     font-size: 10px;
   }
   .connected-company strong {
@@ -398,7 +398,7 @@
     width: 10px;
     height: 10px;
     border-radius: 50%;
-    background: var(--mint);
-    box-shadow: 0 0 12px rgba(115, 214, 173, 0.7);
+    background: var(--color-accent);
+    box-shadow: 0 0 12px var(--color-accent-glow);
   }
 </style>

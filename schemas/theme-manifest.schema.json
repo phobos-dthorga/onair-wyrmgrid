@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wyrmgrid.local/schemas/theme-manifest.schema.json",
+  "title": "WyrmGrid theme manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "id", "name", "colors", "chart_palette"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "id": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 64,
+      "pattern": "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$"
+    },
+    "name": { "type": "string", "minLength": 1, "maxLength": 64 },
+    "author": { "type": "string", "minLength": 1, "maxLength": 80 },
+    "colors": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "canvas",
+        "surface",
+        "surface_elevated",
+        "surface_soft",
+        "text",
+        "text_muted",
+        "line",
+        "accent",
+        "highlight",
+        "danger",
+        "success",
+        "map_aircraft",
+        "map_fbo",
+        "map_label",
+        "map_halo"
+      ],
+      "properties": {
+        "canvas": { "$ref": "#/$defs/colour" },
+        "surface": { "$ref": "#/$defs/colour" },
+        "surface_elevated": { "$ref": "#/$defs/colour" },
+        "surface_soft": { "$ref": "#/$defs/colour" },
+        "text": { "$ref": "#/$defs/colour" },
+        "text_muted": { "$ref": "#/$defs/colour" },
+        "line": { "$ref": "#/$defs/colour" },
+        "accent": { "$ref": "#/$defs/colour" },
+        "highlight": { "$ref": "#/$defs/colour" },
+        "danger": { "$ref": "#/$defs/colour" },
+        "success": { "$ref": "#/$defs/colour" },
+        "map_aircraft": { "$ref": "#/$defs/colour" },
+        "map_fbo": { "$ref": "#/$defs/colour" },
+        "map_label": { "$ref": "#/$defs/colour" },
+        "map_halo": { "$ref": "#/$defs/colour" }
+      }
+    },
+    "chart_palette": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 8,
+      "items": { "$ref": "#/$defs/colour" }
+    }
+  },
+  "$defs": {
+    "colour": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" }
+  }
+}

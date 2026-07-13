@@ -9,7 +9,9 @@
   import { CanvasRenderer } from "echarts/renderers";
   import type { ECharts, EChartsCoreOption } from "echarts/core";
   import { onMount } from "svelte";
-  import { chartColours, chartTheme } from "./theme";
+  import { activeTheme } from "$lib/theme/runtime";
+  import type { ThemeManifest } from "$lib/theme/types";
+  import { chartPresentation } from "./theme";
   import type { ChartSpec } from "./types";
 
   echarts.use([
@@ -38,23 +40,24 @@
     return `${numberFormatter.format(value)}${spec.unit ? ` ${spec.unit}` : ""}`;
   }
 
-  function optionFor(chartSpec: ChartSpec): EChartsCoreOption {
+  function optionFor(chartSpec: ChartSpec, theme: ThemeManifest): EChartsCoreOption {
     const categories = chartSpec.series[0]?.points.map((point) => point.category) ?? [];
+    const presentation = chartPresentation(theme);
 
     return {
       animationDuration: 550,
-      color: chartColours,
+      color: presentation.colours,
       grid: { left: 44, right: 12, top: chartSpec.series.length > 1 ? 28 : 12, bottom: 30 },
       legend: {
         show: chartSpec.series.length > 1,
         top: 0,
-        textStyle: { color: chartTheme.muted },
+        textStyle: { color: presentation.muted },
       },
       tooltip: {
         trigger: "axis",
-        backgroundColor: chartTheme.tooltipBackground,
-        borderColor: chartTheme.tooltipBorder,
-        textStyle: { color: chartTheme.text },
+        backgroundColor: presentation.tooltipBackground,
+        borderColor: presentation.tooltipBorder,
+        textStyle: { color: presentation.text },
         valueFormatter: (value: unknown) =>
           typeof value === "number" ? formatValue(value) : String(value ?? ""),
       },
@@ -65,17 +68,17 @@
         nameGap: 24,
         data: categories,
         boundaryGap: chartSpec.kind === "bar",
-        axisLine: { lineStyle: { color: chartTheme.line } },
+        axisLine: { lineStyle: { color: presentation.line } },
         axisTick: { show: false },
-        axisLabel: { color: chartTheme.muted },
-        nameTextStyle: { color: chartTheme.muted, fontSize: 10 },
+        axisLabel: { color: presentation.muted },
+        nameTextStyle: { color: presentation.muted, fontSize: 10 },
       },
       yAxis: {
         type: "value",
         name: chartSpec.value_axis_label,
-        nameTextStyle: { color: chartTheme.muted, fontSize: 10 },
-        splitLine: { lineStyle: { color: chartTheme.line } },
-        axisLabel: { color: chartTheme.muted },
+        nameTextStyle: { color: presentation.muted, fontSize: 10 },
+        splitLine: { lineStyle: { color: presentation.line } },
+        axisLabel: { color: presentation.muted },
       },
       series: chartSpec.series.map((series) => ({
         id: series.id,
@@ -92,7 +95,7 @@
   }
 
   $effect(() => {
-    if (chart) chart.setOption(optionFor(spec), { notMerge: true });
+    if (chart) chart.setOption(optionFor(spec, $activeTheme), { notMerge: true });
   });
 
   onMount(() => {
@@ -100,7 +103,7 @@
 
     const chartContainer = container;
     chart = echarts.init(chartContainer, undefined, { renderer: "canvas" });
-    chart.setOption(optionFor(spec));
+    chart.setOption(optionFor(spec, $activeTheme));
 
     const resizeObserver = new ResizeObserver(() => chart?.resize());
     resizeObserver.observe(chartContainer);
@@ -153,7 +156,7 @@
   .chart-card {
     margin-top: 16px;
     padding-top: 14px;
-    border-top: 1px solid var(--line);
+    border-top: 1px solid var(--color-line-faint);
   }
   header,
   footer {
@@ -163,7 +166,7 @@
     gap: 12px;
   }
   .chart-eyebrow {
-    color: var(--gold);
+    color: var(--color-highlight);
     text-transform: uppercase;
     letter-spacing: 0.14em;
     font-size: 9px;
@@ -177,15 +180,15 @@
   }
   p {
     margin: 7px 0 0;
-    color: var(--muted);
+    color: var(--color-text-muted);
     font-size: 11px;
     line-height: 1.45;
   }
   .provenance {
     padding: 4px 6px;
-    border: 1px solid rgba(213, 174, 95, 0.28);
+    border: 1px solid var(--color-highlight-border);
     border-radius: 3px;
-    color: var(--gold);
+    color: var(--color-highlight);
     font-size: 8px;
     text-transform: uppercase;
     letter-spacing: 0.08em;
@@ -198,13 +201,13 @@
   .chart-state {
     display: grid;
     place-items: center;
-    color: var(--muted);
+    color: var(--color-text-muted);
     font-size: 12px;
   }
   footer {
     align-items: center;
     margin-top: 4px;
-    color: #6f8580;
+    color: var(--color-text-muted);
     font-size: 8px;
   }
   .screen-reader-summary {

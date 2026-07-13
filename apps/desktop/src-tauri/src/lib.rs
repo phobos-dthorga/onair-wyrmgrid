@@ -5,6 +5,7 @@ use tauri::Manager;
 struct DesktopState {
     onair: wyrmgrid_application::OnAirSession,
     legal: wyrmgrid_application::LegalSettingsService<wyrmgrid_storage::Store>,
+    themes: wyrmgrid_application::ThemeSettingsService<wyrmgrid_storage::Store>,
     observability: observability::Controller,
 }
 
@@ -103,6 +104,29 @@ fn update_telemetry_preference(
     Ok(status)
 }
 
+#[tauri::command]
+fn theme_status(
+    state: tauri::State<'_, DesktopState>,
+) -> Result<wyrmgrid_application::ThemeStatus, wyrmgrid_application::OperationError> {
+    state.themes.status().map_err(operation_error)
+}
+
+#[tauri::command]
+fn select_theme(
+    state: tauri::State<'_, DesktopState>,
+    theme_id: String,
+) -> Result<wyrmgrid_application::ThemeStatus, wyrmgrid_application::OperationError> {
+    state.themes.select(&theme_id).map_err(operation_error)
+}
+
+#[tauri::command]
+fn import_theme(
+    state: tauri::State<'_, DesktopState>,
+    manifest_json: String,
+) -> Result<wyrmgrid_application::ThemeStatus, wyrmgrid_application::OperationError> {
+    state.themes.import(&manifest_json).map_err(operation_error)
+}
+
 fn operation_error<E: Into<wyrmgrid_application::OperationError>>(
     error: E,
 ) -> wyrmgrid_application::OperationError {
@@ -133,10 +157,12 @@ pub fn run() {
                 });
             let legal = wyrmgrid_application::LegalSettingsService::new(store.clone());
             let legal_status = legal.status().expect("legal settings should initialize");
+            let themes = wyrmgrid_application::ThemeSettingsService::new(store.clone());
 
             app.manage(DesktopState {
                 onair: wyrmgrid_application::OnAirSession::with_default_store(store),
                 legal,
+                themes,
                 observability: observability::Controller::new(legal_status.telemetry_enabled),
             });
             Ok(())
@@ -151,7 +177,10 @@ pub fn run() {
             onair_fbo_snapshot,
             legal_status,
             acknowledge_legal,
-            update_telemetry_preference
+            update_telemetry_preference,
+            theme_status,
+            select_theme,
+            import_theme
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

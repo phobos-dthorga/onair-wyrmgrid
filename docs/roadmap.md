@@ -9,6 +9,9 @@
 - Versioned first-run Terms, Privacy Notice, persistent user control, and
   opt-in privacy-filtered Rust and Svelte error monitoring (implemented);
   public Sentry operational review and native symbol upload remain
+- Semantic styling, three built-in appearances, and a persisted, contrast-checked,
+  data-only community theme manifest (implemented); authoring, export, deletion,
+  and any curated distribution remain later ecosystem work
 
 ## Observability foundation
 

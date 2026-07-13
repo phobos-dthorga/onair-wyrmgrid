@@ -243,10 +243,10 @@
     background:
       radial-gradient(
         circle at 50% 25%,
-        rgba(40, 104, 83, 0.24),
+        var(--color-accent-soft),
         transparent 35%
       ),
-      rgba(1, 7, 6, 0.92);
+      var(--color-overlay-strong);
     backdrop-filter: blur(8px);
   }
   .legal-dialog {
@@ -254,11 +254,11 @@
     grid-template-rows: auto auto minmax(210px, 1fr) auto auto auto;
     width: min(820px, 100%);
     max-height: min(820px, calc(100vh - 48px));
-    border: 1px solid rgba(115, 214, 173, 0.25);
+    border: 1px solid var(--color-accent-border);
     padding: 24px;
     overflow: hidden;
-    background: #0a1916;
-    box-shadow: 0 30px 110px rgba(0, 0, 0, 0.58);
+    background: var(--color-surface);
+    box-shadow: 0 30px 110px var(--color-shadow);
   }
   header,
   footer,
@@ -280,8 +280,8 @@
   .close-button {
     width: 34px;
     height: 34px;
-    border: 1px solid var(--line);
-    color: var(--muted);
+    border: 1px solid var(--color-line-faint);
+    color: var(--color-text-muted);
     background: transparent;
     font-size: 22px;
     cursor: pointer;
@@ -292,28 +292,28 @@
     margin: 0 0 12px;
   }
   .document-tabs button {
-    border: 1px solid var(--line);
+    border: 1px solid var(--color-line-faint);
     padding: 8px 12px;
-    color: var(--muted);
-    background: rgba(7, 17, 15, 0.54);
+    color: var(--color-text-muted);
+    background: var(--color-overlay);
     cursor: pointer;
   }
   .document-tabs button.active {
-    border-color: rgba(115, 214, 173, 0.4);
-    color: var(--mint);
-    background: rgba(115, 214, 173, 0.08);
+    border-color: var(--color-accent-border);
+    color: var(--color-accent);
+    background: var(--color-accent-soft);
   }
   .document-panel {
     min-height: 0;
-    border: 1px solid var(--line);
+    border: 1px solid var(--color-line-faint);
     overflow: auto;
-    background: rgba(4, 12, 10, 0.58);
+    background: var(--color-overlay);
   }
   .legal-summary {
     padding: 20px;
   }
   .legal-summary > p {
-    color: #c9d8d3;
+    color: var(--color-text-muted);
     font-size: 13px;
     line-height: 1.6;
   }
@@ -326,46 +326,46 @@
   .summary-grid article {
     display: grid;
     gap: 5px;
-    border-left: 2px solid var(--gold);
+    border-left: 2px solid var(--color-highlight);
     padding: 11px 12px;
-    background: rgba(213, 174, 95, 0.05);
+    background: var(--color-highlight-soft);
   }
   .summary-grid strong {
-    color: #e8eee9;
+    color: var(--color-text);
     font-size: 12px;
   }
   .summary-grid span {
-    color: var(--muted);
+    color: var(--color-text-muted);
     font-size: 11px;
     line-height: 1.45;
   }
   .foundation-note {
-    color: var(--gold) !important;
+    color: var(--color-highlight) !important;
   }
   .telemetry-choice {
     gap: 12px;
     margin-top: 14px;
-    border: 1px solid rgba(115, 214, 173, 0.2);
+    border: 1px solid var(--color-accent-border);
     padding: 12px;
-    background: rgba(115, 214, 173, 0.05);
+    background: var(--color-accent-soft);
     cursor: pointer;
   }
   .telemetry-choice input,
   .acknowledgements input {
     width: 17px;
     height: 17px;
-    accent-color: var(--mint);
+    accent-color: var(--color-accent);
   }
   .telemetry-choice span {
     display: grid;
     gap: 4px;
   }
   .telemetry-choice strong {
-    color: #dce9e4;
+    color: var(--color-text);
     font-size: 12px;
   }
   .telemetry-choice small {
-    color: var(--muted);
+    color: var(--color-text-muted);
     font-size: 10px;
     line-height: 1.45;
   }
@@ -376,20 +376,20 @@
   }
   .acknowledgements label {
     gap: 9px;
-    color: #cddbd6;
+    color: var(--color-text-muted);
     font-size: 11px;
   }
   .acceptance-record {
     margin-top: 12px;
-    color: var(--muted);
+    color: var(--color-text-muted);
     font-size: 10px;
   }
   .error {
     margin-top: 12px;
-    border: 1px solid rgba(207, 126, 101, 0.32);
+    border: 1px solid var(--color-danger-border);
     padding: 9px 11px;
-    color: #efb19e;
-    background: rgba(207, 126, 101, 0.08);
+    color: var(--color-danger);
+    background: var(--color-danger-soft);
     font-size: 11px;
   }
   footer {
@@ -398,7 +398,7 @@
     margin-top: 17px;
   }
   footer button {
-    border: 1px solid var(--line);
+    border: 1px solid var(--color-line-faint);
     border-radius: 3px;
     padding: 9px 14px;
     cursor: pointer;
@@ -408,13 +408,13 @@
     opacity: 0.52;
   }
   .primary {
-    border-color: rgba(115, 214, 173, 0.42) !important;
-    color: #06100d;
-    background: var(--mint);
+    border-color: var(--color-accent-border) !important;
+    color: var(--color-canvas);
+    background: var(--color-accent);
     font-weight: 700;
   }
   .secondary {
-    color: var(--muted);
+    color: var(--color-text-muted);
     background: transparent;
   }
   @media (max-width: 760px) {

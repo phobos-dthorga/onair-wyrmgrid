@@ -1,0 +1,37 @@
+:root {
+  color: var(--color-text);
+  background: var(--color-canvas);
+
+  /* Safe fallback values; the validated theme manifest replaces this allowlist. */
+  --color-canvas: #07110f;
+  --color-surface: #0a1916;
+  --color-surface-elevated: #102520;
+  --color-surface-soft: #172f29;
+  --color-text: #e9f1ef;
+  --color-text-muted: #a7b8b2;
+  --color-line: #526a62;
+  --color-accent: #73d6ad;
+  --color-highlight: #d5ae5f;
+  --color-danger: #ed8074;
+  --color-success: #73d6ad;
+  --color-map-aircraft: #d5ae5f;
+  --color-map-fbo: #73d6ad;
+  --color-map-label: #e9f1ef;
+  --color-map-halo: #07110f;
+
+  /* Derived tokens are calculated from the same validated colour roles at runtime. */
+  --color-overlay: rgba(7, 17, 15, 0.82);
+  --color-overlay-strong: rgba(7, 17, 15, 0.96);
+  --color-surface-translucent: rgba(10, 25, 22, 0.94);
+  --color-surface-soft-translucent: rgba(23, 47, 41, 0.86);
+  --color-line-soft: rgba(82, 106, 98, 0.28);
+  --color-line-faint: rgba(82, 106, 98, 0.18);
+  --color-accent-soft: rgba(115, 214, 173, 0.12);
+  --color-accent-border: rgba(115, 214, 173, 0.34);
+  --color-highlight-soft: rgba(213, 174, 95, 0.12);
+  --color-highlight-border: rgba(213, 174, 95, 0.32);
+  --color-danger-soft: rgba(237, 128, 116, 0.1);
+  --color-danger-border: rgba(237, 128, 116, 0.34);
+  --color-accent-glow: rgba(115, 214, 173, 0.65);
+  --color-shadow: rgba(0, 0, 0, 0.45);
+}

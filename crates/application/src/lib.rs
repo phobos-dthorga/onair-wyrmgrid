@@ -162,6 +162,426 @@ impl<R: LegalPreferencesRepository> LegalSettingsService<R> {
     }
 }
 
+pub const THEME_SCHEMA_VERSION: u32 = 1;
+pub const DEFAULT_THEME_ID: &str = "wyrmgrid-classic";
+const MAX_THEME_MANIFEST_BYTES: usize = 32 * 1024;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PersistedCustomTheme {
+    pub theme_id: String,
+    pub manifest_json: String,
+}
+
+pub trait ThemeRepository: Send + Sync + 'static {
+    fn load_selected_theme(&self) -> Result<Option<String>, ThemeSettingsError>;
+    fn save_selected_theme(&self, theme_id: &str) -> Result<(), ThemeSettingsError>;
+    fn list_custom_themes(&self) -> Result<Vec<PersistedCustomTheme>, ThemeSettingsError>;
+    fn save_custom_theme(
+        &self,
+        theme_id: &str,
+        manifest_json: &str,
+    ) -> Result<(), ThemeSettingsError>;
+}
+
+impl ThemeRepository for Store {
+    fn load_selected_theme(&self) -> Result<Option<String>, ThemeSettingsError> {
+        self.load_theme_preferences_record()
+            .map(|record| record.map(|record| record.selected_theme_id))
+            .map_err(|_| ThemeSettingsError::StorageUnavailable)
+    }
+
+    fn save_selected_theme(&self, theme_id: &str) -> Result<(), ThemeSettingsError> {
+        self.save_selected_theme_record(theme_id)
+            .map_err(|_| ThemeSettingsError::StorageUnavailable)
+    }
+
+    fn list_custom_themes(&self) -> Result<Vec<PersistedCustomTheme>, ThemeSettingsError> {
+        self.list_custom_theme_records()
+            .map(|records| {
+                records
+                    .into_iter()
+                    .map(|record| PersistedCustomTheme {
+                        theme_id: record.theme_id,
+                        manifest_json: record.manifest_json,
+                    })
+                    .collect()
+            })
+            .map_err(|_| ThemeSettingsError::StorageUnavailable)
+    }
+
+    fn save_custom_theme(
+        &self,
+        theme_id: &str,
+        manifest_json: &str,
+    ) -> Result<(), ThemeSettingsError> {
+        self.save_custom_theme_record(theme_id, manifest_json)
+            .map_err(|_| ThemeSettingsError::StorageUnavailable)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ThemeManifest {
+    pub schema_version: u32,
+    pub id: String,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author: Option<String>,
+    pub colors: ThemeColors,
+    pub chart_palette: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ThemeColors {
+    pub canvas: String,
+    pub surface: String,
+    pub surface_elevated: String,
+    pub surface_soft: String,
+    pub text: String,
+    pub text_muted: String,
+    pub line: String,
+    pub accent: String,
+    pub highlight: String,
+    pub danger: String,
+    pub success: String,
+    pub map_aircraft: String,
+    pub map_fbo: String,
+    pub map_label: String,
+    pub map_halo: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct AvailableTheme {
+    pub manifest: ThemeManifest,
+    pub built_in: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ThemeStatus {
+    pub selected_theme_id: String,
+    pub active_theme: ThemeManifest,
+    pub themes: Vec<AvailableTheme>,
+}
+
+#[derive(Debug, Error, Clone, Copy, PartialEq, Eq)]
+pub enum ThemeSettingsError {
+    #[error("WyrmGrid could not read or save its local theme settings.")]
+    StorageUnavailable,
+    #[error("That theme file is larger than the 32 KiB safety limit.")]
+    ManifestTooLarge,
+    #[error("That file is not a valid WyrmGrid theme manifest.")]
+    InvalidManifest,
+    #[error("That theme uses an unsupported manifest version.")]
+    UnsupportedVersion,
+    #[error("That theme identifier is invalid or reserved by WyrmGrid.")]
+    InvalidIdentifier,
+    #[error("That theme contains an invalid name or author.")]
+    InvalidMetadata,
+    #[error("Theme colors must use the #RRGGBB format.")]
+    InvalidColour,
+    #[error("That theme does not provide enough contrast for readable controls.")]
+    InsufficientContrast,
+    #[error("Choose a theme that is currently available.")]
+    UnknownTheme,
+}
+
+pub struct ThemeSettingsService<R> {
+    repository: R,
+}
+
+impl<R: ThemeRepository> ThemeSettingsService<R> {
+    pub fn new(repository: R) -> Self {
+        Self { repository }
+    }
+
+    pub fn status(&self) -> Result<ThemeStatus, ThemeSettingsError> {
+        let mut themes = built_in_themes()
+            .into_iter()
+            .map(|manifest| AvailableTheme {
+                manifest,
+                built_in: true,
+            })
+            .collect::<Vec<_>>();
+
+        for stored in self.repository.list_custom_themes()? {
+            if let Ok(manifest) = parse_custom_theme(&stored.manifest_json)
+                && manifest.id == stored.theme_id
+            {
+                themes.push(AvailableTheme {
+                    manifest,
+                    built_in: false,
+                });
+            }
+        }
+
+        let requested_id = self
+            .repository
+            .load_selected_theme()?
+            .unwrap_or_else(|| DEFAULT_THEME_ID.to_owned());
+        let active_theme = themes
+            .iter()
+            .find(|theme| theme.manifest.id == requested_id)
+            .or_else(|| {
+                themes
+                    .iter()
+                    .find(|theme| theme.manifest.id == DEFAULT_THEME_ID)
+            })
+            .expect("the default built-in theme must exist")
+            .manifest
+            .clone();
+
+        Ok(ThemeStatus {
+            selected_theme_id: active_theme.id.clone(),
+            active_theme,
+            themes,
+        })
+    }
+
+    pub fn select(&self, theme_id: &str) -> Result<ThemeStatus, ThemeSettingsError> {
+        let status = self.status()?;
+        if !status
+            .themes
+            .iter()
+            .any(|theme| theme.manifest.id == theme_id)
+        {
+            return Err(ThemeSettingsError::UnknownTheme);
+        }
+        self.repository.save_selected_theme(theme_id)?;
+        self.status()
+    }
+
+    pub fn import(&self, manifest_json: &str) -> Result<ThemeStatus, ThemeSettingsError> {
+        let manifest = parse_custom_theme(manifest_json)?;
+        let canonical_json =
+            serde_json::to_string(&manifest).map_err(|_| ThemeSettingsError::InvalidManifest)?;
+        self.repository
+            .save_custom_theme(&manifest.id, &canonical_json)?;
+        self.repository.save_selected_theme(&manifest.id)?;
+        self.status()
+    }
+}
+
+pub fn built_in_themes() -> Vec<ThemeManifest> {
+    vec![
+        theme(
+            "wyrmgrid-classic",
+            "WyrmGrid Classic",
+            ThemeColors {
+                canvas: "#07110F".into(),
+                surface: "#0A1916".into(),
+                surface_elevated: "#102520".into(),
+                surface_soft: "#172F29".into(),
+                text: "#E9F1EF".into(),
+                text_muted: "#A7B8B2".into(),
+                line: "#526A62".into(),
+                accent: "#73D6AD".into(),
+                highlight: "#D5AE5F".into(),
+                danger: "#ED8074".into(),
+                success: "#73D6AD".into(),
+                map_aircraft: "#D5AE5F".into(),
+                map_fbo: "#73D6AD".into(),
+                map_label: "#E9F1EF".into(),
+                map_halo: "#07110F".into(),
+            },
+            ["#73D6AD", "#D5AE5F", "#72A7CF", "#CF7B73", "#A88BD4"],
+        ),
+        theme(
+            "wyrmgrid-daylight",
+            "Daylight Dispatch",
+            ThemeColors {
+                canvas: "#F4F0E7".into(),
+                surface: "#FBF9F3".into(),
+                surface_elevated: "#FFFFFF".into(),
+                surface_soft: "#E8E2D4".into(),
+                text: "#14211E".into(),
+                text_muted: "#52615C".into(),
+                line: "#84928B".into(),
+                accent: "#176B55".into(),
+                highlight: "#7A500F".into(),
+                danger: "#A13A32".into(),
+                success: "#216E50".into(),
+                map_aircraft: "#7A500F".into(),
+                map_fbo: "#176B55".into(),
+                map_label: "#14211E".into(),
+                map_halo: "#FFFFFF".into(),
+            },
+            ["#176B55", "#7A500F", "#326A98", "#A13A32", "#6D4A91"],
+        ),
+        theme(
+            "wyrmgrid-high-contrast",
+            "High Contrast",
+            ThemeColors {
+                canvas: "#000000".into(),
+                surface: "#0A0A0A".into(),
+                surface_elevated: "#141414".into(),
+                surface_soft: "#1E1E1E".into(),
+                text: "#FFFFFF".into(),
+                text_muted: "#D7D7D7".into(),
+                line: "#858585".into(),
+                accent: "#59FFBE".into(),
+                highlight: "#FFD75A".into(),
+                danger: "#FF786D".into(),
+                success: "#6EFF9F".into(),
+                map_aircraft: "#FFD75A".into(),
+                map_fbo: "#59FFBE".into(),
+                map_label: "#FFFFFF".into(),
+                map_halo: "#000000".into(),
+            },
+            ["#59FFBE", "#FFD75A", "#67C8FF", "#FF786D", "#D39BFF"],
+        ),
+    ]
+}
+
+fn theme<const N: usize>(
+    id: &str,
+    name: &str,
+    colors: ThemeColors,
+    chart_palette: [&str; N],
+) -> ThemeManifest {
+    ThemeManifest {
+        schema_version: THEME_SCHEMA_VERSION,
+        id: id.into(),
+        name: name.into(),
+        author: Some("WyrmGrid".into()),
+        colors,
+        chart_palette: chart_palette.into_iter().map(str::to_owned).collect(),
+    }
+}
+
+fn parse_custom_theme(manifest_json: &str) -> Result<ThemeManifest, ThemeSettingsError> {
+    if manifest_json.len() > MAX_THEME_MANIFEST_BYTES {
+        return Err(ThemeSettingsError::ManifestTooLarge);
+    }
+    let manifest: ThemeManifest =
+        serde_json::from_str(manifest_json).map_err(|_| ThemeSettingsError::InvalidManifest)?;
+    validate_theme(&manifest, false)?;
+    Ok(manifest)
+}
+
+fn validate_theme(
+    manifest: &ThemeManifest,
+    allow_reserved_identifier: bool,
+) -> Result<(), ThemeSettingsError> {
+    if manifest.schema_version != THEME_SCHEMA_VERSION {
+        return Err(ThemeSettingsError::UnsupportedVersion);
+    }
+    if !valid_theme_id(&manifest.id)
+        || (!allow_reserved_identifier && manifest.id.starts_with("wyrmgrid-"))
+    {
+        return Err(ThemeSettingsError::InvalidIdentifier);
+    }
+    if !valid_label(&manifest.name, 64)
+        || manifest
+            .author
+            .as_ref()
+            .is_some_and(|author| !valid_label(author, 80))
+    {
+        return Err(ThemeSettingsError::InvalidMetadata);
+    }
+
+    let colors = [
+        &manifest.colors.canvas,
+        &manifest.colors.surface,
+        &manifest.colors.surface_elevated,
+        &manifest.colors.surface_soft,
+        &manifest.colors.text,
+        &manifest.colors.text_muted,
+        &manifest.colors.line,
+        &manifest.colors.accent,
+        &manifest.colors.highlight,
+        &manifest.colors.danger,
+        &manifest.colors.success,
+        &manifest.colors.map_aircraft,
+        &manifest.colors.map_fbo,
+        &manifest.colors.map_label,
+        &manifest.colors.map_halo,
+    ];
+    if colors.into_iter().any(|colour| !valid_hex_colour(colour))
+        || !(3..=8).contains(&manifest.chart_palette.len())
+        || manifest
+            .chart_palette
+            .iter()
+            .any(|colour| !valid_hex_colour(colour))
+    {
+        return Err(ThemeSettingsError::InvalidColour);
+    }
+    let interface_surfaces = [
+        manifest.colors.canvas.as_str(),
+        manifest.colors.surface.as_str(),
+        manifest.colors.surface_elevated.as_str(),
+        manifest.colors.surface_soft.as_str(),
+    ];
+    if !contrasts_with_all(&manifest.colors.text, &interface_surfaces, 4.5)
+        || !contrasts_with_all(&manifest.colors.text_muted, &interface_surfaces, 4.5)
+        || !contrasts_with_all(&manifest.colors.accent, &interface_surfaces, 4.5)
+        || !contrasts_with_all(&manifest.colors.highlight, &interface_surfaces, 4.5)
+        || !contrasts_with_all(&manifest.colors.danger, &interface_surfaces, 4.5)
+        || !contrasts_with_all(&manifest.colors.success, &interface_surfaces, 4.5)
+        || contrast_ratio(&manifest.colors.line, &manifest.colors.surface) < 1.5
+        || contrast_ratio(&manifest.colors.map_label, &manifest.colors.map_halo) < 4.5
+        || contrast_ratio(&manifest.colors.map_aircraft, &manifest.colors.map_halo) < 3.0
+        || contrast_ratio(&manifest.colors.map_fbo, &manifest.colors.map_halo) < 3.0
+        || contrast_ratio(&manifest.colors.highlight, &manifest.colors.map_halo) < 3.0
+        || manifest
+            .chart_palette
+            .iter()
+            .any(|colour| contrast_ratio(colour, &manifest.colors.surface) < 3.0)
+    {
+        return Err(ThemeSettingsError::InsufficientContrast);
+    }
+    Ok(())
+}
+
+fn valid_theme_id(value: &str) -> bool {
+    (3..=64).contains(&value.len())
+        && value.bytes().all(|character| {
+            character.is_ascii_lowercase() || character.is_ascii_digit() || character == b'-'
+        })
+        && !value.starts_with('-')
+        && !value.ends_with('-')
+}
+
+fn valid_label(value: &str, maximum_length: usize) -> bool {
+    !value.trim().is_empty()
+        && value.chars().count() <= maximum_length
+        && !value.chars().any(char::is_control)
+}
+
+fn valid_hex_colour(value: &str) -> bool {
+    value.len() == 7
+        && value.starts_with('#')
+        && value[1..]
+            .bytes()
+            .all(|character| character.is_ascii_hexdigit())
+}
+
+fn contrast_ratio(first: &str, second: &str) -> f64 {
+    let first = relative_luminance(first);
+    let second = relative_luminance(second);
+    (first.max(second) + 0.05) / (first.min(second) + 0.05)
+}
+
+fn contrasts_with_all(foreground: &str, backgrounds: &[&str], minimum: f64) -> bool {
+    backgrounds
+        .iter()
+        .all(|background| contrast_ratio(foreground, background) >= minimum)
+}
+
+fn relative_luminance(colour: &str) -> f64 {
+    let channel = |offset| {
+        let value = u8::from_str_radix(&colour[offset..offset + 2], 16)
+            .expect("validated hex colours have complete channels") as f64
+            / 255.0;
+        if value <= 0.04045 {
+            value / 12.92
+        } else {
+            ((value + 0.055) / 1.055).powf(2.4)
+        }
+    };
+    0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ConnectionStatus {
     pub connected: bool,
@@ -352,6 +772,29 @@ impl From<LegalSettingsError> for OperationError {
             code,
             message: error.to_string(),
             retryable: matches!(error, LegalSettingsError::StorageUnavailable),
+            reportable: false,
+            report_id: None,
+        }
+    }
+}
+
+impl From<ThemeSettingsError> for OperationError {
+    fn from(error: ThemeSettingsError) -> Self {
+        let (code, retryable) = match error {
+            ThemeSettingsError::StorageUnavailable => ("theme.storage_unavailable", true),
+            ThemeSettingsError::ManifestTooLarge => ("theme.manifest_too_large", false),
+            ThemeSettingsError::InvalidManifest => ("theme.invalid_manifest", false),
+            ThemeSettingsError::UnsupportedVersion => ("theme.unsupported_version", false),
+            ThemeSettingsError::InvalidIdentifier => ("theme.invalid_identifier", false),
+            ThemeSettingsError::InvalidMetadata => ("theme.invalid_metadata", false),
+            ThemeSettingsError::InvalidColour => ("theme.invalid_colour", false),
+            ThemeSettingsError::InsufficientContrast => ("theme.insufficient_contrast", false),
+            ThemeSettingsError::UnknownTheme => ("theme.unknown_theme", false),
+        };
+        Self {
+            code,
+            message: error.to_string(),
+            retryable,
             reportable: false,
             report_id: None,
         }
@@ -897,6 +1340,74 @@ mod tests {
     #[test]
     fn exposes_the_supported_plugin_api() {
         assert_eq!(platform_status().plugin_api_version, 1);
+    }
+
+    #[test]
+    fn built_in_themes_satisfy_the_same_safety_rules() {
+        for theme in built_in_themes() {
+            validate_theme(&theme, true).expect("built-in theme should remain valid");
+        }
+    }
+
+    #[test]
+    fn imports_and_selects_a_data_only_custom_theme() {
+        let service = ThemeSettingsService::new(
+            Store::open_in_memory().expect("theme store should initialize"),
+        );
+        let manifest = include_str!("../../../schemas/fixtures/theme-manifest-v1.json");
+
+        let status = service.import(manifest).expect("valid theme should import");
+        assert_eq!(status.selected_theme_id, "midnight-cargo");
+        assert_eq!(status.active_theme.name, "Midnight Cargo");
+        assert_eq!(status.themes.len(), 4);
+
+        let selected = service
+            .select(DEFAULT_THEME_ID)
+            .expect("built-in theme should be selectable");
+        assert_eq!(selected.selected_theme_id, DEFAULT_THEME_ID);
+    }
+
+    #[test]
+    fn rejects_theme_code_reserved_identifiers_and_low_contrast() {
+        let arbitrary_css = r##"{
+            "schema_version":1,"id":"custom","name":"Unsafe","css":"body{}",
+            "colors":{},"chart_palette":["#FFFFFF","#000000","#777777"]
+        }"##;
+        assert_eq!(
+            parse_custom_theme(arbitrary_css),
+            Err(ThemeSettingsError::InvalidManifest)
+        );
+
+        let mut reserved = built_in_themes().remove(0);
+        assert_eq!(
+            validate_theme(&reserved, false),
+            Err(ThemeSettingsError::InvalidIdentifier)
+        );
+        reserved.id = "low-contrast".into();
+        reserved.colors.text = reserved.colors.canvas.clone();
+        assert_eq!(
+            validate_theme(&reserved, false),
+            Err(ThemeSettingsError::InsufficientContrast)
+        );
+    }
+
+    #[test]
+    fn corrupt_or_missing_selected_themes_fall_back_safely() {
+        let store = Store::open_in_memory().expect("theme store should initialize");
+        store
+            .save_custom_theme_record("broken-theme", "{not-json}")
+            .expect("corrupt fixture should save at the raw storage boundary");
+        store
+            .save_selected_theme_record("broken-theme")
+            .expect("selected fixture should save");
+        let service = ThemeSettingsService::new(store);
+
+        let status = service
+            .status()
+            .expect("theme status should degrade safely");
+        assert_eq!(status.selected_theme_id, DEFAULT_THEME_ID);
+        assert_eq!(status.active_theme.id, DEFAULT_THEME_ID);
+        assert_eq!(status.themes.len(), 3);
     }
 
     #[test]

@@ -33,6 +33,15 @@
     disconnectedStatus,
     type OnAirConnectionStatus,
   } from "$lib/onair/types";
+  import ThemeDialog from "$lib/theme/ThemeDialog.svelte";
+  import {
+    browserThemeStatus,
+    importTheme,
+    loadThemeStatus,
+    selectTheme,
+  } from "$lib/theme/client";
+  import { applyTheme } from "$lib/theme/runtime";
+  import type { ThemeStatus } from "$lib/theme/types";
 
   type PlatformStatus = {
     application: string;
@@ -75,6 +84,10 @@
   let legalBusy = $state(false);
   let legalTelemetryDraft = $state(false);
   let showLegalDialog = $state(false);
+  let themeStatus = $state<ThemeStatus>(browserThemeStatus);
+  let showThemeDialog = $state(false);
+  let themeBusy = $state(false);
+  let themeError = $state("");
   let workspaceInitialized = false;
 
   const fleetSnapshot = $derived<FleetSnapshot | null>(fleetView?.snapshot ?? null);
@@ -333,6 +346,52 @@
     }
   }
 
+  async function initializeTheme(): Promise<void> {
+    themeError = "";
+    try {
+      themeStatus = await loadThemeStatus();
+      applyTheme(themeStatus.active_theme);
+    } catch (error) {
+      applyTheme(browserThemeStatus.active_theme);
+      themeError = operationErrorMessage(
+        error,
+        "WyrmGrid could not read its local theme settings.",
+      );
+    }
+  }
+
+  async function chooseTheme(themeId: string): Promise<void> {
+    if (themeId === themeStatus.selected_theme_id) return;
+    themeBusy = true;
+    themeError = "";
+    try {
+      themeStatus = await selectTheme(themeId);
+      applyTheme(themeStatus.active_theme);
+    } catch (error) {
+      themeError = operationErrorMessage(error, "WyrmGrid could not apply that theme.");
+    } finally {
+      themeBusy = false;
+    }
+  }
+
+  async function addTheme(manifestJson: string): Promise<void> {
+    themeBusy = true;
+    themeError = "";
+    try {
+      themeStatus = await importTheme(manifestJson);
+      applyTheme(themeStatus.active_theme);
+    } catch (error) {
+      themeError = operationErrorMessage(error, "WyrmGrid could not import that theme.");
+    } finally {
+      themeBusy = false;
+    }
+  }
+
+  async function initializeApplication(): Promise<void> {
+    await initializeTheme();
+    await initializeLegal();
+  }
+
   function openLegalSettings(): void {
     legalTelemetryDraft = legalStatus.telemetry_enabled;
     legalError = "";
@@ -400,7 +459,7 @@
       automaticSyncMinutes = savedAutomaticSync;
     }
 
-    void initializeLegal();
+    void initializeApplication();
   });
 </script>
 
@@ -424,7 +483,7 @@
     >
   </main>
 {:else if legalStatus.acknowledged}
-<main class="shell" inert={showLegalDialog}>
+<main class="shell" inert={showLegalDialog || showThemeDialog}>
   <header class="topbar">
     <div class="brand-mark" aria-hidden="true">WG</div>
     <div class="brand-copy">
@@ -438,6 +497,16 @@
       <button class="nav-item">Hoard</button>
       <button class="nav-item">Forge</button>
     </nav>
+    <button
+      class="theme-pill"
+      type="button"
+      onclick={() => {
+        themeError = "";
+        showThemeDialog = true;
+      }}
+    >
+      Theme
+    </button>
     <button class="legal-pill" type="button" onclick={openLegalSettings}>
       Privacy &amp; Terms
     </button>
@@ -660,6 +729,17 @@
   status={connection}
   onclose={() => (showConnectionDialog = false)}
   onstatuschange={handleConnectionStatus}
+/>
+
+<ThemeDialog
+  open={showThemeDialog}
+  status={themeStatus}
+  desktopRuntime={isDesktopRuntime()}
+  busy={themeBusy}
+  errorMessage={themeError}
+  onselect={(themeId) => void chooseTheme(themeId)}
+  onimport={(manifestJson) => void addTheme(manifestJson)}
+  onclose={() => (showThemeDialog = false)}
 />
 {/if}
 
