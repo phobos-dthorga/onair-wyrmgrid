@@ -37,13 +37,13 @@ fn disconnect_onair(
 }
 
 #[tauri::command]
-async fn synchronize_onair_fleet(
+async fn synchronize_onair_company_data(
     state: tauri::State<'_, DesktopState>,
-    trigger: wyrmgrid_application::FleetSyncTrigger,
-) -> Result<wyrmgrid_application::FleetSyncResult, String> {
+    trigger: wyrmgrid_application::DataSyncTrigger,
+) -> Result<wyrmgrid_application::CompanyDataSyncResult, String> {
     state
         .onair
-        .synchronize_fleet(trigger)
+        .synchronize_company_data(trigger)
         .await
         .map_err(|error| error.to_string())
 }
@@ -55,6 +55,16 @@ fn onair_fleet_snapshot(
     state
         .onair
         .fleet_snapshot()
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn onair_fbo_snapshot(
+    state: tauri::State<'_, DesktopState>,
+) -> Result<Option<wyrmgrid_application::FboSnapshotView>, String> {
+    state
+        .onair
+        .fbo_snapshot()
         .map_err(|error| error.to_string())
 }
 
@@ -84,8 +94,9 @@ pub fn run() {
             onair_connection_status,
             connect_onair,
             disconnect_onair,
-            synchronize_onair_fleet,
-            onair_fleet_snapshot
+            synchronize_onair_company_data,
+            onair_fleet_snapshot,
+            onair_fbo_snapshot
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

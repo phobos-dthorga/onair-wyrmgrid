@@ -18,6 +18,12 @@ export type AircraftSummary = {
   current_airport: AirportSummary | null;
 };
 
+export type FboSummary = {
+  id: string;
+  name: string | null;
+  airport: AirportSummary | null;
+};
+
 export type FleetSnapshot = {
   value: AircraftSummary[];
   provenance: {
@@ -27,12 +33,11 @@ export type FleetSnapshot = {
   };
 };
 
-export type FleetSyncTrigger = "initial" | "manual" | "automatic";
+export type DataSyncTrigger = "initial" | "manual" | "automatic";
 
-export type FleetSnapshotAvailability =
-  "live" | "cached" | "offline" | "preview";
+export type SnapshotAvailability = "live" | "cached" | "offline" | "preview";
 
-export type FleetSnapshotStorage = "hoard" | "memory_only" | "preview";
+export type SnapshotStorage = "hoard" | "memory_only" | "preview";
 
 export type FleetSnapshotView = {
   company: {
@@ -40,11 +45,28 @@ export type FleetSnapshotView = {
     airline_code: string;
   };
   snapshot: FleetSnapshot;
-  availability: FleetSnapshotAvailability;
-  storage: FleetSnapshotStorage;
+  availability: SnapshotAvailability;
+  storage: SnapshotStorage;
 };
 
-export type FleetSyncResult = {
+export type FboSnapshot = {
+  value: FboSummary[];
+  provenance: FleetSnapshot["provenance"];
+};
+
+export type FboSnapshotView = {
+  company: FleetSnapshotView["company"];
+  snapshot: FboSnapshot;
+  availability: SnapshotAvailability;
+  storage: SnapshotStorage;
+};
+
+export type CompanyDataSyncResult = {
   disposition: "synchronized" | "quietly_ignored";
-  snapshot: FleetSnapshotView | null;
+  fleet: FleetSnapshotView | null;
+  fbos: FboSnapshotView | null;
+  failures: Array<{
+    resource: "fleet" | "fbos";
+    message: string;
+  }>;
 };

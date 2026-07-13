@@ -9,7 +9,7 @@ than one grand map implementation.
 ```text
 OnAir response
   -> private raw Rust types
-  -> stable domain aircraft
+  -> stable domain aircraft or FBO
   -> timestamped, schema-versioned snapshot
   -> SQLite Hoard history
   -> live/cached/offline application view
@@ -22,11 +22,11 @@ MapLibre and Svelte receive application-owned summaries only. They do not parse
 raw OnAir JSON, infer business state, hold credentials, or decide what a remote
 status code means.
 
-## First fleet slice
+## First fleet and FBO slices
 
 The first Atlas slice provides:
 
-- an authenticated initial, manual, or automatic fleet synchronization;
+- an authenticated initial, manual, or automatic company-data synchronization;
 - a clearly labelled manual synchronization control that remains available
   during its silently enforced quiet period;
 - locally remembered automatic-check preferences with conservative interval
@@ -39,19 +39,24 @@ The first Atlas slice provides:
 - a Fleet layer toggle and separate received/mapped counts;
 - automatic map fitting after a new fleet observation;
 - marker selection linked to an aircraft inspector;
+- a separately toggleable gold FBO layer with airport-backed locations;
+- FBO selection linked to an inspector without coupling it to aircraft state;
+- independent fleet and FBO snapshots so a partial remote failure does not
+  discard the resource that succeeded;
 - persistent, schema-versioned Hoard snapshots after successful observations;
 - immediate restart-time display of the latest cached company fleet;
 - explicit Live, Cached, Offline, Preview, Hoard, and Memory-only labels;
 - preservation of the last valid observation when a later refresh fails;
-- a clearly labelled synthetic browser-preview fleet for interface testing.
+- clearly labelled synthetic browser-preview fleet and FBO data for interface testing.
 
-The committed fleet fixture and browser-preview data are synthetic. They contain
+The committed fixtures and browser-preview data are synthetic. They contain
 no user company, aircraft, airport, or credential data.
 
 ## Deliberate limits
 
-This slice does not yet provide FBOs, clustering, routes, jobs, range rings,
-maintenance, or plugin-published layers. Those should be added only when the
+This slice does not yet provide FBO capacity, fuel, workshop, pricing, or
+construction details, nor clustering, routes, jobs, range rings, maintenance,
+or plugin-published layers. Those should be added only when the
 preceding layer establishes the smallest shared contract they require.
 
 Atlas layers should remain declarative. A future plugin may publish bounded

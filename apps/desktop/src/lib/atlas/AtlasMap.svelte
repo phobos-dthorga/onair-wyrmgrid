@@ -2,28 +2,39 @@
   import type { GeoJSONSource, Map } from "maplibre-gl";
   import "maplibre-gl/dist/maplibre-gl.css";
   import { onMount } from "svelte";
-  import type { AircraftSummary } from "./types";
+  import type { AircraftSummary, FboSummary } from "./types";
 
   let {
     aircraft,
+    fbos,
     fleetVisible,
+    fboVisible,
     selectedAircraftId,
-    onselect,
+    selectedFboId,
+    onselectaircraft,
+    onselectfbo,
   }: {
     aircraft: AircraftSummary[];
+    fbos: FboSummary[];
     fleetVisible: boolean;
+    fboVisible: boolean;
     selectedAircraftId: string | null;
-    onselect: (aircraftId: string) => void;
+    selectedFboId: string | null;
+    onselectaircraft: (aircraftId: string) => void;
+    onselectfbo: (fboId: string) => void;
   } = $props();
 
   const FLEET_SOURCE_ID = "wyrmgrid-fleet";
   const FLEET_LAYER_ID = "wyrmgrid-fleet-aircraft";
   const FLEET_LABEL_LAYER_ID = "wyrmgrid-fleet-labels";
+  const FBO_SOURCE_ID = "wyrmgrid-fbos";
+  const FBO_LAYER_ID = "wyrmgrid-fbo-network";
+  const FBO_LABEL_LAYER_ID = "wyrmgrid-fbo-labels";
 
   let mapContainer: HTMLDivElement;
   let map: Map | undefined;
   let mapReady = $state(false);
-  let fittedFleetSignature = "";
+  let fittedAtlasSignature = "";
 
   type FleetFeatureCollection = {
     type: "FeatureCollection";
@@ -35,6 +46,15 @@
         registration: string | null;
         model: string | null;
       };
+    }>;
+  };
+
+  type FboFeatureCollection = {
+    type: "FeatureCollection";
+    features: Array<{
+      type: "Feature";
+      geometry: { type: "Point"; coordinates: [number, number] };
+      properties: { id: string; name: string | null; icao: string | null };
     }>;
   };
 
@@ -65,31 +85,66 @@
     };
   }
 
-  function updateFleet(): void {
+  function fboFeatures(): FboFeatureCollection {
+    return {
+      type: "FeatureCollection",
+      features: fbos.flatMap((item) =>
+        item.airport?.location
+          ? [{
+              type: "Feature" as const,
+              geometry: {
+                type: "Point" as const,
+                coordinates: [
+                  item.airport.location.longitude,
+                  item.airport.location.latitude,
+                ] as [number, number],
+              },
+              properties: { id: item.id, name: item.name, icao: item.airport.icao },
+            }]
+          : [],
+      ),
+    };
+  }
+
+  function updateAtlas(): void {
     if (!map || !mapReady) return;
 
-    const features = fleetFeatures();
-    const source = map.getSource(FLEET_SOURCE_ID) as GeoJSONSource | undefined;
-    source?.setData(features);
+    const fleet = fleetFeatures();
+    const fboNetwork = fboFeatures();
+    (map.getSource(FLEET_SOURCE_ID) as GeoJSONSource | undefined)?.setData(fleet);
+    (map.getSource(FBO_SOURCE_ID) as GeoJSONSource | undefined)?.setData(fboNetwork);
 
     const visibility = fleetVisible ? "visible" : "none";
     map.setLayoutProperty(FLEET_LAYER_ID, "visibility", visibility);
     map.setLayoutProperty(FLEET_LABEL_LAYER_ID, "visibility", visibility);
+    const fboVisibility = fboVisible ? "visible" : "none";
+    map.setLayoutProperty(FBO_LAYER_ID, "visibility", fboVisibility);
+    map.setLayoutProperty(FBO_LABEL_LAYER_ID, "visibility", fboVisibility);
     map.setPaintProperty(FLEET_LAYER_ID, "circle-color", [
       "case",
       ["==", ["get", "id"], selectedAircraftId ?? ""],
       "#d5ae5f",
       "#73d6ad",
     ]);
+    map.setPaintProperty(FBO_LAYER_ID, "circle-color", [
+      "case",
+      ["==", ["get", "id"], selectedFboId ?? ""],
+      "#f1d283",
+      "#d5ae5f",
+    ]);
 
-    const signature = features.features
+    const visibleFeatures = [
+      ...(fleetVisible ? fleet.features : []),
+      ...(fboVisible ? fboNetwork.features : []),
+    ];
+    const signature = visibleFeatures
       .map((feature) => `${feature.properties.id}:${feature.geometry.coordinates.join(",")}`)
       .sort()
       .join("|");
-    if (!signature || signature === fittedFleetSignature) return;
+    if (!signature || signature === fittedAtlasSignature) return;
 
-    fittedFleetSignature = signature;
-    const coordinates = features.features.map((feature) => feature.geometry.coordinates);
+    fittedAtlasSignature = signature;
+    const coordinates = visibleFeatures.map((feature) => feature.geometry.coordinates);
     const bounds = coordinates.reduce(
       (current, coordinate) => current.extend(coordinate),
       new maplibregl.LngLatBounds(coordinates[0], coordinates[0]),
@@ -101,9 +156,12 @@
 
   $effect(() => {
     aircraft;
+    fbos;
     fleetVisible;
+    fboVisible;
     selectedAircraftId;
-    updateFleet();
+    selectedFboId;
+    updateAtlas();
   });
 
   onMount(() => {
@@ -135,6 +193,39 @@
         atlasMap.addSource(FLEET_SOURCE_ID, {
           type: "geojson",
           data: fleetFeatures(),
+        });
+        atlasMap.addSource(FBO_SOURCE_ID, {
+          type: "geojson",
+          data: fboFeatures(),
+        });
+        atlasMap.addLayer({
+          id: FBO_LAYER_ID,
+          type: "circle",
+          source: FBO_SOURCE_ID,
+          paint: {
+            "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, 6, 7, 10],
+            "circle-color": "#d5ae5f",
+            "circle-stroke-color": "#07110f",
+            "circle-stroke-width": 2.5,
+            "circle-opacity": 0.95,
+          },
+        });
+        atlasMap.addLayer({
+          id: FBO_LABEL_LAYER_ID,
+          type: "symbol",
+          source: FBO_SOURCE_ID,
+          minzoom: 3,
+          layout: {
+            "text-field": ["coalesce", ["get", "name"], ["get", "icao"], "FBO"],
+            "text-size": 11,
+            "text-offset": [0, 1.5],
+            "text-anchor": "top",
+          },
+          paint: {
+            "text-color": "#f1d283",
+            "text-halo-color": "#07110f",
+            "text-halo-width": 1.5,
+          },
         });
         atlasMap.addLayer({
           id: FLEET_LAYER_ID,
@@ -168,7 +259,11 @@
         });
         atlasMap.on("click", FLEET_LAYER_ID, (event) => {
           const aircraftId = event.features?.[0]?.properties?.id;
-          if (typeof aircraftId === "string") onselect(aircraftId);
+          if (typeof aircraftId === "string") onselectaircraft(aircraftId);
+        });
+        atlasMap.on("click", FBO_LAYER_ID, (event) => {
+          const fboId = event.features?.[0]?.properties?.id;
+          if (typeof fboId === "string") onselectfbo(fboId);
         });
         atlasMap.on("mouseenter", FLEET_LAYER_ID, () => {
           atlasMap.getCanvas().style.cursor = "pointer";
@@ -176,8 +271,14 @@
         atlasMap.on("mouseleave", FLEET_LAYER_ID, () => {
           atlasMap.getCanvas().style.cursor = "";
         });
+        atlasMap.on("mouseenter", FBO_LAYER_ID, () => {
+          atlasMap.getCanvas().style.cursor = "pointer";
+        });
+        atlasMap.on("mouseleave", FBO_LAYER_ID, () => {
+          atlasMap.getCanvas().style.cursor = "";
+        });
         mapReady = true;
-        updateFleet();
+        updateAtlas();
       });
     });
 

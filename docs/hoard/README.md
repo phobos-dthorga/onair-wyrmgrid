@@ -4,18 +4,19 @@ Hoard is WyrmGrid's local SQLite history and offline-data boundary. It stores
 stable WyrmGrid observations after raw OnAir responses have been validated and
 translated. Raw OnAir JSON and API credentials never enter Hoard.
 
-## Fleet snapshots
+## Fleet and FBO snapshots
 
-After every successful fleet synchronization, the application stores a
+After every successful resource synchronization, the application stores a
 schema-versioned payload containing:
 
 - the company identifier, name, and airline code;
 - stable aircraft and current-airport summaries;
+- stable FBO identity and airport summaries;
 - the original OnAir provenance source and observation time;
 - the WyrmGrid snapshot schema version.
 
 The existing migration-1 `api_snapshots` table already owns this generic record
-shape, so the first fleet persistence slice does not change the database schema
+shape, so the fleet and FBO persistence slices do not change the database schema
 or add an unnecessary migration. Future schema changes must use new append-only
 migrations and must not edit migration 1.
 
@@ -25,13 +26,18 @@ is loaded before an OnAir connection exists. Atlas presents it immediately as
 snapshot, marked **Cached**, while a live synchronization is pending. Only a
 successful remote observation becomes **Live**.
 
+The matching company FBO snapshot is restored independently. Fleet and FBO
+observations retain their own timestamps because the OnAir API does not expose
+an atomic combined response. A successful resource remains usable even when the
+other resource fails during the same guarded synchronization.
+
 Failed synchronization never replaces the last valid observation. It marks the
 retained data Cached, keeps the map usable, and reports the bounded network or
 API failure separately.
 
 ## Retention
 
-Fleet history is compacted transactionally whenever a successful observation is
+Resource history is compacted transactionally whenever a successful observation is
 saved:
 
 - retain the newest observation in each UTC hour for the most recent seven days;

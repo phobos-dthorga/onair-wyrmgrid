@@ -3,7 +3,7 @@
 ## Protected assets
 
 - OnAir API credentials and company identifiers;
-- fleet, employee, finance, job, and flight history;
+- fleet, FBO, employee, finance, job, and flight history;
 - SimBrief identifiers and OFPs, SayIntentions API keys, account identity,
   communications and active-flight files, imported routes, weather caches,
   online-network activity, and simulator telemetry;
@@ -104,9 +104,11 @@
   submission endpoints and restricted to the narrowest required ingress origin
   in desktop content-security policy;
 - no plugin runtime until framing, lifecycle, limits, and permission review are
-  specified and tested;
-- fleet synchronization is serialized in Rust; trigger-specific quiet periods
-  silently return cached state without making another remote request.
+  specified and tested.
+- company synchronization is serialized in Rust; trigger-specific quiet periods
+  silently return cached state without making another remote request. Fleet and
+  FBO reads are sequential, and an authentication or rate-limit failure stops
+  the second request.
 - Hoard stores stable domain snapshots rather than raw API payloads, never stores
   credentials, applies bounded retention, and visibly distinguishes live,
   cached, offline, preview, and memory-only data.
@@ -141,7 +143,7 @@ this guidance must change without weakening secret handling.
 ## Residual Hoard risks
 
 The local SQLite database contains company identifiers, company names, aircraft
-details, locations, and observation history. It is not currently encrypted at
+and FBO details, locations, and observation history. It is not currently encrypted at
 rest and relies on operating-system account and filesystem protections. A user
 must therefore sanitize or omit `wyrmgrid.db` from support reports. Retention
 limits intraday growth but deliberately preserves one daily historical record,

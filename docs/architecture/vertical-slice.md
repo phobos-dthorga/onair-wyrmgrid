@@ -7,7 +7,7 @@ credential entry
   -> session-only Rust credential holder
   -> OnAir company GET connection probe
   -> optional operating-system credential storage (later opt-in milestone)
-  -> OnAir fleet GET requests
+  -> sequential OnAir fleet and FBO GET requests
   -> raw response validation
   -> stable domain translation
   -> timestamped SQLite snapshot
@@ -22,7 +22,7 @@ credential entry
 - No secret appears in logs, errors, plugin messages, crash reports, or SQLite.
 - A connection can be verified, identified by company name, and disconnected
   without persisting the API key.
-- A company and its fleet can be viewed after a successful refresh.
+- A company, its fleet, and its FBO network can be viewed after a successful refresh.
 - The last successful snapshot remains usable while offline.
 - Every displayed record shows data age and source.
 - Failed refreshes preserve the last valid state and explain the failure.
@@ -39,8 +39,9 @@ The next completed increment translates the official fleet envelope into stable
 aircraft and airport summaries and presents valid locations through the Atlas
 Fleet layer and linked inspector. Hoard now persists successful observations,
 restores the newest compatible company fleet at startup, labels offline and
-cached states explicitly, and retains hourly then daily history. FBO translation
-remains before this vertical slice is complete.
+cached states explicitly, and retains hourly then daily history. The next
+increment adds the narrow Swagger-verified FBO identity and airport mapping to
+the same pipeline, with independent persistence and partial-failure handling.
 
 Those retained observations deliberately form the basis of the future Hoard
 Timeline. Historical queries will resolve resources as-of a selected time and
