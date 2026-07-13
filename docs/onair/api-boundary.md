@@ -6,8 +6,8 @@ JSON over HTTPS, the `oa-apikey` request header, a compatibility
 endpoint and API-key header were checked against OnAir's published Swagger
 document on 2026-07-14. The additional company header is based on a sanitized
 community observation described below; it is not part of the published Swagger
-contract. Fleet translation remains a later increment and must be verified
-independently before it is claimed to work.
+contract. The fleet endpoint has since been validated by an authenticated
+outside-repository test; no credential or response capture was committed.
 
 Rules:
 
@@ -20,7 +20,8 @@ Rules:
 - Raw response types are private to the adapter.
 - Captured fixtures must remove company IDs, registrations, personal names,
   coordinates when identifying, and all credentials.
-- Polling uses backoff, cache-aware refresh, and conservative request rates.
+- Fleet synchronization is serialized and subject to conservative quiet
+  periods in the Rust application service.
 
 No write operation is part of the supported platform until OnAir explicitly
 documents one for public API use.
@@ -74,9 +75,31 @@ direct aircraft coordinates are absent.
 
 The translated fleet is wrapped with `on_air_fact` provenance and an observation
 timestamp before leaving Rust. Its source label omits the company UUID. The
-committed fleet response fixture is synthetic and Swagger-derived; a real,
-sanitized authenticated response is still required before claiming complete
-live-schema coverage.
+committed fleet response fixture is synthetic and Swagger-derived; an
+authenticated application test on 2026-07-14 successfully mapped 17 aircraft.
+That confirms the narrow fields used by this slice, not every field in the live
+fleet schema.
+
+## Synchronization policy
+
+OnAir does not currently publish a formal public API rate-limit policy in the
+Swagger document or public API wiki. WyrmGrid therefore uses an intentionally
+conservative, application-owned policy that can be revised if OnAir provides
+official guidance:
+
+- automatic fleet checks default to every 30 minutes;
+- users may select Off, 15 minutes, 30 minutes, 1 hour, or 2 hours;
+- the Rust boundary will never accept automatic checks more frequently than
+  every 15 minutes;
+- manual synchronization has a 60-second quiet period;
+- only one fleet synchronization may be in progress for a connected session;
+- requests inside either quiet period return the existing snapshot without
+  contacting OnAir or displaying an error.
+
+The interval choice is a non-secret interface preference stored locally. The
+authoritative quiet-period enforcement remains in Rust so another interface or
+future plugin cannot bypass it. Automatic checks run only while WyrmGrid is open
+and the OnAir session is connected.
 
 References:
 

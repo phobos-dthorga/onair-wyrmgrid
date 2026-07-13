@@ -35,12 +35,13 @@ fn disconnect_onair(
 }
 
 #[tauri::command]
-async fn refresh_onair_fleet(
+async fn synchronize_onair_fleet(
     state: tauri::State<'_, DesktopState>,
-) -> Result<wyrmgrid_domain::Observed<Vec<wyrmgrid_domain::AircraftSummary>>, String> {
+    trigger: wyrmgrid_application::FleetSyncTrigger,
+) -> Result<wyrmgrid_application::FleetSyncResult, String> {
     state
         .onair
-        .refresh_fleet()
+        .synchronize_fleet(trigger)
         .await
         .map_err(|error| error.to_string())
 }
@@ -66,7 +67,7 @@ pub fn run() {
             onair_connection_status,
             connect_onair,
             disconnect_onair,
-            refresh_onair_fleet,
+            synchronize_onair_fleet,
             onair_fleet_snapshot
         ])
         .run(tauri::generate_context!())

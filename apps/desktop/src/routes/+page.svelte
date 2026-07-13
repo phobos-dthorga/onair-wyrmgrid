@@ -3,7 +3,12 @@
   import { onMount } from "svelte";
   import AtlasMap from "$lib/atlas/AtlasMap.svelte";
   import { atlasPreviewFleet } from "$lib/atlas/sample";
-  import type { AircraftSummary, FleetSnapshot } from "$lib/atlas/types";
+  import type {
+    AircraftSummary,
+    FleetSnapshot,
+    FleetSyncResult,
+    FleetSyncTrigger,
+  } from "$lib/atlas/types";
   import WyrmChart from "$lib/charts/WyrmChart.svelte";
   import { foundationChart } from "$lib/charts/sample";
   import ConnectionDialog from "$lib/onair/ConnectionDialog.svelte";
@@ -21,6 +26,9 @@
 
   type FleetLoadState = "idle" | "loading" | "ready" | "error";
 
+  const AUTOMATIC_SYNC_STORAGE_KEY = "wyrmgrid.atlas.automatic-sync-minutes";
+  const AUTOMATIC_SYNC_OPTIONS = [0, 15, 30, 60, 120] as const;
+
   let status = $state<PlatformStatus>({
     application: "OnAir WyrmGrid",
     version: "0.1.0",
@@ -34,6 +42,7 @@
   let fleetError = $state("");
   let fleetVisible = $state(true);
   let selectedAircraftId = $state<string | null>(null);
+  let automaticSyncMinutes = $state(30);
 
   const aircraft = $derived(fleetSnapshot?.value ?? []);
   const plottedAircraftCount = $derived(aircraft.filter((item) => item.location).length);
@@ -73,13 +82,19 @@
     return `${item.location.latitude.toFixed(4)}, ${item.location.longitude.toFixed(4)}`;
   }
 
-  async function refreshFleet(): Promise<void> {
+  async function synchronizeFleet(trigger: FleetSyncTrigger): Promise<void> {
     if (!connection.connected || fleetLoadState === "loading") return;
     fleetLoadState = "loading";
     fleetError = "";
 
     try {
-      fleetSnapshot = await invoke<FleetSnapshot>("refresh_onair_fleet");
+      const result = await invoke<FleetSyncResult>("synchronize_onair_fleet", { trigger });
+      if (result.disposition === "quietly_ignored" || !result.snapshot) {
+        fleetLoadState = fleetSnapshot ? "ready" : "idle";
+        return;
+      }
+
+      fleetSnapshot = result.snapshot;
       fleetLoadState = "ready";
       if (
         selectedAircraftId &&
@@ -100,7 +115,7 @@
         fleetSnapshot = snapshot;
         fleetLoadState = "ready";
       } else {
-        await refreshFleet();
+        await synchronizeFleet("initial");
       }
     } catch {
       // Browser previews do not expose the Tauri command bridge.
@@ -111,7 +126,7 @@
     connection = value;
     if (value.connected) {
       showConnectionDialog = false;
-      void refreshFleet();
+      void synchronizeFleet("initial");
     } else {
       fleetSnapshot = null;
       fleetLoadState = "idle";
@@ -120,7 +135,39 @@
     }
   }
 
+  function updateAutomaticSync(minutes: number): void {
+    if (!AUTOMATIC_SYNC_OPTIONS.includes(minutes as (typeof AUTOMATIC_SYNC_OPTIONS)[number])) {
+      return;
+    }
+    automaticSyncMinutes = minutes;
+    localStorage.setItem(AUTOMATIC_SYNC_STORAGE_KEY, String(minutes));
+  }
+
+  $effect(() => {
+    if (typeof window === "undefined" || !connection.connected || automaticSyncMinutes === 0) {
+      return;
+    }
+
+    const timer = window.setInterval(
+      () => void synchronizeFleet("automatic"),
+      automaticSyncMinutes * 60 * 1000,
+    );
+    return () => window.clearInterval(timer);
+  });
+
   onMount(() => {
+    const savedAutomaticSync = Number.parseInt(
+      localStorage.getItem(AUTOMATIC_SYNC_STORAGE_KEY) ?? "30",
+      10,
+    );
+    if (
+      AUTOMATIC_SYNC_OPTIONS.includes(
+        savedAutomaticSync as (typeof AUTOMATIC_SYNC_OPTIONS)[number],
+      )
+    ) {
+      automaticSyncMinutes = savedAutomaticSync;
+    }
+
     invoke<PlatformStatus>("platform_status")
       .then((value) => (status = value))
       .catch(() => {
@@ -175,14 +222,34 @@
           <span class="eyebrow">WyrmGrid Atlas</span>
           <h2>Operations layers</h2>
         </div>
+      </div>
+
+      <div class="sync-controls">
         <button
-          class="icon-button"
+          class="sync-button"
           class:refreshing={fleetLoadState === "loading"}
-          aria-label="Refresh fleet"
-          title="Refresh fleet"
-          disabled={!connection.connected || fleetLoadState === "loading"}
-          onclick={() => void refreshFleet()}
-        >↻</button>
+          type="button"
+          disabled={!connection.connected}
+          title="Synchronize the current fleet observation with OnAir"
+          onclick={() => void synchronizeFleet("manual")}
+        >
+          <span aria-hidden="true">↻</span>
+          Synchronize OnAir
+        </button>
+        <label>
+          <span>Automatic checks</span>
+          <select
+            value={automaticSyncMinutes}
+            onchange={(event) => updateAutomaticSync(Number(event.currentTarget.value))}
+          >
+            <option value={0}>Off</option>
+            <option value={15}>Every 15 minutes</option>
+            <option value={30}>Every 30 minutes</option>
+            <option value={60}>Every hour</option>
+            <option value={120}>Every 2 hours</option>
+          </select>
+        </label>
+        <small>Repeated requests are quietly rate-protected by WyrmGrid.</small>
       </div>
 
       <div class="layer-list">
@@ -208,14 +275,14 @@
         <span class="note-icon">{fleetLoadState === "error" ? "!" : "i"}</span>
         <p>
           {#if fleetLoadState === "loading"}
-            Refreshing fleet from OnAir…
+            Synchronizing fleet with OnAir…
           {:else if fleetLoadState === "error"}
             {fleetError}
           {:else if fleetSnapshot}
             {aircraft.length} aircraft received; {plottedAircraftCount} have a mappable location.
             {formatObservedAt(fleetSnapshot.provenance.observed_at)}.
           {:else if connection.connected}
-            OnAir is connected. Refresh the fleet to populate Atlas.
+            OnAir is connected. Synchronize the fleet to populate Atlas.
           {:else}
             Connect an OnAir company to begin. Credentials remain only in memory for this session.
           {/if}

@@ -173,6 +173,57 @@ nav {
 .icon-button.refreshing {
   animation: atlas-spin 0.9s linear infinite;
 }
+.sync-controls {
+  display: grid;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+  padding: 0.8rem;
+  border: 1px solid var(--line);
+  background: rgba(8, 32, 27, 0.72);
+}
+.sync-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 2.35rem;
+  border: 1px solid rgba(103, 220, 179, 0.4);
+  background: rgba(34, 116, 91, 0.22);
+  color: var(--mint);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.sync-button:hover:not(:disabled) {
+  border-color: var(--mint);
+  background: rgba(52, 156, 122, 0.3);
+}
+.sync-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+.sync-button.refreshing span {
+  animation: atlas-spin 0.9s linear infinite;
+}
+.sync-controls label {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.sync-controls select {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: var(--panel-deep);
+  color: var(--paper);
+  padding: 0.5rem 0.55rem;
+  font: inherit;
+}
+.sync-controls small {
+  color: var(--muted);
+  font-size: 0.66rem;
+  line-height: 1.4;
+}
 @keyframes atlas-spin {
   to {
     transform: rotate(360deg);

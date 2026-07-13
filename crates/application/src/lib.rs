@@ -1,8 +1,9 @@
 //! Application-level orchestration independent of Tauri and other interfaces.
 
 use secrecy::SecretString;
-use serde::Serialize;
-use std::sync::{Arc, RwLock};
+use serde::{Deserialize, Serialize};
+use std::sync::{Arc, Mutex, RwLock};
+use std::time::{Duration, Instant};
 use thiserror::Error;
 use uuid::Uuid;
 use wyrmgrid_domain::{AircraftSummary, CompanySummary, Observed};
@@ -37,6 +38,30 @@ pub struct ConnectionStatus {
 pub struct ConnectedCompany {
     pub name: String,
     pub airline_code: String,
+}
+
+pub const MANUAL_FLEET_SYNC_COOLDOWN: Duration = Duration::from_secs(60);
+pub const MINIMUM_AUTOMATIC_FLEET_SYNC_INTERVAL: Duration = Duration::from_secs(15 * 60);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FleetSyncTrigger {
+    Initial,
+    Manual,
+    Automatic,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FleetSyncDisposition {
+    Synchronized,
+    QuietlyIgnored,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct FleetSyncResult {
+    pub disposition: FleetSyncDisposition,
+    pub snapshot: Option<Observed<Vec<AircraftSummary>>>,
 }
 
 #[derive(Debug, Error)]
@@ -75,6 +100,53 @@ struct ConnectedSession {
     client: Arc<OnAirClient>,
     company: CompanySummary,
     fleet: Option<Observed<Vec<AircraftSummary>>>,
+    fleet_sync_gate: Arc<Mutex<FleetSyncGate>>,
+}
+
+#[derive(Debug, Default)]
+struct FleetSyncGate {
+    in_progress: bool,
+    last_started: Option<Instant>,
+}
+
+impl FleetSyncGate {
+    fn try_start(&mut self, trigger: FleetSyncTrigger, now: Instant) -> bool {
+        if self.in_progress {
+            return false;
+        }
+
+        let minimum_interval = match trigger {
+            FleetSyncTrigger::Initial => Duration::ZERO,
+            FleetSyncTrigger::Manual => MANUAL_FLEET_SYNC_COOLDOWN,
+            FleetSyncTrigger::Automatic => MINIMUM_AUTOMATIC_FLEET_SYNC_INTERVAL,
+        };
+        if self
+            .last_started
+            .is_some_and(|last_started| now.duration_since(last_started) < minimum_interval)
+        {
+            return false;
+        }
+
+        self.in_progress = true;
+        self.last_started = Some(now);
+        true
+    }
+
+    fn finish(&mut self) {
+        self.in_progress = false;
+    }
+}
+
+struct FleetSyncPermit {
+    gate: Arc<Mutex<FleetSyncGate>>,
+}
+
+impl Drop for FleetSyncPermit {
+    fn drop(&mut self) {
+        if let Ok(mut gate) = self.gate.lock() {
+            gate.finish();
+        }
+    }
 }
 
 impl Default for OnAirSession {
@@ -123,6 +195,7 @@ impl OnAirSession {
             client,
             company,
             fleet: None,
+            fleet_sync_gate: Arc::new(Mutex::new(FleetSyncGate::default())),
         });
 
         self.status()
@@ -151,14 +224,36 @@ impl OnAirSession {
         })
     }
 
-    pub async fn refresh_fleet(&self) -> Result<Observed<Vec<AircraftSummary>>, ConnectionError> {
-        let (company_id, client) = {
+    pub async fn synchronize_fleet(
+        &self,
+        trigger: FleetSyncTrigger,
+    ) -> Result<FleetSyncResult, ConnectionError> {
+        let (company_id, client, fleet_sync_gate) = {
             let session = self
                 .inner
                 .read()
                 .map_err(|_| ConnectionError::StateUnavailable)?;
             let connected = session.as_ref().ok_or(ConnectionError::NotConnected)?;
-            (connected.company.id.clone(), Arc::clone(&connected.client))
+            (
+                connected.company.id.clone(),
+                Arc::clone(&connected.client),
+                Arc::clone(&connected.fleet_sync_gate),
+            )
+        };
+
+        let _sync_permit = {
+            let mut gate = fleet_sync_gate
+                .lock()
+                .map_err(|_| ConnectionError::StateUnavailable)?;
+            if !gate.try_start(trigger, Instant::now()) {
+                return Ok(FleetSyncResult {
+                    disposition: FleetSyncDisposition::QuietlyIgnored,
+                    snapshot: self.fleet_snapshot()?,
+                });
+            }
+            FleetSyncPermit {
+                gate: Arc::clone(&fleet_sync_gate),
+            }
         };
 
         let fleet = client.fleet().await.map_err(classify_fleet_error)?;
@@ -172,7 +267,10 @@ impl OnAirSession {
             return Err(ConnectionError::StateUnavailable);
         }
         connected.fleet = Some(fleet.clone());
-        Ok(fleet)
+        Ok(FleetSyncResult {
+            disposition: FleetSyncDisposition::Synchronized,
+            snapshot: Some(fleet),
+        })
     }
 
     pub fn fleet_snapshot(
@@ -246,7 +344,7 @@ mod tests {
     async fn refuses_fleet_refresh_without_a_connected_session() {
         let session = OnAirSession::default();
         assert!(matches!(
-            session.refresh_fleet().await,
+            session.synchronize_fleet(FleetSyncTrigger::Manual).await,
             Err(ConnectionError::NotConnected)
         ));
         assert_eq!(
@@ -255,6 +353,33 @@ mod tests {
                 .expect("snapshot state should be readable"),
             None
         );
+    }
+
+    #[test]
+    fn fleet_sync_gate_enforces_trigger_specific_quiet_periods() {
+        let started = Instant::now();
+        let mut gate = FleetSyncGate::default();
+
+        assert!(gate.try_start(FleetSyncTrigger::Initial, started));
+        assert!(!gate.try_start(FleetSyncTrigger::Manual, started));
+        gate.finish();
+        assert!(!gate.try_start(
+            FleetSyncTrigger::Manual,
+            started + MANUAL_FLEET_SYNC_COOLDOWN - Duration::from_secs(1)
+        ));
+        assert!(gate.try_start(
+            FleetSyncTrigger::Manual,
+            started + MANUAL_FLEET_SYNC_COOLDOWN
+        ));
+        gate.finish();
+        assert!(!gate.try_start(
+            FleetSyncTrigger::Automatic,
+            started + MANUAL_FLEET_SYNC_COOLDOWN + Duration::from_secs(1)
+        ));
+        assert!(gate.try_start(
+            FleetSyncTrigger::Automatic,
+            started + MANUAL_FLEET_SYNC_COOLDOWN + MINIMUM_AUTOMATIC_FLEET_SYNC_INTERVAL
+        ));
     }
 
     #[test]
