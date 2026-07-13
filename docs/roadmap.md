@@ -28,6 +28,8 @@
 ## Later modules
 
 - Dispatch and explainable job scoring
+- Operational Planner flagship plugin: Charter Desk first, followed by Airline
+  Network scenarios after the public plugin surface is proven
 - FBO network planning and coverage analysis
 - Maintenance, finance, and flight history
 - WyrmGrid Bridge simulator telemetry
