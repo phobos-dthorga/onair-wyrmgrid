@@ -27,3 +27,16 @@ The fixture in `schemas/fixtures/chart-spec-v1.json` is the canonical version
 one example. The Rust protocol crate deserializes and validates it in tests.
 Chart schema version 1 was added compatibly to plugin API version 1: existing
 plugins do not need to request the new permission or emit chart messages.
+
+## Planned first-party demonstrations
+
+The [Operational Planner concept](operational-planner.md) is a planned flagship
+plugin with Charter Desk and Airline Network workspaces. It is intentionally
+later than the small idle-aircraft plugin proof: the planner should exercise a
+proven public plugin surface, not cause private shortcuts to be added for one
+ambitious first-party feature.
+
+A mature first-party plugin may be promoted into WyrmGrid's primary navigation
+without being moved into the core or granted private access. Visible prominence
+is a product decision; protocol, permission, storage, and lifecycle boundaries
+remain those of a plugin.
