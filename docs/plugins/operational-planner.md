@@ -20,6 +20,20 @@ plugins. They share most facts, calculations, settings, and interface
 contributions. A split is justified only if their release cadence or dependency
 needs genuinely diverge.
 
+## Accepted product decisions
+
+The following starting decisions were accepted on 2026-07-14:
+
+- the first case is a user-defined charter request with an optional action to
+  import compatible facts from an OnAir job;
+- recommendations compare several kinds of value through selectable planning
+  profiles rather than reducing every benefit to credits;
+- leasing is the first external acquisition path to compare with the existing
+  fleet, before short-term rental or outright purchase;
+- the planner may be promoted to a first-class visible WyrmGrid workspace when
+  its maturity and breadth justify that status, while remaining a plugin behind
+  the interface and using the same public contracts as community plugins.
+
 ## Product promise
 
 A useful recommendation should answer four questions:
@@ -54,11 +68,32 @@ scoring. A linear, constraint, or mixed-integer solver should be introduced only
 after a real planning case demonstrates that simpler methods cannot produce a
 useful result.
 
+## Value model
+
+Only monetary return is labelled **profit**. Other benefits are separately
+named value dimensions so the interface never confuses an accounting result
+with a preference or recommendation:
+
+- **financial value** — revenue, direct cost, contribution margin, cash flow,
+  capital exposure, and risk-adjusted profit;
+- **operational value** — utilization, empty positioning avoided, schedule
+  resilience, maintenance fit, and spare capacity;
+- **network value** — connectivity, coverage, feed, future opportunities, and
+  strategic positioning;
+- **player value** — personal flying, progression, variety, preferred aircraft,
+  region, and realism goals.
+
+Balanced, Profit-focused, and Realism-focused profiles provide understandable
+defaults. Advanced users may inspect and adjust their weights. Every result
+shows the dimensions independently before presenting a combined ranking, and
+no non-financial value is silently converted into OnAir credits.
+
 ## Charter Desk
 
 An initial charter plan can combine:
 
-- origin, destination, date window, passengers, cargo, and service preference;
+- a user-defined origin, destination, date window, passengers, cargo, and
+  service preference, optionally seeded from an OnAir job;
 - owned, rentable, leased, or purchasable aircraft candidates;
 - empty positioning before and after the charter;
 - payload-range and airport suitability;
@@ -69,8 +104,9 @@ An initial charter plan can combine:
   avoidance of excessive AI operation.
 
 The smallest useful Charter Desk release should solve one charter or short
-multi-leg chain using the player's existing fleet. Acquisition and market
-discovery can follow after the core suitability and economics are trusted.
+multi-leg chain using the player's existing fleet. Lease comparison follows
+after the core suitability and economics are trusted; short-term rental and
+purchase remain later alternatives.
 
 ## Airline Network
 
@@ -102,6 +138,14 @@ range, fuel capacity and flow, airport-size requirement, current airport,
 condition, hours, and maintenance state. Each field still requires a sanitized
 authenticated fixture before the planner treats it as a supported WyrmGrid
 domain fact.
+
+The published `AircraftLease` model includes status, start and end dates,
+weekly payment and next-payment date, plus starting airframe and average engine
+condition. It does not identify real-world categories such as wet, dry,
+operating, or finance lease. The first planner version should therefore model
+an **OnAir lease** using observed OnAir terms and a user-entered offer when live
+candidate terms cannot be queried. Real-world lease classifications may be
+added later as external scenarios, never inferred from those fields.
 
 Important limitations:
 
@@ -162,6 +206,22 @@ Likely permissions include company, fleet, jobs, and finance read access;
 plugin storage; map-layer and chart publication; and optional external network
 access. Every permission remains separately reviewable and deny-by-default.
 
+## Visible promotion without architectural privilege
+
+The plugin may eventually outgrow the visual status of an optional tool. At
+that point WyrmGrid may promote it into primary navigation and present its
+Charter Desk and Airline Network workspaces as first-class product areas.
+
+Promotion changes discovery and presentation, not trust boundaries. The
+planner remains independently disableable, keeps plugin-owned storage, declares
+permissions, communicates through versioned protocol messages, and receives no
+private Rust, Tauri, Svelte, MapLibre, database, or credential access.
+
+Promotion should require demonstrated regular use, stable workflows, acceptable
+performance, accessibility coverage, migration tests, and a maintenance burden
+that remains credible for the active maintainer. It is not triggered merely by
+feature count.
+
 ## Staged delivery
 
 1. **Feasibility inventory** — identify the exact WyrmGrid facts, external
@@ -169,8 +229,8 @@ access. Every permission remains separately reviewable and deny-by-default.
    charter case.
 2. **Charter suitability** — rank the current fleet for one mission and explain
    payload, range, airport, positioning, and maintenance constraints.
-3. **Charter economics** — add cost, price, margin, sensitivity, saved plans,
-   and acquisition comparisons where observed data permits.
+3. **Charter economics and leasing** — add cost, price, margin, sensitivity,
+   saved plans, and lease comparisons where observed data permits.
 4. **Airline scenario** — compare one proposed recurring route across the
    current fleet using explicit demand and schedule assumptions.
 5. **Network planning** — add multiple routes, connections, utilization,
@@ -182,22 +242,26 @@ Each stage must remain useful on its own. None depends on building a general
 optimization platform, custom UI runtime, or comprehensive real-world aircraft
 database first.
 
-## Product questions and recommended starting answers
+## Resolved starting questions
 
 | Question                                             | Recommended starting answer                                                                                           |
 | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| What is the first concrete planning case?            | One charter request using the current owned fleet.                                                                    |
+| What is the first concrete planning case?            | A user-defined charter request, optionally seeded from an OnAir job, using the current fleet.                         |
 | What planning horizon should be supported first?     | One mission or a short chain; add a seven-day view before longer horizons.                                            |
 | Should real-world or OnAir values win?               | OnAir for game-state and economy; official manuals for technical context; always show the selected source.            |
-| Which acquisition modes matter first?                | Compare owned and rented aircraft first, then purchase and lease when live evidence is available.                     |
+| Which acquisition modes matter first?                | Compare the current fleet with leasing first; add short-term rental and outright purchase later.                      |
 | How should unknown demand be handled?                | User-editable best/base/worst bands, never a fabricated live-demand value.                                            |
-| What should the default objective be?                | Explainable balance of profit, operational feasibility, positioning, and strategic value.                             |
+| What should the default objective be?                | Selectable Balanced, Profit-focused, and Realism-focused profiles with independently visible value dimensions.        |
 | Should the plugin perform actions in OnAir?          | No. It prepares a plan; the user executes supported actions in OnAir.                                                 |
-| Should charter and airline planning ship separately? | No. Keep one package with two workspaces until maintenance evidence supports a split.                                 |
+| Should charter and airline planning ship separately? | No. Keep one plugin; it may later receive first-class visible status without receiving architectural privilege.       |
 | How much realism should be mandatory?                | Safe, credible defaults with optional advanced constraints; never require a full manual data pack for basic planning. |
 | When is an optimizer justified?                      | Only after real scenarios expose a repeated failure of deterministic filtering and scoring.                           |
 
-Before implementation begins, the most consequential user decisions are the
-first real charter scenario, the relative importance of economic versus
-realism objectives, and whether rental or purchase comparison should follow the
-owned-fleet milestone first.
+## Questions intentionally left open
+
+Before implementation, the first real charter scenario still needs concrete
+passenger, cargo, airport, time-window, and service requirements. We must also
+validate the lease fields against authenticated data and determine whether
+candidate lease offers are exposed by a bounded public query. The initial
+profiles must also be scoped either globally or separately for each company and
+planning workspace.

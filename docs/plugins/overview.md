@@ -35,3 +35,8 @@ plugin with Charter Desk and Airline Network workspaces. It is intentionally
 later than the small idle-aircraft plugin proof: the planner should exercise a
 proven public plugin surface, not cause private shortcuts to be added for one
 ambitious first-party feature.
+
+A mature first-party plugin may be promoted into WyrmGrid's primary navigation
+without being moved into the core or granted private access. Visible prominence
+is a product decision; protocol, permission, storage, and lifecycle boundaries
+remain those of a plugin.
