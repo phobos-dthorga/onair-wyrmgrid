@@ -49,25 +49,25 @@ allowing ordinary synchronization to produce unbounded intraday growth.
 
 ## Hoard Timeline
 
-Hoard is intended to become more than an offline fallback. Its observation
-history will support a read-only **Hoard Timeline** where a player can inspect
-how a charter operation or airline changed over time.
+Hoard is more than an offline fallback. Its observation history supports a
+read-only **Hoard Timeline** where a player can inspect how a charter operation
+or airline changed over time.
 
-The timeline will use an **as-of** model: for each requested resource, WyrmGrid
+The timeline uses an **as-of** model: for each requested resource, WyrmGrid
 selects the newest compatible observation at or before the chosen UTC time.
 Fleet, finance, FBO, route, job, and flight observations may have different
 capture times because the public OnAir API does not provide one atomic company
 snapshot. The interface must show each resource's actual observation time and
 must not imply that independently collected facts were simultaneous.
 
-The application will always expose one of two mutually exclusive workspace
+The application always exposes one of two mutually exclusive workspace
 modes: **LIVE** or **HISTORICAL**. Mode is separate from data availability. For
 example, the current operational workspace may honestly read **LIVE mode ·
 Offline snapshot**, while a past view reads **HISTORICAL mode · As of 12 March
 2026**. This avoids hiding loss of connectivity and prevents a saved observation
 from masquerading as a current server response.
 
-HISTORICAL mode will:
+HISTORICAL mode:
 
 - display a persistent mode indicator, **Viewing history** banner, and selected
   time;
@@ -79,18 +79,29 @@ HISTORICAL mode will:
 - derive growth and change metrics from stable observations rather than store
   recommendations as facts.
 
-The first timeline slice will reuse the retained fleet observations and add a
-LIVE/HISTORICAL mode control, time selector, snapshot list, and aircraft-count
-and fleet-composition changes. Later slices can add company value, FBO
+The implemented first timeline slice reuses retained fleet and FBO observations
+and provides a globally visible LIVE/HISTORICAL mode, time selector,
+return-to-present control, fleet-growth chart, and selected fleet-composition
+chart. The Rust application service owns as-of resolution and the growth and
+composition calculations; Tauri commands and Svelte remain presentation
+adapters. History reads are bounded to the newest 4,096 compatible observations
+per company and resource.
+
+Historical selection is intentionally not persisted across application
+restarts. WyrmGrid always starts in LIVE mode so an old point in time cannot be
+mistaken for the present after reopening the application. Live synchronization
+continues while the user inspects history and does not move the selected point.
+
+Later slices can add company value, FBO
 footprint, route network, utilization, finance, and user-named milestones as
 those stable domain resources become available. Charts will consume the same
 query results as tables and Atlas so all three presentations share one
 definition of the underlying history.
 
 The existing generic snapshot records, company/resource partitioning, schema
-versions, observation timestamps, and hourly-to-daily retention policy are the
-foundation for this work. A separate history store or event-sourcing system is
-not justified for the initial timeline.
+versions, observation timestamps, and hourly-to-daily retention policy remain
+the foundation. A separate history store or event-sourcing system was not
+required for the initial timeline, so no database migration was added.
 
 ## Failure mode
 

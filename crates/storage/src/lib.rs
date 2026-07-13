@@ -185,6 +185,90 @@ impl Store {
                 .map_err(StorageError::from),
         }
     }
+
+    pub fn api_snapshot_at_or_before(
+        &self,
+        resource_kind: &str,
+        resource_key: &str,
+        observed_at: &str,
+    ) -> Result<Option<ApiSnapshotRecord>, StorageError> {
+        self.api_snapshot_history_at_or_before(resource_kind, resource_key, observed_at, 1)
+            .map(|mut snapshots| snapshots.pop())
+    }
+
+    pub fn api_snapshot_history(
+        &self,
+        resource_kind: &str,
+        resource_key: &str,
+        limit: usize,
+    ) -> Result<Vec<ApiSnapshotRecord>, StorageError> {
+        let limit = i64::try_from(limit).unwrap_or(i64::MAX);
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        let mut statement = connection.prepare(
+            "SELECT resource_key, observed_at, payload_json
+             FROM (
+                 SELECT id, resource_key, observed_at, payload_json
+                 FROM api_snapshots
+                 WHERE resource_kind = ?1 AND resource_key = ?2
+                 ORDER BY datetime(observed_at) DESC, id DESC
+                 LIMIT ?3
+             )
+             ORDER BY datetime(observed_at) ASC, id ASC",
+        )?;
+        statement
+            .query_map(params![resource_kind, resource_key, limit], |row| {
+                Ok(ApiSnapshotRecord {
+                    resource_key: row.get(0)?,
+                    observed_at: row.get(1)?,
+                    payload_json: row.get(2)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StorageError::from)
+    }
+
+    pub fn api_snapshot_history_at_or_before(
+        &self,
+        resource_kind: &str,
+        resource_key: &str,
+        observed_at: &str,
+        limit: usize,
+    ) -> Result<Vec<ApiSnapshotRecord>, StorageError> {
+        let limit = i64::try_from(limit).unwrap_or(i64::MAX);
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        let mut statement = connection.prepare(
+            "SELECT resource_key, observed_at, payload_json
+             FROM (
+                 SELECT id, resource_key, observed_at, payload_json
+                 FROM api_snapshots
+                 WHERE resource_kind = ?1
+                   AND resource_key = ?2
+                   AND datetime(observed_at) <= datetime(?3)
+                 ORDER BY datetime(observed_at) DESC, id DESC
+                 LIMIT ?4
+             )
+             ORDER BY datetime(observed_at) ASC, id ASC",
+        )?;
+        statement
+            .query_map(
+                params![resource_kind, resource_key, observed_at, limit],
+                |row| {
+                    Ok(ApiSnapshotRecord {
+                        resource_key: row.get(0)?,
+                        observed_at: row.get(1)?,
+                        payload_json: row.get(2)?,
+                    })
+                },
+            )?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StorageError::from)
+    }
 }
 
 impl Store {
@@ -367,6 +451,59 @@ mod tests {
                 observed_at: latest,
                 payload_json: "{\"version\":2}".into(),
             })
+        );
+    }
+
+    #[test]
+    fn reads_bounded_history_and_the_snapshot_at_a_selected_time() {
+        let mut store = Store::open_in_memory().expect("in-memory database should open");
+        let latest_hour = Utc::now()
+            .with_minute(0)
+            .and_then(|value| value.with_second(0))
+            .and_then(|value| value.with_nanosecond(0))
+            .expect("current hour should be representable");
+        let observations = [
+            latest_hour - Duration::hours(3),
+            latest_hour - Duration::hours(2),
+            latest_hour - Duration::hours(1),
+            latest_hour,
+        ];
+        for (index, observed_at) in observations.iter().enumerate() {
+            store
+                .save_api_snapshot(
+                    "fleet",
+                    "company-a",
+                    &observed_at.to_rfc3339_opts(SecondsFormat::Secs, true),
+                    &format!("{{\"index\":{index}}}"),
+                )
+                .expect("snapshot should save");
+        }
+
+        let history = store
+            .api_snapshot_history("fleet", "company-a", 2)
+            .expect("history should be readable");
+        assert_eq!(history.len(), 2);
+        assert_eq!(
+            history[0].observed_at,
+            observations[2].to_rfc3339_opts(SecondsFormat::Secs, true)
+        );
+        assert_eq!(
+            history[1].observed_at,
+            observations[3].to_rfc3339_opts(SecondsFormat::Secs, true)
+        );
+
+        let selected_at = observations[2] + Duration::minutes(30);
+        let selected = store
+            .api_snapshot_at_or_before(
+                "fleet",
+                "company-a",
+                &selected_at.to_rfc3339_opts(SecondsFormat::Secs, true),
+            )
+            .expect("historical selection should be readable")
+            .expect("a prior snapshot should exist");
+        assert_eq!(
+            selected.observed_at,
+            observations[2].to_rfc3339_opts(SecondsFormat::Secs, true)
         );
     }
 

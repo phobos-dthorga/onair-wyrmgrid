@@ -68,6 +68,24 @@ fn onair_fbo_snapshot(
 }
 
 #[tauri::command]
+fn onair_hoard_timeline(
+    state: tauri::State<'_, DesktopState>,
+) -> Result<wyrmgrid_application::HoardTimelineIndex, wyrmgrid_application::OperationError> {
+    state.onair.hoard_timeline_index().map_err(operation_error)
+}
+
+#[tauri::command]
+fn onair_historical_company_data(
+    state: tauri::State<'_, DesktopState>,
+    selected_at: String,
+) -> Result<wyrmgrid_application::HistoricalCompanyDataView, wyrmgrid_application::OperationError> {
+    state
+        .onair
+        .historical_company_data(&selected_at)
+        .map_err(operation_error)
+}
+
+#[tauri::command]
 fn legal_status(
     state: tauri::State<'_, DesktopState>,
 ) -> Result<wyrmgrid_application::LegalStatus, wyrmgrid_application::OperationError> {
@@ -175,6 +193,8 @@ pub fn run() {
             synchronize_onair_company_data,
             onair_fleet_snapshot,
             onair_fbo_snapshot,
+            onair_hoard_timeline,
+            onair_historical_company_data,
             legal_status,
             acknowledge_legal,
             update_telemetry_preference,

@@ -27,6 +27,17 @@
     updateTelemetryPreference,
     type LegalStatus,
   } from "$lib/legal/client";
+  import { fleetCompositionChart, fleetGrowthChart } from "$lib/hoard/charts";
+  import HoardTimelineDialog from "$lib/hoard/HoardTimelineDialog.svelte";
+  import {
+    hoardPreviewTimeline,
+    previewHistoricalCompanyData,
+  } from "$lib/hoard/sample";
+  import type {
+    HistoricalCompanyDataView,
+    HoardTimelineIndex,
+    TimelineMode,
+  } from "$lib/hoard/types";
   import { configureClientTelemetry } from "$lib/observability/client";
   import ConnectionDialog from "$lib/onair/ConnectionDialog.svelte";
   import {
@@ -88,22 +99,55 @@
   let showThemeDialog = $state(false);
   let themeBusy = $state(false);
   let themeError = $state("");
+  let timeline = $state<HoardTimelineIndex>({
+    company: null,
+    observation_times: [],
+    fleet_history: [],
+    current_fleet_composition: [],
+  });
+  let timelineMode = $state<TimelineMode>("live");
+  let historicalData = $state<HistoricalCompanyDataView | null>(null);
+  let timelineCursor = $state(0);
+  let timelineBusy = $state(false);
+  let timelineError = $state("");
+  let showTimelineDialog = $state(false);
   let workspaceInitialized = false;
 
-  const fleetSnapshot = $derived<FleetSnapshot | null>(fleetView?.snapshot ?? null);
+  const activeFleetView = $derived(
+    timelineMode === "historical" ? (historicalData?.fleet ?? null) : fleetView,
+  );
+  const activeFboView = $derived(
+    timelineMode === "historical" ? (historicalData?.fbos ?? null) : fboView,
+  );
+  const fleetSnapshot = $derived<FleetSnapshot | null>(
+    activeFleetView?.snapshot ?? null,
+  );
   const aircraft = $derived(fleetSnapshot?.value ?? []);
-  const fbos = $derived(fboView?.snapshot.value ?? []);
-  const plottedAircraftCount = $derived(aircraft.filter((item) => item.location).length);
-  const plottedFboCount = $derived(fbos.filter((item) => item.airport?.location).length);
+  const fbos = $derived(activeFboView?.snapshot.value ?? []);
+  const plottedAircraftCount = $derived(
+    aircraft.filter((item) => item.location).length,
+  );
+  const plottedFboCount = $derived(
+    fbos.filter((item) => item.airport?.location).length,
+  );
   const selectedAircraft = $derived(
     aircraft.find((item) => item.id === selectedAircraftId) ?? null,
   );
-  const selectedFbo = $derived(fbos.find((item) => item.id === selectedFboId) ?? null);
-  const atlasAvailability = $derived(fleetView?.availability ?? fboView?.availability);
-  const atlasStorage = $derived(fleetView?.storage ?? fboView?.storage);
-  const atlasCompany = $derived(fleetView?.company ?? fboView?.company);
+  const selectedFbo = $derived(
+    fbos.find((item) => item.id === selectedFboId) ?? null,
+  );
+  const atlasAvailability = $derived(
+    activeFleetView?.availability ?? activeFboView?.availability,
+  );
+  const atlasStorage = $derived(
+    activeFleetView?.storage ?? activeFboView?.storage,
+  );
+  const atlasCompany = $derived(
+    activeFleetView?.company ?? activeFboView?.company,
+  );
   const atlasObservedAt = $derived(
-    fleetSnapshot?.provenance.observed_at ?? fboView?.snapshot.provenance.observed_at,
+    fleetSnapshot?.provenance.observed_at ??
+      activeFboView?.snapshot.provenance.observed_at,
   );
   const fleetSourceLabel = $derived(
     atlasAvailability === "preview"
@@ -133,37 +177,65 @@
           : "No snapshot",
   );
   const fboAvailabilityLabel = $derived(
-    fboView?.availability === "live"
+    activeFboView?.availability === "live"
       ? "Live"
-      : fboView?.availability === "cached"
+      : activeFboView?.availability === "cached"
         ? "Cached"
-        : fboView?.availability === "offline"
+        : activeFboView?.availability === "offline"
           ? "Offline"
-          : fboView?.availability === "preview"
+          : activeFboView?.availability === "preview"
             ? "Preview"
             : "Unavailable",
   );
   const fleetResourceAvailabilityLabel = $derived(
-    fleetView?.availability === "live"
+    activeFleetView?.availability === "live"
       ? "Live"
-      : fleetView?.availability === "cached"
+      : activeFleetView?.availability === "cached"
         ? "Cached"
-        : fleetView?.availability === "offline"
+        : activeFleetView?.availability === "offline"
           ? "Offline"
-          : fleetView?.availability === "preview"
+          : activeFleetView?.availability === "preview"
             ? "Preview"
             : "Unavailable",
   );
   const fboSourceLabel = $derived(
-    fboView?.availability === "preview"
+    activeFboView?.availability === "preview"
       ? "Illustrative preview"
-      : fboView?.availability === "live"
+      : activeFboView?.availability === "live"
         ? "OnAir fact"
         : "Cached OnAir fact",
   );
+  const timelineGrowthChart = $derived(
+    fleetGrowthChart(timeline.fleet_history),
+  );
+  const timelineComposition = $derived(
+    timelineMode === "historical"
+      ? (historicalData?.fleet_composition ?? [])
+      : timeline.current_fleet_composition,
+  );
+  const timelineCompositionObservedAt = $derived(
+    timelineMode === "historical"
+      ? historicalData?.fleet?.snapshot.provenance.observed_at
+      : fleetView?.snapshot.provenance.observed_at,
+  );
+  const timelineFleetCompositionChart = $derived(
+    fleetCompositionChart(timelineComposition, timelineCompositionObservedAt),
+  );
   const layers = $derived([
-    { id: "fleet", name: "Fleet", count: plottedAircraftCount, active: fleetVisible, available: true },
-    { id: "fbos", name: "FBO network", count: plottedFboCount, active: fboVisible, available: true },
+    {
+      id: "fleet",
+      name: "Fleet",
+      count: plottedAircraftCount,
+      active: fleetVisible,
+      available: true,
+    },
+    {
+      id: "fbos",
+      name: "FBO network",
+      count: plottedFboCount,
+      active: fboVisible,
+      available: true,
+    },
     { id: "jobs", name: "Jobs", count: 0, active: false, available: false },
     {
       id: "maintenance",
@@ -189,7 +261,11 @@
       : `Observed ${observed.toLocaleString()}`;
   }
 
-  function countedLabel(count: number, singular: string, plural = `${singular}s`): string {
+  function countedLabel(
+    count: number,
+    singular: string,
+    plural = `${singular}s`,
+  ): string {
     return `${count} ${count === 1 ? singular : plural}`;
   }
 
@@ -219,37 +295,130 @@
 
   function acceptFboView(view: FboSnapshotView): void {
     fboView = view;
-    if (selectedFboId && !view.snapshot.value.some((item) => item.id === selectedFboId)) {
+    if (
+      selectedFboId &&
+      !view.snapshot.value.some((item) => item.id === selectedFboId)
+    ) {
       selectedFboId = null;
     }
   }
 
-  async function synchronizeCompanyData(trigger: DataSyncTrigger): Promise<void> {
+  function returnToPresent(): void {
+    timelineMode = "live";
+    historicalData = null;
+    timelineError = "";
+    timelineCursor = Math.max(0, timeline.observation_times.length - 1);
+    selectedAircraftId = null;
+    selectedFboId = null;
+    void refreshTimeline();
+  }
+
+  async function refreshTimeline(): Promise<void> {
+    if (!isDesktopRuntime()) {
+      timeline = hoardPreviewTimeline;
+      if (timelineMode === "live") {
+        timelineCursor = Math.max(0, timeline.observation_times.length - 1);
+      }
+      return;
+    }
+    try {
+      const refreshed = await invokeDesktop<HoardTimelineIndex>(
+        "onair_hoard_timeline",
+      );
+      const selectedIndex = historicalData
+        ? refreshed.observation_times.indexOf(historicalData.selected_at)
+        : -1;
+      if (
+        timelineMode === "historical" &&
+        historicalData &&
+        selectedIndex < 0
+      ) {
+        return;
+      }
+      timeline = refreshed;
+      if (timelineMode === "live") {
+        timelineCursor = Math.max(0, refreshed.observation_times.length - 1);
+      } else if (selectedIndex >= 0) {
+        timelineCursor = selectedIndex;
+      }
+    } catch (error) {
+      timelineError = operationErrorMessage(
+        error,
+        "WyrmGrid could not read the Hoard timeline.",
+      );
+    }
+  }
+
+  function openHoardTimeline(): void {
+    timelineError = "";
+    showTimelineDialog = true;
+    void refreshTimeline();
+  }
+
+  async function viewHistoricalMoment(): Promise<void> {
+    const selectedAt = timeline.observation_times[timelineCursor];
+    if (!selectedAt || timelineBusy) return;
+    timelineBusy = true;
+    timelineError = "";
+    try {
+      historicalData = isDesktopRuntime()
+        ? await invokeDesktop<HistoricalCompanyDataView>(
+            "onair_historical_company_data",
+            { selectedAt },
+          )
+        : previewHistoricalCompanyData(selectedAt);
+      timelineMode = "historical";
+      selectedAircraftId = null;
+      selectedFboId = null;
+    } catch (error) {
+      timelineError = operationErrorMessage(
+        error,
+        "WyrmGrid could not open that retained observation.",
+      );
+    } finally {
+      timelineBusy = false;
+    }
+  }
+
+  async function synchronizeCompanyData(
+    trigger: DataSyncTrigger,
+  ): Promise<void> {
     if (!connection.connected || fleetLoadState === "loading") return;
     fleetLoadState = "loading";
     fleetError = "";
 
     try {
-      const result = await invokeDesktop<CompanyDataSyncResult>("synchronize_onair_company_data", { trigger });
+      const result = await invokeDesktop<CompanyDataSyncResult>(
+        "synchronize_onair_company_data",
+        { trigger },
+      );
       if (result.disposition === "quietly_ignored") {
         fleetLoadState = fleetView || fboView ? "ready" : "idle";
+        await refreshTimeline();
         return;
       }
 
       if (result.fleet) acceptFleetView(result.fleet);
       if (result.fbos) acceptFboView(result.fbos);
       if (result.failures.length > 0) {
-        fleetError = result.failures.map((failure) => failure.message).join(" ");
+        fleetError = result.failures
+          .map((failure) => failure.message)
+          .join(" ");
         fleetLoadState = "error";
       } else {
         fleetLoadState = "ready";
       }
+      await refreshTimeline();
     } catch (error) {
       fleetError = safeError(error);
       try {
-        const retained = await invokeDesktop<FleetSnapshotView | null>("onair_fleet_snapshot");
+        const retained = await invokeDesktop<FleetSnapshotView | null>(
+          "onair_fleet_snapshot",
+        );
         if (retained) acceptFleetView(retained);
-        const retainedFbos = await invokeDesktop<FboSnapshotView | null>("onair_fbo_snapshot");
+        const retainedFbos = await invokeDesktop<FboSnapshotView | null>(
+          "onair_fbo_snapshot",
+        );
         if (retainedFbos) acceptFboView(retainedFbos);
       } catch {
         // Keep the existing presentation state when Hoard cannot be read.
@@ -258,7 +427,9 @@
     }
   }
 
-  async function restoreCompanySnapshots(synchronizeAfterRestore: boolean): Promise<void> {
+  async function restoreCompanySnapshots(
+    synchronizeAfterRestore: boolean,
+  ): Promise<void> {
     try {
       const [fleet, fboNetwork] = await Promise.all([
         invokeDesktop<FleetSnapshotView | null>("onair_fleet_snapshot"),
@@ -273,7 +444,11 @@
       if (fboNetwork) acceptFboView(fboNetwork);
       else fboView = null;
       if (!fleet && !fboNetwork) fleetLoadState = "idle";
-      if (connection.connected && (synchronizeAfterRestore || !fleet || !fboNetwork)) {
+      await refreshTimeline();
+      if (
+        connection.connected &&
+        (synchronizeAfterRestore || !fleet || !fboNetwork)
+      ) {
         await synchronizeCompanyData("initial");
       }
     } catch (error) {
@@ -283,6 +458,7 @@
   }
 
   function handleConnectionStatus(value: OnAirConnectionStatus): void {
+    returnToPresent();
     connection = value;
     if (value.connected) {
       showConnectionDialog = false;
@@ -300,6 +476,8 @@
     if (!isDesktopRuntime()) {
       fleetView = atlasPreviewFleet;
       fboView = atlasPreviewFbos;
+      timeline = hoardPreviewTimeline;
+      timelineCursor = timeline.observation_times.length - 1;
       fleetLoadState = "ready";
       return;
     }
@@ -368,7 +546,10 @@
       themeStatus = await selectTheme(themeId);
       applyTheme(themeStatus.active_theme);
     } catch (error) {
-      themeError = operationErrorMessage(error, "WyrmGrid could not apply that theme.");
+      themeError = operationErrorMessage(
+        error,
+        "WyrmGrid could not apply that theme.",
+      );
     } finally {
       themeBusy = false;
     }
@@ -381,7 +562,10 @@
       themeStatus = await importTheme(manifestJson);
       applyTheme(themeStatus.active_theme);
     } catch (error) {
-      themeError = operationErrorMessage(error, "WyrmGrid could not import that theme.");
+      themeError = operationErrorMessage(
+        error,
+        "WyrmGrid could not import that theme.",
+      );
     } finally {
       themeBusy = false;
     }
@@ -483,264 +667,363 @@
     >
   </main>
 {:else if legalStatus.acknowledged}
-<main class="shell" inert={showLegalDialog || showThemeDialog}>
-  <header class="topbar">
-    <div class="brand-mark" aria-hidden="true">WG</div>
-    <div class="brand-copy">
-      <span class="eyebrow">OnAir</span>
-      <h1>WyrmGrid</h1>
-    </div>
-    <nav aria-label="Primary navigation">
-      <button class="nav-item active">Atlas</button>
-      <button class="nav-item">Fleet</button>
-      <button class="nav-item">Dispatch</button>
-      <button class="nav-item">Hoard</button>
-      <button class="nav-item">Forge</button>
-    </nav>
-    <button
-      class="theme-pill"
-      type="button"
-      onclick={() => {
-        themeError = "";
-        showThemeDialog = true;
-      }}
-    >
-      Theme
-    </button>
-    <button class="legal-pill" type="button" onclick={openLegalSettings}>
-      Privacy &amp; Terms
-    </button>
-    <button
-      class:connected={connection.connected}
-      class="connection-pill"
-      type="button"
-      onclick={() => (showConnectionDialog = true)}
-    >
-      <span></span>
-      {connection.connected && connection.company ? connection.company.name : "Connect OnAir"}
-    </button>
-  </header>
-
-  <section class="workspace">
-    <aside class="sidebar" aria-label="Map layers">
-      <div class="section-heading">
-        <div>
-          <span class="eyebrow">WyrmGrid Atlas</span>
-          <h2>Operations layers</h2>
-        </div>
+  <main
+    class="shell"
+    inert={showLegalDialog || showThemeDialog || showTimelineDialog}
+  >
+    <header class="topbar">
+      <div class="brand-mark" aria-hidden="true">WG</div>
+      <div class="brand-copy">
+        <span class="eyebrow">OnAir</span>
+        <h1>WyrmGrid</h1>
       </div>
-
-      <div class="sync-controls">
+      <nav aria-label="Primary navigation">
+        <button class="nav-item active" type="button">Atlas</button>
+        <button class="nav-item" type="button" disabled>Fleet</button>
+        <button class="nav-item" type="button" disabled>Dispatch</button>
         <button
-          class="sync-button"
-          class:refreshing={fleetLoadState === "loading"}
+          class="nav-item"
+          class:active={showTimelineDialog}
           type="button"
-          disabled={!connection.connected}
-          title="Synchronize current fleet and FBO observations with OnAir"
-          onclick={() => void synchronizeCompanyData("manual")}
+          onclick={openHoardTimeline}>Hoard</button
         >
-          <span aria-hidden="true">↻</span>
-          Synchronize OnAir
-        </button>
-        <label>
-          <span>Automatic checks</span>
-          <select
-            value={automaticSyncMinutes}
-            onchange={(event) => updateAutomaticSync(Number(event.currentTarget.value))}
-          >
-            <option value={0}>Off</option>
-            <option value={15}>Every 15 minutes</option>
-            <option value={30}>Every 30 minutes</option>
-            <option value={60}>Every hour</option>
-            <option value={120}>Every 2 hours</option>
-          </select>
-        </label>
-        <small>Repeated requests are quietly rate-protected by WyrmGrid.</small>
-      </div>
-
-      <div class="layer-list">
-        {#each layers as layer}
-          <button
-            class:muted={!layer.active}
-            class="layer-row"
-            aria-pressed={layer.active}
-            disabled={!layer.available}
-            title={layer.available ? `Toggle ${layer.name}` : `${layer.name} is planned for a later slice`}
-            onclick={() => {
-              if (layer.id === "fleet") fleetVisible = !fleetVisible;
-              if (layer.id === "fbos") fboVisible = !fboVisible;
-            }}
-          >
-            <span class="layer-indicator"></span>
-            <span>{layer.name}</span>
-            <strong>{layer.count}</strong>
-          </button>
-        {/each}
-      </div>
-
-      <div class="sidebar-note" class:error-note={fleetLoadState === "error"}>
-        <span class="note-icon">{fleetLoadState === "error" ? "!" : "i"}</span>
-        <p>
-          {#if fleetLoadState === "loading"}
-            Synchronizing company data with OnAir…
-          {:else if fleetLoadState === "error"}
-            {fleetError}
-            {#if fleetView || fboView}
-              Previous Hoard observations remain visible where available.
-            {/if}
-          {:else if atlasCompany}
-            {#if atlasAvailability === "offline"}
-              Offline Hoard snapshot for {atlasCompany.name}.
-            {:else if atlasAvailability === "cached"}
-              Cached Hoard snapshot for {atlasCompany.name}; synchronization is pending.
-            {:else if atlasAvailability === "preview"}
-              Synthetic browser-preview company data.
-            {:else}
-              Live company data for {atlasCompany.name}.
-            {/if}
-            {countedLabel(aircraft.length, "aircraft", "aircraft")} and
-            {countedLabel(fbos.length, "FBO")} received;
-            {plottedAircraftCount + plottedFboCount} Atlas points mappable.
-            {formatObservedAt(atlasObservedAt)}.
-          {:else if connection.connected}
-            OnAir is connected. Synchronize company data to populate Atlas.
-          {:else}
-            Connect an OnAir company to begin. Credentials remain only in memory for this session.
-          {/if}
-        </p>
-      </div>
-    </aside>
-
-    <section class="map-stage" aria-label="Universal operations map">
-      <AtlasMap
-        {aircraft}
-        {fbos}
-        fleetVisible={fleetVisible}
-        fboVisible={fboVisible}
-        selectedAircraftId={selectedAircraftId}
-        selectedFboId={selectedFboId}
-        onselectaircraft={(aircraftId) => {
-          selectedAircraftId = aircraftId;
-          selectedFboId = null;
+        <button class="nav-item" type="button" disabled>Forge</button>
+      </nav>
+      <button
+        class="theme-pill"
+        type="button"
+        onclick={() => {
+          themeError = "";
+          showThemeDialog = true;
         }}
-        onselectfbo={(fboId) => {
-          selectedFboId = fboId;
-          selectedAircraftId = null;
-        }}
-      />
-      <div class="map-wash"></div>
-      <div class="map-title">
-        <span class="eyebrow">Universal operations map</span>
-        <strong>See the network. Command the skies.</strong>
-        {#if atlasAvailability && atlasAvailability !== "live"}
-          <span class:offline={atlasAvailability === "offline"} class="data-mode-badge">
-            {fleetAvailabilityLabel} · {fleetStorageLabel}
-          </span>
+      >
+        Theme
+      </button>
+      <button class="legal-pill" type="button" onclick={openLegalSettings}>
+        Privacy &amp; Terms
+      </button>
+      <button
+        class:connected={connection.connected}
+        class="connection-pill"
+        type="button"
+        onclick={() => (showConnectionDialog = true)}
+      >
+        <span></span>
+        {connection.connected && connection.company
+          ? connection.company.name
+          : "Connect OnAir"}
+      </button>
+    </header>
+
+    <section
+      class:historical={timelineMode === "historical"}
+      class="time-mode-bar"
+    >
+      <div class="time-mode-copy">
+        <span class="time-mode-indicator" aria-hidden="true"></span>
+        <strong>{timelineMode === "historical" ? "Historical" : "Live"}</strong>
+        <span>
+          {timelineMode === "historical"
+            ? `${formatObservedAt(historicalData?.selected_at)} · retained Hoard view`
+            : "Atlas follows the latest company observations"}
+        </span>
+      </div>
+      <div class="time-mode-actions">
+        {#if timelineMode === "historical"}
+          <button type="button" onclick={returnToPresent}
+            >Return to present</button
+          >
         {/if}
-      </div>
-      <div class="readiness-card">
-        <span class="eyebrow">Atlas readiness</span>
-        <div class="readiness-value">
-          {fleetView || fboView
-            ? `${countedLabel(plottedAircraftCount, "aircraft", "aircraft")} · ${countedLabel(plottedFboCount, "FBO")} mapped`
-            : "Awaiting company data"}
-        </div>
-        <dl>
-          <div><dt>Source</dt><dd>{atlasCompany ? fleetSourceLabel : "Not connected"}</dd></div>
-          <div><dt>State</dt><dd>{fleetAvailabilityLabel}</dd></div>
-          <div><dt>Plugin API</dt><dd>v{status.plugin_api_version}</dd></div>
-          <div><dt>Build</dt><dd>{status.version}</dd></div>
-        </dl>
-        {#if !fleetView}<WyrmChart spec={foundationChart} />{/if}
+        <button type="button" onclick={openHoardTimeline}
+          >Open Hoard Timeline</button
+        >
       </div>
     </section>
 
-    <aside class="inspector" aria-label="Selection inspector">
-      <span class="eyebrow">Inspector</span>
-      {#if selectedAircraft}
-        <h2>{displayRegistration(selectedAircraft)}</h2>
-        <p>{selectedAircraft.model ?? "Aircraft type unavailable"}</p>
+    <section class="workspace">
+      <aside class="sidebar" aria-label="Map layers">
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">WyrmGrid Atlas</span>
+            <h2>Operations layers</h2>
+          </div>
+        </div>
 
-        <div class="selection-details">
-          <article>
-            <span>Current airport</span>
-            <strong>{selectedAircraft.current_airport?.icao || "Not reported"}</strong>
-            {#if selectedAircraft.current_airport?.name}
-              <small>{selectedAircraft.current_airport.name}</small>
+        <div class="sync-controls">
+          <button
+            class="sync-button"
+            class:refreshing={fleetLoadState === "loading"}
+            type="button"
+            disabled={!connection.connected}
+            title="Synchronize current fleet and FBO observations with OnAir"
+            onclick={() => void synchronizeCompanyData("manual")}
+          >
+            <span aria-hidden="true">↻</span>
+            Synchronize OnAir
+          </button>
+          <label>
+            <span>Automatic checks</span>
+            <select
+              value={automaticSyncMinutes}
+              onchange={(event) =>
+                updateAutomaticSync(Number(event.currentTarget.value))}
+            >
+              <option value={0}>Off</option>
+              <option value={15}>Every 15 minutes</option>
+              <option value={30}>Every 30 minutes</option>
+              <option value={60}>Every hour</option>
+              <option value={120}>Every 2 hours</option>
+            </select>
+          </label>
+          <small
+            >Repeated requests are quietly rate-protected by WyrmGrid.</small
+          >
+        </div>
+
+        <div class="layer-list">
+          {#each layers as layer}
+            <button
+              class:muted={!layer.active}
+              class="layer-row"
+              aria-pressed={layer.active}
+              disabled={!layer.available}
+              title={layer.available
+                ? `Toggle ${layer.name}`
+                : `${layer.name} is planned for a later slice`}
+              onclick={() => {
+                if (layer.id === "fleet") fleetVisible = !fleetVisible;
+                if (layer.id === "fbos") fboVisible = !fboVisible;
+              }}
+            >
+              <span class="layer-indicator"></span>
+              <span>{layer.name}</span>
+              <strong>{layer.count}</strong>
+            </button>
+          {/each}
+        </div>
+
+        <div class="sidebar-note" class:error-note={fleetLoadState === "error"}>
+          <span class="note-icon">{fleetLoadState === "error" ? "!" : "i"}</span
+          >
+          <p>
+            {#if fleetLoadState === "loading"}
+              Synchronizing company data with OnAir…
+            {:else if fleetLoadState === "error"}
+              {fleetError}
+              {#if activeFleetView || activeFboView}
+                Previous Hoard observations remain visible where available.
+              {/if}
+            {:else if atlasCompany}
+              {#if atlasAvailability === "offline"}
+                Offline Hoard snapshot for {atlasCompany.name}.
+              {:else if atlasAvailability === "cached"}
+                Cached Hoard snapshot for {atlasCompany.name}; synchronization
+                is pending.
+              {:else if atlasAvailability === "preview"}
+                Synthetic browser-preview company data.
+              {:else}
+                Live company data for {atlasCompany.name}.
+              {/if}
+              {countedLabel(aircraft.length, "aircraft", "aircraft")} and
+              {countedLabel(fbos.length, "FBO")} received;
+              {plottedAircraftCount + plottedFboCount} Atlas points mappable.
+              {formatObservedAt(atlasObservedAt)}.
+            {:else if connection.connected}
+              OnAir is connected. Synchronize company data to populate Atlas.
+            {:else}
+              Connect an OnAir company to begin. Credentials remain only in
+              memory for this session.
             {/if}
+          </p>
+        </div>
+      </aside>
+
+      <section class="map-stage" aria-label="Universal operations map">
+        <AtlasMap
+          {aircraft}
+          {fbos}
+          {fleetVisible}
+          {fboVisible}
+          {selectedAircraftId}
+          {selectedFboId}
+          onselectaircraft={(aircraftId) => {
+            selectedAircraftId = aircraftId;
+            selectedFboId = null;
+          }}
+          onselectfbo={(fboId) => {
+            selectedFboId = fboId;
+            selectedAircraftId = null;
+          }}
+        />
+        <div class="map-wash"></div>
+        <div class="map-title">
+          <span class="eyebrow">Universal operations map</span>
+          <strong>See the network. Command the skies.</strong>
+          {#if atlasAvailability && atlasAvailability !== "live"}
+            <span
+              class:offline={atlasAvailability === "offline"}
+              class="data-mode-badge"
+            >
+              {fleetAvailabilityLabel} · {fleetStorageLabel}
+            </span>
+          {/if}
+        </div>
+        <div class="readiness-card">
+          <span class="eyebrow">Atlas readiness</span>
+          <div class="readiness-value">
+            {activeFleetView || activeFboView
+              ? `${countedLabel(plottedAircraftCount, "aircraft", "aircraft")} · ${countedLabel(plottedFboCount, "FBO")} mapped`
+              : "Awaiting company data"}
+          </div>
+          <dl>
+            <div>
+              <dt>Source</dt>
+              <dd>{atlasCompany ? fleetSourceLabel : "Not connected"}</dd>
+            </div>
+            <div>
+              <dt>State</dt>
+              <dd>{fleetAvailabilityLabel}</dd>
+            </div>
+            <div>
+              <dt>Plugin API</dt>
+              <dd>v{status.plugin_api_version}</dd>
+            </div>
+            <div>
+              <dt>Build</dt>
+              <dd>{status.version}</dd>
+            </div>
+          </dl>
+          {#if !activeFleetView}<WyrmChart spec={foundationChart} />{/if}
+        </div>
+      </section>
+
+      <aside class="inspector" aria-label="Selection inspector">
+        <span class="eyebrow">Inspector</span>
+        {#if selectedAircraft}
+          <h2>{displayRegistration(selectedAircraft)}</h2>
+          <p>{selectedAircraft.model ?? "Aircraft type unavailable"}</p>
+
+          <div class="selection-details">
+            <article>
+              <span>Current airport</span>
+              <strong
+                >{selectedAircraft.current_airport?.icao ||
+                  "Not reported"}</strong
+              >
+              {#if selectedAircraft.current_airport?.name}
+                <small>{selectedAircraft.current_airport.name}</small>
+              {/if}
+            </article>
+            <article>
+              <span>Coordinates</span>
+              <strong>{formatCoordinates(selectedAircraft)}</strong>
+            </article>
+            <article>
+              <span>Provenance</span>
+              <strong>{fleetSourceLabel}</strong>
+              <small
+                >{formatObservedAt(
+                  fleetSnapshot?.provenance.observed_at,
+                )}</small
+              >
+            </article>
+          </div>
+        {:else if selectedFbo}
+          <h2>{selectedFbo.name ?? "Unnamed FBO"}</h2>
+          <p>Company FBO network location</p>
+
+          <div class="selection-details">
+            <article>
+              <span>Airport</span>
+              <strong>{selectedFbo.airport?.icao || "Not reported"}</strong>
+              {#if selectedFbo.airport?.name}<small
+                  >{selectedFbo.airport.name}</small
+                >{/if}
+            </article>
+            <article>
+              <span>Coordinates</span>
+              <strong>{formatFboCoordinates(selectedFbo)}</strong>
+            </article>
+            <article>
+              <span>Provenance</span>
+              <strong>{fboSourceLabel}</strong>
+              <small
+                >{formatObservedAt(
+                  activeFboView?.snapshot.provenance.observed_at,
+                )}</small
+              >
+            </article>
+          </div>
+        {:else}
+          <h2>Nothing selected</h2>
+          <p>
+            Select a mapped aircraft or FBO to inspect its current operational
+            context.
+          </p>
+
+          <div class="empty-radar" aria-hidden="true">
+            <span></span><span></span><span></span>
+            <i></i>
+          </div>
+        {/if}
+
+        <div class="status-grid">
+          <article>
+            <span>OnAir</span><strong
+              >{connection.connected ? "Connected" : "Not connected"}</strong
+            >
           </article>
           <article>
-            <span>Coordinates</span>
-            <strong>{formatCoordinates(selectedAircraft)}</strong>
+            <span>Fleet</span><strong>{fleetResourceAvailabilityLabel}</strong>
           </article>
           <article>
-            <span>Provenance</span>
-            <strong>{fleetSourceLabel}</strong>
-            <small>{formatObservedAt(fleetSnapshot?.provenance.observed_at)}</small>
+            <span>FBOs</span><strong>{fboAvailabilityLabel}</strong>
+          </article>
+          <article>
+            <span>Storage</span><strong>{fleetStorageLabel}</strong>
           </article>
         </div>
-      {:else if selectedFbo}
-        <h2>{selectedFbo.name ?? "Unnamed FBO"}</h2>
-        <p>Company FBO network location</p>
+      </aside>
+    </section>
 
-        <div class="selection-details">
-          <article>
-            <span>Airport</span>
-            <strong>{selectedFbo.airport?.icao || "Not reported"}</strong>
-            {#if selectedFbo.airport?.name}<small>{selectedFbo.airport.name}</small>{/if}
-          </article>
-          <article>
-            <span>Coordinates</span>
-            <strong>{formatFboCoordinates(selectedFbo)}</strong>
-          </article>
-          <article>
-            <span>Provenance</span>
-            <strong>{fboSourceLabel}</strong>
-            <small>{formatObservedAt(fboView?.snapshot.provenance.observed_at)}</small>
-          </article>
-        </div>
-      {:else}
-        <h2>Nothing selected</h2>
-        <p>Select a mapped aircraft or FBO to inspect its current operational context.</p>
+    <footer>
+      <span>{status.application} · {status.mode}</span>
+      <span>Unaffiliated community project</span>
+    </footer>
+  </main>
 
-        <div class="empty-radar" aria-hidden="true">
-          <span></span><span></span><span></span>
-          <i></i>
-        </div>
-      {/if}
+  <ConnectionDialog
+    open={showConnectionDialog}
+    status={connection}
+    onclose={() => (showConnectionDialog = false)}
+    onstatuschange={handleConnectionStatus}
+  />
 
-      <div class="status-grid">
-        <article><span>OnAir</span><strong>{connection.connected ? "Connected" : "Not connected"}</strong></article>
-        <article><span>Fleet</span><strong>{fleetResourceAvailabilityLabel}</strong></article>
-        <article><span>FBOs</span><strong>{fboAvailabilityLabel}</strong></article>
-        <article><span>Storage</span><strong>{fleetStorageLabel}</strong></article>
-      </div>
-    </aside>
-  </section>
+  <ThemeDialog
+    open={showThemeDialog}
+    status={themeStatus}
+    desktopRuntime={isDesktopRuntime()}
+    busy={themeBusy}
+    errorMessage={themeError}
+    onselect={(themeId) => void chooseTheme(themeId)}
+    onimport={(manifestJson) => void addTheme(manifestJson)}
+    onclose={() => (showThemeDialog = false)}
+  />
 
-  <footer>
-    <span>{status.application} · {status.mode}</span>
-    <span>Unaffiliated community project</span>
-  </footer>
-</main>
-
-<ConnectionDialog
-  open={showConnectionDialog}
-  status={connection}
-  onclose={() => (showConnectionDialog = false)}
-  onstatuschange={handleConnectionStatus}
-/>
-
-<ThemeDialog
-  open={showThemeDialog}
-  status={themeStatus}
-  desktopRuntime={isDesktopRuntime()}
-  busy={themeBusy}
-  errorMessage={themeError}
-  onselect={(themeId) => void chooseTheme(themeId)}
-  onimport={(manifestJson) => void addTheme(manifestJson)}
-  onclose={() => (showThemeDialog = false)}
-/>
+  <HoardTimelineDialog
+    open={showTimelineDialog}
+    mode={timelineMode}
+    {timeline}
+    cursor={timelineCursor}
+    growthChart={timelineGrowthChart}
+    compositionChart={timelineFleetCompositionChart}
+    busy={timelineBusy}
+    errorMessage={timelineError}
+    oncursorchange={(cursor) => (timelineCursor = cursor)}
+    onview={() => void viewHistoricalMoment()}
+    onreturn={returnToPresent}
+    onclose={() => (showTimelineDialog = false)}
+  />
 {/if}
 
 <LegalDialog

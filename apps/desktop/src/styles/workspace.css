@@ -1,7 +1,7 @@
 .shell {
   height: 100vh;
   display: grid;
-  grid-template-rows: 72px 1fr 30px;
+  grid-template-rows: 72px 40px 1fr 30px;
   background: var(--color-canvas);
 }
 .topbar {
@@ -73,6 +73,10 @@ nav {
   color: var(--color-text);
   border-bottom-color: var(--color-accent);
 }
+.nav-item:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
 .connection-pill {
   padding: 8px 11px;
   border: 1px solid var(--color-line-faint);
@@ -112,6 +116,65 @@ nav {
 .connection-pill.connected span {
   background: var(--color-accent);
   box-shadow: 0 0 8px var(--color-accent-glow);
+}
+
+.time-mode-bar {
+  position: relative;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 18px;
+  border-bottom: 1px solid var(--color-line-faint);
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+  font-size: 10px;
+}
+.time-mode-bar.historical {
+  border-bottom-color: var(--color-highlight-border);
+  background:
+    linear-gradient(90deg, var(--color-highlight-soft), transparent 40%),
+    var(--color-surface);
+}
+.time-mode-copy,
+.time-mode-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.time-mode-copy strong {
+  color: var(--color-accent);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.historical .time-mode-copy strong {
+  color: var(--color-highlight);
+}
+.time-mode-indicator {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  box-shadow: 0 0 8px var(--color-accent-glow);
+}
+.historical .time-mode-indicator {
+  border: 1px solid var(--color-highlight);
+  background: transparent;
+  box-shadow: none;
+}
+.time-mode-actions button {
+  border: 1px solid var(--color-line-faint);
+  border-radius: 3px;
+  padding: 4px 8px;
+  color: var(--color-text-muted);
+  background: transparent;
+  font-size: 9px;
+  cursor: pointer;
+}
+.time-mode-actions button:hover {
+  border-color: var(--color-highlight-border);
+  color: var(--color-highlight);
 }
 
 .legal-loading {
