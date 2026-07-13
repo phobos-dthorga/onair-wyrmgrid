@@ -26,3 +26,10 @@ export type FleetSnapshot = {
     observed_at: string;
   };
 };
+
+export type FleetSyncTrigger = "initial" | "manual" | "automatic";
+
+export type FleetSyncResult = {
+  disposition: "synchronized" | "quietly_ignored";
+  snapshot: FleetSnapshot | null;
+};

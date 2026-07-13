@@ -24,7 +24,11 @@ status code means.
 
 The first Atlas slice provides:
 
-- an authenticated, user-triggered fleet refresh;
+- an authenticated initial, manual, or automatic fleet synchronization;
+- a clearly labelled manual synchronization control that remains available
+  during its silently enforced quiet period;
+- locally remembered automatic-check preferences with conservative interval
+  choices;
 - stable aircraft and airport summaries translated in Rust;
 - OnAir provenance and observation time for the complete fleet snapshot;
 - aircraft markers for records with valid WGS84 coordinates;
@@ -49,3 +53,8 @@ smallest shared contract they require.
 Atlas layers should remain declarative. A future plugin may publish bounded
 features and presentation metadata, but it must not receive the MapLibre object
 or execute arbitrary map code in the desktop webview.
+
+Automatic scheduling currently belongs to the desktop while authoritative
+serialization and quiet periods belong to the Rust application service. This
+keeps one small timer near the active window lifecycle without duplicating API
+protection policy in Svelte.

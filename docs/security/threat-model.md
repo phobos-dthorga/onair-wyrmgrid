@@ -18,6 +18,7 @@
 - dependency or release-pipeline compromise;
 - stale data presented as current fact;
 - recommendations mistaken for OnAir-provided facts.
+- accidental or automated request storms against OnAir's public API;
 
 ## Initial controls
 
@@ -36,6 +37,8 @@
 - locked dependencies, dependency updates, audit jobs, and CI-built releases;
 - no plugin runtime until framing, lifecycle, limits, and permission review are
   specified and tested.
+- fleet synchronization is serialized in Rust; trigger-specific quiet periods
+  silently return cached state without making another remote request.
 - chart contributions are data-only; the host rejects executable callbacks,
   arbitrary ECharts options, HTML tooltips, non-finite values, oversized series,
   and charts published without `charts_publish`.

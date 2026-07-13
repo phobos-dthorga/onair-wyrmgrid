@@ -15,6 +15,8 @@
   (implemented); FBO translation remains
 - Timestamped in-memory fleet refresh and data age (implemented); SQLite
   snapshots and restart-time offline fallback remain
+- Conservatively rate-protected manual and user-configured automatic fleet
+  synchronization (implemented)
 - Atlas fleet markers, layer toggle, map fitting, and linked aircraft inspector
   (implemented)
 
