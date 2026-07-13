@@ -36,7 +36,13 @@ slice. It intentionally precedes persistent credential storage and fleet
 synchronization so each security boundary can be tested in isolation.
 
 The next completed increment translates the official fleet envelope into stable
-aircraft and airport summaries, retains the latest observation in process
-memory, and presents valid locations through the Atlas Fleet layer and linked
-inspector. SQLite snapshot persistence, restart-time offline fallback, and FBO
-translation remain before this vertical slice is complete.
+aircraft and airport summaries and presents valid locations through the Atlas
+Fleet layer and linked inspector. Hoard now persists successful observations,
+restores the newest compatible company fleet at startup, labels offline and
+cached states explicitly, and retains hourly then daily history. FBO translation
+remains before this vertical slice is complete.
+
+Those retained observations deliberately form the basis of the future Hoard
+Timeline. Historical queries will resolve resources as-of a selected time and
+preserve each resource's real observation timestamp rather than invent an
+atomic company snapshot.

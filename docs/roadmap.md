@@ -13,8 +13,11 @@
 - Optional operating-system credential store
 - Company connection plus initial fleet, aircraft, and airport translation
   (implemented); FBO translation remains
-- Timestamped in-memory fleet refresh and data age (implemented); SQLite
-  snapshots and restart-time offline fallback remain
+- Timestamped fleet refresh, compacted SQLite history, restart-time offline
+  fallback, and explicit live/cached/offline state (implemented)
+- Hoard Timeline fleet history: persistent LIVE/HISTORICAL mode indicator,
+  as-of selection, return-to-present control, and fleet growth/composition
+  charts
 - Conservatively rate-protected manual and user-configured automatic fleet
   synchronization (implemented)
 - Atlas fleet markers, layer toggle, map fitting, and linked aircraft inspector
@@ -35,6 +38,8 @@
   proven
 - FBO network planning and coverage analysis
 - Maintenance, finance, and flight history
+- Hoard Timeline expansion across company value, FBO footprint, routes,
+  utilization, finance, and named milestones
 - WyrmGrid Bridge simulator telemetry
 - Signed plugin packages and WyrmGrid Aerie discovery
 

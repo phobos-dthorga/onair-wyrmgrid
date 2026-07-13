@@ -9,9 +9,9 @@ first-party intelligence modules will use the same versioned, permission-aware
 plugin boundary available to third-party developers.
 
 > **Project status:** foundation stage. Session-only OnAir connection and the
-> first Atlas fleet slice are implemented; SQLite fleet snapshots, FBOs,
-> restart-time offline data, and persistent credential storage remain parts of
-> the first vertical slice.
+> first Atlas fleet slice, protected synchronization, and restart-time Hoard
+> snapshots are implemented; FBOs and persistent credential storage remain
+> parts of the first vertical slice.
 
 ## Vision
 

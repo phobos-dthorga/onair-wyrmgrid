@@ -6,6 +6,7 @@
   import type {
     AircraftSummary,
     FleetSnapshot,
+    FleetSnapshotView,
     FleetSyncResult,
     FleetSyncTrigger,
   } from "$lib/atlas/types";
@@ -37,20 +38,45 @@
   });
   let connection = $state<OnAirConnectionStatus>(disconnectedStatus);
   let showConnectionDialog = $state(false);
-  let fleetSnapshot = $state<FleetSnapshot | null>(null);
+  let fleetView = $state<FleetSnapshotView | null>(null);
   let fleetLoadState = $state<FleetLoadState>("idle");
   let fleetError = $state("");
   let fleetVisible = $state(true);
   let selectedAircraftId = $state<string | null>(null);
   let automaticSyncMinutes = $state(30);
 
+  const fleetSnapshot = $derived<FleetSnapshot | null>(fleetView?.snapshot ?? null);
   const aircraft = $derived(fleetSnapshot?.value ?? []);
   const plottedAircraftCount = $derived(aircraft.filter((item) => item.location).length);
   const selectedAircraft = $derived(
     aircraft.find((item) => item.id === selectedAircraftId) ?? null,
   );
   const fleetSourceLabel = $derived(
-    fleetSnapshot?.provenance.kind === "on_air_fact" ? "OnAir fact" : "Illustrative preview",
+    fleetView?.availability === "preview"
+      ? "Illustrative preview"
+      : fleetView?.availability === "live"
+        ? "OnAir fact"
+        : "Cached OnAir fact",
+  );
+  const fleetAvailabilityLabel = $derived(
+    fleetView?.availability === "live"
+      ? "Live"
+      : fleetView?.availability === "cached"
+        ? "Cached"
+        : fleetView?.availability === "offline"
+          ? "Offline"
+          : fleetView?.availability === "preview"
+            ? "Preview"
+            : "Unavailable",
+  );
+  const fleetStorageLabel = $derived(
+    fleetView?.storage === "hoard"
+      ? "Hoard snapshot"
+      : fleetView?.storage === "memory_only"
+        ? "Memory only"
+        : fleetView?.storage === "preview"
+          ? "Preview data"
+          : "No snapshot",
   );
   const layers = $derived([
     { id: "fleet", name: "Fleet", count: plottedAircraftCount, active: fleetVisible, available: true },
@@ -82,6 +108,16 @@
     return `${item.location.latitude.toFixed(4)}, ${item.location.longitude.toFixed(4)}`;
   }
 
+  function acceptFleetView(view: FleetSnapshotView): void {
+    fleetView = view;
+    if (
+      selectedAircraftId &&
+      !view.snapshot.value.some((item) => item.id === selectedAircraftId)
+    ) {
+      selectedAircraftId = null;
+    }
+  }
+
   async function synchronizeFleet(trigger: FleetSyncTrigger): Promise<void> {
     if (!connection.connected || fleetLoadState === "loading") return;
     fleetLoadState = "loading";
@@ -90,31 +126,35 @@
     try {
       const result = await invoke<FleetSyncResult>("synchronize_onair_fleet", { trigger });
       if (result.disposition === "quietly_ignored" || !result.snapshot) {
-        fleetLoadState = fleetSnapshot ? "ready" : "idle";
+        fleetLoadState = fleetView ? "ready" : "idle";
         return;
       }
 
-      fleetSnapshot = result.snapshot;
+      acceptFleetView(result.snapshot);
       fleetLoadState = "ready";
-      if (
-        selectedAircraftId &&
-        !fleetSnapshot.value.some((item) => item.id === selectedAircraftId)
-      ) {
-        selectedAircraftId = null;
-      }
     } catch (error) {
-      fleetLoadState = "error";
       fleetError = safeError(error);
+      try {
+        const retained = await invoke<FleetSnapshotView | null>("onair_fleet_snapshot");
+        if (retained) acceptFleetView(retained);
+      } catch {
+        // Keep the existing presentation state when Hoard cannot be read.
+      }
+      fleetLoadState = "error";
     }
   }
 
-  async function restoreFleetSnapshot(): Promise<void> {
+  async function restoreFleetSnapshot(synchronizeAfterRestore: boolean): Promise<void> {
     try {
-      const snapshot = await invoke<FleetSnapshot | null>("onair_fleet_snapshot");
-      if (snapshot) {
-        fleetSnapshot = snapshot;
+      const view = await invoke<FleetSnapshotView | null>("onair_fleet_snapshot");
+      if (view) {
+        acceptFleetView(view);
         fleetLoadState = "ready";
       } else {
+        fleetView = null;
+        fleetLoadState = "idle";
+      }
+      if (connection.connected && (synchronizeAfterRestore || !view)) {
         await synchronizeFleet("initial");
       }
     } catch {
@@ -126,12 +166,10 @@
     connection = value;
     if (value.connected) {
       showConnectionDialog = false;
-      void synchronizeFleet("initial");
+      void restoreFleetSnapshot(true);
     } else {
-      fleetSnapshot = null;
-      fleetLoadState = "idle";
       fleetError = "";
-      selectedAircraftId = null;
+      void restoreFleetSnapshot(false);
     }
   }
 
@@ -171,14 +209,14 @@
     invoke<PlatformStatus>("platform_status")
       .then((value) => (status = value))
       .catch(() => {
-        fleetSnapshot = atlasPreviewFleet;
+        fleetView = atlasPreviewFleet;
         fleetLoadState = "ready";
       });
 
     invoke<OnAirConnectionStatus>("onair_connection_status")
       .then((value) => {
         connection = value;
-        if (value.connected) void restoreFleetSnapshot();
+        void restoreFleetSnapshot(value.connected);
       })
       .catch(() => {
         // Browser previews do not expose the Tauri command bridge.
@@ -278,8 +316,20 @@
             Synchronizing fleet with OnAir…
           {:else if fleetLoadState === "error"}
             {fleetError}
-          {:else if fleetSnapshot}
-            {aircraft.length} aircraft received; {plottedAircraftCount} have a mappable location.
+            {#if fleetView}
+              The previous {fleetAvailabilityLabel.toLowerCase()} Hoard observation remains visible.
+            {/if}
+          {:else if fleetView && fleetSnapshot}
+            {#if fleetView.availability === "offline"}
+              Offline Hoard snapshot for {fleetView.company.name}.
+            {:else if fleetView.availability === "cached"}
+              Cached Hoard snapshot for {fleetView.company.name}; synchronization is pending.
+            {:else if fleetView.availability === "preview"}
+              Synthetic browser-preview fleet.
+            {:else}
+              Live fleet for {fleetView.company.name}.
+            {/if}
+            {aircraft.length} aircraft received; {plottedAircraftCount} mappable.
             {formatObservedAt(fleetSnapshot.provenance.observed_at)}.
           {:else if connection.connected}
             OnAir is connected. Synchronize the fleet to populate Atlas.
@@ -301,18 +351,24 @@
       <div class="map-title">
         <span class="eyebrow">Universal operations map</span>
         <strong>See the network. Command the skies.</strong>
+        {#if fleetView && fleetView.availability !== "live"}
+          <span class:offline={fleetView.availability === "offline"} class="data-mode-badge">
+            {fleetAvailabilityLabel} · {fleetStorageLabel}
+          </span>
+        {/if}
       </div>
       <div class="readiness-card">
         <span class="eyebrow">Atlas readiness</span>
         <div class="readiness-value">
-          {fleetSnapshot ? `${plottedAircraftCount} aircraft mapped` : "Awaiting fleet"}
+          {fleetView ? `${plottedAircraftCount} aircraft mapped` : "Awaiting fleet"}
         </div>
         <dl>
-          <div><dt>Source</dt><dd>{fleetSnapshot ? fleetSourceLabel : "Not connected"}</dd></div>
+          <div><dt>Source</dt><dd>{fleetView ? fleetSourceLabel : "Not connected"}</dd></div>
+          <div><dt>State</dt><dd>{fleetAvailabilityLabel}</dd></div>
           <div><dt>Plugin API</dt><dd>v{status.plugin_api_version}</dd></div>
           <div><dt>Build</dt><dd>{status.version}</dd></div>
         </dl>
-        {#if !fleetSnapshot}<WyrmChart spec={foundationChart} />{/if}
+        {#if !fleetView}<WyrmChart spec={foundationChart} />{/if}
       </div>
     </section>
 
@@ -352,8 +408,8 @@
 
       <div class="status-grid">
         <article><span>OnAir</span><strong>{connection.connected ? "Connected" : "Not connected"}</strong></article>
-        <article><span>Fleet</span><strong>{fleetLoadState}</strong></article>
-        <article><span>Storage</span><strong>Memory snapshot</strong></article>
+        <article><span>Fleet</span><strong>{fleetAvailabilityLabel}</strong></article>
+        <article><span>Storage</span><strong>{fleetStorageLabel}</strong></article>
       </div>
     </aside>
   </section>

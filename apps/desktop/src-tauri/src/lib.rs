@@ -1,3 +1,5 @@
+use tauri::Manager;
+
 struct DesktopState {
     onair: wyrmgrid_application::OnAirSession,
 }
@@ -49,7 +51,7 @@ async fn synchronize_onair_fleet(
 #[tauri::command]
 fn onair_fleet_snapshot(
     state: tauri::State<'_, DesktopState>,
-) -> Result<Option<wyrmgrid_domain::Observed<Vec<wyrmgrid_domain::AircraftSummary>>>, String> {
+) -> Result<Option<wyrmgrid_application::FleetSnapshotView>, String> {
     state
         .onair
         .fleet_snapshot()
@@ -59,8 +61,23 @@ fn onair_fleet_snapshot(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .manage(DesktopState {
-            onair: wyrmgrid_application::OnAirSession::default(),
+        .setup(|app| {
+            let store = app
+                .path()
+                .app_data_dir()
+                .ok()
+                .and_then(|directory| std::fs::create_dir_all(&directory).ok().map(|_| directory))
+                .and_then(|directory| {
+                    wyrmgrid_storage::Store::open(directory.join("wyrmgrid.db")).ok()
+                })
+                .unwrap_or_else(|| {
+                    wyrmgrid_storage::Store::open_in_memory()
+                        .expect("in-memory Hoard fallback should initialize")
+                });
+            app.manage(DesktopState {
+                onair: wyrmgrid_application::OnAirSession::with_default_store(store),
+            });
+            Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             platform_status,

@@ -1,0 +1,106 @@
+# WyrmGrid Hoard
+
+Hoard is WyrmGrid's local SQLite history and offline-data boundary. It stores
+stable WyrmGrid observations after raw OnAir responses have been validated and
+translated. Raw OnAir JSON and API credentials never enter Hoard.
+
+## Fleet snapshots
+
+After every successful fleet synchronization, the application stores a
+schema-versioned payload containing:
+
+- the company identifier, name, and airline code;
+- stable aircraft and current-airport summaries;
+- the original OnAir provenance source and observation time;
+- the WyrmGrid snapshot schema version.
+
+The existing migration-1 `api_snapshots` table already owns this generic record
+shape, so the first fleet persistence slice does not change the database schema
+or add an unnecessary migration. Future schema changes must use new append-only
+migrations and must not edit migration 1.
+
+At desktop startup, the newest compatible fleet snapshot across known companies
+is loaded before an OnAir connection exists. Atlas presents it immediately as
+**Offline · Hoard snapshot**. Connecting a company switches to its newest saved
+snapshot, marked **Cached**, while a live synchronization is pending. Only a
+successful remote observation becomes **Live**.
+
+Failed synchronization never replaces the last valid observation. It marks the
+retained data Cached, keeps the map usable, and reports the bounded network or
+API failure separately.
+
+## Retention
+
+Fleet history is compacted transactionally whenever a successful observation is
+saved:
+
+- retain the newest observation in each UTC hour for the most recent seven days;
+- retain the newest observation in each UTC day for older history;
+- partition retention by company and resource kind.
+
+This provides useful recent resolution and long-term daily history without
+allowing ordinary synchronization to produce unbounded intraday growth.
+
+## Hoard Timeline
+
+Hoard is intended to become more than an offline fallback. Its observation
+history will support a read-only **Hoard Timeline** where a player can inspect
+how a charter operation or airline changed over time.
+
+The timeline will use an **as-of** model: for each requested resource, WyrmGrid
+selects the newest compatible observation at or before the chosen UTC time.
+Fleet, finance, FBO, route, job, and flight observations may have different
+capture times because the public OnAir API does not provide one atomic company
+snapshot. The interface must show each resource's actual observation time and
+must not imply that independently collected facts were simultaneous.
+
+The application will always expose one of two mutually exclusive workspace
+modes: **LIVE** or **HISTORICAL**. Mode is separate from data availability. For
+example, the current operational workspace may honestly read **LIVE mode ·
+Offline snapshot**, while a past view reads **HISTORICAL mode · As of 12 March
+2026**. This avoids hiding loss of connectivity and prevents a saved observation
+from masquerading as a current server response.
+
+HISTORICAL mode will:
+
+- display a persistent mode indicator, **Viewing history** banner, and selected
+  time;
+- remain read-only and visually distinct from Live, Cached, and Offline data
+  availability states;
+- keep live synchronization running independently without moving the user's
+  selected historical position;
+- provide an explicit return-to-present action;
+- derive growth and change metrics from stable observations rather than store
+  recommendations as facts.
+
+The first timeline slice will reuse the retained fleet observations and add a
+LIVE/HISTORICAL mode control, time selector, snapshot list, and aircraft-count
+and fleet-composition changes. Later slices can add company value, FBO
+footprint, route network, utilization, finance, and user-named milestones as
+those stable domain resources become available. Charts will consume the same
+query results as tables and Atlas so all three presentations share one
+definition of the underlying history.
+
+The existing generic snapshot records, company/resource partitioning, schema
+versions, observation timestamps, and hourly-to-daily retention policy are the
+foundation for this work. A separate history store or event-sourcing system is
+not justified for the initial timeline.
+
+## Failure mode
+
+The desktop opens `wyrmgrid.db` in the operating system's application-data
+directory. If that location cannot be created or SQLite cannot be opened,
+WyrmGrid degrades to an in-memory store rather than preventing startup. Atlas
+then labels successful observations **Memory only**, making the loss of restart
+persistence visible.
+
+Unsupported or malformed stored payload versions are ignored safely. Hoard does
+not reinterpret them as current domain data.
+
+## Privacy boundary
+
+The database contains company identifiers, company names, fleet records,
+locations, and observation history. It does not currently encrypt those facts
+at rest and relies on the user's operating-system account and file permissions.
+Users should treat `wyrmgrid.db` as private operational data and sanitize it
+before attaching it to an issue. API keys are never written to this database.
