@@ -24,4 +24,4 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 serde.workspace = true
 wyrmgrid-application = { path = "../../../crates/application" }
-
+wyrmgrid-domain = { path = "../../../crates/domain" }

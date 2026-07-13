@@ -8,9 +8,10 @@ through one connected world map. It is designed as a community platform: most
 first-party intelligence modules will use the same versioned, permission-aware
 plugin boundary available to third-party developers.
 
-> **Project status:** foundation stage. A session-only OnAir connection probe is
-> implemented; fleet synchronization, historical caching, and persistent
-> credential storage remain parts of the first vertical slice.
+> **Project status:** foundation stage. Session-only OnAir connection and the
+> first Atlas fleet slice are implemented; SQLite fleet snapshots, FBOs,
+> restart-time offline data, and persistent credential storage remain parts of
+> the first vertical slice.
 
 ## Vision
 

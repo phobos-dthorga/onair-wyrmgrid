@@ -5,7 +5,7 @@ use serde::Serialize;
 use std::sync::{Arc, RwLock};
 use thiserror::Error;
 use uuid::Uuid;
-use wyrmgrid_domain::CompanySummary;
+use wyrmgrid_domain::{AircraftSummary, CompanySummary, Observed};
 use wyrmgrid_onair_api::{ClientError, DEFAULT_BASE_URL, OnAirClient};
 use wyrmgrid_plugin_protocol::PLUGIN_API_VERSION;
 
@@ -57,6 +57,12 @@ pub enum ConnectionError {
     ServiceUnavailable,
     #[error("The local connection state is unavailable.")]
     StateUnavailable,
+    #[error("Connect to OnAir before refreshing the fleet.")]
+    NotConnected,
+    #[error(
+        "WyrmGrid could not refresh the fleet. A previous successful observation, if present, remains available."
+    )]
+    FleetUnavailable,
 }
 
 #[derive(Clone)]
@@ -66,8 +72,9 @@ pub struct OnAirSession {
 }
 
 struct ConnectedSession {
-    _client: OnAirClient,
+    client: Arc<OnAirClient>,
     company: CompanySummary,
+    fleet: Option<Observed<Vec<AircraftSummary>>>,
 }
 
 impl Default for OnAirSession {
@@ -96,12 +103,14 @@ impl OnAirSession {
             return Err(ConnectionError::EmptyApiKey);
         }
 
-        let client = OnAirClient::new(
-            self.base_url,
-            company_id,
-            SecretString::from(api_key.to_owned()),
-        )
-        .map_err(classify_client_error)?;
+        let client = Arc::new(
+            OnAirClient::new(
+                self.base_url,
+                company_id,
+                SecretString::from(api_key.to_owned()),
+            )
+            .map_err(classify_client_error)?,
+        );
         let company = client
             .company_summary()
             .await
@@ -111,8 +120,9 @@ impl OnAirSession {
             .inner
             .write()
             .map_err(|_| ConnectionError::StateUnavailable)? = Some(ConnectedSession {
-            _client: client,
+            client,
             company,
+            fleet: None,
         });
 
         self.status()
@@ -140,16 +150,60 @@ impl OnAirSession {
             credential_storage: "session_only",
         })
     }
+
+    pub async fn refresh_fleet(&self) -> Result<Observed<Vec<AircraftSummary>>, ConnectionError> {
+        let (company_id, client) = {
+            let session = self
+                .inner
+                .read()
+                .map_err(|_| ConnectionError::StateUnavailable)?;
+            let connected = session.as_ref().ok_or(ConnectionError::NotConnected)?;
+            (connected.company.id.clone(), Arc::clone(&connected.client))
+        };
+
+        let fleet = client.fleet().await.map_err(classify_fleet_error)?;
+
+        let mut session = self
+            .inner
+            .write()
+            .map_err(|_| ConnectionError::StateUnavailable)?;
+        let connected = session.as_mut().ok_or(ConnectionError::NotConnected)?;
+        if connected.company.id != company_id {
+            return Err(ConnectionError::StateUnavailable);
+        }
+        connected.fleet = Some(fleet.clone());
+        Ok(fleet)
+    }
+
+    pub fn fleet_snapshot(
+        &self,
+    ) -> Result<Option<Observed<Vec<AircraftSummary>>>, ConnectionError> {
+        let session = self
+            .inner
+            .read()
+            .map_err(|_| ConnectionError::StateUnavailable)?;
+        Ok(session
+            .as_ref()
+            .and_then(|connected| connected.fleet.clone()))
+    }
 }
 
 fn classify_client_error(error: ClientError) -> ConnectionError {
     match error {
-        ClientError::AuthenticationRejected
-        | ClientError::ApiRejected
-        | ClientError::MissingContent => ConnectionError::AuthenticationRejected,
+        ClientError::AuthenticationRejected | ClientError::ApiRejected => {
+            ConnectionError::AuthenticationRejected
+        }
         ClientError::CompanyNotFound => ConnectionError::CompanyNotFound,
         ClientError::RateLimited => ConnectionError::RateLimited,
         _ => ConnectionError::ServiceUnavailable,
+    }
+}
+
+fn classify_fleet_error(error: ClientError) -> ConnectionError {
+    match error {
+        ClientError::AuthenticationRejected => ConnectionError::AuthenticationRejected,
+        ClientError::RateLimited => ConnectionError::RateLimited,
+        _ => ConnectionError::FleetUnavailable,
     }
 }
 
@@ -188,6 +242,21 @@ mod tests {
         ));
     }
 
+    #[tokio::test]
+    async fn refuses_fleet_refresh_without_a_connected_session() {
+        let session = OnAirSession::default();
+        assert!(matches!(
+            session.refresh_fleet().await,
+            Err(ConnectionError::NotConnected)
+        ));
+        assert_eq!(
+            session
+                .fleet_snapshot()
+                .expect("snapshot state should be readable"),
+            None
+        );
+    }
+
     #[test]
     fn maps_adapter_failures_to_bounded_user_messages() {
         assert!(matches!(
@@ -205,5 +274,13 @@ mod tests {
         let message = ConnectionError::AuthenticationRejected.to_string();
         assert!(message.contains("For now"));
         assert!(message.contains("not OnAir Companion"));
+        assert!(matches!(
+            classify_client_error(ClientError::MissingContent),
+            ConnectionError::ServiceUnavailable
+        ));
+        assert!(matches!(
+            classify_fleet_error(ClientError::ApiRejected),
+            ConnectionError::FleetUnavailable
+        ));
     }
 }

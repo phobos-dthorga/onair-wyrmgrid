@@ -34,6 +34,27 @@ fn disconnect_onair(
     state.onair.disconnect().map_err(|error| error.to_string())
 }
 
+#[tauri::command]
+async fn refresh_onair_fleet(
+    state: tauri::State<'_, DesktopState>,
+) -> Result<wyrmgrid_domain::Observed<Vec<wyrmgrid_domain::AircraftSummary>>, String> {
+    state
+        .onair
+        .refresh_fleet()
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn onair_fleet_snapshot(
+    state: tauri::State<'_, DesktopState>,
+) -> Result<Option<wyrmgrid_domain::Observed<Vec<wyrmgrid_domain::AircraftSummary>>>, String> {
+    state
+        .onair
+        .fleet_snapshot()
+        .map_err(|error| error.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -44,7 +65,9 @@ pub fn run() {
             platform_status,
             onair_connection_status,
             connect_onair,
-            disconnect_onair
+            disconnect_onair,
+            refresh_onair_fleet,
+            onair_fleet_snapshot
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -4710,6 +4710,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "wyrmgrid-application",
+ "wyrmgrid-domain",
 ]
 
 [[package]]
@@ -4725,6 +4726,7 @@ dependencies = [
 name = "wyrmgrid-onair-api"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "reqwest 0.12.28",
  "secrecy",
  "serde",

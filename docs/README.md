@@ -6,6 +6,7 @@
 - [Architecture decisions](architecture/decisions/README.md)
 - [Development environment](development.md)
 - [Roadmap](roadmap.md)
+- [WyrmGrid Atlas](atlas/README.md)
 - [Plugin platform](plugins/overview.md)
 - [OnAir API boundary](onair/api-boundary.md)
 - [Threat model](security/threat-model.md)

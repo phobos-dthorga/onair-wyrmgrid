@@ -11,9 +11,12 @@
 
 - Session-only connection probe with sanitized diagnostics (implemented)
 - Optional operating-system credential store
-- Company, fleet, aircraft, airport, and FBO translation
-- Cached snapshots, data age, refresh, and offline fallback
-- Atlas markers and linked selection inspector
+- Company connection plus initial fleet, aircraft, and airport translation
+  (implemented); FBO translation remains
+- Timestamped in-memory fleet refresh and data age (implemented); SQLite
+  snapshots and restart-time offline fallback remain
+- Atlas fleet markers, layer toggle, map fitting, and linked aircraft inspector
+  (implemented)
 
 ## Vertical slice 2: external plugin proof
 

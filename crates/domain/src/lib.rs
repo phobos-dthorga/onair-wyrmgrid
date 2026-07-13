@@ -44,6 +44,10 @@ pub struct AircraftId(pub Uuid);
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
+pub struct AirportId(pub Uuid);
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct CompanyId(pub Uuid);
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -54,11 +58,20 @@ pub struct CompanySummary {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AirportSummary {
+    pub id: AirportId,
+    pub icao: Option<String>,
+    pub name: Option<String>,
+    pub location: Option<Coordinates>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AircraftSummary {
     pub id: AircraftId,
-    pub registration: String,
-    pub model: String,
+    pub registration: Option<String>,
+    pub model: Option<String>,
     pub location: Option<Coordinates>,
+    pub current_airport: Option<AirportSummary>,
 }
 
 #[cfg(test)]
