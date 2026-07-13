@@ -93,6 +93,10 @@
 - relative plugin entry-point validation;
 - content security policy for the desktop webview;
 - locked dependencies, dependency updates, audit jobs, and CI-built releases;
+- Dependency Review allows one documented low-severity SvelteKit `cookie`
+  advisory only while WyrmGrid remains a static desktop client with no HTTP
+  cookie-writing surface; the exception must be removed when a compatible fix
+  exists or that boundary changes;
 - Sentry is an optional outer adapter; domain and application services do not
   depend on it, and telemetry failure never blocks normal application work;
 - initial collection is error-only; replay, logs, performance tracing,
