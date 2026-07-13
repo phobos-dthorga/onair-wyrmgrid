@@ -17,6 +17,13 @@ export const hoardPreviewTimeline: HoardTimelineIndex = {
     { observed_at: "2026-07-13T06:00:00Z", aircraft_count: 2 },
     { observed_at: "2026-07-14T00:00:00Z", aircraft_count: 3 },
   ],
+  fbo_history: [
+    { observed_at: "2026-07-10T06:00:00Z", fbo_count: 0 },
+    { observed_at: "2026-07-11T06:00:00Z", fbo_count: 0 },
+    { observed_at: "2026-07-12T06:00:00Z", fbo_count: 1 },
+    { observed_at: "2026-07-13T06:00:00Z", fbo_count: 1 },
+    { observed_at: "2026-07-14T00:00:00Z", fbo_count: 1 },
+  ],
   current_fleet_composition: [
     { model: "Example Bush Aircraft", aircraft_count: 1 },
     { model: "Example Jet", aircraft_count: 1 },

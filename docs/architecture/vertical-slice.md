@@ -48,6 +48,8 @@ Historical queries resolve fleet and FBO resources as-of a selected time and
 preserve each resource's real observation timestamp rather than invent an
 atomic company snapshot. The workspace keeps historical mode separate from
 live/cached/offline availability and returns to LIVE explicitly or at restart.
+Fleet size, ranked fleet composition, and FBO-network size are calculated in
+the application service from those same bounded retained observations.
 
 The later SimBrief, weather, online-network, navigation, and simulator work is
 sequenced in the [external integrations programme](../integrations/README.md).

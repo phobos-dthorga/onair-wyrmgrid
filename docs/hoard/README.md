@@ -82,7 +82,11 @@ HISTORICAL mode:
 The implemented first timeline slice reuses retained fleet and FBO observations
 and provides a globally visible LIVE/HISTORICAL mode, time selector,
 return-to-present control, fleet-growth chart, and selected fleet-composition
-chart. The Rust application service owns as-of resolution and the growth and
+chart. FBO-network growth is calculated from the independently timestamped FBO
+snapshot history and presented alongside fleet growth without implying that the
+two resources were observed simultaneously. Dense fleet compositions use a
+ranked horizontal presentation so full real-world fleets remain readable. The
+Rust application service owns as-of resolution and the fleet/FBO growth and
 composition calculations; Tauri commands and Svelte remain presentation
 adapters. History reads are bounded to the newest 4,096 compatible observations
 per company and resource.
@@ -92,11 +96,10 @@ restarts. WyrmGrid always starts in LIVE mode so an old point in time cannot be
 mistaken for the present after reopening the application. Live synchronization
 continues while the user inspects history and does not move the selected point.
 
-Later slices can add company value, FBO
-footprint, route network, utilization, finance, and user-named milestones as
-those stable domain resources become available. Charts will consume the same
-query results as tables and Atlas so all three presentations share one
-definition of the underlying history.
+Later slices can add company value, geographic FBO coverage, route network,
+utilization, finance, and user-named milestones as those stable domain resources
+become available. Charts will consume the same query results as tables and Atlas
+so all three presentations share one definition of the underlying history.
 
 The existing generic snapshot records, company/resource partitioning, schema
 versions, observation timestamps, and hourly-to-daily retention policy remain

@@ -11,6 +11,11 @@
   import { onMount } from "svelte";
   import { activeTheme } from "$lib/theme/runtime";
   import type { ThemeManifest } from "$lib/theme/types";
+  import {
+    categoricalChartHeight,
+    readableCategoryLabel,
+    usesHorizontalBars,
+  } from "./layout";
   import { chartPresentation } from "./theme";
   import type { ChartSpec } from "./types";
 
@@ -33,6 +38,14 @@
 
   let container = $state<HTMLDivElement>();
   let chart = $state.raw<ECharts>();
+  const categories = $derived(
+    spec.series[0]?.points.map((point) => point.category) ?? [],
+  );
+  const resolvedHeight = $derived(
+    usesHorizontalBars(spec.kind, categories)
+      ? categoricalChartHeight(categories.length)
+      : height,
+  );
 
   const numberFormatter = new Intl.NumberFormat(undefined, {
     maximumFractionDigits: 2,
@@ -56,15 +69,46 @@
     const categories =
       chartSpec.series[0]?.points.map((point) => point.category) ?? [];
     const presentation = chartPresentation(theme);
+    const horizontalBars = usesHorizontalBars(chartSpec.kind, categories);
+    const categoryAxis = {
+      type: "category",
+      name: horizontalBars ? undefined : chartSpec.category_axis_label,
+      nameLocation: "middle",
+      nameGap: 24,
+      data: categories,
+      boundaryGap: chartSpec.kind === "bar",
+      inverse: horizontalBars,
+      axisLine: { lineStyle: { color: presentation.line } },
+      axisTick: { show: false },
+      axisLabel: {
+        color: presentation.muted,
+        interval: chartSpec.kind === "bar" ? 0 : undefined,
+        rotate: horizontalBars ? 0 : chartSpec.kind === "bar" ? 20 : 0,
+        formatter:
+          chartSpec.kind === "bar"
+            ? (value: string) => readableCategoryLabel(value)
+            : undefined,
+      },
+      nameTextStyle: { color: presentation.muted, fontSize: 10 },
+    };
+    const valueAxis = {
+      type: "value",
+      name: chartSpec.value_axis_label,
+      nameLocation: horizontalBars ? "middle" : undefined,
+      nameGap: horizontalBars ? 24 : undefined,
+      nameTextStyle: { color: presentation.muted, fontSize: 10 },
+      splitLine: { lineStyle: { color: presentation.line } },
+      axisLabel: { color: presentation.muted },
+    };
 
     return {
       animationDuration: 550,
       color: presentation.colours,
       grid: {
-        left: 44,
+        left: horizontalBars ? 130 : 44,
         right: 12,
         top: chartSpec.series.length > 1 ? 28 : 12,
-        bottom: chartSpec.kind === "bar" ? 58 : 30,
+        bottom: horizontalBars ? 32 : chartSpec.kind === "bar" ? 58 : 30,
       },
       legend: {
         show: chartSpec.series.length > 1,
@@ -79,34 +123,8 @@
         valueFormatter: (value: unknown) =>
           typeof value === "number" ? formatValue(value) : String(value ?? ""),
       },
-      xAxis: {
-        type: "category",
-        name: chartSpec.category_axis_label,
-        nameLocation: "middle",
-        nameGap: 24,
-        data: categories,
-        boundaryGap: chartSpec.kind === "bar",
-        axisLine: { lineStyle: { color: presentation.line } },
-        axisTick: { show: false },
-        axisLabel: {
-          color: presentation.muted,
-          interval: chartSpec.kind === "bar" ? 0 : undefined,
-          rotate: chartSpec.kind === "bar" ? 20 : 0,
-          formatter:
-            chartSpec.kind === "bar"
-              ? (value: string) =>
-                  value.length > 18 ? `${value.slice(0, 17)}…` : value
-              : undefined,
-        },
-        nameTextStyle: { color: presentation.muted, fontSize: 10 },
-      },
-      yAxis: {
-        type: "value",
-        name: chartSpec.value_axis_label,
-        nameTextStyle: { color: presentation.muted, fontSize: 10 },
-        splitLine: { lineStyle: { color: presentation.line } },
-        axisLabel: { color: presentation.muted },
-      },
+      xAxis: horizontalBars ? valueAxis : categoryAxis,
+      yAxis: horizontalBars ? categoryAxis : valueAxis,
       series: chartSpec.series.map((series) => ({
         id: series.id,
         name: series.label,
@@ -158,12 +176,14 @@
   {#if spec.description}<p>{spec.description}</p>{/if}
 
   {#if spec.series.length === 0}
-    <div class="chart-state" style:height>No data available</div>
+    <div class="chart-state" style:height={resolvedHeight}>
+      No data available
+    </div>
   {:else}
     <div
       bind:this={container}
       class="chart"
-      style:height
+      style:height={resolvedHeight}
       role="img"
       aria-label={`${spec.title}. ${spec.description ?? ""}`}
     ></div>

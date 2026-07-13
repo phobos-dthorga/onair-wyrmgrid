@@ -707,6 +707,12 @@ pub struct FleetHistoryPoint {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct FboHistoryPoint {
+    pub observed_at: String,
+    pub fbo_count: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct FleetCompositionPoint {
     pub model: String,
     pub aircraft_count: u32,
@@ -717,6 +723,7 @@ pub struct HoardTimelineIndex {
     pub company: Option<ConnectedCompany>,
     pub observation_times: Vec<String>,
     pub fleet_history: Vec<FleetHistoryPoint>,
+    pub fbo_history: Vec<FboHistoryPoint>,
     pub current_fleet_composition: Vec<FleetCompositionPoint>,
 }
 
@@ -1261,6 +1268,7 @@ impl OnAirSession {
                 company: None,
                 observation_times: Vec::new(),
                 fleet_history: Vec::new(),
+                fbo_history: Vec::new(),
                 current_fleet_composition: Vec::new(),
             });
         };
@@ -1308,6 +1316,13 @@ impl OnAirSession {
                 aircraft_count: bounded_count(stored.snapshot.value.len()),
             })
             .collect();
+        let fbo_history = valid_fbos
+            .iter()
+            .map(|stored| FboHistoryPoint {
+                observed_at: format_timeline_time(stored.snapshot.provenance.observed_at),
+                fbo_count: bounded_count(stored.snapshot.value.len()),
+            })
+            .collect();
         let current_fleet_composition = current_fleet
             .as_ref()
             .map(|view| fleet_composition(&view.snapshot.value))
@@ -1317,6 +1332,7 @@ impl OnAirSession {
             company: Some(ConnectedCompany::from(&company)),
             observation_times,
             fleet_history,
+            fbo_history,
             current_fleet_composition,
         })
     }
@@ -1901,7 +1917,13 @@ mod tests {
                 schema_version: FBOS_SNAPSHOT_SCHEMA_VERSION,
                 company: company.clone(),
                 snapshot: Observed {
-                    value: Vec::new(),
+                    value: (0..2)
+                        .map(|index| FboSummary {
+                            id: FboId(Uuid::new_v4()),
+                            name: Some(format!("Timeline FBO {index}")),
+                            airport: None,
+                        })
+                        .collect(),
                     provenance: Provenance {
                         kind: ProvenanceKind::OnAirFact,
                         source: "onair:company/fbos".into(),
@@ -1934,6 +1956,14 @@ mod tests {
                 .map(|point| point.aircraft_count)
                 .collect::<Vec<_>>(),
             vec![1, 2, 3]
+        );
+        assert_eq!(
+            timeline
+                .fbo_history
+                .iter()
+                .map(|point| point.fbo_count)
+                .collect::<Vec<_>>(),
+            vec![2]
         );
         assert_eq!(
             timeline.current_fleet_composition,
