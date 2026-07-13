@@ -11,17 +11,17 @@
 
 - Session-only connection probe with sanitized diagnostics (implemented)
 - Optional operating-system credential store
-- Company connection plus initial fleet, aircraft, and airport translation
-  (implemented); FBO translation remains
-- Timestamped fleet refresh, compacted SQLite history, restart-time offline
+- Company connection plus initial fleet, aircraft, airport, and FBO translation
+  (implemented)
+- Timestamped company-data refresh, compacted SQLite history, restart-time offline
   fallback, and explicit live/cached/offline state (implemented)
 - Hoard Timeline fleet history: persistent LIVE/HISTORICAL mode indicator,
   as-of selection, return-to-present control, and fleet growth/composition
   charts
-- Conservatively rate-protected manual and user-configured automatic fleet
+- Conservatively rate-protected manual and user-configured automatic company
   synchronization (implemented)
-- Atlas fleet markers, layer toggle, map fitting, and linked aircraft inspector
-  (implemented)
+- Atlas fleet and FBO markers, independent layer toggles, shared map fitting,
+  and linked inspectors (implemented)
 
 ## Vertical slice 2: external plugin proof
 

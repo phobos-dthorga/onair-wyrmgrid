@@ -2,13 +2,15 @@
   import { invoke } from "@tauri-apps/api/core";
   import { onMount } from "svelte";
   import AtlasMap from "$lib/atlas/AtlasMap.svelte";
-  import { atlasPreviewFleet } from "$lib/atlas/sample";
+  import { atlasPreviewFbos, atlasPreviewFleet } from "$lib/atlas/sample";
   import type {
     AircraftSummary,
+    CompanyDataSyncResult,
+    DataSyncTrigger,
+    FboSnapshotView,
+    FboSummary,
     FleetSnapshot,
     FleetSnapshotView,
-    FleetSyncResult,
-    FleetSyncTrigger,
   } from "$lib/atlas/types";
   import WyrmChart from "$lib/charts/WyrmChart.svelte";
   import { foundationChart } from "$lib/charts/sample";
@@ -39,26 +41,69 @@
   let connection = $state<OnAirConnectionStatus>(disconnectedStatus);
   let showConnectionDialog = $state(false);
   let fleetView = $state<FleetSnapshotView | null>(null);
+  let fboView = $state<FboSnapshotView | null>(null);
   let fleetLoadState = $state<FleetLoadState>("idle");
   let fleetError = $state("");
   let fleetVisible = $state(true);
+  let fboVisible = $state(true);
   let selectedAircraftId = $state<string | null>(null);
+  let selectedFboId = $state<string | null>(null);
   let automaticSyncMinutes = $state(30);
 
   const fleetSnapshot = $derived<FleetSnapshot | null>(fleetView?.snapshot ?? null);
   const aircraft = $derived(fleetSnapshot?.value ?? []);
+  const fbos = $derived(fboView?.snapshot.value ?? []);
   const plottedAircraftCount = $derived(aircraft.filter((item) => item.location).length);
+  const plottedFboCount = $derived(fbos.filter((item) => item.airport?.location).length);
   const selectedAircraft = $derived(
     aircraft.find((item) => item.id === selectedAircraftId) ?? null,
   );
+  const selectedFbo = $derived(fbos.find((item) => item.id === selectedFboId) ?? null);
+  const atlasAvailability = $derived(fleetView?.availability ?? fboView?.availability);
+  const atlasStorage = $derived(fleetView?.storage ?? fboView?.storage);
+  const atlasCompany = $derived(fleetView?.company ?? fboView?.company);
+  const atlasObservedAt = $derived(
+    fleetSnapshot?.provenance.observed_at ?? fboView?.snapshot.provenance.observed_at,
+  );
   const fleetSourceLabel = $derived(
-    fleetView?.availability === "preview"
+    atlasAvailability === "preview"
       ? "Illustrative preview"
-      : fleetView?.availability === "live"
+      : atlasAvailability === "live"
         ? "OnAir fact"
         : "Cached OnAir fact",
   );
   const fleetAvailabilityLabel = $derived(
+    atlasAvailability === "live"
+      ? "Live"
+      : atlasAvailability === "cached"
+        ? "Cached"
+        : atlasAvailability === "offline"
+          ? "Offline"
+          : atlasAvailability === "preview"
+            ? "Preview"
+            : "Unavailable",
+  );
+  const fleetStorageLabel = $derived(
+    atlasStorage === "hoard"
+      ? "Hoard snapshot"
+      : atlasStorage === "memory_only"
+        ? "Memory only"
+        : atlasStorage === "preview"
+          ? "Preview data"
+          : "No snapshot",
+  );
+  const fboAvailabilityLabel = $derived(
+    fboView?.availability === "live"
+      ? "Live"
+      : fboView?.availability === "cached"
+        ? "Cached"
+        : fboView?.availability === "offline"
+          ? "Offline"
+          : fboView?.availability === "preview"
+            ? "Preview"
+            : "Unavailable",
+  );
+  const fleetResourceAvailabilityLabel = $derived(
     fleetView?.availability === "live"
       ? "Live"
       : fleetView?.availability === "cached"
@@ -69,18 +114,16 @@
             ? "Preview"
             : "Unavailable",
   );
-  const fleetStorageLabel = $derived(
-    fleetView?.storage === "hoard"
-      ? "Hoard snapshot"
-      : fleetView?.storage === "memory_only"
-        ? "Memory only"
-        : fleetView?.storage === "preview"
-          ? "Preview data"
-          : "No snapshot",
+  const fboSourceLabel = $derived(
+    fboView?.availability === "preview"
+      ? "Illustrative preview"
+      : fboView?.availability === "live"
+        ? "OnAir fact"
+        : "Cached OnAir fact",
   );
   const layers = $derived([
     { id: "fleet", name: "Fleet", count: plottedAircraftCount, active: fleetVisible, available: true },
-    { id: "fbos", name: "FBO network", count: 0, active: false, available: false },
+    { id: "fbos", name: "FBO network", count: plottedFboCount, active: fboVisible, available: true },
     { id: "jobs", name: "Jobs", count: 0, active: false, available: false },
     { id: "maintenance", name: "Maintenance", count: 0, active: false, available: false },
   ]);
@@ -88,7 +131,7 @@
   function safeError(error: unknown): string {
     return typeof error === "string" && error.length > 0
       ? error
-      : "WyrmGrid could not refresh the fleet.";
+      : "WyrmGrid could not synchronize company data.";
   }
 
   function formatObservedAt(value: string | undefined): string {
@@ -99,6 +142,10 @@
       : `Observed ${observed.toLocaleString()}`;
   }
 
+  function countedLabel(count: number, singular: string, plural = `${singular}s`): string {
+    return `${count} ${count === 1 ? singular : plural}`;
+  }
+
   function displayRegistration(item: AircraftSummary): string {
     return item.registration ?? "Unknown registration";
   }
@@ -106,6 +153,11 @@
   function formatCoordinates(item: AircraftSummary): string {
     if (!item.location) return "Location unavailable";
     return `${item.location.latitude.toFixed(4)}, ${item.location.longitude.toFixed(4)}`;
+  }
+
+  function formatFboCoordinates(item: FboSummary): string {
+    if (!item.airport?.location) return "Location unavailable";
+    return `${item.airport.location.latitude.toFixed(4)}, ${item.airport.location.longitude.toFixed(4)}`;
   }
 
   function acceptFleetView(view: FleetSnapshotView): void {
@@ -118,25 +170,40 @@
     }
   }
 
-  async function synchronizeFleet(trigger: FleetSyncTrigger): Promise<void> {
+  function acceptFboView(view: FboSnapshotView): void {
+    fboView = view;
+    if (selectedFboId && !view.snapshot.value.some((item) => item.id === selectedFboId)) {
+      selectedFboId = null;
+    }
+  }
+
+  async function synchronizeCompanyData(trigger: DataSyncTrigger): Promise<void> {
     if (!connection.connected || fleetLoadState === "loading") return;
     fleetLoadState = "loading";
     fleetError = "";
 
     try {
-      const result = await invoke<FleetSyncResult>("synchronize_onair_fleet", { trigger });
-      if (result.disposition === "quietly_ignored" || !result.snapshot) {
-        fleetLoadState = fleetView ? "ready" : "idle";
+      const result = await invoke<CompanyDataSyncResult>("synchronize_onair_company_data", { trigger });
+      if (result.disposition === "quietly_ignored") {
+        fleetLoadState = fleetView || fboView ? "ready" : "idle";
         return;
       }
 
-      acceptFleetView(result.snapshot);
-      fleetLoadState = "ready";
+      if (result.fleet) acceptFleetView(result.fleet);
+      if (result.fbos) acceptFboView(result.fbos);
+      if (result.failures.length > 0) {
+        fleetError = result.failures.map((failure) => failure.message).join(" ");
+        fleetLoadState = "error";
+      } else {
+        fleetLoadState = "ready";
+      }
     } catch (error) {
       fleetError = safeError(error);
       try {
         const retained = await invoke<FleetSnapshotView | null>("onair_fleet_snapshot");
         if (retained) acceptFleetView(retained);
+        const retainedFbos = await invoke<FboSnapshotView | null>("onair_fbo_snapshot");
+        if (retainedFbos) acceptFboView(retainedFbos);
       } catch {
         // Keep the existing presentation state when Hoard cannot be read.
       }
@@ -144,18 +211,23 @@
     }
   }
 
-  async function restoreFleetSnapshot(synchronizeAfterRestore: boolean): Promise<void> {
+  async function restoreCompanySnapshots(synchronizeAfterRestore: boolean): Promise<void> {
     try {
-      const view = await invoke<FleetSnapshotView | null>("onair_fleet_snapshot");
-      if (view) {
-        acceptFleetView(view);
+      const [fleet, fboNetwork] = await Promise.all([
+        invoke<FleetSnapshotView | null>("onair_fleet_snapshot"),
+        invoke<FboSnapshotView | null>("onair_fbo_snapshot"),
+      ]);
+      if (fleet) {
+        acceptFleetView(fleet);
         fleetLoadState = "ready";
       } else {
         fleetView = null;
-        fleetLoadState = "idle";
       }
-      if (connection.connected && (synchronizeAfterRestore || !view)) {
-        await synchronizeFleet("initial");
+      if (fboNetwork) acceptFboView(fboNetwork);
+      else fboView = null;
+      if (!fleet && !fboNetwork) fleetLoadState = "idle";
+      if (connection.connected && (synchronizeAfterRestore || !fleet || !fboNetwork)) {
+        await synchronizeCompanyData("initial");
       }
     } catch {
       // Browser previews do not expose the Tauri command bridge.
@@ -166,10 +238,10 @@
     connection = value;
     if (value.connected) {
       showConnectionDialog = false;
-      void restoreFleetSnapshot(true);
+      void restoreCompanySnapshots(true);
     } else {
       fleetError = "";
-      void restoreFleetSnapshot(false);
+      void restoreCompanySnapshots(false);
     }
   }
 
@@ -187,7 +259,7 @@
     }
 
     const timer = window.setInterval(
-      () => void synchronizeFleet("automatic"),
+      () => void synchronizeCompanyData("automatic"),
       automaticSyncMinutes * 60 * 1000,
     );
     return () => window.clearInterval(timer);
@@ -210,13 +282,14 @@
       .then((value) => (status = value))
       .catch(() => {
         fleetView = atlasPreviewFleet;
+        fboView = atlasPreviewFbos;
         fleetLoadState = "ready";
       });
 
     invoke<OnAirConnectionStatus>("onair_connection_status")
       .then((value) => {
         connection = value;
-        void restoreFleetSnapshot(value.connected);
+        void restoreCompanySnapshots(value.connected);
       })
       .catch(() => {
         // Browser previews do not expose the Tauri command bridge.
@@ -268,8 +341,8 @@
           class:refreshing={fleetLoadState === "loading"}
           type="button"
           disabled={!connection.connected}
-          title="Synchronize the current fleet observation with OnAir"
-          onclick={() => void synchronizeFleet("manual")}
+          title="Synchronize current fleet and FBO observations with OnAir"
+          onclick={() => void synchronizeCompanyData("manual")}
         >
           <span aria-hidden="true">↻</span>
           Synchronize OnAir
@@ -300,6 +373,7 @@
             title={layer.available ? `Toggle ${layer.name}` : `${layer.name} is planned for a later slice`}
             onclick={() => {
               if (layer.id === "fleet") fleetVisible = !fleetVisible;
+              if (layer.id === "fbos") fboVisible = !fboVisible;
             }}
           >
             <span class="layer-indicator"></span>
@@ -313,26 +387,28 @@
         <span class="note-icon">{fleetLoadState === "error" ? "!" : "i"}</span>
         <p>
           {#if fleetLoadState === "loading"}
-            Synchronizing fleet with OnAir…
+            Synchronizing company data with OnAir…
           {:else if fleetLoadState === "error"}
             {fleetError}
-            {#if fleetView}
-              The previous {fleetAvailabilityLabel.toLowerCase()} Hoard observation remains visible.
+            {#if fleetView || fboView}
+              Previous Hoard observations remain visible where available.
             {/if}
-          {:else if fleetView && fleetSnapshot}
-            {#if fleetView.availability === "offline"}
-              Offline Hoard snapshot for {fleetView.company.name}.
-            {:else if fleetView.availability === "cached"}
-              Cached Hoard snapshot for {fleetView.company.name}; synchronization is pending.
-            {:else if fleetView.availability === "preview"}
-              Synthetic browser-preview fleet.
+          {:else if atlasCompany}
+            {#if atlasAvailability === "offline"}
+              Offline Hoard snapshot for {atlasCompany.name}.
+            {:else if atlasAvailability === "cached"}
+              Cached Hoard snapshot for {atlasCompany.name}; synchronization is pending.
+            {:else if atlasAvailability === "preview"}
+              Synthetic browser-preview company data.
             {:else}
-              Live fleet for {fleetView.company.name}.
+              Live company data for {atlasCompany.name}.
             {/if}
-            {aircraft.length} aircraft received; {plottedAircraftCount} mappable.
-            {formatObservedAt(fleetSnapshot.provenance.observed_at)}.
+            {countedLabel(aircraft.length, "aircraft", "aircraft")} and
+            {countedLabel(fbos.length, "FBO")} received;
+            {plottedAircraftCount + plottedFboCount} Atlas points mappable.
+            {formatObservedAt(atlasObservedAt)}.
           {:else if connection.connected}
-            OnAir is connected. Synchronize the fleet to populate Atlas.
+            OnAir is connected. Synchronize company data to populate Atlas.
           {:else}
             Connect an OnAir company to begin. Credentials remain only in memory for this session.
           {/if}
@@ -343,16 +419,26 @@
     <section class="map-stage" aria-label="Universal operations map">
       <AtlasMap
         {aircraft}
+        {fbos}
         fleetVisible={fleetVisible}
+        fboVisible={fboVisible}
         selectedAircraftId={selectedAircraftId}
-        onselect={(aircraftId) => (selectedAircraftId = aircraftId)}
+        selectedFboId={selectedFboId}
+        onselectaircraft={(aircraftId) => {
+          selectedAircraftId = aircraftId;
+          selectedFboId = null;
+        }}
+        onselectfbo={(fboId) => {
+          selectedFboId = fboId;
+          selectedAircraftId = null;
+        }}
       />
       <div class="map-wash"></div>
       <div class="map-title">
         <span class="eyebrow">Universal operations map</span>
         <strong>See the network. Command the skies.</strong>
-        {#if fleetView && fleetView.availability !== "live"}
-          <span class:offline={fleetView.availability === "offline"} class="data-mode-badge">
+        {#if atlasAvailability && atlasAvailability !== "live"}
+          <span class:offline={atlasAvailability === "offline"} class="data-mode-badge">
             {fleetAvailabilityLabel} · {fleetStorageLabel}
           </span>
         {/if}
@@ -360,10 +446,12 @@
       <div class="readiness-card">
         <span class="eyebrow">Atlas readiness</span>
         <div class="readiness-value">
-          {fleetView ? `${plottedAircraftCount} aircraft mapped` : "Awaiting fleet"}
+          {fleetView || fboView
+            ? `${countedLabel(plottedAircraftCount, "aircraft", "aircraft")} · ${countedLabel(plottedFboCount, "FBO")} mapped`
+            : "Awaiting company data"}
         </div>
         <dl>
-          <div><dt>Source</dt><dd>{fleetView ? fleetSourceLabel : "Not connected"}</dd></div>
+          <div><dt>Source</dt><dd>{atlasCompany ? fleetSourceLabel : "Not connected"}</dd></div>
           <div><dt>State</dt><dd>{fleetAvailabilityLabel}</dd></div>
           <div><dt>Plugin API</dt><dd>v{status.plugin_api_version}</dd></div>
           <div><dt>Build</dt><dd>{status.version}</dd></div>
@@ -396,9 +484,29 @@
             <small>{formatObservedAt(fleetSnapshot?.provenance.observed_at)}</small>
           </article>
         </div>
+      {:else if selectedFbo}
+        <h2>{selectedFbo.name ?? "Unnamed FBO"}</h2>
+        <p>Company FBO network location</p>
+
+        <div class="selection-details">
+          <article>
+            <span>Airport</span>
+            <strong>{selectedFbo.airport?.icao || "Not reported"}</strong>
+            {#if selectedFbo.airport?.name}<small>{selectedFbo.airport.name}</small>{/if}
+          </article>
+          <article>
+            <span>Coordinates</span>
+            <strong>{formatFboCoordinates(selectedFbo)}</strong>
+          </article>
+          <article>
+            <span>Provenance</span>
+            <strong>{fboSourceLabel}</strong>
+            <small>{formatObservedAt(fboView?.snapshot.provenance.observed_at)}</small>
+          </article>
+        </div>
       {:else}
         <h2>Nothing selected</h2>
-        <p>Select a mapped aircraft to inspect its current operational context.</p>
+        <p>Select a mapped aircraft or FBO to inspect its current operational context.</p>
 
         <div class="empty-radar" aria-hidden="true">
           <span></span><span></span><span></span>
@@ -408,7 +516,8 @@
 
       <div class="status-grid">
         <article><span>OnAir</span><strong>{connection.connected ? "Connected" : "Not connected"}</strong></article>
-        <article><span>Fleet</span><strong>{fleetAvailabilityLabel}</strong></article>
+        <article><span>Fleet</span><strong>{fleetResourceAvailabilityLabel}</strong></article>
+        <article><span>FBOs</span><strong>{fboAvailabilityLabel}</strong></article>
         <article><span>Storage</span><strong>{fleetStorageLabel}</strong></article>
       </div>
     </aside>
