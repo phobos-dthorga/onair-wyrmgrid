@@ -7,6 +7,7 @@
 - [Development environment](development.md)
 - [Roadmap](roadmap.md)
 - [WyrmGrid Atlas](atlas/README.md)
+- [WyrmGrid Hoard](hoard/README.md)
 - [Plugin platform](plugins/overview.md)
 - [Operational Planner plugin concept](plugins/operational-planner.md)
 - [OnAir API boundary](onair/api-boundary.md)

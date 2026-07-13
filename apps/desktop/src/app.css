@@ -331,6 +331,23 @@ nav {
   font-size: 17px;
   font-weight: 400;
 }
+.data-mode-badge {
+  display: inline-block;
+  margin-top: 9px;
+  border: 1px solid rgba(216, 177, 71, 0.5);
+  padding: 4px 7px;
+  color: var(--gold);
+  background: rgba(92, 68, 15, 0.28);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.data-mode-badge.offline {
+  border-color: rgba(231, 137, 101, 0.55);
+  color: #efaa8d;
+  background: rgba(100, 42, 26, 0.32);
+}
 .readiness-card {
   position: absolute;
   left: 24px;
@@ -349,7 +366,7 @@ nav {
 }
 dl {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 7px;
   margin: 0;
 }

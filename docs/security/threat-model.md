@@ -17,8 +17,10 @@
 - hostile API payloads, imported files, map styles, and URLs;
 - dependency or release-pipeline compromise;
 - stale data presented as current fact;
-- recommendations mistaken for OnAir-provided facts.
+- historical operational state mistaken for the present state;
+- recommendations mistaken for OnAir-provided facts;
 - accidental or automated request storms against OnAir's public API;
+- disclosure of locally cached company, fleet, and location history;
 
 ## Initial controls
 
@@ -39,6 +41,13 @@
   specified and tested.
 - fleet synchronization is serialized in Rust; trigger-specific quiet periods
   silently return cached state without making another remote request.
+- Hoard stores stable domain snapshots rather than raw API payloads, never stores
+  credentials, applies bounded retention, and visibly distinguishes live,
+  cached, offline, preview, and memory-only data.
+- Hoard Timeline remains read-only, persistently identifies mutually exclusive
+  LIVE or HISTORICAL workspace mode separately from data availability, shows
+  the selected time and each resource's actual observation time, and offers an
+  explicit return-to-present action.
 - chart contributions are data-only; the host rejects executable callbacks,
   arbitrary ECharts options, HTML tooltips, non-finite values, oversized series,
   and charts published without `charts_publish`.
@@ -62,3 +71,13 @@ identifies OnAir Client and warns that Companion has not reached credential
 parity; authentication errors repeat that recovery instruction without echoing
 either entered value. When Companion becomes the primary compatible client,
 this guidance must change without weakening secret handling.
+
+## Residual Hoard risks
+
+The local SQLite database contains company identifiers, company names, aircraft
+details, locations, and observation history. It is not currently encrypted at
+rest and relies on operating-system account and filesystem protections. A user
+must therefore sanitize or omit `wyrmgrid.db` from support reports. Retention
+limits intraday growth but deliberately preserves one daily historical record,
+so sensitive operational history remains until the user deletes the database or
+a future data-management feature removes it.

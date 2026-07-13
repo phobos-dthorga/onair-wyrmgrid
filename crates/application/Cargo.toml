@@ -10,11 +10,15 @@ repository.workspace = true
 [dependencies]
 secrecy.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
 wyrmgrid-domain = { path = "../domain" }
 wyrmgrid-onair-api = { path = "../onair-api" }
 wyrmgrid-plugin-protocol = { path = "../plugin-protocol" }
+wyrmgrid-storage = { path = "../storage" }
 
 [dev-dependencies]
+chrono.workspace = true
+tempfile = "3.20.0"
 tokio.workspace = true

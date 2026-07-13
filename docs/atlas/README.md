@@ -10,7 +10,9 @@ than one grand map implementation.
 OnAir response
   -> private raw Rust types
   -> stable domain aircraft
-  -> timestamped application snapshot
+  -> timestamped, schema-versioned snapshot
+  -> SQLite Hoard history
+  -> live/cached/offline application view
   -> thin Tauri command
   -> declarative Atlas layer
   -> linked selection inspector
@@ -37,7 +39,10 @@ The first Atlas slice provides:
 - a Fleet layer toggle and separate received/mapped counts;
 - automatic map fitting after a new fleet observation;
 - marker selection linked to an aircraft inspector;
-- preservation of the last in-memory observation when a later refresh fails;
+- persistent, schema-versioned Hoard snapshots after successful observations;
+- immediate restart-time display of the latest cached company fleet;
+- explicit Live, Cached, Offline, Preview, Hoard, and Memory-only labels;
+- preservation of the last valid observation when a later refresh fails;
 - a clearly labelled synthetic browser-preview fleet for interface testing.
 
 The committed fleet fixture and browser-preview data are synthetic. They contain
@@ -45,10 +50,9 @@ no user company, aircraft, airport, or credential data.
 
 ## Deliberate limits
 
-This slice does not yet provide SQLite persistence, restart-time offline data,
-FBOs, clustering, routes, jobs, range rings, maintenance, or plugin-published
-layers. Those should be added only when the preceding layer establishes the
-smallest shared contract they require.
+This slice does not yet provide FBOs, clustering, routes, jobs, range rings,
+maintenance, or plugin-published layers. Those should be added only when the
+preceding layer establishes the smallest shared contract they require.
 
 Atlas layers should remain declarative. A future plugin may publish bounded
 features and presentation metadata, but it must not receive the MapLibre object
@@ -58,3 +62,7 @@ Automatic scheduling currently belongs to the desktop while authoritative
 serialization and quiet periods belong to the Rust application service. This
 keeps one small timer near the active window lifecycle without duplicating API
 protection policy in Svelte.
+
+Hoard persistence and the live/cached/offline decision belong to the Rust
+application and storage services. Svelte receives an explicit snapshot view and
+only chooses how those states are presented.
