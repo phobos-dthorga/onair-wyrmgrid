@@ -20,6 +20,16 @@ body:
       placeholder: YYYY-MM-DD
     validations:
       required: true
+  - type: dropdown
+    id: credential_source
+    attributes:
+      label: Credential source used for an authenticated observation
+      description: WyrmGrid supports API details copied from OnAir Client only.
+      options:
+        - OnAir Client → Options → Global Settings
+        - Not applicable (sanitized fixture or public documentation)
+    validations:
+      required: true
   - type: textarea
     id: behavior
     attributes:

@@ -76,6 +76,14 @@ npm run dev
 No OnAir credential is needed to compile or preview the foundation. Never put a
 real API key in source code, test fixtures, issue reports, screenshots, or logs.
 
+### Connecting to OnAir
+
+Obtain both the Company ID and API Key from **OnAir Client → Options → Global
+Settings**. Do not use API details shown by **OnAir Companion**: during an
+authenticated WyrmGrid test on 2026-07-14, Companion supplied values that OnAir's
+public API rejected, while the Client-supplied values worked. WyrmGrid therefore
+treats OnAir Client as the only supported credential source.
+
 See [Development](docs/development.md), [Architecture](docs/architecture/overview.md),
 and [Contributing](CONTRIBUTING.md) before making structural changes.
 

@@ -114,6 +114,11 @@
           Copy the Company ID and API Key from OnAir Client → Options → Global Settings. WyrmGrid uses them only with OnAir's read-only public API.
         </p>
 
+        <div class="credential-source-warning" role="note">
+          <strong>Use OnAir Client—not OnAir Companion</strong>
+          <span>Companion may display similar API details, but they are not valid for this connection.</span>
+        </div>
+
         <form onsubmit={connect}>
           <label for="company-id">Company ID</label>
           <input
@@ -273,6 +278,22 @@
     color: var(--gold);
   }
   .session-notice span {
+    color: var(--muted);
+  }
+  .credential-source-warning {
+    display: grid;
+    gap: 3px;
+    margin-top: 14px;
+    border: 1px solid rgba(207, 126, 101, 0.32);
+    padding: 10px 12px;
+    background: rgba(207, 126, 101, 0.08);
+    font-size: 11px;
+    line-height: 1.4;
+  }
+  .credential-source-warning strong {
+    color: #efb19e;
+  }
+  .credential-source-warning span {
     color: var(--muted);
   }
   .error {

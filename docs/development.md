@@ -27,3 +27,14 @@ schemas/               language-neutral public contracts
 Keep real credentials outside `.env` files in the repository. The committed
 `.env.example` contains names only and is not the planned production secret
 storage mechanism.
+
+## Authenticated API testing
+
+Use credentials copied strictly from **OnAir Client → Options → Global
+Settings**. Do not use the API details displayed by **OnAir Companion**. A live
+test on 2026-07-14 found that Companion-provided values were rejected while the
+Client-provided Company ID and API Key worked.
+
+Never place either value in source, `.env` files, command history, fixtures,
+screenshots, issue reports, or logs. Authenticated observations must be reduced
+to sanitized behavior before being committed.

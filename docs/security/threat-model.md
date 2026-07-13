@@ -26,6 +26,8 @@
   for the active process, and are dropped on Disconnect or application exit;
 - connection errors are mapped to bounded user-facing categories instead of
   relaying remote response bodies;
+- credential guidance names OnAir Client as the only supported source and warns
+  against visually similar but rejected values from OnAir Companion;
 - read-only API design;
 - explicit provenance and observation timestamps;
 - deny-by-default plugin capabilities;
@@ -50,3 +52,8 @@ compromised host. The frontend necessarily holds the entered value briefly
 before invoking Rust and clears it after success, disconnect, or dialog close.
 WyrmGrid therefore makes no claim of hardened secret storage until a reviewed
 operating-system credential-store implementation is introduced.
+
+Credentials copied from the wrong OnAir product are an availability and support
+risk rather than a confidentiality control failure. The interface identifies
+OnAir Client and warns against OnAir Companion before submission; authentication
+errors repeat that recovery instruction without echoing either entered value.
