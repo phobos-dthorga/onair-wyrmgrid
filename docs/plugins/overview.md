@@ -28,6 +28,40 @@ one example. The Rust protocol crate deserializes and validates it in tests.
 Chart schema version 1 was added compatibly to plugin API version 1: existing
 plugins do not need to request the new permission or emit chart messages.
 
+## External integration capabilities
+
+Provider adapters belong to the host. Plugins consume only stable, sanitized
+operational snapshots after the corresponding public capability is specified.
+They do not receive raw SimBrief, SayIntentions.AI, weather, VATSIM, IVAO,
+Navigraph, OnAir, or simulator payloads and cannot borrow the host's provider
+credentials.
+
+SayIntentions reads and actions are not covered by `external_network`,
+`notifications_create`, or `simulator_telemetry_read`. A future capability must
+name the bounded operation, keep the account key in the host, apply host-owned
+message templates and limits, and require user confirmation for every external
+effect unless a separately reviewed automation rule exists.
+
+The manifest's existing `simulator_telemetry_read` permission is reserved for a
+future bounded WyrmGrid Bridge snapshot. It does not grant simulator commands,
+flight-plan loading, raw SimConnect or FSUIPC access, arbitrary dataref access,
+or historical tracks. Those would require separate capabilities and protocol
+reviews.
+
+The version-one `external_network` name must not be interpreted as unrestricted
+internet access or a host endpoint proxy. No runtime implements it yet. Before a
+plugin runtime ships, the project must either define a destination- and
+operation-scoped broker or supersede the value with narrower provider
+capabilities through an explicit plugin-protocol compatibility decision.
+
+Likewise, `notifications_create` permits a bounded host notification request; it
+does not authorize Discord, email, webhook, calendar, or arbitrary network
+delivery. Community-delivery plugins need destination-specific user approval
+and keep their own service credentials outside host snapshots.
+
+See the [external integrations programme](../integrations/README.md) for planned
+provider boundaries.
+
 ## Planned first-party demonstrations
 
 The [Operational Planner concept](operational-planner.md) is a planned flagship
