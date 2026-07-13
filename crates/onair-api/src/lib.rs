@@ -3,16 +3,21 @@
 //! Raw responses stay inside this crate. Other parts of WyrmGrid consume stable
 //! domain models rather than binding themselves to OnAir's JSON field names.
 
+use chrono::Utc;
 use reqwest::{Client, StatusCode, header};
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, de::DeserializeOwned};
 use thiserror::Error;
 use url::Url;
 use uuid::Uuid;
-use wyrmgrid_domain::{CompanyId, CompanySummary};
+use wyrmgrid_domain::{
+    AircraftId, AircraftSummary, AirportId, AirportSummary, CompanyId, CompanySummary, Coordinates,
+    Observed, Provenance, ProvenanceKind,
+};
 
 const API_KEY_HEADER: &str = "oa-apikey";
 const COMPANY_ID_HEADER: &str = "CompanyUniqueId";
+const FLEET_PROVENANCE_SOURCE: &str = "onair:company/fleet";
 pub const DEFAULT_BASE_URL: &str = "https://server1.onair.company/api/v1";
 
 pub struct OnAirClient {
@@ -73,6 +78,44 @@ struct RawCompany {
     airline_code: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct RawAircraft {
+    #[serde(rename = "Id", default)]
+    id: Option<Uuid>,
+    #[serde(rename = "Identifier", default)]
+    identifier: Option<String>,
+    #[serde(rename = "AircraftType", default)]
+    aircraft_type: Option<RawAircraftType>,
+    #[serde(rename = "Longitude", default)]
+    longitude: Option<f64>,
+    #[serde(rename = "Latitude", default)]
+    latitude: Option<f64>,
+    #[serde(rename = "CurrentAirport", default)]
+    current_airport: Option<RawAirport>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawAircraftType {
+    #[serde(rename = "DisplayName", default)]
+    display_name: Option<String>,
+    #[serde(rename = "TypeName", default)]
+    type_name: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawAirport {
+    #[serde(rename = "Id", default)]
+    id: Option<Uuid>,
+    #[serde(rename = "ICAO", default)]
+    icao: Option<String>,
+    #[serde(rename = "Name", default)]
+    name: Option<String>,
+    #[serde(rename = "Longitude", default)]
+    longitude: Option<f64>,
+    #[serde(rename = "Latitude", default)]
+    latitude: Option<f64>,
+}
+
 impl OnAirClient {
     pub fn new(
         base_url: &str,
@@ -107,6 +150,31 @@ impl OnAirClient {
         })
     }
 
+    pub async fn fleet(&self) -> Result<Observed<Vec<AircraftSummary>>, ClientError> {
+        let response: ApiResult<Vec<RawAircraft>> = self
+            .get(&format!("company/{}/fleet", self.company_id))
+            .await?;
+        if response.error.is_some_and(|error| !error.trim().is_empty()) {
+            return Err(ClientError::ApiRejected);
+        }
+
+        let aircraft = response
+            .content
+            .ok_or(ClientError::MissingContent)?
+            .into_iter()
+            .filter_map(translate_aircraft)
+            .collect();
+
+        Ok(Observed {
+            value: aircraft,
+            provenance: Provenance {
+                kind: ProvenanceKind::OnAirFact,
+                source: FLEET_PROVENANCE_SOURCE.to_owned(),
+                observed_at: Utc::now(),
+            },
+        })
+    }
+
     async fn get<T: DeserializeOwned>(&self, path: &str) -> Result<T, ClientError> {
         let response = self.http.execute(self.request(path)?).await?;
 
@@ -136,6 +204,48 @@ impl OnAirClient {
             .header(header::ACCEPT, "application/json")
             .build()?)
     }
+}
+
+fn translate_aircraft(aircraft: RawAircraft) -> Option<AircraftSummary> {
+    let current_airport = aircraft.current_airport.and_then(translate_airport);
+    let direct_location = coordinates(aircraft.latitude, aircraft.longitude);
+    let airport_location = current_airport
+        .as_ref()
+        .and_then(|airport| airport.location);
+
+    Some(AircraftSummary {
+        id: AircraftId(aircraft.id?),
+        registration: non_empty(aircraft.identifier),
+        model: aircraft.aircraft_type.and_then(|aircraft_type| {
+            non_empty(aircraft_type.display_name).or_else(|| non_empty(aircraft_type.type_name))
+        }),
+        location: direct_location.or(airport_location),
+        current_airport,
+    })
+}
+
+fn translate_airport(airport: RawAirport) -> Option<AirportSummary> {
+    Some(AirportSummary {
+        id: AirportId(airport.id?),
+        icao: non_empty(airport.icao),
+        name: non_empty(airport.name),
+        location: coordinates(airport.latitude, airport.longitude),
+    })
+}
+
+fn coordinates(latitude: Option<f64>, longitude: Option<f64>) -> Option<Coordinates> {
+    let coordinates = Coordinates {
+        latitude: latitude?,
+        longitude: longitude?,
+    };
+    coordinates.is_valid().then_some(coordinates)
+}
+
+fn non_empty(value: Option<String>) -> Option<String> {
+    value.and_then(|value| {
+        let trimmed = value.trim();
+        (!trimmed.is_empty()).then(|| trimmed.to_owned())
+    })
 }
 
 #[cfg(test)]
@@ -198,6 +308,41 @@ mod tests {
 
         assert_eq!(company.name, "Example Air");
         assert_eq!(company.airline_code, "WYR");
+    }
+
+    #[test]
+    fn translates_the_swagger_fleet_envelope_without_inventing_missing_facts() {
+        let response: ApiResult<Vec<RawAircraft>> = serde_json::from_str(include_str!(
+            "../tests/fixtures/swagger-fleet-response.json"
+        ))
+        .expect("synthetic Swagger fixture should deserialize");
+        let aircraft: Vec<_> = response
+            .content
+            .expect("fixture should contain a fleet")
+            .into_iter()
+            .filter_map(translate_aircraft)
+            .collect();
+
+        assert_eq!(aircraft.len(), 3);
+        assert_eq!(aircraft[0].registration.as_deref(), Some("WYR-101"));
+        assert_eq!(aircraft[0].model.as_deref(), Some("Example Turboprop"));
+        assert_eq!(
+            aircraft[0]
+                .current_airport
+                .as_ref()
+                .and_then(|airport| airport.icao.as_deref()),
+            Some("YTEST")
+        );
+        assert_eq!(
+            aircraft[1].location,
+            Some(Coordinates {
+                latitude: -33.86,
+                longitude: 151.2,
+            })
+        );
+        assert_eq!(aircraft[2].registration, None);
+        assert_eq!(aircraft[2].model, None);
+        assert_eq!(aircraft[2].location, None);
     }
 
     #[test]

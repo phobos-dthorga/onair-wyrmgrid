@@ -58,6 +58,26 @@ the user guidance should move to Companion in the same change.
 The committed response fixture is synthetic and Swagger-derived. It exists to
 test field translation; it is not evidence of a successful live company query.
 
+## Fleet boundary
+
+The current Swagger document was checked again on 2026-07-14 for
+`GET /api/v1/company/{companyId}/fleet`. The first Atlas slice translates only
+the verified aircraft ID, identifier, nested aircraft-type display/type name,
+direct coordinates, and nested current-airport identity, name, ICAO, and
+coordinates.
+
+Raw fleet fields remain optional at the adapter boundary because the Swagger
+models declare properties but no required set. WyrmGrid does not manufacture
+placeholder registrations, models, airports, or coordinates. Invalid WGS84
+coordinates become absent; valid current-airport coordinates are used only when
+direct aircraft coordinates are absent.
+
+The translated fleet is wrapped with `on_air_fact` provenance and an observation
+timestamp before leaving Rust. Its source label omits the company UUID. The
+committed fleet response fixture is synthetic and Swagger-derived; a real,
+sanitized authenticated response is still required before claiming complete
+live-schema coverage.
+
 References:
 
 - [OnAir public API wiki](https://onaircompany.hostwiki.io/en/Public-APIs)
