@@ -30,10 +30,7 @@ export type FleetSnapshot = {
 export type FleetSyncTrigger = "initial" | "manual" | "automatic";
 
 export type FleetSnapshotAvailability =
-  | "live"
-  | "cached"
-  | "offline"
-  | "preview";
+  "live" | "cached" | "offline" | "preview";
 
 export type FleetSnapshotStorage = "hoard" | "memory_only" | "preview";
 
