@@ -9,8 +9,8 @@
 
 ## Vertical slice 1: company and fleet
 
-- Operating-system credential store
-- Live authentication probe with sanitized diagnostics
+- Session-only connection probe with sanitized diagnostics (implemented)
+- Optional operating-system credential store
 - Company, fleet, aircraft, airport, and FBO translation
 - Cached snapshots, data age, refresh, and offline fallback
 - Atlas markers and linked selection inspector

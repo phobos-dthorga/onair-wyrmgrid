@@ -5,6 +5,11 @@
   import { onMount } from "svelte";
   import WyrmChart from "$lib/charts/WyrmChart.svelte";
   import { foundationChart } from "$lib/charts/sample";
+  import ConnectionDialog from "$lib/onair/ConnectionDialog.svelte";
+  import {
+    disconnectedStatus,
+    type OnAirConnectionStatus,
+  } from "$lib/onair/types";
 
   type PlatformStatus = {
     application: string;
@@ -21,6 +26,8 @@
     plugin_api_version: 1,
     mode: "browser preview",
   });
+  let connection = $state<OnAirConnectionStatus>(disconnectedStatus);
+  let showConnectionDialog = $state(false);
 
   const layers = [
     { name: "Fleet", count: 0, active: true },
@@ -54,6 +61,12 @@
         // Browser previews do not expose the Tauri command bridge.
       });
 
+    invoke<OnAirConnectionStatus>("onair_connection_status")
+      .then((value) => (connection = value))
+      .catch(() => {
+        // Browser previews do not expose the Tauri command bridge.
+      });
+
     return () => {
       cancelled = true;
       map?.remove();
@@ -79,7 +92,15 @@
       <button class="nav-item">Hoard</button>
       <button class="nav-item">Forge</button>
     </nav>
-    <div class="connection-pill"><span></span> Offline foundation</div>
+    <button
+      class:connected={connection.connected}
+      class="connection-pill"
+      type="button"
+      onclick={() => (showConnectionDialog = true)}
+    >
+      <span></span>
+      {connection.connected && connection.company ? connection.company.name : "Connect OnAir"}
+    </button>
   </header>
 
   <section class="workspace">
@@ -104,7 +125,11 @@
 
       <div class="sidebar-note">
         <span class="note-icon">i</span>
-        <p>Connect an OnAir company to populate the Atlas. Credentials remain on this device.</p>
+        <p>
+          {connection.connected
+            ? "OnAir is authenticated for this session. Fleet retrieval is the next vertical slice."
+            : "Connect an OnAir company to begin. Credentials remain only in memory for this session."}
+        </p>
       </div>
     </aside>
 
@@ -138,7 +163,7 @@
       </div>
 
       <div class="status-grid">
-        <article><span>Data age</span><strong>Not connected</strong></article>
+        <article><span>OnAir</span><strong>{connection.connected ? "Connected" : "Not connected"}</strong></article>
         <article><span>Storage</span><strong>SQLite ready</strong></article>
         <article><span>Plugins</span><strong>Protocol v1</strong></article>
       </div>
@@ -150,3 +175,13 @@
     <span>Unaffiliated community project</span>
   </footer>
 </main>
+
+<ConnectionDialog
+  open={showConnectionDialog}
+  status={connection}
+  onclose={() => (showConnectionDialog = false)}
+  onstatuschange={(value) => {
+    connection = value;
+    if (value.connected) showConnectionDialog = false;
+  }}
+/>

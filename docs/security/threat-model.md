@@ -22,6 +22,12 @@
 ## Initial controls
 
 - secrets wrapped and redacted at the adapter boundary;
+- API keys move from the password field into a Rust `SecretString`, remain only
+  for the active process, and are dropped on Disconnect or application exit;
+- connection errors are mapped to bounded user-facing categories instead of
+  relaying remote response bodies;
+- current credential guidance directs users to OnAir Client and warns against
+  visually similar but not-yet-compatible values from OnAir Companion;
 - read-only API design;
 - explicit provenance and observation timestamps;
 - deny-by-default plugin capabilities;
@@ -37,3 +43,19 @@
 Before stable release, the project needs operating-system credential storage,
 signed updates, hardened plugin supervision, abuse-case tests, and a formal
 security review of every external input boundary.
+
+## Residual connection risks
+
+Session-only handling prevents normal disk persistence, but it cannot promise
+that a secret is absent from process memory, operating-system crash dumps, or a
+compromised host. The frontend necessarily holds the entered value briefly
+before invoking Rust and clears it after success, disconnect, or dialog close.
+WyrmGrid therefore makes no claim of hardened secret storage until a reviewed
+operating-system credential-store implementation is introduced.
+
+Credentials copied from the wrong OnAir product are an availability and support
+risk rather than a confidentiality control failure. For now, the interface
+identifies OnAir Client and warns that Companion has not reached credential
+parity; authentication errors repeat that recovery instruction without echoing
+either entered value. When Companion becomes the primary compatible client,
+this guidance must change without weakening secret handling.

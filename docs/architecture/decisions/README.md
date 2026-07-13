@@ -8,3 +8,4 @@ record rather than silently rewriting history.
 - [ADR-0003: Local-first provenance-aware data](0003-local-first-provenance.md)
 - [ADR-0004: Declarative charts and a single-maintainer complexity budget](0004-declarative-charts-and-complexity-budget.md)
 - [ADR-0005: Use Tauri's platform webviews](0005-system-webviews.md)
+- [ADR-0006: Begin with session-only OnAir credentials](0006-session-only-onair-credentials.md)

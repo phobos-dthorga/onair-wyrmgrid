@@ -20,6 +20,17 @@ body:
       placeholder: YYYY-MM-DD
     validations:
       required: true
+  - type: dropdown
+    id: credential_source
+    attributes:
+      label: Credential source used for an authenticated observation
+      description: Identify the source so Companion parity can be re-evaluated safely.
+      options:
+        - OnAir Client → Options → Global Settings
+        - OnAir Companion (currently experimental for WyrmGrid)
+        - Not applicable (sanitized fixture or public documentation)
+    validations:
+      required: true
   - type: textarea
     id: behavior
     attributes:
