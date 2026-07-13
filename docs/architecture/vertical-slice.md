@@ -43,10 +43,11 @@ cached states explicitly, and retains hourly then daily history. The next
 increment adds the narrow Swagger-verified FBO identity and airport mapping to
 the same pipeline, with independent persistence and partial-failure handling.
 
-Those retained observations deliberately form the basis of the future Hoard
-Timeline. Historical queries will resolve resources as-of a selected time and
+Those retained observations now power the first Hoard Timeline slice.
+Historical queries resolve fleet and FBO resources as-of a selected time and
 preserve each resource's real observation timestamp rather than invent an
-atomic company snapshot.
+atomic company snapshot. The workspace keeps historical mode separate from
+live/cached/offline availability and returns to LIVE explicitly or at restart.
 
 The later SimBrief, weather, online-network, navigation, and simulator work is
 sequenced in the [external integrations programme](../integrations/README.md).

@@ -1,7 +1,9 @@
 //! Application-level orchestration independent of Tauri and other interfaces.
 
+use chrono::{DateTime, SecondsFormat, Utc};
 use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
 use thiserror::Error;
@@ -9,12 +11,14 @@ use uuid::Uuid;
 use wyrmgrid_domain::{AircraftSummary, CompanyId, CompanySummary, FboSummary, Observed};
 use wyrmgrid_onair_api::{ClientError, DEFAULT_BASE_URL, OnAirClient};
 use wyrmgrid_plugin_protocol::PLUGIN_API_VERSION;
-use wyrmgrid_storage::Store;
+use wyrmgrid_storage::{ApiSnapshotRecord, Store};
 
 const FLEET_RESOURCE_KIND: &str = "onair_company_fleet";
 const FLEET_SNAPSHOT_SCHEMA_VERSION: u32 = 1;
 const FBOS_RESOURCE_KIND: &str = "onair_company_fbos";
 const FBOS_SNAPSHOT_SCHEMA_VERSION: u32 = 1;
+const MAX_HOARD_TIMELINE_OBSERVATIONS: usize = 4_096;
+const UNKNOWN_AIRCRAFT_MODEL: &str = "Unknown model";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PlatformStatus {
@@ -696,6 +700,34 @@ pub struct CompanyDataSyncResult {
     pub failures: Vec<DataSyncFailure>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct FleetHistoryPoint {
+    pub observed_at: String,
+    pub aircraft_count: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct FleetCompositionPoint {
+    pub model: String,
+    pub aircraft_count: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct HoardTimelineIndex {
+    pub company: Option<ConnectedCompany>,
+    pub observation_times: Vec<String>,
+    pub fleet_history: Vec<FleetHistoryPoint>,
+    pub current_fleet_composition: Vec<FleetCompositionPoint>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct HistoricalCompanyDataView {
+    pub selected_at: String,
+    pub fleet: Option<FleetSnapshotView>,
+    pub fbos: Option<FboSnapshotView>,
+    pub fleet_composition: Vec<FleetCompositionPoint>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct StoredFleetSnapshot {
     schema_version: u32,
@@ -740,6 +772,18 @@ pub enum ConnectionError {
     FbosUnavailable,
 }
 
+#[derive(Debug, Error)]
+pub enum HoardTimelineError {
+    #[error("The selected Hoard time is invalid.")]
+    InvalidSelection,
+    #[error("No retained company observation exists at that time.")]
+    ObservationUnavailable,
+    #[error("WyrmGrid could not read the local Hoard timeline.")]
+    StorageUnavailable,
+    #[error("The local timeline state is unavailable.")]
+    StateUnavailable,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct OperationError {
     pub code: &'static str,
@@ -774,6 +818,28 @@ impl From<ConnectionError> for OperationError {
             ConnectionError::FbosUnavailable => ("onair.fbos_unavailable", true, false),
         };
 
+        Self {
+            code,
+            message: error.to_string(),
+            retryable,
+            reportable,
+            report_id: None,
+        }
+    }
+}
+
+impl From<HoardTimelineError> for OperationError {
+    fn from(error: HoardTimelineError) -> Self {
+        let (code, retryable, reportable) = match error {
+            HoardTimelineError::InvalidSelection => {
+                ("hoard.invalid_timeline_selection", false, false)
+            }
+            HoardTimelineError::ObservationUnavailable => {
+                ("hoard.observation_unavailable", false, false)
+            }
+            HoardTimelineError::StorageUnavailable => ("hoard.storage_unavailable", true, true),
+            HoardTimelineError::StateUnavailable => ("application.state_unavailable", true, true),
+        };
         Self {
             code,
             message: error.to_string(),
@@ -1171,6 +1237,170 @@ impl OnAirSession {
             .map_err(|_| ConnectionError::StateUnavailable)
     }
 
+    pub fn hoard_timeline_index(&self) -> Result<HoardTimelineIndex, HoardTimelineError> {
+        let connected_company = self
+            .inner
+            .read()
+            .map_err(|_| HoardTimelineError::StateUnavailable)?
+            .as_ref()
+            .map(|session| session.company.clone());
+        let current_fleet = self
+            .fleet
+            .read()
+            .map_err(|_| HoardTimelineError::StateUnavailable)?
+            .clone();
+        let store = self
+            .store
+            .lock()
+            .map_err(|_| HoardTimelineError::StateUnavailable)?;
+        let company = connected_company
+            .or_else(|| load_stored_fleet(&store, None).map(|stored| stored.company))
+            .or_else(|| load_stored_fbos(&store, None).map(|stored| stored.company));
+        let Some(company) = company else {
+            return Ok(HoardTimelineIndex {
+                company: None,
+                observation_times: Vec::new(),
+                fleet_history: Vec::new(),
+                current_fleet_composition: Vec::new(),
+            });
+        };
+
+        let resource_key = company.id.0.to_string();
+        let fleet_records = store
+            .api_snapshot_history(
+                FLEET_RESOURCE_KIND,
+                &resource_key,
+                MAX_HOARD_TIMELINE_OBSERVATIONS,
+            )
+            .map_err(|_| HoardTimelineError::StorageUnavailable)?;
+        let fbo_records = store
+            .api_snapshot_history(
+                FBOS_RESOURCE_KIND,
+                &resource_key,
+                MAX_HOARD_TIMELINE_OBSERVATIONS,
+            )
+            .map_err(|_| HoardTimelineError::StorageUnavailable)?;
+
+        let valid_fleet = fleet_records
+            .into_iter()
+            .filter_map(stored_fleet_from_record)
+            .collect::<Vec<_>>();
+        let valid_fbos = fbo_records
+            .into_iter()
+            .filter_map(stored_fbos_from_record)
+            .collect::<Vec<_>>();
+        let observation_times = valid_fleet
+            .iter()
+            .map(|stored| stored.snapshot.provenance.observed_at)
+            .chain(
+                valid_fbos
+                    .iter()
+                    .map(|stored| stored.snapshot.provenance.observed_at),
+            )
+            .map(format_timeline_time)
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect();
+        let fleet_history = valid_fleet
+            .iter()
+            .map(|stored| FleetHistoryPoint {
+                observed_at: format_timeline_time(stored.snapshot.provenance.observed_at),
+                aircraft_count: bounded_count(stored.snapshot.value.len()),
+            })
+            .collect();
+        let current_fleet_composition = current_fleet
+            .as_ref()
+            .map(|view| fleet_composition(&view.snapshot.value))
+            .unwrap_or_default();
+
+        Ok(HoardTimelineIndex {
+            company: Some(ConnectedCompany::from(&company)),
+            observation_times,
+            fleet_history,
+            current_fleet_composition,
+        })
+    }
+
+    pub fn historical_company_data(
+        &self,
+        selected_at: &str,
+    ) -> Result<HistoricalCompanyDataView, HoardTimelineError> {
+        if selected_at.len() > 64 {
+            return Err(HoardTimelineError::InvalidSelection);
+        }
+        let selected_at = DateTime::parse_from_rfc3339(selected_at)
+            .map_err(|_| HoardTimelineError::InvalidSelection)?
+            .with_timezone(&Utc);
+        let selected_at_text = format_timeline_time(selected_at);
+        let connected_company = self
+            .inner
+            .read()
+            .map_err(|_| HoardTimelineError::StateUnavailable)?
+            .as_ref()
+            .map(|session| session.company.clone());
+        let store = self
+            .store
+            .lock()
+            .map_err(|_| HoardTimelineError::StateUnavailable)?;
+        let company = connected_company
+            .clone()
+            .or_else(|| load_stored_fleet(&store, None).map(|stored| stored.company))
+            .or_else(|| load_stored_fbos(&store, None).map(|stored| stored.company))
+            .ok_or(HoardTimelineError::ObservationUnavailable)?;
+        let resource_key = company.id.0.to_string();
+        let availability = if connected_company
+            .as_ref()
+            .is_some_and(|connected| connected.id == company.id)
+        {
+            SnapshotAvailability::Cached
+        } else {
+            SnapshotAvailability::Offline
+        };
+        let storage = if store.is_persistent() {
+            SnapshotStorage::Hoard
+        } else {
+            SnapshotStorage::MemoryOnly
+        };
+        let fleet = store
+            .api_snapshot_history_at_or_before(
+                FLEET_RESOURCE_KIND,
+                &resource_key,
+                &selected_at_text,
+                MAX_HOARD_TIMELINE_OBSERVATIONS,
+            )
+            .map_err(|_| HoardTimelineError::StorageUnavailable)?
+            .into_iter()
+            .rev()
+            .find_map(stored_fleet_from_record)
+            .map(|stored| fleet_view(stored, availability, storage));
+        let fbos = store
+            .api_snapshot_history_at_or_before(
+                FBOS_RESOURCE_KIND,
+                &resource_key,
+                &selected_at_text,
+                MAX_HOARD_TIMELINE_OBSERVATIONS,
+            )
+            .map_err(|_| HoardTimelineError::StorageUnavailable)?
+            .into_iter()
+            .rev()
+            .find_map(stored_fbos_from_record)
+            .map(|stored| fbo_view(stored, availability, storage));
+        if fleet.is_none() && fbos.is_none() {
+            return Err(HoardTimelineError::ObservationUnavailable);
+        }
+        let fleet_composition = fleet
+            .as_ref()
+            .map(|view| fleet_composition(&view.snapshot.value))
+            .unwrap_or_default();
+
+        Ok(HistoricalCompanyDataView {
+            selected_at: selected_at_text,
+            fleet,
+            fbos,
+            fleet_composition,
+        })
+    }
+
     fn ensure_current_company(&self, company_id: &CompanyId) -> Result<(), ConnectionError> {
         let session = self
             .inner
@@ -1252,6 +1482,10 @@ fn load_stored_fleet(store: &Store, company_id: Option<&CompanyId>) -> Option<St
     let record = store
         .latest_api_snapshot(FLEET_RESOURCE_KIND, resource_key.as_deref())
         .ok()??;
+    stored_fleet_from_record(record)
+}
+
+fn stored_fleet_from_record(record: ApiSnapshotRecord) -> Option<StoredFleetSnapshot> {
     let stored: StoredFleetSnapshot = serde_json::from_str(&record.payload_json).ok()?;
     (stored.schema_version == FLEET_SNAPSHOT_SCHEMA_VERSION
         && record.resource_key == stored.company.id.0.to_string())
@@ -1275,6 +1509,10 @@ fn load_stored_fbos(store: &Store, company_id: Option<&CompanyId>) -> Option<Sto
     let record = store
         .latest_api_snapshot(FBOS_RESOURCE_KIND, resource_key.as_deref())
         .ok()??;
+    stored_fbos_from_record(record)
+}
+
+fn stored_fbos_from_record(record: ApiSnapshotRecord) -> Option<StoredFboSnapshot> {
     let stored: StoredFboSnapshot = serde_json::from_str(&record.payload_json).ok()?;
     (stored.schema_version == FBOS_SNAPSHOT_SCHEMA_VERSION
         && record.resource_key == stored.company.id.0.to_string())
@@ -1291,6 +1529,42 @@ fn save_stored_fbos(store: &mut Store, stored: &StoredFboSnapshot) -> Result<(),
             &payload,
         )
         .map_err(|_| ())
+}
+
+fn format_timeline_time(value: DateTime<Utc>) -> String {
+    value.to_rfc3339_opts(SecondsFormat::Secs, true)
+}
+
+fn bounded_count(value: usize) -> u32 {
+    u32::try_from(value).unwrap_or(u32::MAX)
+}
+
+fn fleet_composition(aircraft: &[AircraftSummary]) -> Vec<FleetCompositionPoint> {
+    let mut counts = BTreeMap::<String, u32>::new();
+    for item in aircraft {
+        let model = item
+            .model
+            .as_deref()
+            .map(str::trim)
+            .filter(|model| !model.is_empty())
+            .unwrap_or(UNKNOWN_AIRCRAFT_MODEL);
+        let count = counts.entry(model.to_owned()).or_default();
+        *count = count.saturating_add(1);
+    }
+    let mut composition = counts
+        .into_iter()
+        .map(|(model, aircraft_count)| FleetCompositionPoint {
+            model,
+            aircraft_count,
+        })
+        .collect::<Vec<_>>();
+    composition.sort_by(|left, right| {
+        right
+            .aircraft_count
+            .cmp(&left.aircraft_count)
+            .then_with(|| left.model.cmp(&right.model))
+    });
+    composition
 }
 
 fn classify_client_error(error: ClientError) -> ConnectionError {
@@ -1318,7 +1592,7 @@ fn classify_resource_error(error: ClientError, resource: CompanyDataResource) ->
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::Utc;
+    use chrono::{Duration as ChronoDuration, Timelike, Utc};
     use tempfile::tempdir;
     use wyrmgrid_domain::{
         AircraftId, AirportId, AirportSummary, FboId, Provenance, ProvenanceKind,
@@ -1572,6 +1846,152 @@ mod tests {
         assert_eq!(fbo_view.availability, SnapshotAvailability::Offline);
         assert_eq!(fbo_view.storage, SnapshotStorage::Hoard);
         assert_eq!(fbo_view.snapshot, stored_fbos.snapshot);
+    }
+
+    #[test]
+    fn builds_a_timeline_and_resolves_company_data_as_of_a_retained_time() {
+        let company = CompanySummary {
+            id: CompanyId(Uuid::new_v4()),
+            name: "Timeline Charter".into(),
+            airline_code: "TLC".into(),
+        };
+        let latest_hour = Utc::now()
+            .with_minute(0)
+            .and_then(|value| value.with_second(0))
+            .and_then(|value| value.with_nanosecond(0))
+            .expect("current hour should be representable");
+        let mut store = Store::open_in_memory().expect("timeline store should initialize");
+        for (offset, models) in [
+            (-2, vec!["Cessna 172"]),
+            (-1, vec!["Cessna 172", "Beechcraft King Air"]),
+            (0, vec!["Cessna 172", "Beechcraft King Air", "Cessna 172"]),
+        ] {
+            let observed_at = latest_hour + ChronoDuration::hours(offset);
+            let aircraft = models
+                .into_iter()
+                .map(|model| AircraftSummary {
+                    id: AircraftId(Uuid::new_v4()),
+                    registration: None,
+                    model: Some(model.into()),
+                    location: None,
+                    current_airport: None,
+                })
+                .collect();
+            save_stored_fleet(
+                &mut store,
+                &StoredFleetSnapshot {
+                    schema_version: FLEET_SNAPSHOT_SCHEMA_VERSION,
+                    company: company.clone(),
+                    snapshot: Observed {
+                        value: aircraft,
+                        provenance: Provenance {
+                            kind: ProvenanceKind::OnAirFact,
+                            source: "onair:company/fleet".into(),
+                            observed_at,
+                        },
+                    },
+                },
+            )
+            .expect("fleet history should save");
+        }
+        let fbo_observed_at = latest_hour - ChronoDuration::minutes(90);
+        save_stored_fbos(
+            &mut store,
+            &StoredFboSnapshot {
+                schema_version: FBOS_SNAPSHOT_SCHEMA_VERSION,
+                company: company.clone(),
+                snapshot: Observed {
+                    value: Vec::new(),
+                    provenance: Provenance {
+                        kind: ProvenanceKind::OnAirFact,
+                        source: "onair:company/fbos".into(),
+                        observed_at: fbo_observed_at,
+                    },
+                },
+            },
+        )
+        .expect("FBO history should save");
+
+        let mut corruptible_store = store.clone();
+        let session = OnAirSession::with_store(DEFAULT_BASE_URL, store);
+        corruptible_store
+            .save_api_snapshot(
+                FLEET_RESOURCE_KIND,
+                &company.id.0.to_string(),
+                &format_timeline_time(latest_hour + ChronoDuration::hours(1)),
+                "{\"unsupported\":true}",
+            )
+            .expect("incompatible historical fixture should save");
+        let timeline = session
+            .hoard_timeline_index()
+            .expect("timeline should be readable");
+        assert_eq!(timeline.company, Some(ConnectedCompany::from(&company)));
+        assert_eq!(timeline.observation_times.len(), 4);
+        assert_eq!(
+            timeline
+                .fleet_history
+                .iter()
+                .map(|point| point.aircraft_count)
+                .collect::<Vec<_>>(),
+            vec![1, 2, 3]
+        );
+        assert_eq!(
+            timeline.current_fleet_composition,
+            vec![
+                FleetCompositionPoint {
+                    model: "Cessna 172".into(),
+                    aircraft_count: 2,
+                },
+                FleetCompositionPoint {
+                    model: "Beechcraft King Air".into(),
+                    aircraft_count: 1,
+                },
+            ]
+        );
+
+        let historical = session
+            .historical_company_data(&format_timeline_time(
+                latest_hour - ChronoDuration::minutes(30),
+            ))
+            .expect("historical company data should be available");
+        assert_eq!(
+            historical
+                .fleet
+                .as_ref()
+                .expect("historical fleet should exist")
+                .snapshot
+                .value
+                .len(),
+            2
+        );
+        assert_eq!(
+            historical
+                .fbos
+                .as_ref()
+                .expect("historical FBOs should exist")
+                .snapshot
+                .provenance
+                .observed_at,
+            fbo_observed_at
+        );
+        let compatible_fallback = session
+            .historical_company_data(&format_timeline_time(
+                latest_hour + ChronoDuration::hours(2),
+            ))
+            .expect("an incompatible record should not hide older compatible history");
+        assert_eq!(
+            compatible_fallback
+                .fleet
+                .expect("compatible fleet fallback should exist")
+                .snapshot
+                .value
+                .len(),
+            3
+        );
+        assert!(matches!(
+            session.historical_company_data("not-a-time"),
+            Err(HoardTimelineError::InvalidSelection)
+        ));
     }
 
     #[tokio::test]

@@ -34,20 +34,38 @@
   let container = $state<HTMLDivElement>();
   let chart = $state.raw<ECharts>();
 
-  const numberFormatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 });
+  const numberFormatter = new Intl.NumberFormat(undefined, {
+    maximumFractionDigits: 2,
+  });
 
   function formatValue(value: number): string {
     return `${numberFormatter.format(value)}${spec.unit ? ` ${spec.unit}` : ""}`;
   }
 
-  function optionFor(chartSpec: ChartSpec, theme: ThemeManifest): EChartsCoreOption {
-    const categories = chartSpec.series[0]?.points.map((point) => point.category) ?? [];
+  function formatObservedAt(value: string): string {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime())
+      ? "Observation time unavailable"
+      : parsed.toLocaleString();
+  }
+
+  function optionFor(
+    chartSpec: ChartSpec,
+    theme: ThemeManifest,
+  ): EChartsCoreOption {
+    const categories =
+      chartSpec.series[0]?.points.map((point) => point.category) ?? [];
     const presentation = chartPresentation(theme);
 
     return {
       animationDuration: 550,
       color: presentation.colours,
-      grid: { left: 44, right: 12, top: chartSpec.series.length > 1 ? 28 : 12, bottom: 30 },
+      grid: {
+        left: 44,
+        right: 12,
+        top: chartSpec.series.length > 1 ? 28 : 12,
+        bottom: chartSpec.kind === "bar" ? 58 : 30,
+      },
       legend: {
         show: chartSpec.series.length > 1,
         top: 0,
@@ -70,7 +88,16 @@
         boundaryGap: chartSpec.kind === "bar",
         axisLine: { lineStyle: { color: presentation.line } },
         axisTick: { show: false },
-        axisLabel: { color: presentation.muted },
+        axisLabel: {
+          color: presentation.muted,
+          interval: chartSpec.kind === "bar" ? 0 : undefined,
+          rotate: chartSpec.kind === "bar" ? 20 : 0,
+          formatter:
+            chartSpec.kind === "bar"
+              ? (value: string) =>
+                  value.length > 18 ? `${value.slice(0, 17)}…` : value
+              : undefined,
+        },
         nameTextStyle: { color: presentation.muted, fontSize: 10 },
       },
       yAxis: {
@@ -95,7 +122,8 @@
   }
 
   $effect(() => {
-    if (chart) chart.setOption(optionFor(spec, $activeTheme), { notMerge: true });
+    if (chart)
+      chart.setOption(optionFor(spec, $activeTheme), { notMerge: true });
   });
 
   onMount(() => {
@@ -122,7 +150,9 @@
       <span class="chart-eyebrow">WyrmGrid Hoard</span>
       <h3>{spec.title}</h3>
     </div>
-    <span class="provenance" data-kind={spec.provenance.kind}>{spec.provenance.kind.replace("_", " ")}</span>
+    <span class="provenance" data-kind={spec.provenance.kind}
+      >{spec.provenance.kind.replace("_", " ")}</span
+    >
   </header>
 
   {#if spec.description}<p>{spec.description}</p>{/if}
@@ -148,7 +178,9 @@
 
   <footer>
     <span>{spec.provenance.source}</span>
-    <time datetime={spec.provenance.observed_at}>Illustrative · not live OnAir data</time>
+    <time datetime={spec.provenance.observed_at}
+      >{formatObservedAt(spec.provenance.observed_at)}</time
+    >
   </footer>
 </article>
 

@@ -36,7 +36,7 @@ The implementation sequence and operating thresholds live in the
   fallback, and explicit live/cached/offline state (implemented)
 - Hoard Timeline fleet history: persistent LIVE/HISTORICAL mode indicator,
   as-of selection, return-to-present control, and fleet growth/composition
-  charts
+  charts (implemented)
 - Conservatively rate-protected manual and user-configured automatic company
   synchronization (implemented)
 - Atlas fleet and FBO markers, independent layer toggles, shared map fitting,

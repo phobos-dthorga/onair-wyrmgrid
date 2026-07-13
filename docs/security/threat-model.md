@@ -126,7 +126,9 @@
 - Hoard Timeline remains read-only, persistently identifies mutually exclusive
   LIVE or HISTORICAL workspace mode separately from data availability, shows
   the selected time and each resource's actual observation time, and offers an
-  explicit return-to-present action.
+  explicit return-to-present action. Historical selection is not restored after
+  restart; startup deliberately returns to LIVE mode to prevent stale context
+  from silently carrying into a new session.
 - chart contributions are data-only; the host rejects executable callbacks,
   arbitrary ECharts options, HTML tooltips, non-finite values, oversized series,
   and charts published without `charts_publish`.
