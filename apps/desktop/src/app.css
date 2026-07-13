@@ -253,7 +253,7 @@ nav {
   position: absolute;
   left: 24px;
   bottom: 24px;
-  width: 290px;
+  width: min(430px, calc(100% - 48px));
   padding: 17px;
   border: 1px solid var(--line);
   background: rgba(8, 23, 19, 0.91);

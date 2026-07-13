@@ -32,6 +32,7 @@ plugin boundary available to third-party developers.
 | Core and services            | Rust 2024                               |
 | Interface                    | Svelte 5 and TypeScript                 |
 | Map                          | MapLibre GL JS                          |
+| Charts                       | Apache ECharts behind WyrmChart         |
 | Local storage                | SQLite                                  |
 | Plugin boundary              | Out-of-process, versioned JSON messages |
 | Native simulator integration | Separate C++ sidecars where justified   |

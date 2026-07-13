@@ -17,8 +17,10 @@ OnAir adapter            WyrmGrid Bridge
       Tauri commands
           |
           v
-    Svelte + MapLibre
-       (Atlas)
+  Svelte presentation
+     |          |
+ MapLibre    WyrmChart
+  (Atlas)    (ECharts)
 ```
 
 The dependency direction points inward. Interface and infrastructure adapters
@@ -44,3 +46,19 @@ declared entry point, grants approved capabilities, validates messages, applies
 timeouts and size limits, and owns all privileged actions. Declarative map,
 table, form, chart, notification, command, and inspector contributions come
 before unrestricted custom UI.
+
+## Maintainability boundary
+
+WyrmGrid is designed to remain sustainable for one maintainer. Community-ready
+boundaries must not require community-scale infrastructure. Each replaceable
+technology has one application-owned adapter: OnAir JSON, SQLite, Tauri,
+MapLibre, and ECharts remain outside domain rules.
+
+New abstraction is justified by a current use case, not the possibility of a
+future contributor. See
+[ADR-0004](decisions/0004-declarative-charts-and-complexity-budget.md).
+
+The presentation runs in Tauri's platform webview: Chromium-based WebView2 on
+Windows and WebKit-backed views on macOS and Linux. WRY is the application
+boundary, while cross-engine behaviour is verified rather than replaced by a
+bundled browser runtime. See [ADR-0005](decisions/0005-system-webviews.md).
