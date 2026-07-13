@@ -2,6 +2,7 @@
   import type { GeoJSONSource, Map } from "maplibre-gl";
   import "maplibre-gl/dist/maplibre-gl.css";
   import { onMount } from "svelte";
+  import { activeTheme } from "$lib/theme/runtime";
   import type { AircraftSummary, FboSummary } from "./types";
 
   let {
@@ -123,15 +124,21 @@
     map.setPaintProperty(FLEET_LAYER_ID, "circle-color", [
       "case",
       ["==", ["get", "id"], selectedAircraftId ?? ""],
-      "#d5ae5f",
-      "#73d6ad",
+      $activeTheme.colors.highlight,
+      $activeTheme.colors.map_aircraft,
     ]);
     map.setPaintProperty(FBO_LAYER_ID, "circle-color", [
       "case",
       ["==", ["get", "id"], selectedFboId ?? ""],
-      "#f1d283",
-      "#d5ae5f",
+      $activeTheme.colors.highlight,
+      $activeTheme.colors.map_fbo,
     ]);
+    map.setPaintProperty(FLEET_LAYER_ID, "circle-stroke-color", $activeTheme.colors.map_halo);
+    map.setPaintProperty(FBO_LAYER_ID, "circle-stroke-color", $activeTheme.colors.map_halo);
+    map.setPaintProperty(FLEET_LABEL_LAYER_ID, "text-color", $activeTheme.colors.map_label);
+    map.setPaintProperty(FBO_LABEL_LAYER_ID, "text-color", $activeTheme.colors.map_label);
+    map.setPaintProperty(FLEET_LABEL_LAYER_ID, "text-halo-color", $activeTheme.colors.map_halo);
+    map.setPaintProperty(FBO_LABEL_LAYER_ID, "text-halo-color", $activeTheme.colors.map_halo);
 
     const visibleFeatures = [
       ...(fleetVisible ? fleet.features : []),
@@ -161,6 +168,7 @@
     fboVisible;
     selectedAircraftId;
     selectedFboId;
+    $activeTheme;
     updateAtlas();
   });
 
@@ -204,8 +212,8 @@
           source: FBO_SOURCE_ID,
           paint: {
             "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, 6, 7, 10],
-            "circle-color": "#d5ae5f",
-            "circle-stroke-color": "#07110f",
+            "circle-color": $activeTheme.colors.map_fbo,
+            "circle-stroke-color": $activeTheme.colors.map_halo,
             "circle-stroke-width": 2.5,
             "circle-opacity": 0.95,
           },
@@ -222,8 +230,8 @@
             "text-anchor": "top",
           },
           paint: {
-            "text-color": "#f1d283",
-            "text-halo-color": "#07110f",
+            "text-color": $activeTheme.colors.map_label,
+            "text-halo-color": $activeTheme.colors.map_halo,
             "text-halo-width": 1.5,
           },
         });
@@ -233,8 +241,8 @@
           source: FLEET_SOURCE_ID,
           paint: {
             "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, 5, 7, 9],
-            "circle-color": "#73d6ad",
-            "circle-stroke-color": "#07110f",
+            "circle-color": $activeTheme.colors.map_aircraft,
+            "circle-stroke-color": $activeTheme.colors.map_halo,
             "circle-stroke-width": 2,
             "circle-opacity": 0.92,
           },
@@ -252,8 +260,8 @@
             "text-allow-overlap": false,
           },
           paint: {
-            "text-color": "#e9f1ef",
-            "text-halo-color": "#07110f",
+            "text-color": $activeTheme.colors.map_label,
+            "text-halo-color": $activeTheme.colors.map_halo,
             "text-halo-width": 1.5,
           },
         });

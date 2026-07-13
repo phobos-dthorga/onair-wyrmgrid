@@ -73,7 +73,7 @@
 <style>
   .legal-document {
     padding: 20px 22px 28px;
-    color: #c9d8d3;
+    color: var(--color-text-muted);
     font-size: 12px;
     line-height: 1.62;
   }
@@ -84,14 +84,14 @@
     margin: 0;
   }
   h3 {
-    color: #eff6f3;
+    color: var(--color-text);
     font-family: Georgia, serif;
     font-size: 22px;
     font-weight: 500;
   }
   h4 {
     margin-top: 22px;
-    color: var(--gold);
+    color: var(--color-highlight);
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.06em;

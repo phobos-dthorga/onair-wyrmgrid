@@ -1,15 +1,13 @@
-export const chartColours = [
-  "#73d6ad",
-  "#d5ae5f",
-  "#72a9d1",
-  "#cf7e65",
-  "#a88bd8",
-];
+import { colourWithAlpha } from "$lib/theme/runtime";
+import type { ThemeManifest } from "$lib/theme/types";
 
-export const chartTheme = {
-  text: "#e9f1ef",
-  muted: "#8aa29a",
-  line: "rgba(137, 192, 171, 0.18)",
-  tooltipBackground: "rgba(7, 17, 15, 0.96)",
-  tooltipBorder: "rgba(137, 192, 171, 0.28)",
-};
+export function chartPresentation(theme: ThemeManifest) {
+  return {
+    colours: theme.chart_palette,
+    text: theme.colors.text,
+    muted: theme.colors.text_muted,
+    line: colourWithAlpha(theme.colors.line, 0.18),
+    tooltipBackground: colourWithAlpha(theme.colors.canvas, 0.96),
+    tooltipBorder: colourWithAlpha(theme.colors.line, 0.28),
+  };
+}

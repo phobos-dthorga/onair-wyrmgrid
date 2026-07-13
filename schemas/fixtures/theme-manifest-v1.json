@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "id": "midnight-cargo",
+  "name": "Midnight Cargo",
+  "author": "Test Pilot",
+  "colors": {
+    "canvas": "#050A12",
+    "surface": "#0C1726",
+    "surface_elevated": "#13243A",
+    "surface_soft": "#1B304A",
+    "text": "#F2F7FF",
+    "text_muted": "#AABBD0",
+    "line": "#61738A",
+    "accent": "#64D8CB",
+    "highlight": "#F2C66D",
+    "danger": "#FF8078",
+    "success": "#74DEA8",
+    "map_aircraft": "#F2C66D",
+    "map_fbo": "#64D8CB",
+    "map_label": "#F2F7FF",
+    "map_halo": "#050A12"
+  },
+  "chart_palette": ["#64D8CB", "#F2C66D", "#7FB3E8"]
+}

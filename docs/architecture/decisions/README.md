@@ -11,3 +11,4 @@ record rather than silently rewriting history.
 - [ADR-0006: Begin with session-only OnAir credentials](0006-session-only-onair-credentials.md)
 - [ADR-0007: Hosted Sentry behind observability adapters](0007-hosted-sentry-observability.md)
 - [ADR-0008: Provider adapters and canonical operational snapshots](0008-provider-adapters-and-operational-snapshots.md)
+- [ADR-0009: Data-only community themes](0009-data-only-community-themes.md)

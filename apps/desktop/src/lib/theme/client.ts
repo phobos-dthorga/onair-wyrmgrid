@@ -1,0 +1,47 @@
+import { invokeDesktop, isDesktopRuntime } from "$lib/desktop/client";
+import type { ThemeManifest, ThemeStatus } from "./types";
+
+export const classicTheme: ThemeManifest = {
+  schema_version: 1,
+  id: "wyrmgrid-classic",
+  name: "WyrmGrid Classic",
+  author: "WyrmGrid",
+  colors: {
+    canvas: "#07110F",
+    surface: "#0A1916",
+    surface_elevated: "#102520",
+    surface_soft: "#172F29",
+    text: "#E9F1EF",
+    text_muted: "#A7B8B2",
+    line: "#526A62",
+    accent: "#73D6AD",
+    highlight: "#D5AE5F",
+    danger: "#ED8074",
+    success: "#73D6AD",
+    map_aircraft: "#D5AE5F",
+    map_fbo: "#73D6AD",
+    map_label: "#E9F1EF",
+    map_halo: "#07110F",
+  },
+  chart_palette: ["#73D6AD", "#D5AE5F", "#72A7CF", "#CF7B73", "#A88BD4"],
+};
+
+export const browserThemeStatus: ThemeStatus = {
+  selected_theme_id: classicTheme.id,
+  active_theme: classicTheme,
+  themes: [{ manifest: classicTheme, built_in: true }],
+};
+
+export async function loadThemeStatus(): Promise<ThemeStatus> {
+  return isDesktopRuntime()
+    ? invokeDesktop<ThemeStatus>("theme_status")
+    : browserThemeStatus;
+}
+
+export async function selectTheme(themeId: string): Promise<ThemeStatus> {
+  return invokeDesktop<ThemeStatus>("select_theme", { themeId });
+}
+
+export async function importTheme(manifestJson: string): Promise<ThemeStatus> {
+  return invokeDesktop<ThemeStatus>("import_theme", { manifestJson });
+}

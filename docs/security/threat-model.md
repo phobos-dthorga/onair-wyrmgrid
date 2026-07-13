@@ -23,6 +23,8 @@
 - path traversal and unsafe process arguments;
 - unbounded messages, event storms, hangs, and resource exhaustion;
 - hostile API payloads, imported files, map styles, and URLs;
+- imported themes concealing security text, counterfeiting controls, loading
+  remote resources, or exhausting local storage;
 - malicious or oversized OFPs, flight-plan files, compressed feeds, navigation
   packages, weather geometries, and simulator messages;
 - spoofed localhost simulator services, sidecars, callbacks, or OAuth redirect
@@ -128,6 +130,11 @@
 - chart contributions are data-only; the host rejects executable callbacks,
   arbitrary ECharts options, HTML tooltips, non-finite values, oversized series,
   and charts published without `charts_publish`.
+- community themes are data-only, limited to 32 KiB, parsed with a strict
+  versioned schema, restricted to fixed hexadecimal colour roles and a bounded
+  chart palette, and contrast-checked in Rust. Unknown fields, arbitrary CSS,
+  code, markup, URLs, fonts, images, paths, selectors, layout, and reserved host
+  identifiers are rejected before persistence.
 
 Before stable release, the project needs operating-system credential storage,
 signed updates, hardened plugin supervision, abuse-case tests, and a formal

@@ -8,6 +8,7 @@ use thiserror::Error;
 
 const INITIAL_SCHEMA: &str = include_str!("../migrations/0001_initial.sql");
 const LEGAL_PREFERENCES_SCHEMA: &str = include_str!("../migrations/0002_legal_preferences.sql");
+const THEMES_SCHEMA: &str = include_str!("../migrations/0003_themes.sql");
 
 #[derive(Debug, Error)]
 pub enum StorageError {
@@ -38,6 +39,17 @@ pub struct LegalPreferencesRecord {
     pub acknowledged_at: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ThemePreferencesRecord {
+    pub selected_theme_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CustomThemeRecord {
+    pub theme_id: String,
+    pub manifest_json: String,
+}
+
 impl Store {
     pub fn open(path: impl AsRef<Path>) -> Result<Self, StorageError> {
         let connection = Connection::open(path)?;
@@ -58,6 +70,7 @@ impl Store {
         )?;
         connection.execute_batch(INITIAL_SCHEMA)?;
         connection.execute_batch(LEGAL_PREFERENCES_SCHEMA)?;
+        connection.execute_batch(THEMES_SCHEMA)?;
         Ok(Self {
             connection: Arc::new(Mutex::new(connection)),
             persistent,
@@ -237,6 +250,87 @@ impl Store {
     }
 }
 
+impl Store {
+    pub fn load_theme_preferences_record(
+        &self,
+    ) -> Result<Option<ThemePreferencesRecord>, StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection
+            .query_row(
+                "SELECT selected_theme_id FROM theme_preferences WHERE singleton_id = 1",
+                [],
+                |row| {
+                    Ok(ThemePreferencesRecord {
+                        selected_theme_id: row.get(0)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(StorageError::from)
+    }
+
+    pub fn save_selected_theme_record(&self, theme_id: &str) -> Result<(), StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection
+            .execute(
+                "INSERT INTO theme_preferences (singleton_id, selected_theme_id)
+                 VALUES (1, ?1)
+                 ON CONFLICT(singleton_id) DO UPDATE SET
+                    selected_theme_id = excluded.selected_theme_id,
+                    updated_at = CURRENT_TIMESTAMP",
+                [theme_id],
+            )
+            .map(|_| ())
+            .map_err(StorageError::from)
+    }
+
+    pub fn list_custom_theme_records(&self) -> Result<Vec<CustomThemeRecord>, StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        let mut statement = connection
+            .prepare("SELECT theme_id, manifest_json FROM custom_themes ORDER BY theme_id ASC")?;
+        let records = statement
+            .query_map([], |row| {
+                Ok(CustomThemeRecord {
+                    theme_id: row.get(0)?,
+                    manifest_json: row.get(1)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(records)
+    }
+
+    pub fn save_custom_theme_record(
+        &self,
+        theme_id: &str,
+        manifest_json: &str,
+    ) -> Result<(), StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection
+            .execute(
+                "INSERT INTO custom_themes (theme_id, manifest_json)
+                 VALUES (?1, ?2)
+                 ON CONFLICT(theme_id) DO UPDATE SET
+                    manifest_json = excluded.manifest_json,
+                    updated_at = CURRENT_TIMESTAMP",
+                params![theme_id, manifest_json],
+            )
+            .map(|_| ())
+            .map_err(StorageError::from)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -247,7 +341,7 @@ mod tests {
         let store = Store::open_in_memory().expect("in-memory database should open");
         assert_eq!(
             store.schema_version().expect("version should be readable"),
-            2
+            3
         );
     }
 
@@ -365,5 +459,41 @@ mod tests {
         assert_eq!(preferences.privacy_notice_version, "privacy-v1");
         assert!(preferences.telemetry_enabled);
         assert!(!preferences.acknowledged_at.is_empty());
+    }
+
+    #[test]
+    fn persists_custom_themes_and_the_selected_theme() {
+        let store = Store::open_in_memory().expect("in-memory database should open");
+        assert!(
+            store
+                .load_theme_preferences_record()
+                .expect("theme preference should be readable")
+                .is_none()
+        );
+
+        store
+            .save_custom_theme_record("night-flight", "{\"schema_version\":1}")
+            .expect("custom theme should save");
+        store
+            .save_selected_theme_record("night-flight")
+            .expect("theme selection should save");
+
+        assert_eq!(
+            store
+                .list_custom_theme_records()
+                .expect("custom themes should be readable"),
+            vec![CustomThemeRecord {
+                theme_id: "night-flight".into(),
+                manifest_json: "{\"schema_version\":1}".into(),
+            }]
+        );
+        assert_eq!(
+            store
+                .load_theme_preferences_record()
+                .expect("theme preference should be readable"),
+            Some(ThemePreferencesRecord {
+                selected_theme_id: "night-flight".into(),
+            })
+        );
     }
 }
