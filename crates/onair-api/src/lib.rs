@@ -12,12 +12,13 @@ use url::Url;
 use uuid::Uuid;
 use wyrmgrid_domain::{
     AircraftId, AircraftSummary, AirportId, AirportSummary, CompanyId, CompanySummary, Coordinates,
-    Observed, Provenance, ProvenanceKind,
+    FboId, FboSummary, Observed, Provenance, ProvenanceKind,
 };
 
 const API_KEY_HEADER: &str = "oa-apikey";
 const COMPANY_ID_HEADER: &str = "CompanyUniqueId";
 const FLEET_PROVENANCE_SOURCE: &str = "onair:company/fleet";
+const FBOS_PROVENANCE_SOURCE: &str = "onair:company/fbos";
 pub const DEFAULT_BASE_URL: &str = "https://server1.onair.company/api/v1";
 
 pub struct OnAirClient {
@@ -116,6 +117,18 @@ struct RawAirport {
     latitude: Option<f64>,
 }
 
+#[derive(Debug, Deserialize)]
+struct RawFbo {
+    #[serde(rename = "Id", default)]
+    id: Option<Uuid>,
+    #[serde(rename = "Name", default)]
+    name: Option<String>,
+    #[serde(rename = "Airport", default)]
+    airport: Option<RawAirport>,
+    #[serde(rename = "AirportId", default)]
+    airport_id: Option<Uuid>,
+}
+
 impl OnAirClient {
     pub fn new(
         base_url: &str,
@@ -170,6 +183,31 @@ impl OnAirClient {
             provenance: Provenance {
                 kind: ProvenanceKind::OnAirFact,
                 source: FLEET_PROVENANCE_SOURCE.to_owned(),
+                observed_at: Utc::now(),
+            },
+        })
+    }
+
+    pub async fn fbos(&self) -> Result<Observed<Vec<FboSummary>>, ClientError> {
+        let response: ApiResult<Vec<RawFbo>> = self
+            .get(&format!("company/{}/fbos", self.company_id))
+            .await?;
+        if response.error.is_some_and(|error| !error.trim().is_empty()) {
+            return Err(ClientError::ApiRejected);
+        }
+
+        let fbos = response
+            .content
+            .ok_or(ClientError::MissingContent)?
+            .into_iter()
+            .filter_map(translate_fbo)
+            .collect();
+
+        Ok(Observed {
+            value: fbos,
+            provenance: Provenance {
+                kind: ProvenanceKind::OnAirFact,
+                source: FBOS_PROVENANCE_SOURCE.to_owned(),
                 observed_at: Utc::now(),
             },
         })
@@ -230,6 +268,27 @@ fn translate_airport(airport: RawAirport) -> Option<AirportSummary> {
         icao: non_empty(airport.icao),
         name: non_empty(airport.name),
         location: coordinates(airport.latitude, airport.longitude),
+    })
+}
+
+fn translate_fbo(fbo: RawFbo) -> Option<FboSummary> {
+    let airport = match fbo.airport {
+        Some(mut airport) => {
+            airport.id = airport.id.or(fbo.airport_id);
+            translate_airport(airport)
+        }
+        None => fbo.airport_id.map(|id| AirportSummary {
+            id: AirportId(id),
+            icao: None,
+            name: None,
+            location: None,
+        }),
+    };
+
+    Some(FboSummary {
+        id: FboId(fbo.id?),
+        name: non_empty(fbo.name),
+        airport,
     })
 }
 
@@ -343,6 +402,49 @@ mod tests {
         assert_eq!(aircraft[2].registration, None);
         assert_eq!(aircraft[2].model, None);
         assert_eq!(aircraft[2].location, None);
+    }
+
+    #[test]
+    fn translates_the_swagger_fbo_envelope_without_inventing_missing_facts() {
+        let response: ApiResult<Vec<RawFbo>> =
+            serde_json::from_str(include_str!("../tests/fixtures/swagger-fbo-response.json"))
+                .expect("synthetic Swagger fixture should deserialize");
+        let fbos: Vec<_> = response
+            .content
+            .expect("fixture should contain FBOs")
+            .into_iter()
+            .filter_map(translate_fbo)
+            .collect();
+
+        assert_eq!(fbos.len(), 3);
+        assert_eq!(fbos[0].name.as_deref(), Some("WyrmGrid Test Base"));
+        assert_eq!(
+            fbos[0]
+                .airport
+                .as_ref()
+                .and_then(|airport| airport.icao.as_deref()),
+            Some("YTEST")
+        );
+        assert_eq!(
+            fbos[0]
+                .airport
+                .as_ref()
+                .and_then(|airport| airport.location),
+            Some(Coordinates {
+                latitude: -37.81,
+                longitude: 144.96,
+            })
+        );
+        assert_eq!(fbos[1].name, None);
+        assert!(fbos[1].airport.is_some());
+        assert_eq!(
+            fbos[1]
+                .airport
+                .as_ref()
+                .and_then(|airport| airport.location),
+            None
+        );
+        assert_eq!(fbos[2].airport, None);
     }
 
     #[test]

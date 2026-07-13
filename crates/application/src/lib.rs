@@ -6,13 +6,15 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
 use thiserror::Error;
 use uuid::Uuid;
-use wyrmgrid_domain::{AircraftSummary, CompanyId, CompanySummary, Observed};
+use wyrmgrid_domain::{AircraftSummary, CompanyId, CompanySummary, FboSummary, Observed};
 use wyrmgrid_onair_api::{ClientError, DEFAULT_BASE_URL, OnAirClient};
 use wyrmgrid_plugin_protocol::PLUGIN_API_VERSION;
 use wyrmgrid_storage::Store;
 
 const FLEET_RESOURCE_KIND: &str = "onair_company_fleet";
 const FLEET_SNAPSHOT_SCHEMA_VERSION: u32 = 1;
+const FBOS_RESOURCE_KIND: &str = "onair_company_fbos";
+const FBOS_SNAPSHOT_SCHEMA_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PlatformStatus {
@@ -53,12 +55,12 @@ impl From<&CompanySummary> for ConnectedCompany {
     }
 }
 
-pub const MANUAL_FLEET_SYNC_COOLDOWN: Duration = Duration::from_secs(60);
-pub const MINIMUM_AUTOMATIC_FLEET_SYNC_INTERVAL: Duration = Duration::from_secs(15 * 60);
+pub const MANUAL_SYNC_COOLDOWN: Duration = Duration::from_secs(60);
+pub const MINIMUM_AUTOMATIC_SYNC_INTERVAL: Duration = Duration::from_secs(15 * 60);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum FleetSyncTrigger {
+pub enum DataSyncTrigger {
     Initial,
     Manual,
     Automatic,
@@ -66,14 +68,14 @@ pub enum FleetSyncTrigger {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum FleetSyncDisposition {
+pub enum DataSyncDisposition {
     Synchronized,
     QuietlyIgnored,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum FleetSnapshotAvailability {
+pub enum SnapshotAvailability {
     Live,
     Cached,
     Offline,
@@ -81,7 +83,7 @@ pub enum FleetSnapshotAvailability {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum FleetSnapshotStorage {
+pub enum SnapshotStorage {
     Hoard,
     MemoryOnly,
 }
@@ -90,14 +92,37 @@ pub enum FleetSnapshotStorage {
 pub struct FleetSnapshotView {
     pub company: ConnectedCompany,
     pub snapshot: Observed<Vec<AircraftSummary>>,
-    pub availability: FleetSnapshotAvailability,
-    pub storage: FleetSnapshotStorage,
+    pub availability: SnapshotAvailability,
+    pub storage: SnapshotStorage,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct FleetSyncResult {
-    pub disposition: FleetSyncDisposition,
-    pub snapshot: Option<FleetSnapshotView>,
+pub struct FboSnapshotView {
+    pub company: ConnectedCompany,
+    pub snapshot: Observed<Vec<FboSummary>>,
+    pub availability: SnapshotAvailability,
+    pub storage: SnapshotStorage,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CompanyDataResource {
+    Fleet,
+    Fbos,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct DataSyncFailure {
+    pub resource: CompanyDataResource,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct CompanyDataSyncResult {
+    pub disposition: DataSyncDisposition,
+    pub fleet: Option<FleetSnapshotView>,
+    pub fbos: Option<FboSnapshotView>,
+    pub failures: Vec<DataSyncFailure>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -105,6 +130,13 @@ struct StoredFleetSnapshot {
     schema_version: u32,
     company: CompanySummary,
     snapshot: Observed<Vec<AircraftSummary>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+struct StoredFboSnapshot {
+    schema_version: u32,
+    company: CompanySummary,
+    snapshot: Observed<Vec<FboSummary>>,
 }
 
 #[derive(Debug, Error)]
@@ -125,18 +157,23 @@ pub enum ConnectionError {
     ServiceUnavailable,
     #[error("The local connection state is unavailable.")]
     StateUnavailable,
-    #[error("Connect to OnAir before refreshing the fleet.")]
+    #[error("Connect to OnAir before synchronizing company data.")]
     NotConnected,
     #[error(
         "WyrmGrid could not refresh the fleet. A previous successful observation, if present, remains available."
     )]
     FleetUnavailable,
+    #[error(
+        "WyrmGrid could not refresh the FBO network. A previous successful observation, if present, remains available."
+    )]
+    FbosUnavailable,
 }
 
 #[derive(Clone)]
 pub struct OnAirSession {
     inner: Arc<RwLock<Option<ConnectedSession>>>,
     fleet: Arc<RwLock<Option<FleetSnapshotView>>>,
+    fbos: Arc<RwLock<Option<FboSnapshotView>>>,
     store: Arc<Mutex<Store>>,
     base_url: &'static str,
 }
@@ -144,25 +181,25 @@ pub struct OnAirSession {
 struct ConnectedSession {
     client: Arc<OnAirClient>,
     company: CompanySummary,
-    fleet_sync_gate: Arc<Mutex<FleetSyncGate>>,
+    data_sync_gate: Arc<Mutex<DataSyncGate>>,
 }
 
 #[derive(Debug, Default)]
-struct FleetSyncGate {
+struct DataSyncGate {
     in_progress: bool,
     last_started: Option<Instant>,
 }
 
-impl FleetSyncGate {
-    fn try_start(&mut self, trigger: FleetSyncTrigger, now: Instant) -> bool {
+impl DataSyncGate {
+    fn try_start(&mut self, trigger: DataSyncTrigger, now: Instant) -> bool {
         if self.in_progress {
             return false;
         }
 
         let minimum_interval = match trigger {
-            FleetSyncTrigger::Initial => Duration::ZERO,
-            FleetSyncTrigger::Manual => MANUAL_FLEET_SYNC_COOLDOWN,
-            FleetSyncTrigger::Automatic => MINIMUM_AUTOMATIC_FLEET_SYNC_INTERVAL,
+            DataSyncTrigger::Initial => Duration::ZERO,
+            DataSyncTrigger::Manual => MANUAL_SYNC_COOLDOWN,
+            DataSyncTrigger::Automatic => MINIMUM_AUTOMATIC_SYNC_INTERVAL,
         };
         if self
             .last_started
@@ -181,11 +218,11 @@ impl FleetSyncGate {
     }
 }
 
-struct FleetSyncPermit {
-    gate: Arc<Mutex<FleetSyncGate>>,
+struct DataSyncPermit {
+    gate: Arc<Mutex<DataSyncGate>>,
 }
 
-impl Drop for FleetSyncPermit {
+impl Drop for DataSyncPermit {
     fn drop(&mut self) {
         if let Ok(mut gate) = self.gate.lock() {
             gate.finish();
@@ -207,20 +244,24 @@ impl OnAirSession {
 
     pub fn with_store(base_url: &'static str, store: Store) -> Self {
         let persistent = store.is_persistent();
-        let cached = load_stored_fleet(&store, None).map(|stored| {
-            fleet_view(
-                stored,
-                FleetSnapshotAvailability::Offline,
-                if persistent {
-                    FleetSnapshotStorage::Hoard
-                } else {
-                    FleetSnapshotStorage::MemoryOnly
-                },
-            )
-        });
+        let stored_fleet = load_stored_fleet(&store, None);
+        let anchor_company = stored_fleet
+            .as_ref()
+            .map(|stored| stored.company.id.clone());
+        let stored_fbos = load_stored_fbos(&store, anchor_company.as_ref());
+        let storage = if persistent {
+            SnapshotStorage::Hoard
+        } else {
+            SnapshotStorage::MemoryOnly
+        };
+        let cached_fleet =
+            stored_fleet.map(|stored| fleet_view(stored, SnapshotAvailability::Offline, storage));
+        let cached_fbos =
+            stored_fbos.map(|stored| fbo_view(stored, SnapshotAvailability::Offline, storage));
         Self {
             inner: Arc::new(RwLock::new(None)),
-            fleet: Arc::new(RwLock::new(cached)),
+            fleet: Arc::new(RwLock::new(cached_fleet)),
+            fbos: Arc::new(RwLock::new(cached_fbos)),
             store: Arc::new(Mutex::new(store)),
             base_url,
         }
@@ -255,18 +296,19 @@ impl OnAirSession {
             .await
             .map_err(classify_client_error)?;
 
-        let cached = self
-            .store
-            .lock()
-            .ok()
-            .and_then(|store| load_stored_fleet(&store, Some(&company.id)))
-            .map(|stored| {
-                fleet_view(
-                    stored,
-                    FleetSnapshotAvailability::Cached,
-                    FleetSnapshotStorage::Hoard,
-                )
-            });
+        let (cached_fleet, cached_fbos) = self.store.lock().ok().map_or((None, None), |store| {
+            let storage = if store.is_persistent() {
+                SnapshotStorage::Hoard
+            } else {
+                SnapshotStorage::MemoryOnly
+            };
+            (
+                load_stored_fleet(&store, Some(&company.id))
+                    .map(|stored| fleet_view(stored, SnapshotAvailability::Cached, storage)),
+                load_stored_fbos(&store, Some(&company.id))
+                    .map(|stored| fbo_view(stored, SnapshotAvailability::Cached, storage)),
+            )
+        });
 
         *self
             .inner
@@ -274,12 +316,16 @@ impl OnAirSession {
             .map_err(|_| ConnectionError::StateUnavailable)? = Some(ConnectedSession {
             client,
             company,
-            fleet_sync_gate: Arc::new(Mutex::new(FleetSyncGate::default())),
+            data_sync_gate: Arc::new(Mutex::new(DataSyncGate::default())),
         });
         *self
             .fleet
             .write()
-            .map_err(|_| ConnectionError::StateUnavailable)? = cached;
+            .map_err(|_| ConnectionError::StateUnavailable)? = cached_fleet;
+        *self
+            .fbos
+            .write()
+            .map_err(|_| ConnectionError::StateUnavailable)? = cached_fbos;
 
         self.status()
     }
@@ -295,7 +341,15 @@ impl OnAirSession {
             .map_err(|_| ConnectionError::StateUnavailable)?
             .as_mut()
         {
-            fleet.availability = FleetSnapshotAvailability::Offline;
+            fleet.availability = SnapshotAvailability::Offline;
+        }
+        if let Some(fbos) = self
+            .fbos
+            .write()
+            .map_err(|_| ConnectionError::StateUnavailable)?
+            .as_mut()
+        {
+            fbos.availability = SnapshotAvailability::Offline;
         }
         self.status()
     }
@@ -314,61 +368,99 @@ impl OnAirSession {
         })
     }
 
-    pub async fn synchronize_fleet(
+    pub async fn synchronize_company_data(
         &self,
-        trigger: FleetSyncTrigger,
-    ) -> Result<FleetSyncResult, ConnectionError> {
-        let (company_id, client, fleet_sync_gate) = {
+        trigger: DataSyncTrigger,
+    ) -> Result<CompanyDataSyncResult, ConnectionError> {
+        let (company, client, data_sync_gate) = {
             let session = self
                 .inner
                 .read()
                 .map_err(|_| ConnectionError::StateUnavailable)?;
             let connected = session.as_ref().ok_or(ConnectionError::NotConnected)?;
             (
-                connected.company.id.clone(),
+                connected.company.clone(),
                 Arc::clone(&connected.client),
-                Arc::clone(&connected.fleet_sync_gate),
+                Arc::clone(&connected.data_sync_gate),
             )
         };
 
         let _sync_permit = {
-            let mut gate = fleet_sync_gate
+            let mut gate = data_sync_gate
                 .lock()
                 .map_err(|_| ConnectionError::StateUnavailable)?;
             if !gate.try_start(trigger, Instant::now()) {
-                return Ok(FleetSyncResult {
-                    disposition: FleetSyncDisposition::QuietlyIgnored,
-                    snapshot: self.fleet_snapshot()?,
+                return Ok(CompanyDataSyncResult {
+                    disposition: DataSyncDisposition::QuietlyIgnored,
+                    fleet: self.fleet_snapshot()?,
+                    fbos: self.fbo_snapshot()?,
+                    failures: Vec::new(),
                 });
             }
-            FleetSyncPermit {
-                gate: Arc::clone(&fleet_sync_gate),
+            DataSyncPermit {
+                gate: Arc::clone(&data_sync_gate),
             }
         };
 
+        let mut failures = Vec::new();
+        let mut stop_after_fleet = false;
         let fleet = match client.fleet().await {
-            Ok(fleet) => fleet,
+            Ok(snapshot) => Some(self.accept_fleet_snapshot(&company, snapshot)?),
             Err(error) => {
-                self.mark_fleet_cached(&company_id)?;
-                return Err(classify_fleet_error(error));
+                stop_after_fleet = matches!(
+                    error,
+                    ClientError::AuthenticationRejected | ClientError::RateLimited
+                );
+                self.mark_fleet_cached(&company.id)?;
+                failures.push(DataSyncFailure {
+                    resource: CompanyDataResource::Fleet,
+                    message: classify_resource_error(error, CompanyDataResource::Fleet).to_string(),
+                });
+                self.fleet_snapshot()?
             }
         };
 
-        let company = {
-            let session = self
-                .inner
-                .read()
-                .map_err(|_| ConnectionError::StateUnavailable)?;
-            let connected = session.as_ref().ok_or(ConnectionError::NotConnected)?;
-            if connected.company.id != company_id {
-                return Err(ConnectionError::StateUnavailable);
+        let fbos = if stop_after_fleet {
+            self.mark_fbos_cached(&company.id)?;
+            failures.push(DataSyncFailure {
+                resource: CompanyDataResource::Fbos,
+                message: "FBO synchronization was skipped to avoid another rejected request."
+                    .to_owned(),
+            });
+            self.fbo_snapshot()?
+        } else {
+            match client.fbos().await {
+                Ok(snapshot) => Some(self.accept_fbo_snapshot(&company, snapshot)?),
+                Err(error) => {
+                    self.mark_fbos_cached(&company.id)?;
+                    failures.push(DataSyncFailure {
+                        resource: CompanyDataResource::Fbos,
+                        message: classify_resource_error(error, CompanyDataResource::Fbos)
+                            .to_string(),
+                    });
+                    self.fbo_snapshot()?
+                }
             }
-            connected.company.clone()
         };
+
+        Ok(CompanyDataSyncResult {
+            disposition: DataSyncDisposition::Synchronized,
+            fleet,
+            fbos,
+            failures,
+        })
+    }
+
+    fn accept_fleet_snapshot(
+        &self,
+        company: &CompanySummary,
+        snapshot: Observed<Vec<AircraftSummary>>,
+    ) -> Result<FleetSnapshotView, ConnectionError> {
+        self.ensure_current_company(&company.id)?;
         let stored = StoredFleetSnapshot {
             schema_version: FLEET_SNAPSHOT_SCHEMA_VERSION,
-            company,
-            snapshot: fleet,
+            company: company.clone(),
+            snapshot,
         };
         let storage = self
             .store
@@ -376,18 +468,39 @@ impl OnAirSession {
             .ok()
             .filter(|store| store.is_persistent())
             .and_then(|mut store| save_stored_fleet(&mut store, &stored).ok())
-            .map_or(FleetSnapshotStorage::MemoryOnly, |_| {
-                FleetSnapshotStorage::Hoard
-            });
-        let view = fleet_view(stored, FleetSnapshotAvailability::Live, storage);
+            .map_or(SnapshotStorage::MemoryOnly, |_| SnapshotStorage::Hoard);
+        let view = fleet_view(stored, SnapshotAvailability::Live, storage);
         *self
             .fleet
             .write()
             .map_err(|_| ConnectionError::StateUnavailable)? = Some(view.clone());
-        Ok(FleetSyncResult {
-            disposition: FleetSyncDisposition::Synchronized,
-            snapshot: Some(view),
-        })
+        Ok(view)
+    }
+
+    fn accept_fbo_snapshot(
+        &self,
+        company: &CompanySummary,
+        snapshot: Observed<Vec<FboSummary>>,
+    ) -> Result<FboSnapshotView, ConnectionError> {
+        self.ensure_current_company(&company.id)?;
+        let stored = StoredFboSnapshot {
+            schema_version: FBOS_SNAPSHOT_SCHEMA_VERSION,
+            company: company.clone(),
+            snapshot,
+        };
+        let storage = self
+            .store
+            .lock()
+            .ok()
+            .filter(|store| store.is_persistent())
+            .and_then(|mut store| save_stored_fbos(&mut store, &stored).ok())
+            .map_or(SnapshotStorage::MemoryOnly, |_| SnapshotStorage::Hoard);
+        let view = fbo_view(stored, SnapshotAvailability::Live, storage);
+        *self
+            .fbos
+            .write()
+            .map_err(|_| ConnectionError::StateUnavailable)? = Some(view.clone());
+        Ok(view)
     }
 
     pub fn fleet_snapshot(&self) -> Result<Option<FleetSnapshotView>, ConnectionError> {
@@ -395,6 +508,24 @@ impl OnAirSession {
             .read()
             .map(|fleet| fleet.clone())
             .map_err(|_| ConnectionError::StateUnavailable)
+    }
+
+    pub fn fbo_snapshot(&self) -> Result<Option<FboSnapshotView>, ConnectionError> {
+        self.fbos
+            .read()
+            .map(|fbos| fbos.clone())
+            .map_err(|_| ConnectionError::StateUnavailable)
+    }
+
+    fn ensure_current_company(&self, company_id: &CompanyId) -> Result<(), ConnectionError> {
+        let session = self
+            .inner
+            .read()
+            .map_err(|_| ConnectionError::StateUnavailable)?;
+        let connected = session.as_ref().ok_or(ConnectionError::NotConnected)?;
+        (&connected.company.id == company_id)
+            .then_some(())
+            .ok_or(ConnectionError::StateUnavailable)
     }
 
     fn mark_fleet_cached(&self, company_id: &CompanyId) -> Result<(), ConnectionError> {
@@ -411,7 +542,26 @@ impl OnAirSession {
                 .map_err(|_| ConnectionError::StateUnavailable)?
                 .as_mut()
         {
-            fleet.availability = FleetSnapshotAvailability::Cached;
+            fleet.availability = SnapshotAvailability::Cached;
+        }
+        Ok(())
+    }
+
+    fn mark_fbos_cached(&self, company_id: &CompanyId) -> Result<(), ConnectionError> {
+        let is_current_company = self
+            .inner
+            .read()
+            .map_err(|_| ConnectionError::StateUnavailable)?
+            .as_ref()
+            .is_some_and(|connected| &connected.company.id == company_id);
+        if is_current_company
+            && let Some(fbos) = self
+                .fbos
+                .write()
+                .map_err(|_| ConnectionError::StateUnavailable)?
+                .as_mut()
+        {
+            fbos.availability = SnapshotAvailability::Cached;
         }
         Ok(())
     }
@@ -419,10 +569,23 @@ impl OnAirSession {
 
 fn fleet_view(
     stored: StoredFleetSnapshot,
-    availability: FleetSnapshotAvailability,
-    storage: FleetSnapshotStorage,
+    availability: SnapshotAvailability,
+    storage: SnapshotStorage,
 ) -> FleetSnapshotView {
     FleetSnapshotView {
+        company: ConnectedCompany::from(&stored.company),
+        snapshot: stored.snapshot,
+        availability,
+        storage,
+    }
+}
+
+fn fbo_view(
+    stored: StoredFboSnapshot,
+    availability: SnapshotAvailability,
+    storage: SnapshotStorage,
+) -> FboSnapshotView {
+    FboSnapshotView {
         company: ConnectedCompany::from(&stored.company),
         snapshot: stored.snapshot,
         availability,
@@ -453,6 +616,29 @@ fn save_stored_fleet(store: &mut Store, stored: &StoredFleetSnapshot) -> Result<
         .map_err(|_| ())
 }
 
+fn load_stored_fbos(store: &Store, company_id: Option<&CompanyId>) -> Option<StoredFboSnapshot> {
+    let resource_key = company_id.map(|id| id.0.to_string());
+    let record = store
+        .latest_api_snapshot(FBOS_RESOURCE_KIND, resource_key.as_deref())
+        .ok()??;
+    let stored: StoredFboSnapshot = serde_json::from_str(&record.payload_json).ok()?;
+    (stored.schema_version == FBOS_SNAPSHOT_SCHEMA_VERSION
+        && record.resource_key == stored.company.id.0.to_string())
+    .then_some(stored)
+}
+
+fn save_stored_fbos(store: &mut Store, stored: &StoredFboSnapshot) -> Result<(), ()> {
+    let payload = serde_json::to_string(stored).map_err(|_| ())?;
+    store
+        .save_api_snapshot(
+            FBOS_RESOURCE_KIND,
+            &stored.company.id.0.to_string(),
+            &stored.snapshot.provenance.observed_at.to_rfc3339(),
+            &payload,
+        )
+        .map_err(|_| ())
+}
+
 fn classify_client_error(error: ClientError) -> ConnectionError {
     match error {
         ClientError::AuthenticationRejected | ClientError::ApiRejected => {
@@ -464,11 +650,14 @@ fn classify_client_error(error: ClientError) -> ConnectionError {
     }
 }
 
-fn classify_fleet_error(error: ClientError) -> ConnectionError {
+fn classify_resource_error(error: ClientError, resource: CompanyDataResource) -> ConnectionError {
     match error {
         ClientError::AuthenticationRejected => ConnectionError::AuthenticationRejected,
         ClientError::RateLimited => ConnectionError::RateLimited,
-        _ => ConnectionError::FleetUnavailable,
+        _ => match resource {
+            CompanyDataResource::Fleet => ConnectionError::FleetUnavailable,
+            CompanyDataResource::Fbos => ConnectionError::FbosUnavailable,
+        },
     }
 }
 
@@ -477,7 +666,9 @@ mod tests {
     use super::*;
     use chrono::Utc;
     use tempfile::tempdir;
-    use wyrmgrid_domain::{AircraftId, Provenance, ProvenanceKind};
+    use wyrmgrid_domain::{
+        AircraftId, AirportId, AirportSummary, FboId, Provenance, ProvenanceKind,
+    };
 
     #[test]
     fn exposes_the_supported_plugin_api() {
@@ -498,7 +689,7 @@ mod tests {
     }
 
     #[test]
-    fn restores_the_latest_persistent_fleet_as_offline_data() {
+    fn restores_the_latest_persistent_company_data_as_offline() {
         let directory = tempdir().expect("temporary Hoard directory should exist");
         let database_path = directory.path().join("wyrmgrid.db");
         let company = CompanySummary {
@@ -524,23 +715,53 @@ mod tests {
                 },
             },
         };
+        let stored_fbos = StoredFboSnapshot {
+            schema_version: FBOS_SNAPSHOT_SCHEMA_VERSION,
+            company: company.clone(),
+            snapshot: Observed {
+                value: vec![FboSummary {
+                    id: FboId(Uuid::new_v4()),
+                    name: Some("Cached Aerie".into()),
+                    airport: Some(AirportSummary {
+                        id: AirportId(Uuid::new_v4()),
+                        icao: Some("YTEST".into()),
+                        name: Some("Stored Airport".into()),
+                        location: None,
+                    }),
+                }],
+                provenance: Provenance {
+                    kind: ProvenanceKind::OnAirFact,
+                    source: "onair:company/fbos".into(),
+                    observed_at: Utc::now(),
+                },
+            },
+        };
         let mut store = Store::open(&database_path).expect("persistent Hoard should open");
         save_stored_fleet(&mut store, &stored).expect("fleet should persist");
+        save_stored_fbos(&mut store, &stored_fbos).expect("FBOs should persist");
         drop(store);
 
         let session = OnAirSession::with_store(
             DEFAULT_BASE_URL,
             Store::open(&database_path).expect("persistent Hoard should reopen"),
         );
-        let view = session
+        let fleet_view = session
             .fleet_snapshot()
             .expect("fleet state should be readable")
             .expect("cached fleet should restore");
+        let fbo_view = session
+            .fbo_snapshot()
+            .expect("FBO state should be readable")
+            .expect("cached FBOs should restore");
 
-        assert_eq!(view.company, ConnectedCompany::from(&company));
-        assert_eq!(view.availability, FleetSnapshotAvailability::Offline);
-        assert_eq!(view.storage, FleetSnapshotStorage::Hoard);
-        assert_eq!(view.snapshot, stored.snapshot);
+        assert_eq!(fleet_view.company, ConnectedCompany::from(&company));
+        assert_eq!(fleet_view.availability, SnapshotAvailability::Offline);
+        assert_eq!(fleet_view.storage, SnapshotStorage::Hoard);
+        assert_eq!(fleet_view.snapshot, stored.snapshot);
+        assert_eq!(fbo_view.company, ConnectedCompany::from(&company));
+        assert_eq!(fbo_view.availability, SnapshotAvailability::Offline);
+        assert_eq!(fbo_view.storage, SnapshotStorage::Hoard);
+        assert_eq!(fbo_view.snapshot, stored_fbos.snapshot);
     }
 
     #[tokio::test]
@@ -557,10 +778,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn refuses_fleet_refresh_without_a_connected_session() {
+    async fn refuses_company_sync_without_a_connected_session() {
         let session = OnAirSession::default();
         assert!(matches!(
-            session.synchronize_fleet(FleetSyncTrigger::Manual).await,
+            session
+                .synchronize_company_data(DataSyncTrigger::Manual)
+                .await,
             Err(ConnectionError::NotConnected)
         ));
         assert_eq!(
@@ -569,32 +792,35 @@ mod tests {
                 .expect("snapshot state should be readable"),
             None
         );
+        assert_eq!(
+            session
+                .fbo_snapshot()
+                .expect("snapshot state should be readable"),
+            None
+        );
     }
 
     #[test]
-    fn fleet_sync_gate_enforces_trigger_specific_quiet_periods() {
+    fn data_sync_gate_enforces_trigger_specific_quiet_periods() {
         let started = Instant::now();
-        let mut gate = FleetSyncGate::default();
+        let mut gate = DataSyncGate::default();
 
-        assert!(gate.try_start(FleetSyncTrigger::Initial, started));
-        assert!(!gate.try_start(FleetSyncTrigger::Manual, started));
+        assert!(gate.try_start(DataSyncTrigger::Initial, started));
+        assert!(!gate.try_start(DataSyncTrigger::Manual, started));
         gate.finish();
         assert!(!gate.try_start(
-            FleetSyncTrigger::Manual,
-            started + MANUAL_FLEET_SYNC_COOLDOWN - Duration::from_secs(1)
+            DataSyncTrigger::Manual,
+            started + MANUAL_SYNC_COOLDOWN - Duration::from_secs(1)
         ));
-        assert!(gate.try_start(
-            FleetSyncTrigger::Manual,
-            started + MANUAL_FLEET_SYNC_COOLDOWN
-        ));
+        assert!(gate.try_start(DataSyncTrigger::Manual, started + MANUAL_SYNC_COOLDOWN));
         gate.finish();
         assert!(!gate.try_start(
-            FleetSyncTrigger::Automatic,
-            started + MANUAL_FLEET_SYNC_COOLDOWN + Duration::from_secs(1)
+            DataSyncTrigger::Automatic,
+            started + MANUAL_SYNC_COOLDOWN + Duration::from_secs(1)
         ));
         assert!(gate.try_start(
-            FleetSyncTrigger::Automatic,
-            started + MANUAL_FLEET_SYNC_COOLDOWN + MINIMUM_AUTOMATIC_FLEET_SYNC_INTERVAL
+            DataSyncTrigger::Automatic,
+            started + MANUAL_SYNC_COOLDOWN + MINIMUM_AUTOMATIC_SYNC_INTERVAL
         ));
     }
 
@@ -620,8 +846,12 @@ mod tests {
             ConnectionError::ServiceUnavailable
         ));
         assert!(matches!(
-            classify_fleet_error(ClientError::ApiRejected),
+            classify_resource_error(ClientError::ApiRejected, CompanyDataResource::Fleet),
             ConnectionError::FleetUnavailable
+        ));
+        assert!(matches!(
+            classify_resource_error(ClientError::ApiRejected, CompanyDataResource::Fbos),
+            ConnectionError::FbosUnavailable
         ));
     }
 }

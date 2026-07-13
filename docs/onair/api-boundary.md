@@ -20,7 +20,7 @@ Rules:
 - Raw response types are private to the adapter.
 - Captured fixtures must remove company IDs, registrations, personal names,
   coordinates when identifying, and all credentials.
-- Fleet synchronization is serialized and subject to conservative quiet
+- Company synchronization is serialized and subject to conservative quiet
   periods in the Rust application service.
 
 No write operation is part of the supported platform until OnAir explicitly
@@ -80,6 +80,21 @@ authenticated application test on 2026-07-14 successfully mapped 17 aircraft.
 That confirms the narrow fields used by this slice, not every field in the live
 fleet schema.
 
+## FBO boundary
+
+The published Swagger document was checked on 2026-07-14 for
+`GET /api/v1/company/{companyId}/fbos`. WyrmGrid currently translates only FBO
+identity and optional name, plus nested airport identity, ICAO, name, and valid
+WGS84 coordinates. When the nested airport omits its ID, the top-level
+`AirportId` is used; an `AirportId` without nested airport details remains an
+honest identity-only airport rather than acquiring invented metadata.
+
+Capacity, fuel, workshop, pricing, and construction fields are deliberately
+deferred until a concrete view needs them and a sanitized authenticated
+observation confirms their live shape. The committed FBO fixture is synthetic
+and Swagger-derived. It is translation evidence, not a claim that the endpoint
+has been authenticated against the user's company.
+
 ## Synchronization policy
 
 OnAir does not currently publish a formal public API rate-limit policy in the
@@ -87,14 +102,21 @@ Swagger document or public API wiki. WyrmGrid therefore uses an intentionally
 conservative, application-owned policy that can be revised if OnAir provides
 official guidance:
 
-- automatic fleet checks default to every 30 minutes;
+- automatic company checks default to every 30 minutes;
 - users may select Off, 15 minutes, 30 minutes, 1 hour, or 2 hours;
 - the Rust boundary will never accept automatic checks more frequently than
   every 15 minutes;
 - manual synchronization has a 60-second quiet period;
-- only one fleet synchronization may be in progress for a connected session;
+- only one company synchronization may be in progress for a connected session;
 - requests inside either quiet period return the existing snapshot without
   contacting OnAir or displaying an error.
+
+An accepted synchronization performs fleet then FBO reads sequentially under
+that one gate. Each successful resource is timestamped and retained
+independently. If fleet authentication is rejected or rate-limited, WyrmGrid
+does not make the FBO request; other fleet failures may still allow the FBO
+snapshot to refresh. This preserves useful partial results without multiplying
+user-facing synchronization controls.
 
 The interval choice is a non-secret interface preference stored locally. The
 authoritative quiet-period enforcement remains in Rust so another interface or

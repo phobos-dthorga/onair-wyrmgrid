@@ -1,0 +1,34 @@
+{
+  "Content": [
+    {
+      "Id": "44444444-4444-4444-8444-444444444444",
+      "Name": "WyrmGrid Test Base",
+      "AirportId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "Airport": {
+        "Id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "ICAO": "YTEST",
+        "Name": "Synthetic Regional Airport",
+        "Latitude": -37.81,
+        "Longitude": 144.96
+      }
+    },
+    {
+      "Id": "55555555-5555-4555-8555-555555555555",
+      "Name": "  ",
+      "AirportId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "Airport": null
+    },
+    {
+      "Id": "66666666-6666-4666-8666-666666666666",
+      "Name": "Unmapped Test Base",
+      "AirportId": null,
+      "Airport": null
+    },
+    {
+      "Name": "Rejected record without an FBO ID",
+      "AirportId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      "Airport": null
+    }
+  ],
+  "Error": null
+}

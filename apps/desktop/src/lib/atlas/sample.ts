@@ -1,4 +1,4 @@
-import type { FleetSnapshotView } from "./types";
+import type { FboSnapshotView, FleetSnapshotView } from "./types";
 
 export const atlasPreviewFleet: FleetSnapshotView = {
   company: {
@@ -34,6 +34,31 @@ export const atlasPreviewFleet: FleetSnapshotView = {
         model: "Example Bush Aircraft",
         location: { latitude: 61.2181, longitude: -149.9003 },
         current_airport: null,
+      },
+    ],
+    provenance: {
+      kind: "calculated",
+      source: "wyrmgrid:browser-preview",
+      observed_at: "2026-07-14T00:00:00Z",
+    },
+  },
+};
+
+export const atlasPreviewFbos: FboSnapshotView = {
+  company: atlasPreviewFleet.company,
+  availability: "preview",
+  storage: "preview",
+  snapshot: {
+    value: [
+      {
+        id: "44444444-4444-4444-8444-444444444444",
+        name: "Synthetic Continental Aerie",
+        airport: {
+          id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          icao: "LFXX",
+          name: "Synthetic Continental Airport",
+          location: { latitude: 48.8566, longitude: 2.3522 },
+        },
       },
     ],
     provenance: {
