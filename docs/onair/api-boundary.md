@@ -28,10 +28,10 @@ documents one for public API use.
 ## Connection probe
 
 The desktop asks for the company UUID and company-specific API key shown in the
-OnAir Client under **Options > Global Settings**. OnAir Companion is not a
-supported credential source: an authenticated test on 2026-07-14 found that its
-displayed API details were rejected, while values copied from OnAir Client
-worked. WyrmGrid sends the key only in the
+OnAir Client under **Options > Global Settings**. As of 2026-07-14, the
+still-developing OnAir Companion is not yet a compatible credential source: an
+authenticated test found that its displayed API details were rejected, while
+values copied from OnAir Client worked. WyrmGrid sends the key only in the
 `oa-apikey` header and sends the same company UUID in both the request path and
 the `CompanyUniqueId` header. A successful company envelope is translated into
 WyrmGrid's `CompanySummary` domain type.
@@ -49,6 +49,11 @@ The successful Client-versus-Companion comparison also means the earlier live
 rejection does not prove that `CompanyUniqueId` was required. The compatibility
 header remains because the newest complete community example included it and
 the request test makes that deliberate behavior visible.
+
+OnAir Companion is expected to become the primary OnAir client. Its credential
+compatibility must be revalidated when OnAir announces API parity or retires the
+older Client. Once a sanitized authenticated test succeeds, this boundary and
+the user guidance should move to Companion in the same change.
 
 The committed response fixture is synthetic and Swagger-derived. It exists to
 test field translation; it is not evidence of a successful live company query.

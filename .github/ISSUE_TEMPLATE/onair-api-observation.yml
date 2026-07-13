@@ -24,9 +24,10 @@ body:
     id: credential_source
     attributes:
       label: Credential source used for an authenticated observation
-      description: WyrmGrid supports API details copied from OnAir Client only.
+      description: Identify the source so Companion parity can be re-evaluated safely.
       options:
         - OnAir Client → Options → Global Settings
+        - OnAir Companion (currently experimental for WyrmGrid)
         - Not applicable (sanitized fixture or public documentation)
     validations:
       required: true

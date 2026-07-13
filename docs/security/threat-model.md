@@ -26,8 +26,8 @@
   for the active process, and are dropped on Disconnect or application exit;
 - connection errors are mapped to bounded user-facing categories instead of
   relaying remote response bodies;
-- credential guidance names OnAir Client as the only supported source and warns
-  against visually similar but rejected values from OnAir Companion;
+- current credential guidance directs users to OnAir Client and warns against
+  visually similar but not-yet-compatible values from OnAir Companion;
 - read-only API design;
 - explicit provenance and observation timestamps;
 - deny-by-default plugin capabilities;
@@ -54,6 +54,8 @@ WyrmGrid therefore makes no claim of hardened secret storage until a reviewed
 operating-system credential-store implementation is introduced.
 
 Credentials copied from the wrong OnAir product are an availability and support
-risk rather than a confidentiality control failure. The interface identifies
-OnAir Client and warns against OnAir Companion before submission; authentication
-errors repeat that recovery instruction without echoing either entered value.
+risk rather than a confidentiality control failure. For now, the interface
+identifies OnAir Client and warns that Companion has not reached credential
+parity; authentication errors repeat that recovery instruction without echoing
+either entered value. When Companion becomes the primary compatible client,
+this guidance must change without weakening secret handling.

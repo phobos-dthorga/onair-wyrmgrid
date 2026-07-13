@@ -115,8 +115,8 @@
         </p>
 
         <div class="credential-source-warning" role="note">
-          <strong>Use OnAir Client—not OnAir Companion</strong>
-          <span>Companion may display similar API details, but they are not valid for this connection.</span>
+          <strong>For now, use OnAir Client—not OnAir Companion</strong>
+          <span>Companion is still approaching feature parity; its current API details are not yet valid for this connection.</span>
         </div>
 
         <form onsubmit={connect}>

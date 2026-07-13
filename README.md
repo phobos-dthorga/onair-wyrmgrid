@@ -78,11 +78,12 @@ real API key in source code, test fixtures, issue reports, screenshots, or logs.
 
 ### Connecting to OnAir
 
-Obtain both the Company ID and API Key from **OnAir Client → Options → Global
-Settings**. Do not use API details shown by **OnAir Companion**: during an
-authenticated WyrmGrid test on 2026-07-14, Companion supplied values that OnAir's
-public API rejected, while the Client-supplied values worked. WyrmGrid therefore
-treats OnAir Client as the only supported credential source.
+For now, obtain both the Company ID and API Key from **OnAir Client → Options →
+Global Settings**. During an authenticated WyrmGrid test on 2026-07-14, the
+still-developing **OnAir Companion** supplied values that OnAir's public API
+rejected, while the Client-supplied values worked. Companion is expected to
+become OnAir's primary client, so this is a temporary compatibility rule that
+must be retested when its API credential support reaches parity.
 
 See [Development](docs/development.md), [Architecture](docs/architecture/overview.md),
 and [Contributing](CONTRIBUTING.md) before making structural changes.

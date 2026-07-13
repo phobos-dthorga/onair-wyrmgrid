@@ -46,7 +46,7 @@ pub enum ConnectionError {
     #[error("Enter your OnAir API key.")]
     EmptyApiKey,
     #[error(
-        "OnAir rejected these details. Copy them from OnAir Client → Options → Global Settings—not OnAir Companion."
+        "OnAir rejected these details. For now, copy them from OnAir Client → Options → Global Settings—not OnAir Companion."
     )]
     AuthenticationRejected,
     #[error("That company was not found in the selected OnAir world.")]
@@ -202,10 +202,8 @@ mod tests {
             classify_client_error(ClientError::CompanyNotFound),
             ConnectionError::CompanyNotFound
         ));
-        assert!(
-            ConnectionError::AuthenticationRejected
-                .to_string()
-                .contains("not OnAir Companion")
-        );
+        let message = ConnectionError::AuthenticationRejected.to_string();
+        assert!(message.contains("For now"));
+        assert!(message.contains("not OnAir Companion"));
     }
 }

@@ -30,10 +30,14 @@ storage mechanism.
 
 ## Authenticated API testing
 
-Use credentials copied strictly from **OnAir Client → Options → Global
-Settings**. Do not use the API details displayed by **OnAir Companion**. A live
-test on 2026-07-14 found that Companion-provided values were rejected while the
+For current testing, use credentials copied strictly from **OnAir Client →
+Options → Global Settings**. A live test on 2026-07-14 found that API details
+from the still-developing **OnAir Companion** were rejected while the
 Client-provided Company ID and API Key worked.
+
+Companion is expected to become OnAir's primary client. Revalidate this rule
+when OnAir announces API credential parity or Companion replaces the older
+Client; update the interface, tests, and API-boundary documentation together.
 
 Never place either value in source, `.env` files, command history, fixtures,
 screenshots, issue reports, or logs. Authenticated observations must be reduced
