@@ -387,6 +387,28 @@ pub fn built_in_themes() -> Vec<ThemeManifest> {
             ["#73D6AD", "#D5AE5F", "#72A7CF", "#CF7B73", "#A88BD4"],
         ),
         theme(
+            "wyrmgrid-phobos",
+            "Phobos D'thorga",
+            ThemeColors {
+                canvas: "#100708".into(),
+                surface: "#1A0B0D".into(),
+                surface_elevated: "#261014".into(),
+                surface_soft: "#32161B".into(),
+                text: "#F8EDEF".into(),
+                text_muted: "#D7B8BE".into(),
+                line: "#8C4A55".into(),
+                accent: "#FF6B7A".into(),
+                highlight: "#F2A65A".into(),
+                danger: "#FF8A80".into(),
+                success: "#8FE3B2".into(),
+                map_aircraft: "#FF6B7A".into(),
+                map_fbo: "#F2A65A".into(),
+                map_label: "#F8EDEF".into(),
+                map_halo: "#100708".into(),
+            },
+            ["#FF6B7A", "#F2A65A", "#E68AC3", "#A99CFF", "#8FE3B2"],
+        ),
+        theme(
             "wyrmgrid-daylight",
             "Daylight Dispatch",
             ThemeColors {
@@ -1344,7 +1366,13 @@ mod tests {
 
     #[test]
     fn built_in_themes_satisfy_the_same_safety_rules() {
-        for theme in built_in_themes() {
+        let themes = built_in_themes();
+        assert!(
+            themes
+                .iter()
+                .any(|theme| { theme.id == "wyrmgrid-phobos" && theme.name == "Phobos D'thorga" })
+        );
+        for theme in themes {
             validate_theme(&theme, true).expect("built-in theme should remain valid");
         }
     }
@@ -1359,7 +1387,7 @@ mod tests {
         let status = service.import(manifest).expect("valid theme should import");
         assert_eq!(status.selected_theme_id, "midnight-cargo");
         assert_eq!(status.active_theme.name, "Midnight Cargo");
-        assert_eq!(status.themes.len(), 4);
+        assert_eq!(status.themes.len(), 5);
 
         let selected = service
             .select(DEFAULT_THEME_ID)
@@ -1407,7 +1435,7 @@ mod tests {
             .expect("theme status should degrade safely");
         assert_eq!(status.selected_theme_id, DEFAULT_THEME_ID);
         assert_eq!(status.active_theme.id, DEFAULT_THEME_ID);
-        assert_eq!(status.themes.len(), 3);
+        assert_eq!(status.themes.len(), 4);
     }
 
     #[test]

@@ -7,9 +7,11 @@ instead of assuming WyrmGrid Classic's literal colours.
 
 ## Built-in themes
 
-The desktop application currently includes WyrmGrid Classic, Daylight Dispatch,
-and High Contrast. The selected theme is stored locally and is applied to the
-workspace, dialogs, Atlas markers and labels, and declarative charts.
+The desktop application currently includes WyrmGrid Classic, Phobos D'thorga,
+Daylight Dispatch, and High Contrast. Phobos D'thorga uses oxblood surfaces,
+ember-red accents, and warm highlights as a dark tribute to the project's
+author. The selected theme is stored locally and is applied to the workspace,
+dialogs, Atlas markers and labels, and declarative charts.
 
 ## Community theme boundary
 
