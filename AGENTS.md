@@ -41,5 +41,9 @@
 - Use semantic versioning for the application and separately version the plugin
   protocol, schema, and database migrations.
 - CI produces release artifacts. Do not hand-assemble published binaries.
+- Routine commits and pull requests compile-check the desktop application but
+  do not assemble installers. Build installers automatically for semantic minor
+  releases and above (`vX.Y.0`), not patch releases. A manual exceptional build
+  must record a concrete reason.
 - Keep early releases marked as prereleases until update signing and platform
   signing policies are complete.

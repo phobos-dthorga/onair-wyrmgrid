@@ -57,3 +57,8 @@ MapLibre, and ECharts remain outside domain rules.
 New abstraction is justified by a current use case, not the possibility of a
 future contributor. See
 [ADR-0004](decisions/0004-declarative-charts-and-complexity-budget.md).
+
+The presentation runs in Tauri's platform webview: Chromium-based WebView2 on
+Windows and WebKit-backed views on macOS and Linux. WRY is the application
+boundary, while cross-engine behaviour is verified rather than replaced by a
+bundled browser runtime. See [ADR-0005](decisions/0005-system-webviews.md).

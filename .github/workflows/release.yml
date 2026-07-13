@@ -2,15 +2,54 @@ name: Release
 
 on:
   push:
-    tags: ["v*"]
+    tags: ["v*.*.0"]
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Version tag to build, such as v0.2.1
+        required: true
+        type: string
+      exception_reason:
+        description: Why this non-routine installer build is worth the resources
+        required: true
+        type: string
 
 permissions:
   contents: write
 
 jobs:
+  policy:
+    name: Release policy
+    runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.policy.outputs.release_tag }}
+    steps:
+      - id: policy
+        name: Enforce installer build policy
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PUSH_TAG: ${{ github.ref_name }}
+          MANUAL_TAG: ${{ inputs.release_tag }}
+          EXCEPTION_REASON: ${{ inputs.exception_reason }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            if [[ ! "$MANUAL_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
+              echo "Manual release_tag must be a semantic version beginning with v." >&2
+              exit 1
+            fi
+            if (( ${#EXCEPTION_REASON} < 20 )); then
+              echo "Document a meaningful exception reason of at least 20 characters." >&2
+              exit 1
+            fi
+            echo "release_tag=$MANUAL_TAG" >> "$GITHUB_OUTPUT"
+          else
+            echo "release_tag=$PUSH_TAG" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
     name: Build ${{ matrix.platform }}
+    needs: policy
     strategy:
       fail-fast: false
       matrix:
@@ -43,8 +82,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: apps/desktop
-          tagName: ${{ github.ref_name }}
-          releaseName: OnAir WyrmGrid ${{ github.ref_name }}
+          tagName: ${{ needs.policy.outputs.release_tag }}
+          releaseName: OnAir WyrmGrid ${{ needs.policy.outputs.release_tag }}
           releaseBody: See the changelog and attached platform packages.
           releaseDraft: true
           prerelease: true
