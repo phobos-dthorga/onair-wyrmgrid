@@ -16,7 +16,7 @@
     "tauri": "npm run tauri --workspace @wyrmgrid/desktop --"
   },
   "devDependencies": {
-    "prettier": "3.6.2",
+    "prettier": "3.9.5",
     "prettier-plugin-svelte": "3.4.0"
   },
   "engines": {
