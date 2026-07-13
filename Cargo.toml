@@ -22,6 +22,7 @@ chrono = { version = "0.4.41", default-features = false, features = ["clock", "s
 reqwest = { version = "0.12.22", default-features = false, features = ["json", "rustls-tls"] }
 rusqlite = { version = "0.40.1", features = ["bundled"] }
 secrecy = "0.10.3"
+sentry = { version = "0.48.4", default-features = false, features = ["backtrace", "contexts", "debug-images", "panic", "reqwest", "rustls"] }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.142"
 thiserror = "2.0.12"

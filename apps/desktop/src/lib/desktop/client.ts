@@ -1,0 +1,78 @@
+import { invoke, isTauri } from "@tauri-apps/api/core";
+
+export type OperationError = {
+  code: string;
+  message: string;
+  retryable: boolean;
+  reportable: boolean;
+  report_id?: string;
+};
+
+export class DesktopBridgeUnavailable extends Error {
+  constructor() {
+    super("The WyrmGrid desktop bridge is unavailable.");
+    this.name = "DesktopBridgeUnavailable";
+  }
+}
+
+export class DesktopOperationFailure extends Error {
+  readonly operation: OperationError;
+
+  constructor(operation: OperationError) {
+    super(operation.message);
+    this.name = "DesktopOperationFailure";
+    this.operation = operation;
+  }
+}
+
+export function isDesktopRuntime(): boolean {
+  return isTauri();
+}
+
+export async function invokeDesktop<T>(
+  command: string,
+  args?: Record<string, unknown>,
+): Promise<T> {
+  if (!isDesktopRuntime()) throw new DesktopBridgeUnavailable();
+
+  try {
+    return await invoke<T>(command, args);
+  } catch (error) {
+    throw new DesktopOperationFailure(normalizeOperationError(error));
+  }
+}
+
+export function operationErrorMessage(
+  error: unknown,
+  fallback: string,
+): string {
+  return error instanceof DesktopOperationFailure
+    ? error.operation.message
+    : fallback;
+}
+
+function normalizeOperationError(value: unknown): OperationError {
+  if (isOperationError(value)) return value;
+  return {
+    code: "desktop.command_failed",
+    message: "WyrmGrid could not complete the desktop request.",
+    retryable: true,
+    reportable: false,
+  };
+}
+
+function isOperationError(value: unknown): value is OperationError {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<OperationError>;
+  return (
+    typeof candidate.code === "string" &&
+    /^[a-z][a-z0-9_.-]{2,79}$/.test(candidate.code) &&
+    typeof candidate.message === "string" &&
+    candidate.message.length > 0 &&
+    candidate.message.length <= 500 &&
+    typeof candidate.retryable === "boolean" &&
+    typeof candidate.reportable === "boolean" &&
+    (candidate.report_id === undefined ||
+      /^[0-9a-f]{32}$/i.test(candidate.report_id))
+  );
+}

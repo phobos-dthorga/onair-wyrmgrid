@@ -22,7 +22,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost https://demotiles.maplibre.org; img-src 'self' asset: http://asset.localhost data: blob: https://demotiles.maplibre.org; style-src 'self' 'unsafe-inline'; worker-src blob:"
+      "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://demotiles.maplibre.org; img-src 'self' asset: http://asset.localhost data: blob: https://demotiles.maplibre.org; style-src 'self' 'unsafe-inline'; worker-src blob:"
     }
   },
   "bundle": {

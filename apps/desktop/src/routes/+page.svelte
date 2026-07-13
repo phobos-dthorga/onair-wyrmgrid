@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { invoke } from "@tauri-apps/api/core";
   import { onMount } from "svelte";
   import AtlasMap from "$lib/atlas/AtlasMap.svelte";
   import { atlasPreviewFbos, atlasPreviewFleet } from "$lib/atlas/sample";
@@ -14,6 +13,21 @@
   } from "$lib/atlas/types";
   import WyrmChart from "$lib/charts/WyrmChart.svelte";
   import { foundationChart } from "$lib/charts/sample";
+  import {
+    invokeDesktop,
+    isDesktopRuntime,
+    operationErrorMessage,
+  } from "$lib/desktop/client";
+  import LegalDialog from "$lib/legal/LegalDialog.svelte";
+  import {
+    CURRENT_PRIVACY_NOTICE_VERSION,
+    CURRENT_TERMS_VERSION,
+    acknowledgeLegal,
+    loadLegalStatus,
+    updateTelemetryPreference,
+    type LegalStatus,
+  } from "$lib/legal/client";
+  import { configureClientTelemetry } from "$lib/observability/client";
   import ConnectionDialog from "$lib/onair/ConnectionDialog.svelte";
   import {
     disconnectedStatus,
@@ -28,6 +42,7 @@
   };
 
   type FleetLoadState = "idle" | "loading" | "ready" | "error";
+  type LegalLoadState = "loading" | "ready" | "error";
 
   const AUTOMATIC_SYNC_STORAGE_KEY = "wyrmgrid.atlas.automatic-sync-minutes";
   const AUTOMATIC_SYNC_OPTIONS = [0, 15, 30, 60, 120] as const;
@@ -49,6 +64,18 @@
   let selectedAircraftId = $state<string | null>(null);
   let selectedFboId = $state<string | null>(null);
   let automaticSyncMinutes = $state(30);
+  let legalStatus = $state<LegalStatus>({
+    terms_version: CURRENT_TERMS_VERSION,
+    privacy_notice_version: CURRENT_PRIVACY_NOTICE_VERSION,
+    acknowledged: false,
+    telemetry_enabled: false,
+  });
+  let legalLoadState = $state<LegalLoadState>("loading");
+  let legalError = $state("");
+  let legalBusy = $state(false);
+  let legalTelemetryDraft = $state(false);
+  let showLegalDialog = $state(false);
+  let workspaceInitialized = false;
 
   const fleetSnapshot = $derived<FleetSnapshot | null>(fleetView?.snapshot ?? null);
   const aircraft = $derived(fleetSnapshot?.value ?? []);
@@ -125,13 +152,20 @@
     { id: "fleet", name: "Fleet", count: plottedAircraftCount, active: fleetVisible, available: true },
     { id: "fbos", name: "FBO network", count: plottedFboCount, active: fboVisible, available: true },
     { id: "jobs", name: "Jobs", count: 0, active: false, available: false },
-    { id: "maintenance", name: "Maintenance", count: 0, active: false, available: false },
+    {
+      id: "maintenance",
+      name: "Maintenance",
+      count: 0,
+      active: false,
+      available: false,
+    },
   ]);
 
   function safeError(error: unknown): string {
-    return typeof error === "string" && error.length > 0
-      ? error
-      : "WyrmGrid could not synchronize company data.";
+    return operationErrorMessage(
+      error,
+      "WyrmGrid could not synchronize company data.",
+    );
   }
 
   function formatObservedAt(value: string | undefined): string {
@@ -183,7 +217,7 @@
     fleetError = "";
 
     try {
-      const result = await invoke<CompanyDataSyncResult>("synchronize_onair_company_data", { trigger });
+      const result = await invokeDesktop<CompanyDataSyncResult>("synchronize_onair_company_data", { trigger });
       if (result.disposition === "quietly_ignored") {
         fleetLoadState = fleetView || fboView ? "ready" : "idle";
         return;
@@ -200,9 +234,9 @@
     } catch (error) {
       fleetError = safeError(error);
       try {
-        const retained = await invoke<FleetSnapshotView | null>("onair_fleet_snapshot");
+        const retained = await invokeDesktop<FleetSnapshotView | null>("onair_fleet_snapshot");
         if (retained) acceptFleetView(retained);
-        const retainedFbos = await invoke<FboSnapshotView | null>("onair_fbo_snapshot");
+        const retainedFbos = await invokeDesktop<FboSnapshotView | null>("onair_fbo_snapshot");
         if (retainedFbos) acceptFboView(retainedFbos);
       } catch {
         // Keep the existing presentation state when Hoard cannot be read.
@@ -214,8 +248,8 @@
   async function restoreCompanySnapshots(synchronizeAfterRestore: boolean): Promise<void> {
     try {
       const [fleet, fboNetwork] = await Promise.all([
-        invoke<FleetSnapshotView | null>("onair_fleet_snapshot"),
-        invoke<FboSnapshotView | null>("onair_fbo_snapshot"),
+        invokeDesktop<FleetSnapshotView | null>("onair_fleet_snapshot"),
+        invokeDesktop<FboSnapshotView | null>("onair_fbo_snapshot"),
       ]);
       if (fleet) {
         acceptFleetView(fleet);
@@ -229,8 +263,9 @@
       if (connection.connected && (synchronizeAfterRestore || !fleet || !fboNetwork)) {
         await synchronizeCompanyData("initial");
       }
-    } catch {
-      // Browser previews do not expose the Tauri command bridge.
+    } catch (error) {
+      fleetLoadState = "error";
+      fleetError = safeError(error);
     }
   }
 
@@ -245,8 +280,91 @@
     }
   }
 
+  function initializeWorkspace(): void {
+    if (workspaceInitialized) return;
+    workspaceInitialized = true;
+
+    if (!isDesktopRuntime()) {
+      fleetView = atlasPreviewFleet;
+      fboView = atlasPreviewFbos;
+      fleetLoadState = "ready";
+      return;
+    }
+
+    invokeDesktop<PlatformStatus>("platform_status")
+      .then((value) => (status = value))
+      .catch((error) => {
+        fleetLoadState = "error";
+        fleetError = operationErrorMessage(
+          error,
+          "WyrmGrid could not read its build status.",
+        );
+      });
+
+    invokeDesktop<OnAirConnectionStatus>("onair_connection_status")
+      .then((value) => {
+        connection = value;
+        void restoreCompanySnapshots(value.connected);
+      })
+      .catch((error) => {
+        fleetLoadState = "error";
+        fleetError = operationErrorMessage(
+          error,
+          "WyrmGrid could not read connection state.",
+        );
+      });
+  }
+
+  async function initializeLegal(): Promise<void> {
+    legalLoadState = "loading";
+    legalError = "";
+    try {
+      legalStatus = await loadLegalStatus();
+      legalTelemetryDraft = legalStatus.telemetry_enabled;
+      await configureClientTelemetry(legalStatus.telemetry_enabled);
+      legalLoadState = "ready";
+      if (legalStatus.acknowledged) initializeWorkspace();
+    } catch (error) {
+      legalLoadState = "error";
+      legalError = operationErrorMessage(
+        error,
+        "WyrmGrid could not read its local privacy preferences.",
+      );
+    }
+  }
+
+  function openLegalSettings(): void {
+    legalTelemetryDraft = legalStatus.telemetry_enabled;
+    legalError = "";
+    showLegalDialog = true;
+  }
+
+  async function saveLegalChoice(): Promise<void> {
+    legalBusy = true;
+    legalError = "";
+    try {
+      legalStatus = legalStatus.acknowledged
+        ? await updateTelemetryPreference(legalTelemetryDraft)
+        : await acknowledgeLegal(legalTelemetryDraft);
+      await configureClientTelemetry(legalStatus.telemetry_enabled);
+      showLegalDialog = false;
+      if (legalStatus.acknowledged) initializeWorkspace();
+    } catch (error) {
+      legalError = operationErrorMessage(
+        error,
+        "WyrmGrid could not save its local privacy preferences.",
+      );
+    } finally {
+      legalBusy = false;
+    }
+  }
+
   function updateAutomaticSync(minutes: number): void {
-    if (!AUTOMATIC_SYNC_OPTIONS.includes(minutes as (typeof AUTOMATIC_SYNC_OPTIONS)[number])) {
+    if (
+      !AUTOMATIC_SYNC_OPTIONS.includes(
+        minutes as (typeof AUTOMATIC_SYNC_OPTIONS)[number],
+      )
+    ) {
       return;
     }
     automaticSyncMinutes = minutes;
@@ -254,7 +372,11 @@
   }
 
   $effect(() => {
-    if (typeof window === "undefined" || !connection.connected || automaticSyncMinutes === 0) {
+    if (
+      typeof window === "undefined" ||
+      !connection.connected ||
+      automaticSyncMinutes === 0
+    ) {
       return;
     }
 
@@ -278,22 +400,7 @@
       automaticSyncMinutes = savedAutomaticSync;
     }
 
-    invoke<PlatformStatus>("platform_status")
-      .then((value) => (status = value))
-      .catch(() => {
-        fleetView = atlasPreviewFleet;
-        fboView = atlasPreviewFbos;
-        fleetLoadState = "ready";
-      });
-
-    invoke<OnAirConnectionStatus>("onair_connection_status")
-      .then((value) => {
-        connection = value;
-        void restoreCompanySnapshots(value.connected);
-      })
-      .catch(() => {
-        // Browser previews do not expose the Tauri command bridge.
-      });
+    void initializeLegal();
   });
 </script>
 
@@ -301,7 +408,23 @@
   <title>OnAir WyrmGrid</title>
 </svelte:head>
 
-<main class="shell">
+{#if legalLoadState === "loading"}
+  <main class="legal-loading" aria-live="polite">
+    <div class="brand-mark" aria-hidden="true">WG</div>
+    <span class="eyebrow">OnAir WyrmGrid</span>
+    <strong>Preparing local privacy settings…</strong>
+  </main>
+{:else if legalLoadState === "error"}
+  <main class="legal-loading legal-load-error">
+    <div class="brand-mark" aria-hidden="true">WG</div>
+    <span class="eyebrow">Local settings unavailable</span>
+    <strong>{legalError}</strong>
+    <button type="button" onclick={() => void initializeLegal()}
+      >Try again</button
+    >
+  </main>
+{:else if legalStatus.acknowledged}
+<main class="shell" inert={showLegalDialog}>
   <header class="topbar">
     <div class="brand-mark" aria-hidden="true">WG</div>
     <div class="brand-copy">
@@ -315,6 +438,9 @@
       <button class="nav-item">Hoard</button>
       <button class="nav-item">Forge</button>
     </nav>
+    <button class="legal-pill" type="button" onclick={openLegalSettings}>
+      Privacy &amp; Terms
+    </button>
     <button
       class:connected={connection.connected}
       class="connection-pill"
@@ -534,4 +660,18 @@
   status={connection}
   onclose={() => (showConnectionDialog = false)}
   onstatuschange={handleConnectionStatus}
+/>
+{/if}
+
+<LegalDialog
+  open={legalLoadState === "ready" &&
+    (!legalStatus.acknowledged || showLegalDialog)}
+  required={!legalStatus.acknowledged}
+  status={legalStatus}
+  telemetryEnabled={legalTelemetryDraft}
+  busy={legalBusy}
+  errorMessage={legalError}
+  ontelemetrychange={(enabled) => (legalTelemetryDraft = enabled)}
+  onsubmit={() => void saveLegalChoice()}
+  onclose={() => (showLegalDialog = false)}
 />

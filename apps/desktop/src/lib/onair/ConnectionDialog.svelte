@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { invoke } from "@tauri-apps/api/core";
+  import { invokeDesktop, operationErrorMessage } from "$lib/desktop/client";
   import type { OnAirConnectionStatus } from "./types";
 
   let {
@@ -21,9 +21,10 @@
   let errorMessage = $state("");
 
   function safeError(error: unknown): string {
-    return typeof error === "string" && error.length > 0
-      ? error
-      : "WyrmGrid could not complete the connection request.";
+    return operationErrorMessage(
+      error,
+      "WyrmGrid could not complete the connection request.",
+    );
   }
 
   async function connect(event: SubmitEvent): Promise<void> {
@@ -32,10 +33,13 @@
     errorMessage = "";
 
     try {
-      const connected = await invoke<OnAirConnectionStatus>("connect_onair", {
-        companyId: companyId.trim(),
-        apiKey,
-      });
+      const connected = await invokeDesktop<OnAirConnectionStatus>(
+        "connect_onair",
+        {
+          companyId: companyId.trim(),
+          apiKey,
+        },
+      );
       apiKey = "";
       companyId = "";
       revealApiKey = false;
@@ -51,7 +55,8 @@
     submitting = true;
     errorMessage = "";
     try {
-      const disconnected = await invoke<OnAirConnectionStatus>("disconnect_onair");
+      const disconnected =
+        await invokeDesktop<OnAirConnectionStatus>("disconnect_onair");
       apiKey = "";
       companyId = "";
       onstatuschange(disconnected);
@@ -78,13 +83,23 @@
 
 {#if open}
   <div class="dialog-backdrop">
-    <div class="connection-dialog" role="dialog" aria-modal="true" aria-labelledby="connection-title">
+    <div
+      class="connection-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="connection-title"
+    >
       <header>
         <div>
           <span class="eyebrow">Secure data link</span>
           <h2 id="connection-title">OnAir connection</h2>
         </div>
-        <button class="close-button" type="button" aria-label="Close connection dialog" onclick={close}>×</button>
+        <button
+          class="close-button"
+          type="button"
+          aria-label="Close connection dialog"
+          onclick={close}>×</button
+        >
       </header>
 
       {#if status.connected && status.company}
@@ -93,30 +108,42 @@
           <div>
             <span>Connected for this session</span>
             <strong>{status.company.name}</strong>
-            {#if status.company.airline_code}<small>{status.company.airline_code}</small>{/if}
+            {#if status.company.airline_code}<small
+                >{status.company.airline_code}</small
+              >{/if}
           </div>
         </div>
 
         <p class="explanation">
-          The API key is held only in Rust memory and will be forgotten when WyrmGrid closes.
+          The API key is held only in Rust memory and will be forgotten when
+          WyrmGrid closes.
         </p>
 
         {#if errorMessage}<p class="error" role="alert">{errorMessage}</p>{/if}
 
         <div class="dialog-actions">
           <button class="secondary" type="button" onclick={close}>Done</button>
-          <button class="danger" type="button" disabled={submitting} onclick={disconnect}>
+          <button
+            class="danger"
+            type="button"
+            disabled={submitting}
+            onclick={disconnect}
+          >
             {submitting ? "Disconnecting…" : "Disconnect"}
           </button>
         </div>
       {:else}
         <p class="explanation">
-          Copy the Company ID and API Key from OnAir Client → Options → Global Settings. WyrmGrid uses them only with OnAir's read-only public API.
+          Copy the Company ID and API Key from OnAir Client → Options → Global
+          Settings. WyrmGrid uses them only with OnAir's read-only public API.
         </p>
 
         <div class="credential-source-warning" role="note">
           <strong>For now, use OnAir Client—not OnAir Companion</strong>
-          <span>Companion is still approaching feature parity; its current API details are not yet valid for this connection.</span>
+          <span
+            >Companion is still approaching feature parity; its current API
+            details are not yet valid for this connection.</span
+          >
         </div>
 
         <form onsubmit={connect}>
@@ -150,18 +177,29 @@
               type="button"
               aria-label={revealApiKey ? "Hide API key" : "Show API key"}
               onclick={() => (revealApiKey = !revealApiKey)}
-            >{revealApiKey ? "Hide" : "Show"}</button>
+              >{revealApiKey ? "Hide" : "Show"}</button
+            >
           </div>
 
           <div class="session-notice">
             <strong>Session only</strong>
-            <span>No credential is written to SQLite, browser storage, logs, or plugins.</span>
+            <span
+              >No credential is written to SQLite, browser storage, logs, or
+              plugins.</span
+            >
           </div>
 
-          {#if errorMessage}<p class="error" role="alert">{errorMessage}</p>{/if}
+          {#if errorMessage}<p class="error" role="alert">
+              {errorMessage}
+            </p>{/if}
 
           <div class="dialog-actions">
-            <button class="secondary" type="button" disabled={submitting} onclick={close}>Cancel</button>
+            <button
+              class="secondary"
+              type="button"
+              disabled={submitting}
+              onclick={close}>Cancel</button
+            >
             <button class="primary" type="submit" disabled={submitting}>
               {submitting ? "Contacting OnAir…" : "Connect to OnAir"}
             </button>

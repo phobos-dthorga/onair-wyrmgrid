@@ -20,6 +20,37 @@ volume. Reassess the Team plan when another maintainer needs access, integrated
 alerts become useful, or filtered production errors consistently approach the
 plan quota. Set a hard pay-as-you-go budget before enabling any paid overage.
 
+## Implemented foundation
+
+- Serializable operation errors carry a stable code, safe message,
+  retryability, reportability, and optional report identifier.
+- Frontend commands pass through one typed desktop client.
+- Rust and SvelteKit adapters require an explicit enable flag, a configured
+  DSN, and the current versioned user preference.
+- The preference is off by default, persisted locally in SQLite, and available
+  from **Privacy & Terms** after first-run acknowledgement.
+- Both adapters remove user, request, breadcrumb, extra, local-path,
+  source-line, and unapproved context data before sending.
+- Expected input, authentication, rate-limit, offline, and optional-integration
+  conditions are not reported.
+- Release CI can upload Svelte source maps using protected GitHub configuration.
+
+| Kind     | Name                  |
+| -------- | --------------------- |
+| Variable | `SENTRY_ORG`          |
+| Variable | `SENTRY_RUST_PROJECT` |
+| Variable | `SENTRY_UI_PROJECT`   |
+| Secret   | `SENTRY_AUTH_TOKEN`   |
+| Secret   | `SENTRY_RUST_DSN`     |
+| Secret   | `SENTRY_UI_DSN`       |
+
+The DSN secrets are reserved for deliberately enabled builds; current public
+release jobs do not embed them. Before public telemetry, verify server-side PII
+and IP scrubbing, one sanitized event from each runtime, retention and access
+roles, quota alerts and a hard overage budget, native debug-information upload,
+and the current data-processing and international-transfer terms. The complete
+gate is maintained in [Legal and privacy readiness](../legal/readiness.md).
+
 ## Phase 0: architecture preparation
 
 - Replace string-only Tauri failures with a serializable command error carrying

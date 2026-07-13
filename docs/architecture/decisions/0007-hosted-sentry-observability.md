@@ -20,7 +20,9 @@ is disproportionate for a single-maintainer prerelease project.
 Observability is also a confidentiality boundary. OnAir credentials, company
 identifiers, operational history, locations, local paths, database contents,
 and untrusted plugin output must not enter telemetry merely because a library
-can automatically collect them.
+can automatically collect them. Legal-document versions, acknowledgement
+records, and the user's optional telemetry preference are local privacy state
+and must be protected as well.
 
 ## Decision
 
@@ -47,9 +49,10 @@ can automatically collect them.
 - Disable default PII collection and IP storage. Events and breadcrumbs pass
   through explicit client-side allowlisting/redaction, with Sentry-side
   scrubbing as defence in depth.
-- Public builds do not transmit telemetry until WyrmGrid has a user-visible
-  disclosure and control. Maintainer and prerelease test builds may enable it
-  deliberately without changing production defaults.
+- Telemetry remains off by default and requires the current versioned Privacy
+  Notice and Terms to have been acknowledged plus an explicit optional user
+  preference. A deliberately enabled build still requires a configured DSN;
+  current public release jobs do not embed one.
 - Keep Sentry upload credentials only in CI secret storage. A DSN is a public
   submission endpoint rather than an account credential, but account-specific
   configuration still belongs at the build/deployment boundary.
@@ -80,6 +83,10 @@ quota exhaustion result only in missing telemetry.
 Two SDKs mean frontend and Rust failures are not automatically one distributed
 trace. Stable error codes, optional report identifiers, and canonical release
 metadata provide correlation without coupling application contracts to Sentry.
+
+First-run legal onboarding now supplies the disclosure and user control, but it
+does not by itself authorize public telemetry. The operational and legal
+readiness gates remain mandatory before release builds receive DSNs.
 
 Self-hosting may be reconsidered for an air-gapped or contractual requirement,
 materially different data-control needs, or sustained volume that makes managed

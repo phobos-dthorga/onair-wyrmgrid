@@ -23,6 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       release_tag: ${{ steps.policy.outputs.release_tag }}
+      release_version: ${{ steps.policy.outputs.release_version }}
     steps:
       - id: policy
         name: Enforce installer build policy
@@ -46,6 +47,8 @@ jobs:
           else
             echo "release_tag=$PUSH_TAG" >> "$GITHUB_OUTPUT"
           fi
+          RELEASE_TAG="${MANUAL_TAG:-$PUSH_TAG}"
+          echo "release_version=${RELEASE_TAG#v}" >> "$GITHUB_OUTPUT"
 
   build:
     name: Build ${{ matrix.platform }}
@@ -56,10 +59,13 @@ jobs:
         include:
           - platform: windows-latest
             args: --bundles nsis
+            upload_sentry_source_maps: true
           - platform: ubuntu-22.04
             args: --bundles appimage,deb
+            upload_sentry_source_maps: false
           - platform: macos-latest
             args: --bundles app,dmg
+            upload_sentry_source_maps: false
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v7
@@ -80,6 +86,12 @@ jobs:
       - uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SENTRY_AUTH_TOKEN: ${{ matrix.upload_sentry_source_maps && secrets.SENTRY_AUTH_TOKEN || '' }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_UI_PROJECT: ${{ vars.SENTRY_UI_PROJECT }}
+          SENTRY_RELEASE: onair-wyrmgrid@${{ needs.policy.outputs.release_version }}
+          SENTRY_UPLOAD_SOURCEMAPS: ${{ matrix.upload_sentry_source_maps }}
+          VITE_SENTRY_RELEASE: onair-wyrmgrid@${{ needs.policy.outputs.release_version }}
         with:
           projectPath: apps/desktop
           tagName: ${{ needs.policy.outputs.release_tag }}
