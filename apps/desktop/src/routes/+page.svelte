@@ -3,6 +3,8 @@
   import type { Map } from "maplibre-gl";
   import "maplibre-gl/dist/maplibre-gl.css";
   import { onMount } from "svelte";
+  import WyrmChart from "$lib/charts/WyrmChart.svelte";
+  import { foundationChart } from "$lib/charts/sample";
 
   type PlatformStatus = {
     application: string;
@@ -121,6 +123,7 @@
           <div><dt>Plugin API</dt><dd>v{status.plugin_api_version}</dd></div>
           <div><dt>Build</dt><dd>{status.version}</dd></div>
         </dl>
+        <WyrmChart spec={foundationChart} />
       </div>
     </section>
 

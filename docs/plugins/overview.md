@@ -14,3 +14,16 @@ The version-one manifest groundwork is in
 `schemas/plugin-manifest.schema.json`, mirrored by Rust types in
 `wyrmgrid-plugin-protocol`. The example is intentionally non-executable until
 the lifecycle and framing contract are accepted.
+
+## Chart contributions
+
+Charts use the versioned, declarative contract in
+`schemas/chart-spec.schema.json`. A plugin granted `charts_publish` may provide
+validated series data for line, area, or bar charts. The host controls rendering
+and does not accept ECharts configuration, JavaScript functions, HTML tooltips,
+or plugin-defined themes.
+
+The fixture in `schemas/fixtures/chart-spec-v1.json` is the canonical version
+one example. The Rust protocol crate deserializes and validates it in tests.
+Chart schema version 1 was added compatibly to plugin API version 1: existing
+plugins do not need to request the new permission or emit chart messages.

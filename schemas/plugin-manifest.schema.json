@@ -25,6 +25,7 @@
           "on_air_jobs_read",
           "on_air_finance_read",
           "map_layers_publish",
+          "charts_publish",
           "notifications_create",
           "plugin_storage",
           "simulator_telemetry_read",

@@ -30,6 +30,9 @@
 - locked dependencies, dependency updates, audit jobs, and CI-built releases;
 - no plugin runtime until framing, lifecycle, limits, and permission review are
   specified and tested.
+- chart contributions are data-only; the host rejects executable callbacks,
+  arbitrary ECharts options, HTML tooltips, non-finite values, oversized series,
+  and charts published without `charts_publish`.
 
 Before stable release, the project needs operating-system credential storage,
 signed updates, hardened plugin supervision, abuse-case tests, and a formal

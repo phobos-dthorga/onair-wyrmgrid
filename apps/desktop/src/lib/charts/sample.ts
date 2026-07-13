@@ -1,0 +1,33 @@
+import type { ChartSpec } from "./types";
+
+export const foundationChart: ChartSpec = {
+  schema_version: 1,
+  id: "org.wyrmgrid.foundation.observations",
+  title: "Hoard growth",
+  description:
+    "Illustrative records showing the chart system before live OnAir data is connected.",
+  kind: "area",
+  category_axis_label: "Refresh cycle",
+  value_axis_label: "Records",
+  unit: "records",
+  series: [
+    {
+      id: "observations",
+      label: "Stored observations",
+      points: [
+        { category: "01", value: 3 },
+        { category: "02", value: 7 },
+        { category: "03", value: 6 },
+        { category: "04", value: 12 },
+        { category: "05", value: 16 },
+        { category: "06", value: 21 },
+        { category: "07", value: 28 },
+      ],
+    },
+  ],
+  provenance: {
+    kind: "calculated",
+    source: "Illustrative foundation data",
+    observed_at: "2026-07-14T00:00:00Z",
+  },
+};
