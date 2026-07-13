@@ -8,7 +8,13 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+secrecy.workspace = true
 serde.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
 wyrmgrid-domain = { path = "../domain" }
+wyrmgrid-onair-api = { path = "../onair-api" }
 wyrmgrid-plugin-protocol = { path = "../plugin-protocol" }
 
+[dev-dependencies]
+tokio.workspace = true

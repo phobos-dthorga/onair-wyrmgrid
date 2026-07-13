@@ -8,10 +8,9 @@ through one connected world map. It is designed as a community platform: most
 first-party intelligence modules will use the same versioned, permission-aware
 plugin boundary available to third-party developers.
 
-> **Project status:** foundation stage. The application shell, domain boundary,
-> read-only OnAir adapter, SQLite migration owner, and plugin manifest contract
-> exist. Live OnAir authentication and data synchronization are the first
-> vertical slice, not a completed feature.
+> **Project status:** foundation stage. A session-only OnAir connection probe is
+> implemented; fleet synchronization, historical caching, and persistent
+> credential storage remain parts of the first vertical slice.
 
 ## Vision
 
@@ -82,8 +81,10 @@ and [Contributing](CONTRIBUTING.md) before making structural changes.
 
 ## Releases
 
-Version tags matching `v*` trigger reproducible desktop builds for Windows,
-Linux, and macOS. Early releases remain drafts and prereleases until signing,
+Routine commits and pull requests compile-check the desktop without packaging
+installers. Release installers are produced for `vX.Y.0` tags; a deliberately
+justified manual exception is available when an intermediate patch genuinely
+needs packaging. Early releases remain drafts and prereleases until signing,
 updating, and live OnAir integration are deliberately enabled.
 
 ## Licensing and trademarks

@@ -1,15 +1,18 @@
 # OnAir API boundary
 
-The adapter currently records only the minimum observed convention needed for
-the authentication probe: JSON over HTTPS, the `oa-apikey` request header, and
-read-only company and fleet routes. These assumptions must be checked against
-the live official interface before expansion.
+The adapter implements the minimum official convention needed for the
+connection probe: JSON over HTTPS, the `oa-apikey` request header, and
+`GET /api/v1/company/{companyId}`. This contract was checked against OnAir's
+published Swagger document on 2026-07-14. Fleet translation remains a later
+increment and must be verified independently before it is claimed to work.
 
 Rules:
 
 - Base URLs are configurable and must use HTTPS outside tests.
 - API keys are secret values, redacted from debug output, and never persisted in
   SQLite or sent to plugins.
+- The first connection milestone retains a key only in the running Rust process.
+  Closing WyrmGrid or selecting Disconnect forgets the session.
 - Non-success responses are classified without echoing sensitive request data.
 - Raw response types are private to the adapter.
 - Captured fixtures must remove company IDs, registrations, personal names,
@@ -18,3 +21,18 @@ Rules:
 
 No write operation is part of the supported platform until OnAir explicitly
 documents one for public API use.
+
+## Connection probe
+
+The desktop asks for the company UUID and company-specific API key shown in the
+OnAir Client under **Options > Global Settings**. It sends the key only in the
+`oa-apikey` header to OnAir's HTTPS API and translates a successful company
+envelope into WyrmGrid's `CompanySummary` domain type.
+
+The committed response fixture is synthetic and Swagger-derived. It exists to
+test field translation; it is not evidence of a successful live company query.
+
+References:
+
+- [OnAir public API wiki](https://onaircompany.hostwiki.io/en/Public-APIs)
+- [OnAir v1 Swagger document](https://server1.onair.company/swagger/docs/v1)

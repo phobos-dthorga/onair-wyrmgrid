@@ -42,6 +42,17 @@ impl Coordinates {
 #[serde(transparent)]
 pub struct AircraftId(pub Uuid);
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct CompanyId(pub Uuid);
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CompanySummary {
+    pub id: CompanyId,
+    pub name: String,
+    pub airline_code: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AircraftSummary {
     pub id: AircraftId,
