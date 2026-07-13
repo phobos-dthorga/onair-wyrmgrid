@@ -36,7 +36,8 @@ The implementation sequence and operating thresholds live in the
   fallback, and explicit live/cached/offline state (implemented)
 - Hoard Timeline fleet history: persistent LIVE/HISTORICAL mode indicator,
   as-of selection, return-to-present control, and fleet growth/composition
-  charts (implemented)
+  charts, plus FBO-network growth from independently timestamped observations
+  (implemented)
 - Conservatively rate-protected manual and user-configured automatic company
   synchronization (implemented)
 - Atlas fleet and FBO markers, independent layer toggles, shared map fitting,
@@ -114,8 +115,8 @@ The complete sequence and provider constraints live in the
   proven
 - FBO network planning and coverage analysis
 - Maintenance, finance, and flight history
-- Hoard Timeline expansion across company value, FBO footprint, routes,
-  utilization, finance, and named milestones
+- Hoard Timeline expansion across company value, geographic FBO coverage,
+  routes, utilization, finance, and named milestones
 - WyrmGrid Bridge simulator telemetry, followed by additional simulator and
   aircraft-specific providers
 - Signed plugin packages and WyrmGrid Aerie discovery

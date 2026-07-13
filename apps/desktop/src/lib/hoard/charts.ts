@@ -1,5 +1,9 @@
 import type { ChartSpec } from "$lib/charts/types";
-import type { FleetCompositionPoint, FleetHistoryPoint } from "./types";
+import type {
+  FboHistoryPoint,
+  FleetCompositionPoint,
+  FleetHistoryPoint,
+} from "./types";
 
 const dateFormatter = new Intl.DateTimeFormat(undefined, {
   month: "short",
@@ -34,6 +38,35 @@ export function fleetGrowthChart(
         points: points.map((point) => ({
           category: chartTime(point.observed_at),
           value: point.aircraft_count,
+        })),
+      },
+    ],
+    provenance: {
+      kind: "calculated",
+      source: "WyrmGrid Hoard retained OnAir facts",
+      observed_at: observedAt,
+    },
+  };
+}
+
+export function fboGrowthChart(points: FboHistoryPoint[]): ChartSpec | null {
+  const observedAt = points.at(-1)?.observed_at;
+  if (!observedAt || points.length === 0) return null;
+  return {
+    schema_version: 1,
+    id: "hoard-fbo-growth",
+    title: "FBO network growth",
+    description: "FBOs retained in each successful OnAir network observation.",
+    kind: "area",
+    category_axis_label: "Observation",
+    value_axis_label: "FBOs",
+    series: [
+      {
+        id: "fbo-count",
+        label: "FBOs",
+        points: points.map((point) => ({
+          category: chartTime(point.observed_at),
+          value: point.fbo_count,
         })),
       },
     ],

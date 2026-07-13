@@ -27,7 +27,11 @@
     updateTelemetryPreference,
     type LegalStatus,
   } from "$lib/legal/client";
-  import { fleetCompositionChart, fleetGrowthChart } from "$lib/hoard/charts";
+  import {
+    fboGrowthChart,
+    fleetCompositionChart,
+    fleetGrowthChart,
+  } from "$lib/hoard/charts";
   import HoardTimelineDialog from "$lib/hoard/HoardTimelineDialog.svelte";
   import {
     hoardPreviewTimeline,
@@ -103,6 +107,7 @@
     company: null,
     observation_times: [],
     fleet_history: [],
+    fbo_history: [],
     current_fleet_composition: [],
   });
   let timelineMode = $state<TimelineMode>("live");
@@ -207,6 +212,9 @@
   );
   const timelineGrowthChart = $derived(
     fleetGrowthChart(timeline.fleet_history),
+  );
+  const timelineFboGrowthChart = $derived(
+    fboGrowthChart(timeline.fbo_history),
   );
   const timelineComposition = $derived(
     timelineMode === "historical"
@@ -1016,6 +1024,7 @@
     {timeline}
     cursor={timelineCursor}
     growthChart={timelineGrowthChart}
+    fboGrowthChart={timelineFboGrowthChart}
     compositionChart={timelineFleetCompositionChart}
     busy={timelineBusy}
     errorMessage={timelineError}

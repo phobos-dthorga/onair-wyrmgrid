@@ -49,6 +49,8 @@ The first Atlas slice provides:
 - preservation of the last valid observation when a later refresh fails;
 - a visible LIVE/HISTORICAL workspace mode and Hoard Timeline that can project
   independently captured fleet and FBO facts into Atlas as of a retained time;
+- fleet, composition, and FBO-network growth charts derived from the same
+  retained facts shown by Atlas;
 - return-to-present behavior that preserves live observations while history is
   being inspected;
 - clearly labelled synthetic browser-preview fleet and FBO data for interface testing.

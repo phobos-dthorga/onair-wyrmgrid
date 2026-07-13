@@ -9,6 +9,7 @@
     timeline,
     cursor,
     growthChart,
+    fboGrowthChart,
     compositionChart,
     busy,
     errorMessage,
@@ -22,6 +23,7 @@
     timeline: HoardTimelineIndex;
     cursor: number;
     growthChart: ChartSpec | null;
+    fboGrowthChart: ChartSpec | null;
     compositionChart: ChartSpec | null;
     busy: boolean;
     errorMessage: string;
@@ -142,20 +144,33 @@
         </section>
 
         <section class="charts" aria-label="Hoard history charts">
-          {#if growthChart}
-            <WyrmChart spec={growthChart} height="190px" />
-          {:else}
-            <div class="chart-placeholder">
-              Fleet growth appears after the first retained fleet observation.
-            </div>
-          {/if}
-          {#if compositionChart}
-            <WyrmChart spec={compositionChart} height="190px" />
-          {:else}
-            <div class="chart-placeholder">
-              Fleet composition is unavailable for this moment.
-            </div>
-          {/if}
+          <div class="chart-slot">
+            {#if growthChart}
+              <WyrmChart spec={growthChart} height="180px" />
+            {:else}
+              <div class="chart-placeholder">
+                Fleet growth appears after the first retained fleet observation.
+              </div>
+            {/if}
+          </div>
+          <div class="chart-slot">
+            {#if fboGrowthChart}
+              <WyrmChart spec={fboGrowthChart} height="180px" />
+            {:else}
+              <div class="chart-placeholder">
+                FBO growth appears after the first retained network observation.
+              </div>
+            {/if}
+          </div>
+          <div class="chart-slot composition-slot">
+            {#if compositionChart}
+              <WyrmChart spec={compositionChart} />
+            {:else}
+              <div class="chart-placeholder">
+                Fleet composition is unavailable for this moment.
+              </div>
+            {/if}
+          </div>
         </section>
       </div>
     </div>
@@ -174,7 +189,7 @@
     backdrop-filter: blur(9px);
   }
   .timeline-dialog {
-    width: min(980px, calc(100vw - 48px));
+    width: min(1180px, calc(100vw - 48px));
     max-height: calc(100vh - 48px);
     overflow: auto;
     border: 1px solid var(--color-line-soft);
@@ -241,7 +256,7 @@
   }
   .timeline-content {
     display: grid;
-    grid-template-columns: minmax(280px, 0.8fr) minmax(430px, 1.2fr);
+    grid-template-columns: minmax(280px, 0.72fr) minmax(560px, 1.65fr);
     gap: 22px;
     padding: 22px;
   }
@@ -337,6 +352,13 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 18px;
+    align-items: start;
+  }
+  .chart-slot {
+    min-width: 0;
+  }
+  .composition-slot {
+    grid-column: 1 / -1;
   }
   .charts :global(.chart-card) {
     margin-top: 0;
@@ -360,6 +382,21 @@
   @media (max-width: 1150px) {
     .timeline-content {
       grid-template-columns: 1fr;
+    }
+  }
+  @media (max-width: 720px) {
+    .dialog-backdrop {
+      padding: 12px;
+    }
+    .timeline-dialog {
+      width: calc(100vw - 24px);
+      max-height: calc(100vh - 24px);
+    }
+    .charts {
+      grid-template-columns: 1fr;
+    }
+    .composition-slot {
+      grid-column: auto;
     }
   }
 </style>
