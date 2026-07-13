@@ -1,0 +1,42 @@
+name: Feature proposal
+description: Propose a user-facing WyrmGrid capability.
+title: "[Feature]: "
+labels: [enhancement, needs-design]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Operational problem
+      description: What decision or workflow should become easier?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+    validations:
+      required: true
+  - type: dropdown
+    id: evidence
+    attributes:
+      label: Primary data source
+      options:
+        [
+          OnAir API,
+          Local history,
+          Simulator telemetry,
+          External service,
+          User-entered data,
+          Unknown,
+        ]
+    validations:
+      required: true
+  - type: textarea
+    id: plugin
+    attributes:
+      label: Plugin fit
+      description: Could this be implemented through the public plugin platform?
+  - type: textarea
+    id: risks
+    attributes:
+      label: Security, privacy, or compatibility concerns

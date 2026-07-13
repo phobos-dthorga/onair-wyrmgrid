@@ -1,0 +1,41 @@
+name: OnAir API observation
+description: Record a sanitized, reproducible API behavior or schema change.
+title: "[OnAir API]: "
+labels: [onair-api, needs-verification]
+body:
+  - type: markdown
+    attributes:
+      value: Do not paste credentials or identifiable company, employee, flight, or finance data.
+  - type: input
+    id: endpoint
+    attributes:
+      label: Endpoint shape
+      placeholder: GET /api/v1/company/{companyId}/fleet
+    validations:
+      required: true
+  - type: input
+    id: date
+    attributes:
+      label: Date observed
+      placeholder: YYYY-MM-DD
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Sanitized behavior
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Reproduction or official documentation
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Data safety
+      options:
+        - label: I removed the API key and all identifying player/company data.
+          required: true

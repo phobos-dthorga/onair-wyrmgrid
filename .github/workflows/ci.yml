@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust-core:
+    name: Rust core
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.97.0
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Check core crates
+        run: cargo check --workspace --exclude wyrmgrid-desktop --all-targets
+      - name: Lint core crates
+        run: cargo clippy --workspace --exclude wyrmgrid-desktop --all-targets -- -D warnings
+      - name: Test core crates
+        run: cargo test --workspace --exclude wyrmgrid-desktop
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Check formatting
+        run: npm run format:check
+      - name: Type-check Svelte
+        run: npm run check
+      - name: Build frontend
+        run: npm run build
+
+  desktop-windows:
+    name: Windows desktop smoke build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.97.0
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Check Tauri backend
+        run: cargo check -p wyrmgrid-desktop
+      - name: Build desktop bundle
+        run: npm run tauri -- build --bundles nsis

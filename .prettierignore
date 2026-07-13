@@ -1,0 +1,6 @@
+Cargo.lock
+target/
+node_modules/
+apps/desktop/build/
+apps/desktop/.svelte-kit/
+apps/desktop/src-tauri/gen/

@@ -1,0 +1,30 @@
+name: Plugin platform proposal
+description: Propose a capability, event, contribution point, or SDK change.
+title: "[Plugin API]: "
+labels: [plugin-api, needs-design]
+body:
+  - type: textarea
+    id: use_case
+    attributes:
+      label: Concrete plugin use case
+    validations:
+      required: true
+  - type: textarea
+    id: capability
+    attributes:
+      label: Requested capability or event
+    validations:
+      required: true
+  - type: textarea
+    id: permissions
+    attributes:
+      label: Required permissions and sensitive data
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility considerations
+      description: Explain expected versioning, fallback, and failure behavior.
+    validations:
+      required: true

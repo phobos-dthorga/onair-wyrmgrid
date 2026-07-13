@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and design discussions
+    url: https://github.com/phobos-dthorga/onair-wyrmgrid/discussions
+    about: Ask questions or explore an idea before a formal proposal.
+  - name: Private security report
+    url: https://github.com/phobos-dthorga/onair-wyrmgrid/security/advisories/new
+    about: Report credential exposure or another vulnerability privately.

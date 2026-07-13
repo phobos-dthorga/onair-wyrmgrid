@@ -1,0 +1,7 @@
+* @phobos-dthorga
+/crates/onair-api/ @phobos-dthorga
+/crates/plugin-protocol/ @phobos-dthorga
+/schemas/ @phobos-dthorga
+/.github/workflows/ @phobos-dthorga
+/docs/security/ @phobos-dthorga
+
