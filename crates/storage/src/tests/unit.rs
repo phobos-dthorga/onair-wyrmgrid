@@ -6,7 +6,35 @@ fn initializes_the_database_schema() {
     let store = Store::open_in_memory().expect("in-memory database should open");
     assert_eq!(
         store.schema_version().expect("version should be readable"),
-        5
+        6
+    );
+}
+
+#[test]
+fn persists_independent_display_preferences() {
+    let store = Store::open_in_memory().expect("in-memory database should open");
+    assert!(
+        store
+            .load_display_preferences_record()
+            .expect("display preferences should be readable")
+            .is_none()
+    );
+
+    let preferences = DisplayPreferencesRecord {
+        altitude_unit: "metres".into(),
+        speed_unit: "knots".into(),
+        weight_unit: "kilograms".into(),
+        fuel_unit: "litres".into(),
+    };
+    store
+        .save_display_preferences_record(&preferences)
+        .expect("display preferences should save");
+
+    assert_eq!(
+        store
+            .load_display_preferences_record()
+            .expect("display preferences should be readable"),
+        Some(preferences)
     );
 }
 

@@ -120,6 +120,15 @@
     emptySimulatorBridge,
     type SimulatorBridgeView,
   } from "$lib/simulator/types";
+  import {
+    loadDisplayPreferences,
+    saveDisplayPreferences,
+  } from "$lib/settings/client";
+  import SettingsDialog from "$lib/settings/SettingsDialog.svelte";
+  import {
+    aviationDisplayPreferences,
+    type DisplayPreferences,
+  } from "$lib/settings/types";
   import ThemeDialog from "$lib/theme/ThemeDialog.svelte";
   import {
     browserThemeStatus,
@@ -197,6 +206,12 @@
   let showSimulatorDialog = $state(false);
   let simulatorBusy = $state(false);
   let simulatorError = $state("");
+  let displayPreferences = $state<DisplayPreferences>(
+    aviationDisplayPreferences,
+  );
+  let showSettingsDialog = $state(false);
+  let settingsBusy = $state(false);
+  let settingsError = $state("");
   let timeline = $state<HoardTimelineIndex>({
     company: null,
     observation_times: [],
@@ -1019,7 +1034,42 @@
     }
     await initializeLanguage();
     await initializeTheme();
+    await initializeDisplayPreferences();
     await initializeLegal();
+  }
+
+  async function initializeDisplayPreferences(): Promise<void> {
+    try {
+      displayPreferences = await loadDisplayPreferences();
+    } catch (error) {
+      settingsError = operationErrorMessage(
+        error,
+        "WyrmGrid could not read its local display settings.",
+      );
+    }
+  }
+
+  async function saveUnitChoices(
+    preferences: DisplayPreferences,
+  ): Promise<void> {
+    settingsBusy = true;
+    settingsError = "";
+    try {
+      displayPreferences = await saveDisplayPreferences(preferences);
+      showSettingsDialog = false;
+    } catch (error) {
+      settingsError = operationErrorMessage(
+        error,
+        "WyrmGrid could not save its local display settings.",
+      );
+    } finally {
+      settingsBusy = false;
+    }
+  }
+
+  function openSettings(): void {
+    settingsError = "";
+    showSettingsDialog = true;
   }
 
   function openLegalSettings(): void {
@@ -1160,6 +1210,7 @@
       showThemeDialog ||
       showLanguageDialog ||
       showDiagnosticsDialog ||
+      showSettingsDialog ||
       showSimulatorDialog ||
       showTimelineDialog ||
       showForgeDialog}
@@ -1223,28 +1274,8 @@
       <button class="diagnostics-pill" type="button" onclick={openDiagnostics}>
         Diagnostics
       </button>
-      <button
-        class="theme-pill"
-        type="button"
-        onclick={() => {
-          themeError = "";
-          showThemeDialog = true;
-        }}
-      >
-        {$translation("settings-theme")}
-      </button>
-      <button
-        class="language-pill"
-        type="button"
-        onclick={() => {
-          languageError = "";
-          showLanguageDialog = true;
-        }}
-      >
-        {$translation("settings-language")}
-      </button>
-      <button class="legal-pill" type="button" onclick={openLegalSettings}>
-        {$translation("settings-privacy-terms")}
+      <button class="settings-pill" type="button" onclick={openSettings}>
+        {$translation("settings-open")}
       </button>
       <button
         class:connected={connection.connected}
@@ -1619,10 +1650,34 @@
     status={simulatorBridge}
     busy={simulatorBusy}
     errorMessage={simulatorError}
+    {displayPreferences}
     onrefresh={() => void refreshSimulatorBridge()}
     onstart={(providerId) => void runSimulatorAction("start", providerId)}
     onstop={(providerId) => void runSimulatorAction("stop", providerId)}
     onclose={() => (showSimulatorDialog = false)}
+  />
+
+  <SettingsDialog
+    open={showSettingsDialog}
+    preferences={displayPreferences}
+    busy={settingsBusy}
+    errorMessage={settingsError}
+    onsave={(preferences) => void saveUnitChoices(preferences)}
+    onappearance={() => {
+      showSettingsDialog = false;
+      themeError = "";
+      showThemeDialog = true;
+    }}
+    onlanguage={() => {
+      showSettingsDialog = false;
+      languageError = "";
+      showLanguageDialog = true;
+    }}
+    onprivacy={() => {
+      showSettingsDialog = false;
+      openLegalSettings();
+    }}
+    onclose={() => (showSettingsDialog = false)}
   />
 
   <ThemeDialog

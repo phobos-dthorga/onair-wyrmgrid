@@ -6,6 +6,7 @@
 - [Architecture decisions](architecture/decisions/README.md)
 - [Development environment](development.md)
 - [Display and performance launch options](user-guide/display-and-performance.md)
+- [Settings and measurement units](user-guide/settings-and-units.md)
 - [Testing strategy](testing.md)
 - [Roadmap](roadmap.md)
 - [WyrmGrid Atlas](atlas/README.md)

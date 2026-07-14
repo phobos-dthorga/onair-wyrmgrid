@@ -19,6 +19,7 @@ struct DesktopState {
     legal: wyrmgrid_application::LegalSettingsService<wyrmgrid_storage::Store>,
     themes: wyrmgrid_application::ThemeSettingsService<wyrmgrid_storage::Store>,
     languages: wyrmgrid_application::LanguageSettingsService<wyrmgrid_storage::Store>,
+    display: wyrmgrid_application::DisplaySettingsService<wyrmgrid_storage::Store>,
     observability: observability::Controller,
 }
 
@@ -247,6 +248,21 @@ fn theme_status(
 }
 
 #[tauri::command]
+fn display_preferences(
+    state: tauri::State<'_, DesktopState>,
+) -> Result<wyrmgrid_application::DisplayPreferences, wyrmgrid_application::OperationError> {
+    state.display.status().map_err(operation_error)
+}
+
+#[tauri::command]
+fn update_display_preferences(
+    state: tauri::State<'_, DesktopState>,
+    preferences: wyrmgrid_application::DisplayPreferences,
+) -> Result<wyrmgrid_application::DisplayPreferences, wyrmgrid_application::OperationError> {
+    state.display.update(preferences).map_err(operation_error)
+}
+
+#[tauri::command]
 fn select_theme(
     state: tauri::State<'_, DesktopState>,
     theme_id: String,
@@ -414,6 +430,7 @@ pub fn run() {
             let legal_status = legal.status().expect("legal settings should initialize");
             let themes = wyrmgrid_application::ThemeSettingsService::new(store.clone());
             let languages = wyrmgrid_application::LanguageSettingsService::new(store.clone());
+            let display = wyrmgrid_application::DisplaySettingsService::new(store.clone());
             let onair = wyrmgrid_application::OnAirSession::with_default_store(store.clone());
             let dispatch = wyrmgrid_application::DispatchSession::with_default_provider();
             let simulator_provider =
@@ -440,6 +457,7 @@ pub fn run() {
                 legal,
                 themes,
                 languages,
+                display,
                 observability: observability::Controller::new(legal_status.telemetry_enabled),
             });
             Ok(())
@@ -468,6 +486,8 @@ pub fn run() {
             acknowledge_legal,
             update_telemetry_preference,
             theme_status,
+            display_preferences,
+            update_display_preferences,
             select_theme,
             import_theme,
             language_status,

@@ -1,11 +1,13 @@
 //! Application-level orchestration independent of Tauri and other interfaces.
 
 mod dispatch;
+mod display;
 mod localization;
 mod plugins;
 mod simulator;
 
 pub use dispatch::*;
+pub use display::*;
 pub use localization::*;
 pub use plugins::*;
 pub use simulator::*;
@@ -925,6 +927,22 @@ impl From<ThemeSettingsError> for OperationError {
             ThemeSettingsError::InvalidColour => ("theme.invalid_colour", false),
             ThemeSettingsError::InsufficientContrast => ("theme.insufficient_contrast", false),
             ThemeSettingsError::UnknownTheme => ("theme.unknown_theme", false),
+        };
+        Self {
+            code,
+            message: error.to_string(),
+            retryable,
+            reportable: false,
+            report_id: None,
+        }
+    }
+}
+
+impl From<DisplaySettingsError> for OperationError {
+    fn from(error: DisplaySettingsError) -> Self {
+        let (code, retryable) = match error {
+            DisplaySettingsError::StorageUnavailable => ("display.storage_unavailable", true),
+            DisplaySettingsError::UnsupportedUnit => ("display.unsupported_unit", false),
         };
         Self {
             code,

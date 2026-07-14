@@ -88,8 +88,7 @@ nav {
   color: var(--color-text-muted);
   font-size: 12px;
 }
-.theme-pill,
-.language-pill,
+.settings-pill,
 .simulator-pill,
 .diagnostics-pill,
 .legal-pill {
@@ -103,8 +102,7 @@ nav {
 .simulator-pill {
   margin-left: auto;
 }
-.theme-pill:hover,
-.language-pill:hover,
+.settings-pill:hover,
 .simulator-pill:hover,
 .diagnostics-pill:hover,
 .legal-pill:hover {

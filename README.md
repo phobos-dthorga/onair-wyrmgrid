@@ -118,6 +118,7 @@ must be retested when its API credential support reaches parity.
 
 See [Development](docs/development.md), [Architecture](docs/architecture/overview.md),
 [display and performance launch options](docs/user-guide/display-and-performance.md),
+[settings and measurement units](docs/user-guide/settings-and-units.md),
 [External integrations](docs/integrations/README.md),
 [Simulator provider authoring](docs/integrations/simulator-provider-authoring.md),
 the [simulator experience roadmap](docs/integrations/simulator-experience-roadmap.md),

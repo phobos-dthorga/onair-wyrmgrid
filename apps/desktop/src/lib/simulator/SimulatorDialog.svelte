@@ -1,5 +1,13 @@
 <script lang="ts">
   import { translation } from "$lib/i18n/runtime";
+  import type { DisplayPreferences } from "$lib/settings/types";
+  import {
+    presentAltitude,
+    presentFuel,
+    presentSpeed,
+    presentWeight,
+    type PresentedMeasurement,
+  } from "$lib/settings/units";
   import "./simulator.css";
   import type {
     ProviderConnectionState,
@@ -12,6 +20,7 @@
     status,
     busy = false,
     errorMessage = "",
+    displayPreferences,
     onrefresh,
     onstart,
     onstop,
@@ -21,6 +30,7 @@
     status: SimulatorBridgeView;
     busy?: boolean;
     errorMessage?: string;
+    displayPreferences: DisplayPreferences;
     onrefresh: () => void;
     onstart: (providerId: string) => void;
     onstop: (providerId: string) => void;
@@ -105,6 +115,14 @@
     }
     const separator = unit === "°" ? "" : " ";
     return `${formatNumber(value, digits)}${separator}${unit}`;
+  }
+
+  function formatPresented(measurement: PresentedMeasurement): string {
+    return formatMeasurement(
+      measurement.value,
+      measurement.unit,
+      measurement.digits,
+    );
   }
 
   function formatTime(value: string | undefined): string {
@@ -266,7 +284,14 @@
           </div>
           <div>
             <dt>{$translation("simulator-altitude")}</dt>
-            <dd>{formatMeasurement(snapshot?.altitude_feet, "ft")}</dd>
+            <dd>
+              {formatPresented(
+                presentAltitude(
+                  snapshot?.altitude_feet,
+                  displayPreferences.altitude_unit,
+                ),
+              )}
+            </dd>
           </div>
           <div>
             <dt>{$translation("simulator-heading")}</dt>
@@ -274,23 +299,48 @@
           </div>
           <div>
             <dt>{$translation("simulator-ground-speed")}</dt>
-            <dd>{formatMeasurement(snapshot?.ground_speed_knots, "kt")}</dd>
+            <dd>
+              {formatPresented(
+                presentSpeed(
+                  snapshot?.ground_speed_knots,
+                  displayPreferences.speed_unit,
+                ),
+              )}
+            </dd>
           </div>
           <div>
             <dt>{$translation("simulator-indicated-speed")}</dt>
             <dd>
-              {formatMeasurement(snapshot?.indicated_airspeed_knots, "kt")}
+              {formatPresented(
+                presentSpeed(
+                  snapshot?.indicated_airspeed_knots,
+                  displayPreferences.speed_unit,
+                ),
+              )}
             </dd>
           </div>
           <div>
             <dt>{$translation("simulator-fuel-weight")}</dt>
             <dd>
-              {formatMeasurement(snapshot?.fuel_total_weight_pounds, "lb")}
+              {formatPresented(
+                presentFuel(
+                  snapshot?.fuel_total_weight_pounds,
+                  snapshot?.fuel_total_gallons,
+                  displayPreferences.fuel_unit,
+                ),
+              )}
             </dd>
           </div>
           <div>
             <dt>{$translation("simulator-gross-weight")}</dt>
-            <dd>{formatMeasurement(snapshot?.gross_weight_pounds, "lb")}</dd>
+            <dd>
+              {formatPresented(
+                presentWeight(
+                  snapshot?.gross_weight_pounds,
+                  displayPreferences.weight_unit,
+                ),
+              )}
+            </dd>
           </div>
           <div>
             <dt>{$translation("simulator-observed-at")}</dt>
