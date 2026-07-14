@@ -328,6 +328,12 @@ excluded from plugins and Sentry.
   but do not make an unreviewed provider safe. Community provider loading stays
   disabled until publisher identity, signing, tamper checks, install-root
   controls, resource limits, and safe update/rollback exist.
+- Provider auto-start is user-controlled, default-off, and limited to the
+  persisted ID of an installed manifest-validated provider. It cannot accept an
+  arbitrary executable path from the frontend or a community plugin.
+- A failed provider does not enter an automatic crash loop; the failure remains
+  visible for an explicit restart. Connected snapshots are withheld after the
+  bounded freshness window so stale aircraft state is not presented as live.
 - Licensed navigation data may remain accessible in local caches to a user or
   process with filesystem access. Entitlement checks and application controls do
   not replace operating-system security or provider licence compliance.

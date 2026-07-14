@@ -74,7 +74,8 @@
 
   function bridgeRitualStage(provider: SimulatorProviderView): number {
     if (provider.process_state === "starting") return 1;
-    if (provider.connection_state === "connected") return 5;
+    if (provider.connection_state === "connected" && !provider.telemetry_stale)
+      return 5;
     if (
       ["waiting_for_simulator", "disconnected"].includes(
         provider.connection_state,
@@ -175,7 +176,11 @@
         aria-label={$translation("simulator-provider-list")}
       >
         {#each status.providers as provider}
-          <article class:connected={provider.connection_state === "connected"}>
+          <article
+            class:connected={provider.connection_state === "connected" &&
+              !provider.telemetry_stale}
+            class:stale={provider.telemetry_stale}
+          >
             <div>
               <span class="provider-kind"
                 >{provider.simulators.join(" · ")}</span
@@ -188,8 +193,21 @@
               >
             </div>
             <div class="provider-state">
-              <span>{stateLabel(provider.connection_state)}</span>
-              {#if provider.last_code}<small class="provider-detail">
+              <span
+                >{provider.telemetry_stale
+                  ? $translation("simulator-state-stale")
+                  : stateLabel(provider.connection_state)}</span
+              >
+              {#if provider.telemetry_stale}
+                <small class="provider-detail">
+                  {$translation("simulator-detail-stale", {
+                    seconds:
+                      provider.latest_snapshot_age_seconds ??
+                      provider.connected_age_seconds ??
+                      0,
+                  })}
+                </small>
+              {:else if provider.last_code}<small class="provider-detail">
                   {providerDetail(provider.last_code)}
                 </small>{/if}
             </div>

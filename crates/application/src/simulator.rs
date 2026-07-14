@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -14,10 +14,12 @@ use wyrmgrid_bridge_protocol::{
     ProviderPlatform, read_frame, valid_state_code, write_frame,
 };
 use wyrmgrid_domain::SimulatorTelemetrySnapshot;
+use wyrmgrid_storage::{SimulatorPreferencesRecord, Store};
 
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(3);
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_millis(750);
 const TELEMETRY_FREQUENCY_HZ: u8 = 1;
+const TELEMETRY_STALE_AFTER: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Error, Clone, Copy, PartialEq, Eq)]
 pub enum SimulatorBridgeError {
@@ -41,6 +43,125 @@ pub enum SimulatorBridgeError {
     ProtocolViolation,
     #[error("The simulator provider supervisor is unavailable.")]
     StateUnavailable,
+    #[error("WyrmGrid could not read or save its local simulator preferences.")]
+    PreferencesUnavailable,
+    #[error("Choose an installed simulator provider before enabling automatic start.")]
+    InvalidPreferences,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SimulatorPreferences {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selected_provider_id: Option<String>,
+    pub start_with_wyrmgrid: bool,
+}
+
+pub trait SimulatorPreferencesRepository: Send + Sync + 'static {
+    fn load_simulator_preferences(
+        &self,
+    ) -> Result<Option<SimulatorPreferences>, SimulatorBridgeError>;
+    fn save_simulator_preferences(
+        &self,
+        preferences: &SimulatorPreferences,
+    ) -> Result<(), SimulatorBridgeError>;
+}
+
+impl SimulatorPreferencesRepository for Store {
+    fn load_simulator_preferences(
+        &self,
+    ) -> Result<Option<SimulatorPreferences>, SimulatorBridgeError> {
+        self.load_simulator_preferences_record()
+            .map(|value| value.map(preferences_from_record))
+            .map_err(|_| SimulatorBridgeError::PreferencesUnavailable)
+    }
+
+    fn save_simulator_preferences(
+        &self,
+        preferences: &SimulatorPreferences,
+    ) -> Result<(), SimulatorBridgeError> {
+        self.save_simulator_preferences_record(&SimulatorPreferencesRecord {
+            selected_provider_id: preferences.selected_provider_id.clone(),
+            start_with_wyrmgrid: preferences.start_with_wyrmgrid,
+        })
+        .map_err(|_| SimulatorBridgeError::PreferencesUnavailable)
+    }
+}
+
+pub struct SimulatorSettingsService<R> {
+    repository: R,
+    provider_ids: Vec<String>,
+}
+
+impl<R: SimulatorPreferencesRepository> SimulatorSettingsService<R> {
+    pub fn new(repository: R, provider_ids: Vec<String>) -> Self {
+        Self {
+            repository,
+            provider_ids,
+        }
+    }
+
+    pub fn status(&self) -> Result<SimulatorPreferences, SimulatorBridgeError> {
+        let stored = self.repository.load_simulator_preferences()?;
+        Ok(match stored {
+            Some(preferences) if self.valid(&preferences) => preferences,
+            _ => self.defaults(),
+        })
+    }
+
+    pub fn update(
+        &self,
+        preferences: SimulatorPreferences,
+    ) -> Result<SimulatorPreferences, SimulatorBridgeError> {
+        if !self.valid(&preferences) {
+            return Err(SimulatorBridgeError::InvalidPreferences);
+        }
+        self.repository.save_simulator_preferences(&preferences)?;
+        Ok(preferences)
+    }
+
+    pub fn select_provider(
+        &self,
+        provider_id: &str,
+    ) -> Result<SimulatorPreferences, SimulatorBridgeError> {
+        if !self.provider_ids.iter().any(|known| known == provider_id) {
+            return Err(SimulatorBridgeError::UnknownProvider);
+        }
+        let mut preferences = self.status()?;
+        preferences.selected_provider_id = Some(provider_id.to_owned());
+        self.update(preferences)
+    }
+
+    pub fn startup_provider_id(&self) -> Result<Option<String>, SimulatorBridgeError> {
+        let preferences = self.status()?;
+        Ok(preferences
+            .start_with_wyrmgrid
+            .then_some(preferences.selected_provider_id)
+            .flatten())
+    }
+
+    fn defaults(&self) -> SimulatorPreferences {
+        SimulatorPreferences {
+            selected_provider_id: self.provider_ids.first().cloned(),
+            start_with_wyrmgrid: false,
+        }
+    }
+
+    fn valid(&self, preferences: &SimulatorPreferences) -> bool {
+        let selected_is_known = preferences
+            .selected_provider_id
+            .as_ref()
+            .is_none_or(|selected| self.provider_ids.iter().any(|known| known == selected));
+        selected_is_known
+            && (!preferences.start_with_wyrmgrid || preferences.selected_provider_id.is_some())
+    }
+}
+
+fn preferences_from_record(record: SimulatorPreferencesRecord) -> SimulatorPreferences {
+    SimulatorPreferences {
+        selected_provider_id: record.selected_provider_id,
+        start_with_wyrmgrid: record.start_with_wyrmgrid,
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -105,6 +226,11 @@ pub struct SimulatorProviderView {
     pub connection_state: ProviderConnectionState,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_code: Option<String>,
+    pub telemetry_stale: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub latest_snapshot_age_seconds: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub connected_age_seconds: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -136,6 +262,8 @@ struct RunningProvider {
     connection_state: Mutex<ProviderConnectionState>,
     descriptor: Mutex<Option<ProviderDescriptor>>,
     latest_snapshot: Mutex<Option<SimulatorTelemetrySnapshot>>,
+    latest_snapshot_at: Mutex<Option<Instant>>,
+    connected_at: Mutex<Option<Instant>>,
     last_code: Mutex<Option<String>>,
     outgoing_sequence: Mutex<u64>,
 }
@@ -168,33 +296,49 @@ impl SimulatorBridgeService {
             let matching_runtime = runtime
                 .as_ref()
                 .filter(|runtime| runtime.provider_id == registration.manifest.id);
-            let (process_state, connection_state, last_code) = match matching_runtime {
-                Some(runtime) => (
-                    *runtime
-                        .process_state
-                        .lock()
-                        .map_err(|_| SimulatorBridgeError::StateUnavailable)?,
-                    *runtime
-                        .connection_state
-                        .lock()
-                        .map_err(|_| SimulatorBridgeError::StateUnavailable)?,
-                    runtime
-                        .last_code
-                        .lock()
-                        .map_err(|_| SimulatorBridgeError::StateUnavailable)?
-                        .clone(),
-                ),
-                None if supported => (
-                    SimulatorProviderProcessState::Stopped,
-                    ProviderConnectionState::Stopped,
-                    None,
-                ),
-                None => (
-                    SimulatorProviderProcessState::Unavailable,
-                    ProviderConnectionState::Unavailable,
-                    Some("provider.executable_unavailable".into()),
-                ),
-            };
+            let (process_state, connection_state, last_code, snapshot_age, connected_age) =
+                match matching_runtime {
+                    Some(runtime) => (
+                        *runtime
+                            .process_state
+                            .lock()
+                            .map_err(|_| SimulatorBridgeError::StateUnavailable)?,
+                        *runtime
+                            .connection_state
+                            .lock()
+                            .map_err(|_| SimulatorBridgeError::StateUnavailable)?,
+                        runtime
+                            .last_code
+                            .lock()
+                            .map_err(|_| SimulatorBridgeError::StateUnavailable)?
+                            .clone(),
+                        runtime
+                            .latest_snapshot_at
+                            .lock()
+                            .map_err(|_| SimulatorBridgeError::StateUnavailable)?
+                            .map(|received| received.elapsed()),
+                        runtime
+                            .connected_at
+                            .lock()
+                            .map_err(|_| SimulatorBridgeError::StateUnavailable)?
+                            .map(|connected| connected.elapsed()),
+                    ),
+                    None if supported => (
+                        SimulatorProviderProcessState::Stopped,
+                        ProviderConnectionState::Stopped,
+                        None,
+                        None,
+                        None,
+                    ),
+                    None => (
+                        SimulatorProviderProcessState::Unavailable,
+                        ProviderConnectionState::Unavailable,
+                        Some("provider.executable_unavailable".into()),
+                        None,
+                        None,
+                    ),
+                };
+            let telemetry_stale = telemetry_is_stale(connection_state, snapshot_age, connected_age);
             providers.push(SimulatorProviderView {
                 id: registration.manifest.id.clone(),
                 name: registration.manifest.name.clone(),
@@ -204,6 +348,9 @@ impl SimulatorBridgeService {
                 process_state,
                 connection_state,
                 last_code,
+                telemetry_stale,
+                latest_snapshot_age_seconds: snapshot_age.map(|age| age.as_secs()),
+                connected_age_seconds: connected_age.map(|age| age.as_secs()),
             });
         }
         let latest_snapshot = runtime
@@ -217,7 +364,19 @@ impl SimulatorBridgeService {
                     .connection_state
                     .lock()
                     .map_err(|_| SimulatorBridgeError::StateUnavailable)?;
-                if !snapshot_is_publishable(process_state, connection_state) {
+                let snapshot_age = runtime
+                    .latest_snapshot_at
+                    .lock()
+                    .map_err(|_| SimulatorBridgeError::StateUnavailable)?
+                    .map(|received| received.elapsed());
+                let connected_age = runtime
+                    .connected_at
+                    .lock()
+                    .map_err(|_| SimulatorBridgeError::StateUnavailable)?
+                    .map(|connected| connected.elapsed());
+                if !snapshot_is_publishable(process_state, connection_state)
+                    || telemetry_is_stale(connection_state, snapshot_age, connected_age)
+                {
                     return Ok(None);
                 }
                 runtime
@@ -263,7 +422,19 @@ impl SimulatorBridgeService {
                     .connection_state
                     .lock()
                     .map_err(|_| SimulatorBridgeError::StateUnavailable)?;
-                if !snapshot_is_publishable(process_state, connection_state) {
+                let snapshot_age = runtime
+                    .latest_snapshot_at
+                    .lock()
+                    .map_err(|_| SimulatorBridgeError::StateUnavailable)?
+                    .map(|received| received.elapsed());
+                let connected_age = runtime
+                    .connected_at
+                    .lock()
+                    .map_err(|_| SimulatorBridgeError::StateUnavailable)?
+                    .map(|connected| connected.elapsed());
+                if !snapshot_is_publishable(process_state, connection_state)
+                    || telemetry_is_stale(connection_state, snapshot_age, connected_age)
+                {
                     return Ok(None);
                 }
                 runtime
@@ -331,6 +502,8 @@ impl SimulatorBridgeService {
             connection_state: Mutex::new(ProviderConnectionState::Starting),
             descriptor: Mutex::new(None),
             latest_snapshot: Mutex::new(None),
+            latest_snapshot_at: Mutex::new(None),
+            connected_at: Mutex::new(None),
             last_code: Mutex::new(None),
             outgoing_sequence: Mutex::new(1),
         });
@@ -375,6 +548,10 @@ impl SimulatorBridgeService {
         self.status()
     }
 
+    pub fn provider_ids(&self) -> Vec<String> {
+        self.inner.registrations.keys().cloned().collect()
+    }
+
     pub fn stop(&self, provider_id: &str) -> Result<SimulatorBridgeView, SimulatorBridgeError> {
         self.inner
             .registrations
@@ -415,6 +592,14 @@ impl SimulatorBridgeService {
             ProviderConnectionState::Stopped;
         *runtime
             .latest_snapshot
+            .lock()
+            .map_err(|_| SimulatorBridgeError::StateUnavailable)? = None;
+        *runtime
+            .latest_snapshot_at
+            .lock()
+            .map_err(|_| SimulatorBridgeError::StateUnavailable)? = None;
+        *runtime
+            .connected_at
             .lock()
             .map_err(|_| SimulatorBridgeError::StateUnavailable)? = None;
         self.status()
@@ -555,11 +740,25 @@ fn spawn_provider_reader(
                 ValidatedProviderEvent::State(state, code) => {
                     if let Ok(mut connection_state) = runtime.connection_state.lock() {
                         *connection_state = state;
+                        if let Ok(mut connected_at) = runtime.connected_at.lock() {
+                            if state == ProviderConnectionState::Connected {
+                                if connected_at.is_none() {
+                                    *connected_at = Some(Instant::now());
+                                }
+                            } else {
+                                *connected_at = None;
+                            }
+                        }
                     }
                     if state != ProviderConnectionState::Connected
                         && let Ok(mut latest) = runtime.latest_snapshot.lock()
                     {
                         *latest = None;
+                    }
+                    if state != ProviderConnectionState::Connected
+                        && let Ok(mut received_at) = runtime.latest_snapshot_at.lock()
+                    {
+                        *received_at = None;
                     }
                     if let Ok(mut last_code) = runtime.last_code.lock() {
                         *last_code = Some(code);
@@ -568,6 +767,9 @@ fn spawn_provider_reader(
                 ValidatedProviderEvent::Telemetry(snapshot) => {
                     if let Ok(mut latest) = runtime.latest_snapshot.lock() {
                         *latest = Some(snapshot);
+                    }
+                    if let Ok(mut received_at) = runtime.latest_snapshot_at.lock() {
+                        *received_at = Some(Instant::now());
                     }
                 }
             }
@@ -669,6 +871,12 @@ fn fail_runtime(runtime: &Arc<RunningProvider>, code: &str) {
     if let Ok(mut latest) = runtime.latest_snapshot.lock() {
         *latest = None;
     }
+    if let Ok(mut received_at) = runtime.latest_snapshot_at.lock() {
+        *received_at = None;
+    }
+    if let Ok(mut connected_at) = runtime.connected_at.lock() {
+        *connected_at = None;
+    }
     if let Ok(mut child) = runtime.child.lock() {
         let _ = child.kill();
         let _ = child.wait();
@@ -681,6 +889,17 @@ fn snapshot_is_publishable(
 ) -> bool {
     process_state == SimulatorProviderProcessState::Running
         && connection_state == ProviderConnectionState::Connected
+}
+
+fn telemetry_is_stale(
+    connection_state: ProviderConnectionState,
+    snapshot_age: Option<Duration>,
+    connected_age: Option<Duration>,
+) -> bool {
+    connection_state == ProviderConnectionState::Connected
+        && snapshot_age
+            .or(connected_age)
+            .is_some_and(|age| age > TELEMETRY_STALE_AFTER)
 }
 
 fn stop_process(runtime: &Arc<RunningProvider>) -> Result<(), SimulatorBridgeError> {

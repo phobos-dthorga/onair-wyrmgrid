@@ -3,6 +3,22 @@
 Open **Settings** from WyrmGrid's top navigation to manage measurement units,
 themes, language packs, and privacy choices from one place.
 
+## Simulator provider launch
+
+The **Provider launch** section remembers which trusted simulator sidecar to
+use. **Start this provider with WyrmGrid** is off by default. When enabled,
+WyrmGrid launches only that approved provider in the background; it may wait
+harmlessly until MSFS is available.
+
+This preference does not start MSFS, begin flight recording, change simulator
+state, or grant telemetry access to community plugins. Disable it at any time
+to return to explicit manual provider start on future launches.
+
+If a connected provider stops supplying samples, WyrmGrid marks the stream
+stale after five seconds and hides the old snapshot. Waiting for MSFS,
+reconnecting after MSFS closes, stale telemetry, and provider failure remain
+distinct states so an old aircraft position is never presented as live.
+
 ## Independent unit choices
 
 Measurement categories are saved independently. Selecting litres for fuel does
@@ -55,3 +71,8 @@ persistence, while frontend presentation helpers perform finite, deterministic
 conversions. Adding a new displayed category should add a typed preference,
 storage constraint, conversion boundary tests, interface control, and this
 documentation together. Existing migration files must not be edited.
+
+The append-only `0007_simulator_preferences.sql` migration stores the selected
+provider ID and the default-off launch preference. `SimulatorSettingsService`
+validates the selection against installed provider registrations; the frontend
+cannot supply an arbitrary executable path.

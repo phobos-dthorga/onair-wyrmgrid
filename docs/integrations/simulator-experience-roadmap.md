@@ -11,8 +11,9 @@ honestly instead of treating all three as “telemetry”:
    for later graphs and planned-versus-actual analysis.
 
 The current slice implements the first two states and displays only the latest
-connected snapshot. It does not persist a telemetry history or claim that a
-flight is being recorded.
+fresh connected snapshot. It persists the selected provider and offers an
+explicit, default-off provider auto-start preference. It does not persist a
+telemetry history or claim that a flight is being recorded.
 
 ## Launch and automation settings
 
@@ -33,6 +34,32 @@ The provider can subscribe to documented MSFS lifecycle/flow events, but a
 shared Rust state machine remains authoritative. It combines events with
 bounded telemetry evidence and keeps ambiguous transitions visible for user
 confirmation. Automatic retry must never create duplicate recording sessions.
+
+Provider auto-start is intentionally narrower than recording automation. It
+launches only the selected, manifest-validated sidecar and does not start MSFS,
+record a flight, or broaden plugin permissions. Manually starting a provider
+also remembers it as the selected provider. A provider process failure remains
+visible and manually restartable rather than entering an unbounded crash loop.
+
+The SimConnect provider retries simulator connections after MSFS closes or
+disconnects. While connected, the host ages the latest sample and withholds it
+after five seconds without a replacement. The UI reports that condition as
+stale rather than continuing to present the previous aircraft state as live.
+
+### Live certification checklist
+
+Before calling MSFS 2024 telemetry certified, exercise and record the result of
+each case with the packaged provider:
+
+- WyrmGrid starts with auto-start off and does not launch the provider;
+- auto-start on launches the selected provider while MSFS is absent;
+- MSFS free flight changes waiting state to connected and supplies fresh facts;
+- pausing and resuming preserves an honest live snapshot;
+- returning to the main menu removes the previous aircraft snapshot;
+- closing and restarting MSFS recovers without restarting WyrmGrid;
+- changing aircraft replaces identity and measurements without joining history;
+- a provider process failure is visible and can be manually restarted; and
+- a stalled connected stream becomes stale and hides the last snapshot.
 
 ## In-simulator control surface
 
@@ -113,16 +140,16 @@ user-selected sessions, and exclude raw high-frequency data by default.
 
 ## Delivery sequence
 
-1. Finish live certification of connected MSFS 2024 telemetry and improve
-   provider recovery states.
-2. Add persisted provider selection and the default-off provider auto-start
-   setting.
-3. Introduce the recording/session schemas, retention controls, and explicit
+1. Finish live certification of connected MSFS 2024 telemetry using the
+   documented recovery matrix. Provider recovery states, persisted provider
+   selection, stale-snapshot suppression, and default-off provider auto-start
+   are implemented.
+2. Introduce the recording/session schemas, retention controls, and explicit
    manual recording.
-4. Add tested lifecycle evidence and the default-off automatic recording
+3. Add tested lifecycle evidence and the default-off automatic recording
    setting.
-5. Build the first WyrmChart session graphs with gap-aware downsampling.
-6. Prove the MSFS in-simulator CommBus control surface, then package it only
+4. Build the first WyrmChart session graphs with gap-aware downsampling.
+5. Prove the MSFS in-simulator CommBus control surface, then package it only
    after compatibility, signing, installation, and removal are documented.
 
 ## Questions and suggestions

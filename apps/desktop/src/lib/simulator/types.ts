@@ -25,6 +25,18 @@ export type SimulatorProviderView = {
   process_state: SimulatorProviderProcessState;
   connection_state: ProviderConnectionState;
   last_code?: string;
+  telemetry_stale: boolean;
+  latest_snapshot_age_seconds?: number;
+  connected_age_seconds?: number;
+};
+
+export type SimulatorPreferences = {
+  selected_provider_id?: string;
+  start_with_wyrmgrid: boolean;
+};
+
+export const defaultSimulatorPreferences: SimulatorPreferences = {
+  start_with_wyrmgrid: false,
 };
 
 export type SimulatorTelemetrySnapshot = {
