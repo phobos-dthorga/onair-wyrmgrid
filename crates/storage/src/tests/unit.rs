@@ -6,8 +6,88 @@ fn initializes_the_database_schema() {
     let store = Store::open_in_memory().expect("in-memory database should open");
     assert_eq!(
         store.schema_version().expect("version should be readable"),
-        8
+        9
     );
+}
+
+#[test]
+fn authorization_grants_are_revision_bound_and_decisions_are_audited() {
+    let store = Store::open_in_memory().expect("store should initialize");
+    let subject_kind = "plugin";
+    let subject_id = "org.example.weather";
+    let first_revision = "plugin:1.0.0:on_air_company_read";
+    let second_revision = "plugin:1.1.0:on_air_company_read|external_network";
+
+    store
+        .replace_authorization_grant_records(
+            subject_kind,
+            subject_id,
+            first_revision,
+            &["on_air_company_read".into()],
+        )
+        .expect("grant should save");
+    assert_eq!(
+        store
+            .list_authorization_grant_records(subject_kind, subject_id, first_revision)
+            .expect("matching revision should load"),
+        vec!["on_air_company_read"]
+    );
+    assert!(
+        store
+            .list_authorization_grant_records(subject_kind, subject_id, second_revision)
+            .expect("new revision should fail closed")
+            .is_empty()
+    );
+
+    store
+        .replace_authorization_grant_records(subject_kind, subject_id, second_revision, &[])
+        .expect("revocation should save");
+    let connection = store
+        .connection
+        .lock()
+        .expect("storage connection should be available");
+    let decisions: Vec<(String, i64)> = connection
+        .prepare(
+            "SELECT decision, capability_count FROM authorization_decisions
+             WHERE subject_kind = ?1 AND subject_id = ?2 ORDER BY id ASC",
+        )
+        .expect("decision query should prepare")
+        .query_map(params![subject_kind, subject_id], |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        })
+        .expect("decisions should query")
+        .collect::<Result<_, _>>()
+        .expect("decisions should collect");
+    assert_eq!(decisions, vec![("grant".into(), 1), ("revoke".into(), 0)]);
+}
+
+#[test]
+fn authorization_decision_history_is_bounded() {
+    let store = Store::open_in_memory().expect("store should initialize");
+    for index in 0..4_100 {
+        store
+            .replace_authorization_grant_records(
+                "plugin",
+                "org.example.weather",
+                &format!("plugin:{index}:on_air_company_read"),
+                &["on_air_company_read".into()],
+            )
+            .expect("decision should save");
+    }
+
+    let connection = store
+        .connection
+        .lock()
+        .expect("storage connection should be available");
+    let (count, oldest_id): (i64, i64) = connection
+        .query_row(
+            "SELECT COUNT(*), MIN(id) FROM authorization_decisions",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .expect("bounded decisions should be readable");
+    assert_eq!(count, 4_096);
+    assert_eq!(oldest_id, 5);
 }
 
 #[test]

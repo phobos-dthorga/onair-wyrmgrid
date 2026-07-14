@@ -14,3 +14,4 @@ record rather than silently rewriting history.
 - [ADR-0009: Data-only community themes](0009-data-only-community-themes.md)
 - [ADR-0010: Canonical English catalogue and data-only community language packs](0010-community-localization.md)
 - [ADR-0011: Core simulator capability through versioned provider sidecars](0011-core-simulator-capability-provider-sidecars.md)
+- [ADR-0012: Core authorization and distinct consent boundaries](0012-core-authorization-and-consent-boundaries.md)

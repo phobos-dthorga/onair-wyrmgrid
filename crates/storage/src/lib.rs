@@ -16,6 +16,7 @@ const SIMULATOR_PREFERENCES_SCHEMA: &str =
     include_str!("../migrations/0007_simulator_preferences.sql");
 const SIMULATOR_RECORDINGS_SCHEMA: &str =
     include_str!("../migrations/0008_simulator_recordings.sql");
+const AUTHORIZATION_SCHEMA: &str = include_str!("../migrations/0009_authorization.sql");
 
 #[derive(Debug, Error)]
 pub enum StorageError {
@@ -146,6 +147,7 @@ impl Store {
         connection.execute_batch(DISPLAY_PREFERENCES_SCHEMA)?;
         connection.execute_batch(SIMULATOR_PREFERENCES_SCHEMA)?;
         connection.execute_batch(SIMULATOR_RECORDINGS_SCHEMA)?;
+        connection.execute_batch(AUTHORIZATION_SCHEMA)?;
         Ok(Self {
             connection: Arc::new(Mutex::new(connection)),
             persistent,
@@ -717,6 +719,83 @@ impl Store {
             )?
             .collect::<Result<Vec<_>, _>>()
             .map_err(StorageError::from)
+    }
+}
+
+impl Store {
+    pub fn list_authorization_grant_records(
+        &self,
+        subject_kind: &str,
+        subject_id: &str,
+        scope_revision: &str,
+    ) -> Result<Vec<String>, StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        let mut statement = connection.prepare(
+            "SELECT capability
+             FROM authorization_grants
+             WHERE subject_kind = ?1 AND subject_id = ?2 AND scope_revision = ?3
+             ORDER BY capability ASC",
+        )?;
+        statement
+            .query_map(params![subject_kind, subject_id, scope_revision], |row| {
+                row.get(0)
+            })?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StorageError::from)
+    }
+
+    pub fn replace_authorization_grant_records(
+        &self,
+        subject_kind: &str,
+        subject_id: &str,
+        scope_revision: &str,
+        capabilities: &[String],
+    ) -> Result<(), StorageError> {
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        let transaction = connection.transaction()?;
+        transaction.execute(
+            "DELETE FROM authorization_grants
+             WHERE subject_kind = ?1 AND subject_id = ?2",
+            params![subject_kind, subject_id],
+        )?;
+        for capability in capabilities {
+            transaction.execute(
+                "INSERT INTO authorization_grants (
+                    subject_kind, subject_id, scope_revision, capability
+                 ) VALUES (?1, ?2, ?3, ?4)",
+                params![subject_kind, subject_id, scope_revision, capability],
+            )?;
+        }
+        transaction.execute(
+            "INSERT INTO authorization_decisions (
+                subject_kind, subject_id, scope_revision, decision, capability_count
+             ) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                subject_kind,
+                subject_id,
+                scope_revision,
+                if capabilities.is_empty() {
+                    "revoke"
+                } else {
+                    "grant"
+                },
+                capabilities.len() as i64,
+            ],
+        )?;
+        transaction.execute(
+            "DELETE FROM authorization_decisions
+             WHERE id NOT IN (
+                 SELECT id FROM authorization_decisions ORDER BY id DESC LIMIT 4096
+             )",
+            [],
+        )?;
+        transaction.commit().map_err(StorageError::from)
     }
 }
 

@@ -1,6 +1,12 @@
 <script lang="ts">
   import WyrmChart from "$lib/charts/WyrmChart.svelte";
   import type { ChartSpec } from "$lib/charts/types";
+  import type { DisplayPreferences } from "$lib/settings/types";
+  import RecordingHistory from "$lib/simulator/RecordingHistory.svelte";
+  import type {
+    SimulatorRecordingView,
+    SimulatorSessionView,
+  } from "$lib/simulator/types";
   import type { HoardTimelineIndex, TimelineMode } from "./types";
 
   let {
@@ -11,11 +17,19 @@
     growthChart,
     fboGrowthChart,
     compositionChart,
+    displayPreferences,
+    recordingStatus,
+    recordingSession,
+    recordingBusy,
+    recordingError,
     busy,
     errorMessage,
     oncursorchange,
     onview,
     onreturn,
+    onrecordingselect,
+    onrecordingdelete,
+    onrecordingdeleteall,
     onclose,
   }: {
     open: boolean;
@@ -25,14 +39,23 @@
     growthChart: ChartSpec | null;
     fboGrowthChart: ChartSpec | null;
     compositionChart: ChartSpec | null;
+    displayPreferences: DisplayPreferences;
+    recordingStatus: SimulatorRecordingView;
+    recordingSession?: SimulatorSessionView;
+    recordingBusy: boolean;
+    recordingError: string;
     busy: boolean;
     errorMessage: string;
     oncursorchange: (cursor: number) => void;
     onview: () => void;
     onreturn: () => void;
+    onrecordingselect: (sessionId: string) => void;
+    onrecordingdelete: (sessionId: string) => void;
+    onrecordingdeleteall: () => void;
     onclose: () => void;
   } = $props();
 
+  let activeSection = $state<"company" | "recordings">("company");
   const selectedAt = $derived(timeline.observation_times[cursor]);
 
   function formatTime(value: string | undefined): string {
@@ -59,8 +82,12 @@
       <header>
         <div>
           <span class="eyebrow">WyrmGrid Hoard</span>
-          <h2 id="timeline-title">Company timeline</h2>
-          <p>{timeline.company?.name ?? "No retained company"}</p>
+          <h2 id="timeline-title">History library</h2>
+          <p>
+            {activeSection === "company"
+              ? (timeline.company?.name ?? "No retained company")
+              : "Local simulator telemetry recordings"}
+          </p>
         </div>
         <div class="header-actions">
           <span class:historical={mode === "historical"} class="mode-badge">
@@ -76,7 +103,21 @@
         </div>
       </header>
 
-      <div class="timeline-content">
+      <nav class="history-sections" aria-label="Hoard history sections">
+        <button
+          type="button"
+          aria-pressed={activeSection === "company"}
+          onclick={() => (activeSection = "company")}>Company timeline</button
+        >
+        <button
+          type="button"
+          aria-pressed={activeSection === "recordings"}
+          onclick={() => (activeSection = "recordings")}
+        >Flight recordings ({recordingStatus.sessions.length})</button>
+      </nav>
+
+      {#if activeSection === "company"}
+        <div class="timeline-content">
         <section
           class="time-control"
           aria-label="Historical observation selection"
@@ -172,7 +213,21 @@
             {/if}
           </div>
         </section>
-      </div>
+        </div>
+      {:else}
+        <div class="recording-content">
+          <RecordingHistory
+            status={recordingStatus}
+            session={recordingSession}
+            {displayPreferences}
+            busy={recordingBusy}
+            errorMessage={recordingError}
+            onsessionselect={onrecordingselect}
+            onsessiondelete={onrecordingdelete}
+            ondeleteall={onrecordingdeleteall}
+          />
+        </div>
+      {/if}
     </div>
   </div>
 {/if}
@@ -258,6 +313,30 @@
     display: grid;
     grid-template-columns: minmax(280px, 0.72fr) minmax(560px, 1.65fr);
     gap: 22px;
+    padding: 22px;
+  }
+  .history-sections {
+    display: flex;
+    gap: 8px;
+    padding: 12px 22px 0;
+  }
+  .history-sections button {
+    min-height: 34px;
+    border: 1px solid var(--color-line-soft);
+    border-radius: 4px 4px 0 0;
+    padding: 0 14px;
+    color: var(--color-text-muted);
+    background: var(--color-surface-translucent);
+    font-size: 10px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .history-sections button[aria-pressed="true"] {
+    border-color: var(--color-accent-border);
+    color: var(--color-accent);
+    background: var(--color-accent-soft);
+  }
+  .recording-content {
     padding: 22px;
   }
   .time-control {

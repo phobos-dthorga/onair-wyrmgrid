@@ -52,7 +52,11 @@ WyrmGrid currently keeps the following information on the user's device:
   identity and one-hertz altitude, speed, fuel, weight, attitude,
   simulator-time, and observation-time samples in the local WyrmGrid database.
   Raw SimConnect messages and geographic coordinates are not persisted in the
-  initial recording schema; and
+  initial recording schema;
+- symbolic authorization grant and revoke decisions, including actor ID,
+  capability scope revision, capability count, and decision time. These records
+  are limited to the newest 4,096 decisions and never contain API keys, raw
+  plugin output, or simulator payloads; and
 - while the application is running, a user-supplied SimBrief Pilot ID or
   username for the duration of one import request and the translated latest OFP
   in process memory. The identifier and plan are not currently written to the

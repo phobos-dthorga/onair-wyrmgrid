@@ -136,6 +136,10 @@
     type SimulatorSessionView,
   } from "$lib/simulator/types";
   import {
+    simulatorRecordingPreview,
+    simulatorRecordingSessionPreview,
+  } from "$lib/simulator/sample";
+  import {
     loadDisplayPreferences,
     saveDisplayPreferences,
   } from "$lib/settings/client";
@@ -531,8 +535,9 @@
 
   function openHoardTimeline(): void {
     timelineError = "";
+    simulatorError = "";
     showTimelineDialog = true;
-    void refreshTimeline();
+    void Promise.all([refreshTimeline(), refreshSimulatorRecording()]);
   }
 
   async function refreshDiagnostics(): Promise<void> {
@@ -590,8 +595,8 @@
 
   async function refreshSimulatorRecording(): Promise<void> {
     if (!isDesktopRuntime()) {
-      simulatorRecording = emptySimulatorRecording;
-      simulatorRecordingSession = undefined;
+      simulatorRecording = simulatorRecordingPreview;
+      simulatorRecordingSession = simulatorRecordingSessionPreview;
       return;
     }
     try {
@@ -1869,11 +1874,20 @@
     growthChart={timelineGrowthChart}
     fboGrowthChart={timelineFboGrowthChart}
     compositionChart={timelineFleetCompositionChart}
+    {displayPreferences}
+    recordingStatus={simulatorRecording}
+    recordingSession={simulatorRecordingSession}
+    recordingBusy={simulatorRecordingBusy}
+    recordingError={simulatorError}
     busy={timelineBusy}
     errorMessage={timelineError}
     oncursorchange={(cursor) => (timelineCursor = cursor)}
     onview={() => void viewHistoricalMoment()}
     onreturn={returnToPresent}
+    onrecordingselect={(sessionId) => void selectRecordingSession(sessionId)}
+    onrecordingdelete={(sessionId) =>
+      void runRecordingAction("delete", sessionId)}
+    onrecordingdeleteall={() => void runRecordingAction("delete_all")}
     onclose={() => (showTimelineDialog = false)}
   />
 

@@ -48,6 +48,42 @@ fn persists_and_revokes_only_the_requested_capabilities() {
 }
 
 #[test]
+fn plugin_version_changes_require_a_fresh_permission_review() {
+    let directory = tempfile::tempdir().expect("temporary directory should open");
+    let store = Store::open_in_memory().expect("store should open");
+    let service = PluginService::new(
+        Some(directory.path().to_path_buf()),
+        store.clone(),
+        OnAirSession::with_default_store(store),
+        SimulatorBridgeService::new(Vec::new()),
+    );
+    service
+        .approve_requested_permissions(BUNDLED_PLUGIN_ID)
+        .expect("initial permissions should approve");
+
+    let manifest_path = directory.path().join(BUNDLED_PLUGIN_ID).join("plugin.json");
+    let mut manifest: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(&manifest_path).expect("manifest should read"),
+    )
+    .expect("manifest should parse");
+    manifest["version"] = serde_json::Value::String("0.2.0".into());
+    std::fs::write(
+        &manifest_path,
+        serde_json::to_vec_pretty(&manifest).expect("manifest should serialize"),
+    )
+    .expect("updated manifest should save");
+
+    let status = service
+        .status()
+        .expect("updated plugin should remain visible");
+    assert!(status.plugins[0].granted_permissions.is_empty());
+    assert!(matches!(
+        service.start(BUNDLED_PLUGIN_ID),
+        Err(PluginError::PermissionRequired)
+    ));
+}
+
+#[test]
 fn completes_the_out_of_process_handshake_when_python_is_available() {
     let directory = tempfile::tempdir().expect("temporary directory should open");
     let store = Store::open_in_memory().expect("store should open");

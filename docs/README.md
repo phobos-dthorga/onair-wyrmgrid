@@ -11,6 +11,7 @@
 - [Roadmap](roadmap.md)
 - [WyrmGrid Atlas](atlas/README.md)
 - [WyrmGrid Hoard](hoard/README.md)
+- [Core authorization model](security/authorization-model.md)
 - [Themes and community theme manifests](themes/README.md)
 - [Localization and community language packs](localization/README.md)
 - [Plugin platform](plugins/overview.md)

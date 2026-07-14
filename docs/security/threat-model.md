@@ -354,5 +354,26 @@ excluded from plugins and Sentry.
   a separate hosting decision defines authentication, quotas, retention,
   monitoring, incident response, and shutdown controls.
 
+## Core authorization controls
+
+- Legal acknowledgement, feature preferences, capability grants, and momentary
+  confirmations are distinct policy decisions and cannot authorize one another.
+- Durable grants are denied by default and bound to actor kind, actor ID, exact
+  capabilities, and a scope revision. Plugin version or permission-set changes
+  require a fresh review.
+- Feature services enforce decisions through the Rust authorization module;
+  Tauri commands and Svelte controls are not trusted enforcement boundaries.
+- Grant and revoke events append bounded symbolic metadata to the local
+  authorization audit trail. They contain no API key, raw provider payload, or
+  plugin output.
+- Revocation stops an active plugin before its capabilities are removed.
+- The migration-4 preview grant table remains for append-only migration
+  integrity but is no longer authoritative after migration 9.
+
+Residual risk: the authorization database is not encrypted at rest, a malicious
+plugin may retain facts it received before revocation, and process separation is
+not a complete operating-system sandbox. Users should revoke unneeded grants,
+review permission changes after updates, and run only trusted code.
+
 Provider-specific controls and validation gates are recorded in the
 [external integrations programme](../integrations/README.md).

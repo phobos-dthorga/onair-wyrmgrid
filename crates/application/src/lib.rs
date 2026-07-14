@@ -1,5 +1,6 @@
 //! Application-level orchestration independent of Tauri and other interfaces.
 
+mod authorization;
 mod dispatch;
 mod display;
 mod localization;
@@ -7,6 +8,10 @@ mod plugins;
 mod simulator;
 mod simulator_recording;
 
+pub use authorization::{
+    LegalPreferencesRepository, LegalSettingsError, LegalSettingsService, LegalStatus,
+    PRIVACY_NOTICE_VERSION, PersistedLegalPreferences, TERMS_VERSION,
+};
 pub use dispatch::*;
 pub use display::*;
 pub use localization::*;
@@ -52,135 +57,6 @@ pub fn platform_status() -> PlatformStatus {
         version: env!("CARGO_PKG_VERSION"),
         plugin_api_version: PLUGIN_API_VERSION,
         mode: "foundation",
-    }
-}
-
-pub const TERMS_VERSION: &str = "2026-07-14";
-pub const PRIVACY_NOTICE_VERSION: &str = "2026-07-15";
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PersistedLegalPreferences {
-    pub terms_version: String,
-    pub privacy_notice_version: String,
-    pub telemetry_enabled: bool,
-    pub acknowledged_at: String,
-}
-
-pub trait LegalPreferencesRepository: Send + Sync + 'static {
-    fn load_legal_preferences(
-        &self,
-    ) -> Result<Option<PersistedLegalPreferences>, LegalSettingsError>;
-
-    fn save_legal_preferences(
-        &self,
-        terms_version: &str,
-        privacy_notice_version: &str,
-        telemetry_enabled: bool,
-    ) -> Result<(), LegalSettingsError>;
-}
-
-impl LegalPreferencesRepository for Store {
-    fn load_legal_preferences(
-        &self,
-    ) -> Result<Option<PersistedLegalPreferences>, LegalSettingsError> {
-        self.load_legal_preferences_record()
-            .map(|preferences| {
-                preferences.map(|preferences| PersistedLegalPreferences {
-                    terms_version: preferences.terms_version,
-                    privacy_notice_version: preferences.privacy_notice_version,
-                    telemetry_enabled: preferences.telemetry_enabled,
-                    acknowledged_at: preferences.acknowledged_at,
-                })
-            })
-            .map_err(|_| LegalSettingsError::StorageUnavailable)
-    }
-
-    fn save_legal_preferences(
-        &self,
-        terms_version: &str,
-        privacy_notice_version: &str,
-        telemetry_enabled: bool,
-    ) -> Result<(), LegalSettingsError> {
-        self.save_legal_preferences_record(terms_version, privacy_notice_version, telemetry_enabled)
-            .map_err(|_| LegalSettingsError::StorageUnavailable)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct LegalStatus {
-    pub terms_version: &'static str,
-    pub privacy_notice_version: &'static str,
-    pub acknowledged: bool,
-    pub telemetry_enabled: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub acknowledged_at: Option<String>,
-}
-
-#[derive(Debug, Error, Clone, Copy, PartialEq, Eq)]
-pub enum LegalSettingsError {
-    #[error("WyrmGrid could not read or save its local privacy preferences.")]
-    StorageUnavailable,
-    #[error("Review the current Terms and Privacy Notice before changing this preference.")]
-    AcknowledgementRequired,
-}
-
-pub struct LegalSettingsService<R> {
-    repository: R,
-}
-
-impl<R: LegalPreferencesRepository> LegalSettingsService<R> {
-    pub fn new(repository: R) -> Self {
-        Self { repository }
-    }
-
-    pub fn status(&self) -> Result<LegalStatus, LegalSettingsError> {
-        let stored = self.repository.load_legal_preferences()?;
-        let acknowledged = stored.as_ref().is_some_and(|preferences| {
-            preferences.terms_version == TERMS_VERSION
-                && preferences.privacy_notice_version == PRIVACY_NOTICE_VERSION
-        });
-        let acknowledged_at = if acknowledged {
-            stored
-                .as_ref()
-                .map(|preferences| preferences.acknowledged_at.clone())
-        } else {
-            None
-        };
-
-        Ok(LegalStatus {
-            terms_version: TERMS_VERSION,
-            privacy_notice_version: PRIVACY_NOTICE_VERSION,
-            acknowledged,
-            telemetry_enabled: acknowledged
-                && stored
-                    .as_ref()
-                    .is_some_and(|preferences| preferences.telemetry_enabled),
-            acknowledged_at,
-        })
-    }
-
-    pub fn acknowledge(&self, telemetry_enabled: bool) -> Result<LegalStatus, LegalSettingsError> {
-        self.repository.save_legal_preferences(
-            TERMS_VERSION,
-            PRIVACY_NOTICE_VERSION,
-            telemetry_enabled,
-        )?;
-        self.status()
-    }
-
-    pub fn update_telemetry(
-        &self,
-        telemetry_enabled: bool,
-    ) -> Result<LegalStatus, LegalSettingsError> {
-        if !self.status()?.acknowledged {
-            return Err(LegalSettingsError::AcknowledgementRequired);
-        }
-        self.repository.save_legal_preferences(
-            TERMS_VERSION,
-            PRIVACY_NOTICE_VERSION,
-            telemetry_enabled,
-        )?;
-        self.status()
     }
 }
 

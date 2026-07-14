@@ -28,6 +28,11 @@ were missing; WyrmGrid does not draw a continuous line across that interval.
 Changing aircraft or registration interrupts the active session so facts from
 two aircraft are not silently combined.
 
+The same retained sessions and graphs are available from **Hoard → Flight
+recordings**. Hoard is the durable browsing surface; the Simulator bridge keeps
+capture controls close to the live connection. Both surfaces use one shared
+view and the same unit preferences.
+
 **Keep completed recordings** defaults to 30 days and can be changed to 7, 90,
 or 365 days in Settings. Expired completed and interrupted sessions are pruned
 locally. Each inactive session can be deleted individually, or all inactive
