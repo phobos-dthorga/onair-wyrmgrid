@@ -3,7 +3,15 @@ mod observability;
 
 use tauri::Manager;
 
+#[derive(Clone, Debug, Default, serde::Serialize)]
+struct StartupOptions {
+    no_launch_art: bool,
+    compact_ui: bool,
+    low_resource: bool,
+}
+
 struct DesktopState {
+    startup_options: StartupOptions,
     onair: wyrmgrid_application::OnAirSession,
     dispatch: wyrmgrid_application::DispatchSession,
     plugins: wyrmgrid_application::PluginService,
@@ -12,6 +20,11 @@ struct DesktopState {
     themes: wyrmgrid_application::ThemeSettingsService<wyrmgrid_storage::Store>,
     languages: wyrmgrid_application::LanguageSettingsService<wyrmgrid_storage::Store>,
     observability: observability::Controller,
+}
+
+#[tauri::command]
+fn startup_options(state: tauri::State<'_, DesktopState>) -> StartupOptions {
+    state.startup_options.clone()
 }
 
 #[tauri::command]
@@ -380,8 +393,9 @@ fn operation_error<E: Into<wyrmgrid_application::OperationError>>(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let parsed_startup_options = parse_startup_options(std::env::args_os().skip(1));
     tauri::Builder::default()
-        .setup(|app| {
+        .setup(move |app| {
             let app_data_directory =
                 app.path().app_data_dir().ok().and_then(|directory| {
                     std::fs::create_dir_all(&directory).ok().map(|_| directory)
@@ -418,6 +432,7 @@ pub fn run() {
             );
 
             app.manage(DesktopState {
+                startup_options: parsed_startup_options.clone(),
                 onair,
                 dispatch,
                 plugins,
@@ -430,6 +445,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            startup_options,
             platform_status,
             onair_connection_status,
             connect_onair,
@@ -468,6 +484,27 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+fn parse_startup_options<I, S>(arguments: I) -> StartupOptions
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<std::ffi::OsStr>,
+{
+    let mut options = StartupOptions::default();
+    for argument in arguments {
+        match argument.as_ref().to_string_lossy().as_ref() {
+            "--no-launch-art" => options.no_launch_art = true,
+            "--compact-ui" => options.compact_ui = true,
+            "--low-resource" => options.low_resource = true,
+            _ => {}
+        }
+    }
+    if options.low_resource {
+        options.no_launch_art = true;
+        options.compact_ui = true;
+    }
+    options
 }
 
 fn simulator_provider_path() -> std::path::PathBuf {
@@ -525,3 +562,7 @@ fn resolve_simulator_provider_path(
 #[cfg(test)]
 #[path = "tests/simulator_provider.rs"]
 mod simulator_provider_tests;
+
+#[cfg(test)]
+#[path = "tests/startup_options.rs"]
+mod startup_options_tests;

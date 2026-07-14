@@ -46,7 +46,17 @@
   } from "$lib/dispatch/types";
   import JobsWorkspace from "$lib/jobs/JobsWorkspace.svelte";
   import LaunchScreen from "$lib/launch/LaunchScreen.svelte";
-  import { remainingLaunchDisplayTime } from "$lib/launch/presentation";
+  import {
+    remainingLaunchDisplayTime,
+    shouldRenderLaunchArtwork,
+    viewportPresentation,
+    type ViewportPresentation,
+  } from "$lib/launch/presentation";
+  import {
+    defaultStartupOptions,
+    loadStartupOptions,
+    type StartupOptions,
+  } from "$lib/launch/startup";
   import ForgeDialog from "$lib/forge/ForgeDialog.svelte";
   import {
     approvePluginPermissions,
@@ -141,6 +151,9 @@
     plugin_api_version: 1,
     mode: "browser preview",
   });
+  let startupOptions = $state<StartupOptions>(defaultStartupOptions);
+  let startupOptionsLoaded = $state(false);
+  let viewportMode = $state<ViewportPresentation>("standard");
   let connection = $state<OnAirConnectionStatus>(disconnectedStatus);
   let activeWorkspace = $state<Workspace>("atlas");
   let dispatchStatus = $state<DispatchStatus>(dispatchPreviewEmpty);
@@ -230,6 +243,12 @@
   );
   const atlasAvailability = $derived(
     activeFleetView?.availability ?? activeFboView?.availability,
+  );
+  const launchArtworkEnabled = $derived(
+    shouldRenderLaunchArtwork(
+      startupOptionsLoaded,
+      startupOptions.no_launch_art,
+    ),
   );
   const atlasStorage = $derived(
     activeFleetView?.storage ?? activeFboView?.storage,
@@ -991,6 +1010,13 @@
   }
 
   async function initializeApplication(): Promise<void> {
+    try {
+      startupOptions = await loadStartupOptions();
+    } catch {
+      startupOptions = defaultStartupOptions;
+    } finally {
+      startupOptionsLoaded = true;
+    }
     await initializeLanguage();
     await initializeTheme();
     await initializeLegal();
@@ -1075,6 +1101,15 @@
   });
 
   onMount(() => {
+    const updateViewportMode = () => {
+      viewportMode = viewportPresentation(
+        window.innerWidth,
+        window.innerHeight,
+      );
+    };
+    updateViewportMode();
+    window.addEventListener("resize", updateViewportMode);
+
     const savedAutomaticSync = Number.parseInt(
       localStorage.getItem(AUTOMATIC_SYNC_STORAGE_KEY) ?? "30",
       10,
@@ -1088,6 +1123,7 @@
     }
 
     void initializeApplication();
+    return () => window.removeEventListener("resize", updateViewportMode);
   });
 </script>
 
@@ -1100,6 +1136,8 @@
     eyebrow={$translation("app-name")}
     message={$translation("app-preparing-privacy")}
     canvas={themeStatus.active_theme.colors.canvas}
+    artworkEnabled={launchArtworkEnabled}
+    lowResource={startupOptions.low_resource}
   />
 {:else if legalLoadState === "error"}
   <LaunchScreen
@@ -1107,11 +1145,16 @@
     eyebrow={$translation("app-settings-unavailable")}
     message={legalError}
     canvas={themeStatus.active_theme.colors.canvas}
+    artworkEnabled={launchArtworkEnabled}
+    lowResource={startupOptions.low_resource}
     retryLabel={$translation("action-try-again")}
     onretry={() => void initializeLegal()}
   />
 {:else if legalStatus.acknowledged}
   <main
+    class:compact-ui={startupOptions.compact_ui || viewportMode === "narrow"}
+    class:short-ui={viewportMode === "short"}
+    class:low-resource={startupOptions.low_resource}
     class="shell"
     inert={showLegalDialog ||
       showThemeDialog ||
@@ -1545,6 +1588,11 @@
 
     <footer>
       <span>{status.application} · {status.mode}</span>
+      {#if startupOptions.low_resource}
+        <span>Low-resource presentation</span>
+      {:else if startupOptions.compact_ui}
+        <span>Compact presentation</span>
+      {/if}
       <span>{$translation("footer-unaffiliated")}</span>
     </footer>
   </main>

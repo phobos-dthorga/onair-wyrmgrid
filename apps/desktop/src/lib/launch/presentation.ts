@@ -1,6 +1,24 @@
 export const MINIMUM_LAUNCH_DISPLAY_MS = 800;
 
 export type LaunchArtworkTone = "dark" | "light";
+export type ViewportPresentation = "standard" | "narrow" | "short";
+
+export function viewportPresentation(
+  width: number,
+  height: number,
+): ViewportPresentation {
+  if (!Number.isFinite(width) || !Number.isFinite(height)) return "standard";
+  if (width <= 900) return "narrow";
+  if (height <= 720) return "short";
+  return "standard";
+}
+
+export function shouldRenderLaunchArtwork(
+  startupOptionsLoaded: boolean,
+  noLaunchArt: boolean,
+): boolean {
+  return startupOptionsLoaded && !noLaunchArt;
+}
 
 export function launchArtworkTone(canvas: string): LaunchArtworkTone {
   const match = /^#([0-9a-f]{6})$/i.exec(canvas.trim());

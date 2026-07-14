@@ -10,6 +10,8 @@
     error?: boolean;
     retryLabel?: string;
     onretry?: () => void;
+    artworkEnabled?: boolean;
+    lowResource?: boolean;
   };
 
   let {
@@ -19,6 +21,8 @@
     error = false,
     retryLabel = "Try again",
     onretry,
+    artworkEnabled = true,
+    lowResource = false,
   }: Props = $props();
 
   const artwork = $derived(
@@ -28,10 +32,14 @@
 
 <main
   class:error
+  class:no-artwork={!artworkEnabled}
+  class:low-resource={lowResource}
   class="launch-screen"
   aria-live={error ? "assertive" : "polite"}
 >
-  <img class="launch-artwork" src={artwork} alt="" aria-hidden="true" />
+  {#if artworkEnabled}
+    <img class="launch-artwork" src={artwork} alt="" aria-hidden="true" />
+  {/if}
   <div class="launch-veil" aria-hidden="true"></div>
   <section class="launch-status">
     <span>{eyebrow}</span>
@@ -50,6 +58,12 @@
     overflow: hidden;
     color: #e9f1ef;
     background: #07110f;
+  }
+
+  .launch-screen.no-artwork {
+    background:
+      radial-gradient(circle at 22% 24%, #16362e 0, transparent 34%),
+      linear-gradient(145deg, #07110f, #0b1916 62%, #13201b);
   }
 
   .launch-artwork,
@@ -124,5 +138,19 @@
   button:focus-visible {
     outline: 2px solid #e9f1ef;
     outline-offset: 3px;
+  }
+
+  .low-resource .launch-status {
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+
+  @media (max-width: 900px), (max-height: 720px) {
+    .launch-status {
+      left: 20px;
+      bottom: 20px;
+      width: min(470px, calc(100vw - 40px));
+      backdrop-filter: none;
+    }
   }
 </style>

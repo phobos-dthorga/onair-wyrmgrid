@@ -5,6 +5,7 @@
 - [First vertical slice](architecture/vertical-slice.md)
 - [Architecture decisions](architecture/decisions/README.md)
 - [Development environment](development.md)
+- [Display and performance launch options](user-guide/display-and-performance.md)
 - [Testing strategy](testing.md)
 - [Roadmap](roadmap.md)
 - [WyrmGrid Atlas](atlas/README.md)
