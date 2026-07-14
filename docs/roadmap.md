@@ -47,6 +47,9 @@ The implementation sequence and operating thresholds live in the
   synchronization (implemented)
 - Atlas fleet and FBO markers, independent layer toggles, shared map fitting,
   and linked inspectors (implemented)
+- Bounded pending-job observations, Hoard-backed live/cached/offline state, and
+  a read-only Jobs workspace (developer preview implemented; authenticated live
+  contract confirmation remains)
 
 ## Vertical slice 2: external plugin proof
 
@@ -82,9 +85,9 @@ not replace completion of the current vertical slice.
 - Latest SimBrief OFP import by an explicitly supplied Pilot ID or username,
   session-only Dispatch interface, and explicit clear action (developer preview
   implemented; authenticated compatibility certification remains)
-- OnAir aircraft identity, exact model-label, and current-airport comparison,
-  with unavailable payload and deadline evidence exposed instead of inferred
-  (implemented for the current fleet contract)
+- OnAir aircraft identity, exact model-label, current-airport, selected-job
+  route, reported cargo, and expiry comparison with unavailable evidence exposed
+  instead of inferred (implemented for the current read-only contracts)
 - Explicitly requested, ten-minute session-cached AviationWeather.gov METAR and
   TAF airport context with raw coded text and provenance (implemented)
 - Route advisories and explainable weather findings (airport observation context

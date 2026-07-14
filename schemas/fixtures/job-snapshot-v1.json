@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "jobs": [
+    {
+      "id": "77777777-7777-4777-8777-777777777777",
+      "mission_type": "Synthetic cargo chain",
+      "description": "Two-leg Swagger-derived cargo example",
+      "reported_pay": 18250.0,
+      "created_at": "2026-07-14T00:00:00Z",
+      "taken_at": "2026-07-14T00:10:00Z",
+      "expires_at": "2026-07-16T12:00:00Z",
+      "legs": [
+        {
+          "id": "71111111-1111-4111-8111-111111111111",
+          "sequence": 0,
+          "kind": "cargo",
+          "departure": {
+            "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "icao": "YSSY",
+            "name": "Synthetic Sydney",
+            "location": { "latitude": -33.9461, "longitude": 151.1772 }
+          },
+          "destination": {
+            "id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            "icao": "YMML",
+            "name": "Synthetic Melbourne",
+            "location": { "latitude": -37.6733, "longitude": 144.8433 }
+          },
+          "current_airport": {
+            "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "icao": "YSSY",
+            "name": "Synthetic Sydney",
+            "location": { "latitude": -33.9461, "longitude": 151.1772 }
+          },
+          "cargo_weight_lb": 2500.0,
+          "distance_nm": 381.0,
+          "description": "Synthetic medical supplies"
+        },
+        {
+          "id": "72222222-2222-4222-8222-222222222222",
+          "sequence": 1,
+          "kind": "cargo",
+          "departure": {
+            "id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            "icao": "YMML",
+            "name": "Synthetic Melbourne",
+            "location": { "latitude": -37.6733, "longitude": 144.8433 }
+          },
+          "destination": {
+            "id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+            "icao": "NZAA",
+            "name": "Synthetic Auckland",
+            "location": { "latitude": -37.0082, "longitude": 174.785 }
+          },
+          "current_airport": {
+            "id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            "icao": "YMML",
+            "name": "Synthetic Melbourne",
+            "location": { "latitude": -37.6733, "longitude": 144.8433 }
+          },
+          "cargo_weight_lb": 1500.0,
+          "distance_nm": 1420.0,
+          "description": "Synthetic priority freight"
+        }
+      ]
+    },
+    {
+      "id": "88888888-8888-4888-8888-888888888888",
+      "mission_type": "Synthetic passenger charter",
+      "reported_pay": 7400.0,
+      "expires_at": "2026-07-15T18:00:00Z",
+      "legs": [
+        {
+          "id": "83333333-3333-4333-8333-333333333333",
+          "sequence": 0,
+          "kind": "passengers",
+          "departure": {
+            "id": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+            "icao": "YBBN",
+            "name": "Synthetic Brisbane",
+            "location": { "latitude": -27.3842, "longitude": 153.1175 }
+          },
+          "destination": {
+            "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "icao": "YSSY",
+            "name": "Synthetic Sydney",
+            "location": { "latitude": -33.9461, "longitude": 151.1772 }
+          },
+          "current_airport": {
+            "id": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+            "icao": "YBBN",
+            "name": "Synthetic Brisbane",
+            "location": { "latitude": -27.3842, "longitude": 153.1175 }
+          },
+          "passengers": 8,
+          "distance_nm": 407.0,
+          "description": "Synthetic executive party"
+        }
+      ]
+    }
+  ]
+}

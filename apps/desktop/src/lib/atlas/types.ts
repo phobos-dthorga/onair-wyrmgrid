@@ -66,12 +66,47 @@ export type FboSnapshotView = {
   storage: SnapshotStorage;
 };
 
+export type JobLeg = {
+  id: string;
+  sequence: number;
+  kind: "cargo" | "passengers";
+  departure: AirportSummary | null;
+  destination: AirportSummary | null;
+  current_airport: AirportSummary | null;
+  cargo_weight_lb?: number;
+  passengers?: number;
+  distance_nm?: number;
+  description?: string;
+};
+
+export type JobSummary = {
+  id: string;
+  mission_type?: string;
+  description?: string;
+  reported_pay?: number;
+  created_at?: string;
+  taken_at?: string;
+  expires_at?: string;
+  legs: JobLeg[];
+};
+
+export type JobSnapshotView = {
+  company: FleetSnapshotView["company"];
+  snapshot: {
+    value: { schema_version: number; jobs: JobSummary[] };
+    provenance: FleetSnapshot["provenance"];
+  };
+  availability: SnapshotAvailability;
+  storage: SnapshotStorage;
+};
+
 export type CompanyDataSyncResult = {
   disposition: "synchronized" | "quietly_ignored";
   fleet: FleetSnapshotView | null;
   fbos: FboSnapshotView | null;
+  jobs: JobSnapshotView | null;
   failures: Array<{
-    resource: "fleet" | "fbos";
+    resource: "fleet" | "fbos" | "jobs";
     message: string;
   }>;
 };

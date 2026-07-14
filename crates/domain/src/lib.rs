@@ -1,10 +1,12 @@
 //! Stable domain types shared by WyrmGrid services and public protocol adapters.
 
 mod flight_plan;
+mod job;
 mod operational;
 mod weather;
 
 pub use flight_plan::*;
+pub use job::*;
 pub use operational::*;
 pub use weather::*;
 

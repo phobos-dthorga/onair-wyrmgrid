@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wyrmgrid.dev/schemas/job-snapshot-v1.json",
+  "title": "WyrmGrid JobSnapshot v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "jobs"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "jobs": {
+      "type": "array",
+      "maxItems": 512,
+      "items": { "$ref": "#/$defs/job" }
+    }
+  },
+  "$defs": {
+    "coordinates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["latitude", "longitude"],
+      "properties": {
+        "latitude": { "type": "number", "minimum": -90, "maximum": 90 },
+        "longitude": { "type": "number", "minimum": -180, "maximum": 180 }
+      }
+    },
+    "airport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "icao", "name", "location"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "icao": { "type": ["string", "null"] },
+        "name": { "type": ["string", "null"] },
+        "location": {
+          "oneOf": [{ "$ref": "#/$defs/coordinates" }, { "type": "null" }]
+        }
+      }
+    },
+    "leg": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "sequence",
+        "kind",
+        "departure",
+        "destination",
+        "current_airport"
+      ],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "sequence": { "type": "integer", "minimum": 0 },
+        "kind": { "enum": ["cargo", "passengers"] },
+        "departure": {
+          "oneOf": [{ "$ref": "#/$defs/airport" }, { "type": "null" }]
+        },
+        "destination": {
+          "oneOf": [{ "$ref": "#/$defs/airport" }, { "type": "null" }]
+        },
+        "current_airport": {
+          "oneOf": [{ "$ref": "#/$defs/airport" }, { "type": "null" }]
+        },
+        "cargo_weight_lb": { "type": "number", "minimum": 0 },
+        "passengers": { "type": "integer", "minimum": 0 },
+        "distance_nm": { "type": "number", "minimum": 0 },
+        "description": { "type": "string", "maxLength": 512 }
+      }
+    },
+    "job": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "legs"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "mission_type": { "type": "string", "maxLength": 120 },
+        "description": { "type": "string", "maxLength": 1024 },
+        "reported_pay": { "type": "number", "minimum": 0 },
+        "created_at": { "type": "string", "format": "date-time" },
+        "taken_at": { "type": "string", "format": "date-time" },
+        "expires_at": { "type": "string", "format": "date-time" },
+        "legs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "items": { "$ref": "#/$defs/leg" }
+        }
+      }
+    }
+  }
+}

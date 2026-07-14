@@ -71,6 +71,13 @@ fn onair_fbo_snapshot(
 }
 
 #[tauri::command]
+fn onair_job_snapshot(
+    state: tauri::State<'_, DesktopState>,
+) -> Result<Option<wyrmgrid_application::JobSnapshotView>, wyrmgrid_application::OperationError> {
+    state.onair.job_snapshot().map_err(operation_error)
+}
+
+#[tauri::command]
 fn onair_hoard_timeline(
     state: tauri::State<'_, DesktopState>,
 ) -> Result<wyrmgrid_application::HoardTimelineIndex, wyrmgrid_application::OperationError> {
@@ -97,6 +104,30 @@ fn dispatch_status(
         .dispatch
         .briefing(fleet.as_ref())
         .map_err(operation_error)
+}
+
+#[tauri::command]
+fn select_dispatch_job(
+    state: tauri::State<'_, DesktopState>,
+    job_id: String,
+) -> Result<wyrmgrid_application::DispatchStatus, wyrmgrid_application::OperationError> {
+    let selection = state
+        .onair
+        .job_for_dispatch(&job_id)
+        .map_err(operation_error)?;
+    state
+        .dispatch
+        .select_job(selection)
+        .map_err(operation_error)?;
+    dispatch_status(state)
+}
+
+#[tauri::command]
+fn clear_dispatch_job(
+    state: tauri::State<'_, DesktopState>,
+) -> Result<wyrmgrid_application::DispatchStatus, wyrmgrid_application::OperationError> {
+    state.dispatch.clear_job().map_err(operation_error)?;
+    dispatch_status(state)
 }
 
 #[tauri::command]
@@ -333,9 +364,12 @@ pub fn run() {
             synchronize_onair_company_data,
             onair_fleet_snapshot,
             onair_fbo_snapshot,
+            onair_job_snapshot,
             onair_hoard_timeline,
             onair_historical_company_data,
             dispatch_status,
+            select_dispatch_job,
+            clear_dispatch_job,
             import_simbrief_latest,
             refresh_dispatch_weather,
             clear_dispatch_plan,

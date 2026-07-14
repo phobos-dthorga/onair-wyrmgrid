@@ -9,8 +9,8 @@ use std::sync::{
 use std::time::{Duration, Instant};
 use thiserror::Error;
 use wyrmgrid_domain::{
-    AircraftSummary, FlightPlanSnapshot, Mass, MassUnit, OperationalProvenance, ProvenanceKind,
-    SnapshotFreshness, WeatherSnapshot,
+    AircraftSummary, FlightPlanSnapshot, JobSummary, Mass, MassUnit, OperationalProvenance,
+    ProvenanceKind, SnapshotFreshness, WeatherSnapshot,
 };
 use wyrmgrid_simbrief_api::{ClientError, SimBriefClient, UserReference, UserReferenceKind};
 use wyrmgrid_weather_api::{AviationWeatherClient, ClientError as WeatherClientError};
@@ -66,6 +66,7 @@ pub enum DispatchFindingCategory {
     AircraftPosition,
     Payload,
     Schedule,
+    JobRoute,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -145,7 +146,16 @@ pub struct DispatchStatus {
     pub snapshot: Option<FlightPlanSnapshot>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub comparison: Option<DispatchComparison>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selected_job: Option<DispatchJobSelection>,
     pub weather: DispatchWeatherStatus,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct DispatchJobSelection {
+    pub job: JobSummary,
+    pub observed_at: DateTime<Utc>,
+    pub availability: SnapshotAvailability,
 }
 
 #[derive(Debug, Error, Clone, Copy, PartialEq, Eq)]
@@ -217,6 +227,7 @@ struct DispatchInner {
     weather_provider: Option<Arc<dyn WeatherProvider>>,
     snapshot: RwLock<Option<FlightPlanSnapshot>>,
     weather: RwLock<Option<CachedWeather>>,
+    selected_job: RwLock<Option<DispatchJobSelection>>,
     weather_last_attempt: Mutex<Option<Instant>>,
     importing: AtomicBool,
     weather_refreshing: AtomicBool,
@@ -253,6 +264,7 @@ impl DispatchSession {
                 weather_provider,
                 snapshot: RwLock::new(None),
                 weather: RwLock::new(None),
+                selected_job: RwLock::new(None),
                 weather_last_attempt: Mutex::new(None),
                 importing: AtomicBool::new(false),
                 weather_refreshing: AtomicBool::new(false),
@@ -274,9 +286,15 @@ impl DispatchSession {
             .read()
             .map_err(|_| DispatchError::StateUnavailable)?
             .clone();
+        let selected_job = self
+            .inner
+            .selected_job
+            .read()
+            .map_err(|_| DispatchError::StateUnavailable)?
+            .clone();
         let comparison = snapshot
             .as_ref()
-            .map(|snapshot| compare_plan_to_fleet(snapshot, fleet));
+            .map(|snapshot| compare_plan_to_fleet(snapshot, fleet, selected_job.as_ref()));
         Ok(DispatchStatus {
             provider_available: self.inner.provider.is_some(),
             availability: if snapshot.is_some() {
@@ -288,6 +306,7 @@ impl DispatchSession {
             importing: self.inner.importing.load(Ordering::Acquire),
             snapshot,
             comparison,
+            selected_job,
             weather: self.weather_status()?,
         })
     }
@@ -389,6 +408,28 @@ impl DispatchSession {
         self.status()
     }
 
+    pub fn select_job(&self, selection: DispatchJobSelection) -> Result<(), DispatchError> {
+        selection
+            .job
+            .validate()
+            .map_err(|_| DispatchError::StateUnavailable)?;
+        *self
+            .inner
+            .selected_job
+            .write()
+            .map_err(|_| DispatchError::StateUnavailable)? = Some(selection);
+        Ok(())
+    }
+
+    pub fn clear_job(&self) -> Result<(), DispatchError> {
+        *self
+            .inner
+            .selected_job
+            .write()
+            .map_err(|_| DispatchError::StateUnavailable)? = None;
+        Ok(())
+    }
+
     fn weather_stations(&self) -> Result<Vec<String>, DispatchError> {
         let snapshot = self
             .inner
@@ -480,6 +521,7 @@ impl Drop for ActivityGuard<'_> {
 fn compare_plan_to_fleet(
     plan: &FlightPlanSnapshot,
     fleet: Option<&FleetSnapshotView>,
+    selected_job: Option<&DispatchJobSelection>,
 ) -> DispatchComparison {
     let compared_at = Utc::now();
     let fleet_observed_at = fleet.map(|fleet| fleet.snapshot.provenance.observed_at);
@@ -505,30 +547,11 @@ fn compare_plan_to_fleet(
     }
     append_model_finding(plan, matched.map(|(aircraft, _)| aircraft), &mut findings);
     append_position_finding(plan, matched.map(|(aircraft, _)| aircraft), &mut findings);
-    findings.push(finding(
-        DispatchFindingCategory::Payload,
-        DispatchFindingStatus::Unavailable,
-        "dispatch-finding-payload-unavailable",
-        "Payload limits not observed",
-        "The current OnAir fleet contract does not include job payload or aircraft weight limits, so WyrmGrid does not infer compatibility.",
-        plan.weights
-            .as_ref()
-            .and_then(|weights| weights.value.payload)
-            .map(format_mass),
-        None,
-    ));
-    findings.push(finding(
-        DispatchFindingCategory::Schedule,
-        DispatchFindingStatus::Unavailable,
-        "dispatch-finding-deadline-unavailable",
-        "Deadlines not observed",
-        "The current OnAir slice does not include job schedules or deadlines. Planned block times remain visible without an OnAir deadline verdict.",
-        plan.schedule
-            .as_ref()
-            .and_then(|schedule| schedule.value.scheduled_out)
-            .map(|value| value.to_rfc3339()),
-        None,
-    ));
+    append_job_findings(
+        plan,
+        selected_job.map(|selection| &selection.job),
+        &mut findings,
+    );
 
     let matched_aircraft = matched.map(|(aircraft, basis)| MatchedFleetAircraft {
         basis,
@@ -554,6 +577,137 @@ fn compare_plan_to_fleet(
             freshness,
         },
     }
+}
+
+fn append_job_findings(
+    plan: &FlightPlanSnapshot,
+    job: Option<&JobSummary>,
+    findings: &mut Vec<DispatchFinding>,
+) {
+    let Some(job) = job else {
+        findings.push(finding(
+            DispatchFindingCategory::JobRoute,
+            DispatchFindingStatus::Unavailable,
+            "dispatch-finding-job-unselected",
+            "No OnAir job selected",
+            "Choose a pending job to compare its route, payload, and expiry with this plan.",
+            Some(format!(
+                "{} → {}",
+                plan.airports.value.origin.icao, plan.airports.value.destination.icao
+            )),
+            None,
+        ));
+        return;
+    };
+
+    let planned_route = format!(
+        "{} → {}",
+        plan.airports.value.origin.icao, plan.airports.value.destination.icao
+    );
+    let job_route = job.route().and_then(|(departure, destination)| {
+        Some(format!(
+            "{} → {}",
+            departure.icao.as_deref()?,
+            destination.icao.as_deref()?
+        ))
+    });
+    let route_matches = job_route
+        .as_ref()
+        .is_some_and(|route| normalize_identity(route) == normalize_identity(&planned_route));
+    let (route_status, route_key, route_title, route_explanation) = if route_matches {
+        (
+            DispatchFindingStatus::Match,
+            "dispatch-finding-job-route-match",
+            "Job route matched",
+            "The SimBrief endpoints match the first departure and final destination in the selected job.",
+        )
+    } else if job_route.is_some() {
+        (
+            DispatchFindingStatus::Difference,
+            "dispatch-finding-job-route-difference",
+            "Job route differs",
+            "The plan endpoints do not match the selected job.",
+        )
+    } else {
+        (
+            DispatchFindingStatus::Unavailable,
+            "dispatch-finding-job-route-unavailable",
+            "Job route unavailable",
+            "The selected job did not report both endpoint ICAOs.",
+        )
+    };
+    findings.push(finding(
+        DispatchFindingCategory::JobRoute,
+        route_status,
+        route_key,
+        route_title,
+        route_explanation,
+        Some(planned_route),
+        job_route,
+    ));
+
+    let planned_payload = plan
+        .weights
+        .as_ref()
+        .and_then(|weights| weights.value.payload);
+    let job_payload = job.cargo_weight_lb();
+    let payload_matches = planned_payload.zip(job_payload).map(|(plan, job)| {
+        let plan_lb = match plan.unit {
+            MassUnit::Pounds => plan.value,
+            MassUnit::Kilograms => plan.value * 2.204_622_621_8,
+        };
+        (plan_lb - job).abs() <= 1.0
+    });
+    findings.push(finding(
+        DispatchFindingCategory::Payload,
+        match payload_matches {
+            Some(true) => DispatchFindingStatus::Match,
+            Some(false) => DispatchFindingStatus::Difference,
+            None => DispatchFindingStatus::Unavailable,
+        },
+        match payload_matches {
+            Some(true) => "dispatch-finding-job-payload-match",
+            Some(false) => "dispatch-finding-job-payload-difference",
+            None => "dispatch-finding-job-payload-unavailable",
+        },
+        match payload_matches {
+            Some(true) => "Job payload matched",
+            Some(false) => "Job payload differs",
+            None => "Cargo comparison unavailable",
+        },
+        "WyrmGrid compares reported SimBrief payload with the selected job's cargo weight; it does not infer aircraft capacity.",
+        planned_payload.map(format_mass),
+        job_payload.map(|value| format!("{value} lb")),
+    ));
+
+    let planned_arrival = plan
+        .schedule
+        .as_ref()
+        .and_then(|schedule| schedule.value.scheduled_in.or(schedule.value.scheduled_on));
+    let deadline_match = planned_arrival
+        .zip(job.expires_at)
+        .map(|(arrival, expiry)| arrival <= expiry);
+    findings.push(finding(
+        DispatchFindingCategory::Schedule,
+        match deadline_match {
+            Some(true) => DispatchFindingStatus::Match,
+            Some(false) => DispatchFindingStatus::Difference,
+            None => DispatchFindingStatus::Unavailable,
+        },
+        match deadline_match {
+            Some(true) => "dispatch-finding-job-deadline-match",
+            Some(false) => "dispatch-finding-job-deadline-missed",
+            None => "dispatch-finding-job-deadline-unavailable",
+        },
+        match deadline_match {
+            Some(true) => "Planned arrival precedes expiry",
+            Some(false) => "Planned arrival follows expiry",
+            None => "Deadline comparison unavailable",
+        },
+        "This is a direct schedule comparison, not a guarantee that OnAir will accept or complete the job.",
+        planned_arrival.map(|value| value.to_rfc3339()),
+        job.expires_at.map(|value| value.to_rfc3339()),
+    ));
 }
 
 fn format_mass(mass: Mass) -> String {
@@ -799,7 +953,7 @@ mod tests {
     use uuid::Uuid;
     use wyrmgrid_domain::{
         AircraftId, AirportId, AirportSummary, FlightPlanAirport, FlightPlanAirports,
-        FlightPlanIdentity, FlightPlanSnapshotId, Observed, OperationalObservation,
+        FlightPlanIdentity, FlightPlanSnapshotId, JobSnapshot, Observed, OperationalObservation,
         PlannedAircraft, Provenance, SnapshotFreshness, WEATHER_SNAPSHOT_SCHEMA_VERSION,
         WeatherSnapshotId,
     };
@@ -986,6 +1140,36 @@ mod tests {
             session.clear().unwrap().availability,
             DispatchAvailability::Empty
         );
+    }
+
+    #[tokio::test]
+    async fn compares_a_selected_read_only_job_with_the_imported_plan() {
+        let provider = Arc::new(FakeProvider {
+            responses: Mutex::new(vec![snapshot("NZAA")]),
+        });
+        let session = DispatchSession::new(Some(provider));
+        let jobs: JobSnapshot = serde_json::from_str(include_str!(
+            "../../../schemas/fixtures/job-snapshot-v1.json"
+        ))
+        .unwrap();
+        session
+            .select_job(DispatchJobSelection {
+                job: jobs.jobs[0].clone(),
+                observed_at: Utc::now(),
+                availability: SnapshotAvailability::Cached,
+            })
+            .unwrap();
+        session
+            .import_latest(SimBriefReferenceKind::PilotId, "123456")
+            .await
+            .unwrap();
+
+        let status = session.briefing(Some(&fleet())).unwrap();
+        assert!(status.selected_job.is_some());
+        assert!(status.comparison.unwrap().findings.iter().any(|finding| {
+            finding.category == DispatchFindingCategory::JobRoute
+                && finding.status == DispatchFindingStatus::Match
+        }));
     }
 
     #[tokio::test]
