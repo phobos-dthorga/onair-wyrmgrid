@@ -8,8 +8,9 @@ through one connected world map. It is designed as a community platform: most
 first-party intelligence modules will use the same versioned, permission-aware
 plugin boundary available to third-party developers.
 
-> **Project status:** foundation stage. Session-only OnAir connection, Atlas and
-> Hoard, and the first supervised Python plugin proof are implemented;
+> **Project status:** foundation stage. Session-only OnAir connection, Atlas,
+> Hoard, read-only Jobs-to-Dispatch comparison, and the first supervised Python
+> plugin proof are implemented;
 > persistent credential storage, plugin sandboxing/signing, and broader
 > operational integrations remain ahead.
 
@@ -24,7 +25,7 @@ plugin boundary available to third-party developers.
 - **WyrmGrid Watch** — alerts and monitoring
 - **WyrmGrid Dispatch** — canonical flight-plan inspection with a session-only,
   read-only SimBrief latest-OFP developer preview, explainable OnAir fleet
-  cross-checks, and session-cached airport METAR/TAF context
+  and selected-job cross-checks, and session-cached airport METAR/TAF context
 
 ## Technical foundation
 

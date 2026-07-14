@@ -1,6 +1,6 @@
 # OnAir WyrmGrid Privacy Notice
 
-**Version and effective date:** 2026-07-14.3
+**Version and effective date:** 2026-07-14.4
 
 This preliminary notice describes information handled by official builds of
 OnAir WyrmGrid distributed by Phobos A. D'thorga. It does not describe an
@@ -40,7 +40,11 @@ WyrmGrid currently keeps the following information on the user's device:
 - interface preferences, such as the selected automatic synchronization
   interval, in the desktop webview's local storage; and
 - while the application is running, the supplied OnAir company ID, API key,
-  translated company details, and current fleet observation in process memory;
+  translated company details, and current fleet, FBO, and pending-job
+  observations in process memory;
+- successful translated fleet, FBO, and pending-job observations in WyrmGrid's
+  local Hoard database. These records contain stable WyrmGrid fields and
+  provenance, not the raw OnAir response or API key;
   and
 - while the application is running, a user-supplied SimBrief Pilot ID or
   username for the duration of one import request and the translated latest OFP
@@ -64,7 +68,8 @@ author metadata to Sentry, external providers, or plugins.
 
 When the user chooses to connect, WyrmGrid sends the company ID and API key
 directly to OnAir's public API and requests the selected company information.
-Subsequent synchronization requests retrieve fleet information. OnAir operates
+Subsequent synchronization requests retrieve fleet, FBO-network, and pending-job
+information. OnAir operates
 independently under its own terms and privacy practices. WyrmGrid does not send
 the API key to Sentry, map services, or plugins.
 

@@ -25,3 +25,11 @@ export function clearDispatchPlan(): Promise<DispatchStatus> {
 export function refreshDispatchWeather(): Promise<DispatchStatus> {
   return invokeDesktop<DispatchStatus>("refresh_dispatch_weather");
 }
+
+export function selectDispatchJob(jobId: string): Promise<DispatchStatus> {
+  return invokeDesktop<DispatchStatus>("select_dispatch_job", { jobId });
+}
+
+export function clearDispatchJob(): Promise<DispatchStatus> {
+  return invokeDesktop<DispatchStatus>("clear_dispatch_job");
+}

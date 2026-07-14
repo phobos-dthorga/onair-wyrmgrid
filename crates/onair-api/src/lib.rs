@@ -3,22 +3,27 @@
 //! Raw responses stay inside this crate. Other parts of WyrmGrid consume stable
 //! domain models rather than binding themselves to OnAir's JSON field names.
 
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use reqwest::{Client, StatusCode, header};
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, de::DeserializeOwned};
+use std::time::Duration;
 use thiserror::Error;
 use url::Url;
 use uuid::Uuid;
 use wyrmgrid_domain::{
     AircraftId, AircraftSummary, AirportId, AirportSummary, CompanyId, CompanySummary, Coordinates,
-    FboId, FboSummary, Observed, Provenance, ProvenanceKind,
+    FboId, FboSummary, JOB_SNAPSHOT_SCHEMA_VERSION, JobId, JobLeg, JobLegId, JobLegKind,
+    JobSnapshot, JobSummary, MAX_JOBS_PER_SNAPSHOT, Observed, Provenance, ProvenanceKind,
 };
 
 const API_KEY_HEADER: &str = "oa-apikey";
 const COMPANY_ID_HEADER: &str = "CompanyUniqueId";
 const FLEET_PROVENANCE_SOURCE: &str = "onair:company/fleet";
 const FBOS_PROVENANCE_SOURCE: &str = "onair:company/fbos";
+const JOBS_PROVENANCE_SOURCE: &str = "onair:company/jobs/pending";
+const MAX_RESPONSE_BYTES: usize = 8 * 1024 * 1024;
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
 pub const DEFAULT_BASE_URL: &str = "https://server1.onair.company/api/v1";
 
 pub struct OnAirClient {
@@ -59,6 +64,12 @@ pub enum ClientError {
     ApiRejected,
     #[error("OnAir returned an incomplete company response")]
     MissingContent,
+    #[error("OnAir returned a response larger than WyrmGrid accepts")]
+    ResponseTooLarge,
+    #[error("OnAir returned an unexpected content type")]
+    InvalidContentType,
+    #[error("OnAir returned malformed JSON")]
+    MalformedResponse,
 }
 
 #[derive(Debug, Deserialize)]
@@ -129,6 +140,76 @@ struct RawFbo {
     airport_id: Option<Uuid>,
 }
 
+#[derive(Debug, Deserialize)]
+struct RawMission {
+    #[serde(rename = "Id", default)]
+    id: Option<Uuid>,
+    #[serde(rename = "MissionType", default)]
+    mission_type: Option<RawMissionType>,
+    #[serde(rename = "Description", default)]
+    description: Option<String>,
+    #[serde(rename = "Pay", default)]
+    pay: Option<f64>,
+    #[serde(rename = "CreationDate", default)]
+    creation_date: Option<DateTime<Utc>>,
+    #[serde(rename = "TakenDate", default)]
+    taken_date: Option<DateTime<Utc>>,
+    #[serde(rename = "ExpirationDate", default)]
+    expiration_date: Option<DateTime<Utc>>,
+    #[serde(rename = "Cargos", default)]
+    cargos: Vec<RawCargo>,
+    #[serde(rename = "Charters", default)]
+    charters: Vec<RawCharter>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawMissionType {
+    #[serde(rename = "Name", default)]
+    name: Option<String>,
+    #[serde(rename = "ShortName", default)]
+    short_name: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawCargo {
+    #[serde(rename = "Id", default)]
+    id: Option<Uuid>,
+    #[serde(rename = "LegIndex", default)]
+    leg_index: Option<u32>,
+    #[serde(rename = "Weight", default)]
+    weight: Option<f64>,
+    #[serde(rename = "Distance", default)]
+    distance: Option<f64>,
+    #[serde(rename = "Description", default)]
+    description: Option<String>,
+    #[serde(rename = "DepartureAirport", default)]
+    departure_airport: Option<RawAirport>,
+    #[serde(rename = "DestinationAirport", default)]
+    destination_airport: Option<RawAirport>,
+    #[serde(rename = "CurrentAirport", default)]
+    current_airport: Option<RawAirport>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawCharter {
+    #[serde(rename = "Id", default)]
+    id: Option<Uuid>,
+    #[serde(rename = "LegIndex", default)]
+    leg_index: Option<u32>,
+    #[serde(rename = "PassengersNumber", default)]
+    passengers: Option<i64>,
+    #[serde(rename = "Distance", default)]
+    distance: Option<f64>,
+    #[serde(rename = "Description", default)]
+    description: Option<String>,
+    #[serde(rename = "DepartureAirport", default)]
+    departure_airport: Option<RawAirport>,
+    #[serde(rename = "DestinationAirport", default)]
+    destination_airport: Option<RawAirport>,
+    #[serde(rename = "CurrentAirport", default)]
+    current_airport: Option<RawAirport>,
+}
+
 impl OnAirClient {
     pub fn new(
         base_url: &str,
@@ -141,7 +222,10 @@ impl OnAirClient {
         }
 
         Ok(Self {
-            http: Client::new(),
+            http: Client::builder()
+                .timeout(REQUEST_TIMEOUT)
+                .redirect(reqwest::redirect::Policy::none())
+                .build()?,
             base_url: parsed,
             company_id,
             api_key,
@@ -213,8 +297,41 @@ impl OnAirClient {
         })
     }
 
+    pub async fn pending_jobs(&self) -> Result<Observed<JobSnapshot>, ClientError> {
+        let response: ApiResult<Vec<RawMission>> = self
+            .get(&format!("company/{}/jobs/pending", self.company_id))
+            .await?;
+        if response.error.is_some_and(|error| !error.trim().is_empty()) {
+            return Err(ClientError::ApiRejected);
+        }
+
+        let jobs = response
+            .content
+            .ok_or(ClientError::MissingContent)?
+            .into_iter()
+            .filter_map(translate_job)
+            .take(MAX_JOBS_PER_SNAPSHOT)
+            .collect();
+        let snapshot = JobSnapshot {
+            schema_version: JOB_SNAPSHOT_SCHEMA_VERSION,
+            jobs,
+        };
+        snapshot
+            .validate()
+            .map_err(|_| ClientError::MissingContent)?;
+
+        Ok(Observed {
+            value: snapshot,
+            provenance: Provenance {
+                kind: ProvenanceKind::OnAirFact,
+                source: JOBS_PROVENANCE_SOURCE.to_owned(),
+                observed_at: Utc::now(),
+            },
+        })
+    }
+
     async fn get<T: DeserializeOwned>(&self, path: &str) -> Result<T, ClientError> {
-        let response = self.http.execute(self.request(path)?).await?;
+        let mut response = self.http.execute(self.request(path)?).await?;
 
         match response.status() {
             StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => {
@@ -226,7 +343,32 @@ impl OnAirClient {
             _ => {}
         }
 
-        Ok(response.json().await?)
+        if response
+            .content_length()
+            .is_some_and(|length| length > MAX_RESPONSE_BYTES as u64)
+        {
+            return Err(ClientError::ResponseTooLarge);
+        }
+        if response
+            .headers()
+            .get(header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok())
+            .is_some_and(|value| {
+                let value = value.to_ascii_lowercase();
+                !value.starts_with("application/json") && !value.starts_with("text/json")
+            })
+        {
+            return Err(ClientError::InvalidContentType);
+        }
+
+        let mut body = Vec::new();
+        while let Some(chunk) = response.chunk().await? {
+            if body.len().saturating_add(chunk.len()) > MAX_RESPONSE_BYTES {
+                return Err(ClientError::ResponseTooLarge);
+            }
+            body.extend_from_slice(&chunk);
+        }
+        serde_json::from_slice(&body).map_err(|_| ClientError::MalformedResponse)
     }
 
     fn request(&self, path: &str) -> Result<reqwest::Request, ClientError> {
@@ -292,6 +434,79 @@ fn translate_fbo(fbo: RawFbo) -> Option<FboSummary> {
     })
 }
 
+fn translate_job(mission: RawMission) -> Option<JobSummary> {
+    let mut legs = mission
+        .cargos
+        .into_iter()
+        .filter_map(translate_cargo)
+        .chain(mission.charters.into_iter().filter_map(translate_charter))
+        .collect::<Vec<_>>();
+    legs.sort_by_key(|(source_index, _, _)| *source_index);
+    let legs = legs
+        .into_iter()
+        .enumerate()
+        .map(|(sequence, (_, _, mut leg))| {
+            leg.sequence = sequence as u32;
+            leg
+        })
+        .collect::<Vec<_>>();
+
+    let mission_type = mission.mission_type.and_then(|mission_type| {
+        bounded_text(mission_type.name, 120).or_else(|| bounded_text(mission_type.short_name, 120))
+    });
+    let job = JobSummary {
+        id: JobId(mission.id?),
+        mission_type,
+        description: bounded_text(mission.description, 1_024),
+        reported_pay: non_negative_finite(mission.pay),
+        created_at: mission.creation_date,
+        taken_at: mission.taken_date,
+        expires_at: mission.expiration_date,
+        legs,
+    };
+    job.validate().is_ok().then_some(job)
+}
+
+fn translate_cargo(cargo: RawCargo) -> Option<(u32, u8, JobLeg)> {
+    Some((
+        cargo.leg_index.unwrap_or(u32::MAX),
+        0,
+        JobLeg {
+            id: JobLegId(cargo.id?),
+            sequence: 0,
+            kind: JobLegKind::Cargo,
+            departure: cargo.departure_airport.and_then(translate_airport),
+            destination: cargo.destination_airport.and_then(translate_airport),
+            current_airport: cargo.current_airport.and_then(translate_airport),
+            cargo_weight_lb: non_negative_finite(cargo.weight),
+            passengers: None,
+            distance_nm: non_negative_finite(cargo.distance),
+            description: bounded_text(cargo.description, 512),
+        },
+    ))
+}
+
+fn translate_charter(charter: RawCharter) -> Option<(u32, u8, JobLeg)> {
+    Some((
+        charter.leg_index.unwrap_or(u32::MAX),
+        1,
+        JobLeg {
+            id: JobLegId(charter.id?),
+            sequence: 0,
+            kind: JobLegKind::Passengers,
+            departure: charter.departure_airport.and_then(translate_airport),
+            destination: charter.destination_airport.and_then(translate_airport),
+            current_airport: charter.current_airport.and_then(translate_airport),
+            cargo_weight_lb: None,
+            passengers: charter
+                .passengers
+                .and_then(|value| u32::try_from(value).ok()),
+            distance_nm: non_negative_finite(charter.distance),
+            description: bounded_text(charter.description, 512),
+        },
+    ))
+}
+
 fn coordinates(latitude: Option<f64>, longitude: Option<f64>) -> Option<Coordinates> {
     let coordinates = Coordinates {
         latitude: latitude?,
@@ -305,6 +520,16 @@ fn non_empty(value: Option<String>) -> Option<String> {
         let trimmed = value.trim();
         (!trimmed.is_empty()).then(|| trimmed.to_owned())
     })
+}
+
+fn bounded_text(value: Option<String>, maximum: usize) -> Option<String> {
+    non_empty(value).filter(|value| {
+        value.len() <= maximum && !value.chars().any(|character| character.is_control())
+    })
+}
+
+fn non_negative_finite(value: Option<f64>) -> Option<f64> {
+    value.filter(|value| value.is_finite() && *value >= 0.0)
 }
 
 #[cfg(test)]
@@ -445,6 +670,34 @@ mod tests {
             None
         );
         assert_eq!(fbos[2].airport, None);
+    }
+
+    #[test]
+    fn translates_pending_jobs_into_the_stable_snapshot_contract() {
+        let response: ApiResult<Vec<RawMission>> = serde_json::from_str(include_str!(
+            "../tests/fixtures/swagger-pending-jobs-response.json"
+        ))
+        .expect("synthetic Swagger fixture should deserialize");
+        let snapshot = JobSnapshot {
+            schema_version: JOB_SNAPSHOT_SCHEMA_VERSION,
+            jobs: response
+                .content
+                .expect("fixture should contain missions")
+                .into_iter()
+                .filter_map(translate_job)
+                .collect(),
+        };
+
+        snapshot.validate().expect("snapshot should validate");
+        assert_eq!(snapshot.jobs.len(), 2);
+        assert_eq!(snapshot.jobs[0].cargo_weight_lb(), Some(4_000.0));
+        assert_eq!(snapshot.jobs[1].passenger_count(), Some(8));
+        assert_eq!(
+            snapshot.jobs[0]
+                .route()
+                .and_then(|(departure, _)| departure.icao.as_deref()),
+            Some("YSSY")
+        );
     }
 
     #[test]

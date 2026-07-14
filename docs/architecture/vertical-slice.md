@@ -7,7 +7,7 @@ credential entry
   -> session-only Rust credential holder
   -> OnAir company GET connection probe
   -> optional operating-system credential storage (later opt-in milestone)
-  -> sequential OnAir fleet and FBO GET requests
+  -> sequential OnAir fleet, FBO, and pending-job GET requests
   -> raw response validation
   -> stable domain translation
   -> timestamped SQLite snapshot
@@ -54,9 +54,11 @@ the application service from those same bounded retained observations.
 The first operational-provider increment adds canonical `FlightPlanSnapshot`
 version 1 and a session-only, read-only SimBrief latest-OFP developer preview in
 Dispatch. The next increment compares observed OnAir registration, model, and
-aircraft position without collapsing either source, reports unavailable payload
-and deadline evidence rather than guessing, and adds an explicitly requested
+aircraft position without collapsing either source and adds an explicitly requested
 ten-minute session cache of AviationWeather.gov METAR and TAF facts for plan
-airports. Route advisories, online-network, navigation, simulator, and persistent
+airports. The pending-job increment adds a bounded, retained read-only job
+snapshot and an explicit Jobs-to-Dispatch handoff; Dispatch compares endpoint
+route, reported cargo weight, and expiry without accepting or changing OnAir
+work. Route advisories, online-network, navigation, simulator, and persistent
 operational caches remain sequenced in the
 [external integrations programme](../integrations/README.md).

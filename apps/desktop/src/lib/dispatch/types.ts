@@ -94,7 +94,8 @@ export type DispatchFinding = {
     | "aircraft_model"
     | "aircraft_position"
     | "payload"
-    | "schedule";
+    | "schedule"
+    | "job_route";
   status: DispatchFindingStatus;
   message_key: string;
   title: string;
@@ -152,6 +153,11 @@ export type DispatchStatus = {
   importing: boolean;
   snapshot?: FlightPlanSnapshot;
   comparison?: DispatchComparison;
+  selected_job?: {
+    job: import("$lib/atlas/types").JobSummary;
+    observed_at: string;
+    availability: "live" | "cached" | "offline";
+  };
   weather: {
     provider_available: boolean;
     availability: "not_requested" | "ready";

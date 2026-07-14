@@ -95,6 +95,26 @@ observation confirms their live shape. The committed FBO fixture is synthetic
 and Swagger-derived. It is translation evidence, not a claim that the endpoint
 has been authenticated against the user's company.
 
+## Pending-jobs boundary
+
+The published Swagger document was checked on 2026-07-14 for
+`GET /api/v1/company/{companyId}/jobs/pending`. WyrmGrid translates a deliberately
+narrow subset into `JobSnapshot` version 1: mission identity and type, bounded
+description, reported pay and timestamps, plus cargo and passenger legs with
+airport summaries, reported weight or passenger count, distance, description,
+and stable sequence.
+
+The same Swagger also exposes `POST /api/v1/fbo_jobs/{missionId}/accept`.
+WyrmGrid does not call, wrap, or expose that operation. Selecting a job in the
+interface only attaches the retained read-only observation to Dispatch for
+route, payload, and deadline comparison. It cannot accept, modify, dispatch, or
+complete work in OnAir.
+
+The committed pending-jobs response fixture is synthetic and Swagger-derived.
+No authenticated pending-jobs response has been captured or certified, so the
+feature remains a developer preview until an outside-repository authenticated
+test confirms the narrow live shape.
+
 ## Synchronization policy
 
 OnAir does not currently publish a formal public API rate-limit policy in the
@@ -111,11 +131,12 @@ official guidance:
 - requests inside either quiet period return the existing snapshot without
   contacting OnAir or displaying an error.
 
-An accepted synchronization performs fleet then FBO reads sequentially under
+An accepted synchronization performs fleet, FBO, then pending-job reads sequentially under
 that one gate. Each successful resource is timestamped and retained
 independently. If fleet authentication is rejected or rate-limited, WyrmGrid
-does not make the FBO request; other fleet failures may still allow the FBO
-snapshot to refresh. This preserves useful partial results without multiplying
+does not make later requests; an authentication or rate-limit failure at the
+FBO step skips pending jobs. Other resource failures may still allow subsequent
+snapshots to refresh. This preserves useful partial results without multiplying
 user-facing synchronization controls.
 
 The interval choice is a non-secret interface preference stored locally. The

@@ -138,9 +138,13 @@
 - Forge labels the Python runtime a developer preview and states that capability
   review is not an operating-system sandbox;
 - company synchronization is serialized in Rust; trigger-specific quiet periods
-  silently return cached state without making another remote request. Fleet and
-  FBO reads are sequential, and an authentication or rate-limit failure stops
-  the second request.
+  silently return cached state without making another remote request. Fleet,
+  FBO, and pending-job reads are sequential, and an authentication or rate-limit
+  failure stops later requests. Raw recursive mission objects stay in the adapter;
+  stable job snapshots enforce job, leg, text, numeric, coordinate, and schema limits.
+- Dispatch job selection carries only a validated Hoard observation. It exposes
+  no OnAir acceptance command, and route, payload, and expiry findings remain
+  calculated comparisons rather than OnAir instructions or guarantees.
 - Hoard stores stable domain snapshots rather than raw API payloads, never stores
   credentials, applies bounded retention, and visibly distinguishes live,
   cached, offline, preview, and memory-only data.
