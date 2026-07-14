@@ -8,10 +8,14 @@ Rust toolchain in `rust-toolchain.toml`.
 
 ```powershell
 npm ci
-cargo test --workspace --exclude wyrmgrid-desktop
+cargo test --workspace
+npm test --workspace @wyrmgrid/desktop
 npm run check
 npm run dev
 ```
+
+See the [testing strategy](testing.md) for test placement, required cases, CI
+gates, and the safe scope for automated test-writing agents.
 
 ## Repository layout
 

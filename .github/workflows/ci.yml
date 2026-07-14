@@ -63,3 +63,26 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Check Tauri backend
         run: cargo check -p wyrmgrid-desktop
+      - name: Test Tauri backend
+        run: cargo test -p wyrmgrid-desktop
+
+  rust-coverage:
+    name: Rust coverage
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.97.0
+          components: llvm-tools-preview
+      - uses: taiki-e/install-action@cargo-llvm-cov
+      - uses: Swatinem/rust-cache@v2
+      - name: Measure core test coverage
+        run: cargo llvm-cov --workspace --exclude wyrmgrid-desktop --lcov --output-path rust-lcov.info
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v6
+        with:
+          name: rust-coverage
+          path: rust-lcov.info
+          retention-days: 14

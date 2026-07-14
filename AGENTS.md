@@ -30,6 +30,13 @@
 
 - Rust: formatting, Clippy with warnings denied, unit tests, and dependency audit.
 - Frontend: Svelte type checking, production build, and formatting.
+- Keep test implementations physically separate from production modules. Rust
+  production files may contain only a `#[cfg(test)]` path hook; put unit-test
+  bodies in `src/tests/` and black-box integration tests in `tests/`. Keep
+  frontend tests in dedicated `*.test.ts` files.
+- Every bug fix needs a regression test at the lowest layer that can reproduce
+  it. New business rules need boundary, failure, and unavailable-data cases as
+  well as the successful path.
 - Protocol changes require fixtures, validation tests, documentation, and an
   explicit compatibility decision.
 - Security-sensitive changes require corresponding threat-model updates.
