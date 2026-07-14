@@ -56,6 +56,11 @@ or `error-`.
 These prompts remain canonical English until a translation is reviewed and
 bundled through a future trusted release path.
 
+Source catalogue version 5 adds the protected `security-` namespace. Version 4
+community packs are rejected rather than being silently reinterpreted; authors
+must review the version 5 catalogue, update `source_catalog_version`, and import
+the pack again. Existing ordinary translated message keys keep their meaning.
+
 The desktop **Diagnostics** surface and its local structured log are also
 English-only and do not resolve message keys through language packs. This is an
 operational compatibility boundary: the stable code and controlled message
