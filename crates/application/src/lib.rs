@@ -44,7 +44,7 @@ pub fn platform_status() -> PlatformStatus {
 }
 
 pub const TERMS_VERSION: &str = "2026-07-14";
-pub const PRIVACY_NOTICE_VERSION: &str = "2026-07-14.1";
+pub const PRIVACY_NOTICE_VERSION: &str = "2026-07-14.2";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PersistedLegalPreferences {
@@ -935,6 +935,12 @@ impl From<DispatchError> for OperationError {
         let (code, retryable, reportable) = match error {
             DispatchError::ProviderUnavailable => ("dispatch.provider_unavailable", true, false),
             DispatchError::ImportInProgress => ("dispatch.import_in_progress", true, false),
+            DispatchError::WeatherNeedsPlan => ("weather.plan_required", false, false),
+            DispatchError::WeatherProviderUnavailable => {
+                ("weather.provider_unavailable", true, false)
+            }
+            DispatchError::WeatherRefreshInProgress => ("weather.refresh_in_progress", true, false),
+            DispatchError::WeatherRefreshTooSoon => ("weather.refresh_too_soon", true, false),
             DispatchError::StateUnavailable => ("application.state_unavailable", true, true),
             DispatchError::Provider(wyrmgrid_simbrief_api::ClientError::InvalidUserReference) => {
                 ("simbrief.invalid_user_reference", false, false)
@@ -959,6 +965,24 @@ impl From<DispatchError> for OperationError {
                 | wyrmgrid_simbrief_api::ClientError::InvalidContentType
                 | wyrmgrid_simbrief_api::ClientError::MalformedPlan,
             ) => ("simbrief.invalid_response", false, true),
+            DispatchError::WeatherProvider(wyrmgrid_weather_api::ClientError::InvalidStations) => {
+                ("weather.invalid_stations", false, false)
+            }
+            DispatchError::WeatherProvider(wyrmgrid_weather_api::ClientError::RateLimited) => {
+                ("weather.rate_limited", true, false)
+            }
+            DispatchError::WeatherProvider(
+                wyrmgrid_weather_api::ClientError::TimedOut
+                | wyrmgrid_weather_api::ClientError::Offline
+                | wyrmgrid_weather_api::ClientError::ProviderUnavailable,
+            ) => ("weather.unavailable", true, false),
+            DispatchError::WeatherProvider(
+                wyrmgrid_weather_api::ClientError::ConfigurationUnavailable
+                | wyrmgrid_weather_api::ClientError::UnexpectedResponse
+                | wyrmgrid_weather_api::ClientError::ResponseTooLarge
+                | wyrmgrid_weather_api::ClientError::InvalidContentType
+                | wyrmgrid_weather_api::ClientError::MalformedWeather,
+            ) => ("weather.invalid_response", false, true),
         };
         Self {
             code,

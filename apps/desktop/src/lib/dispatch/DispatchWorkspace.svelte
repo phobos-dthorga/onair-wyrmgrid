@@ -11,12 +11,14 @@
     busy = false,
     errorMessage = "",
     onimport,
+    onweather,
     onclear,
   }: {
     status: DispatchStatus;
     busy?: boolean;
     errorMessage?: string;
     onimport: (kind: SimBriefReferenceKind, reference: string) => void;
+    onweather: () => void;
     onclear: () => void;
   } = $props();
 
@@ -30,6 +32,8 @@
   const route = $derived(plan?.route?.value);
   const weights = $derived(plan?.weights?.value);
   const fuel = $derived(plan?.fuel?.value);
+  const comparison = $derived(status.comparison);
+  const weather = $derived(status.weather.snapshot);
 
   function formatDate(value: string | undefined): string {
     if (!value) return "Not supplied";
@@ -58,6 +62,10 @@
     if (!value) return "—";
     const unit = value.unit === "kilograms" ? "kg" : "lb";
     return `${new Intl.NumberFormat().format(Math.round(value.value))} ${unit}`;
+  }
+
+  function formatFindingCategory(value: string): string {
+    return value.replaceAll("_", " ");
   }
 </script>
 
@@ -103,13 +111,13 @@
         type="submit"
         disabled={busy || !status.provider_available || !reference.trim()}
       >
-        {busy ? "Retrieving latest OFP…" : "Import latest OFP"}
+        {busy ? "Working…" : "Import latest OFP"}
       </button>
     </form>
 
     {#if errorMessage}
       <div class="dispatch-notice dispatch-error" role="alert">
-        <strong>Import not completed</strong>
+        <strong>Dispatch action not completed</strong>
         <span>{errorMessage}</span>
       </div>
     {:else}
@@ -197,6 +205,103 @@
           </dl>
         </article>
       </div>
+
+      <div class="dispatch-intelligence-grid">
+        <article class="dispatch-card dispatch-intelligence-card">
+          <div class="dispatch-card-heading">
+            <div>
+              <span class="eyebrow">Explainable reconciliation</span>
+              <h3>Plan cross-check</h3>
+            </div>
+            <strong>{comparison?.fleet_available ? "ON AIR" : "NO FLEET"}</strong>
+          </div>
+          <p class="dispatch-card-intro">
+            WyrmGrid keeps SimBrief calculations and OnAir observations separate,
+            then shows the evidence behind every match, difference, or gap.
+          </p>
+          {#if comparison}
+            <ol class="dispatch-finding-list">
+              {#each comparison.findings as finding}
+                <li class={`dispatch-finding-${finding.status}`}>
+                  <div class="dispatch-finding-heading">
+                    <span>{formatFindingCategory(finding.category)}</span>
+                    <b>{finding.status}</b>
+                  </div>
+                  <strong>{finding.title}</strong>
+                  <p>{finding.explanation}</p>
+                  {#if finding.plan_value || finding.onair_value}
+                    <dl>
+                      <div><dt>Plan</dt><dd>{finding.plan_value ?? "Not supplied"}</dd></div>
+                      <div><dt>OnAir</dt><dd>{finding.onair_value ?? "Not observed"}</dd></div>
+                    </dl>
+                  {/if}
+                </li>
+              {/each}
+            </ol>
+          {/if}
+        </article>
+
+        <article class="dispatch-card dispatch-intelligence-card dispatch-weather-card">
+          <div class="dispatch-card-heading">
+            <div>
+              <span class="eyebrow">External airport facts</span>
+              <h3>METAR + TAF context</h3>
+            </div>
+            <strong>{status.weather.cache}</strong>
+          </div>
+          <p class="dispatch-card-intro">
+            Public AviationWeather.gov reports for the origin, destination, and
+            alternates. Raw coded text remains visible; no hidden safety score is applied.
+          </p>
+          <button
+            class="dispatch-inline-action"
+            type="button"
+            disabled={busy || !status.weather.provider_available}
+            onclick={onweather}
+          >
+            {busy ? "Working…" : weather ? "Refresh when due" : "Fetch airport weather"}
+          </button>
+
+          {#if weather}
+            <div class="dispatch-weather-grid">
+              {#each weather.airports as airport}
+                <section class="dispatch-weather-station">
+                  <header>
+                    <strong>{airport.station_icao}</strong>
+                    <span class={`dispatch-flight-category dispatch-flight-category-${airport.metar?.value.flight_category ?? "unknown"}`}>
+                      {airport.metar?.value.flight_category?.toUpperCase() ?? "NO METAR"}
+                    </span>
+                  </header>
+                  {#if airport.metar}
+                    <div class="dispatch-weather-metrics">
+                      <span>Wind <b>{airport.metar.value.wind_direction?.kind === "degrees" ? `${airport.metar.value.wind_direction.value.toString().padStart(3, "0")}°` : airport.metar.value.wind_direction?.kind === "variable" ? "VRB" : "—"} / {airport.metar.value.wind_speed_kt ?? "—"} kt{airport.metar.value.wind_gust_kt ? ` G${airport.metar.value.wind_gust_kt}` : ""}</b></span>
+                      <span>Visibility <b>{airport.metar.value.visibility_sm ? `${airport.metar.value.visibility_sm} sm` : "—"}</b></span>
+                      <span>Temp <b>{airport.metar.value.temperature_c ?? "—"}°C</b></span>
+                      <span>Observed <b>{formatDate(airport.metar.value.observed_at)}</b></span>
+                    </div>
+                    <p class="dispatch-coded-weather">{airport.metar.value.raw_text}</p>
+                  {:else}
+                    <p class="dispatch-weather-empty">No recent METAR was returned for this station.</p>
+                  {/if}
+                  {#if airport.taf}
+                    <div class="dispatch-taf-heading">
+                      <span>TAF valid to</span><strong>{formatDate(airport.taf.value.valid_to)}</strong>
+                    </div>
+                    <p class="dispatch-coded-weather dispatch-coded-taf">{airport.taf.value.raw_text}</p>
+                  {:else}
+                    <p class="dispatch-weather-empty">No current TAF was returned for this station.</p>
+                  {/if}
+                </section>
+              {/each}
+            </div>
+          {:else}
+            <div class="dispatch-weather-prompt">
+              <strong>Weather has not been requested.</strong>
+              <span>The first explicit fetch remains in memory and is reused for ten minutes.</span>
+            </div>
+          {/if}
+        </article>
+      </div>
     {:else}
       <div class="dispatch-empty-state">
         <div class="dispatch-runway" aria-hidden="true"><span></span><i>34L</i></div>
@@ -221,6 +326,8 @@
         <article><span>Generated</span><strong>{formatDate(plan.identity.provenance.generated_at)}</strong></article>
         <article><span>Retrieved</span><strong>{formatDate(plan.identity.provenance.retrieved_at)}</strong></article>
         <article><span>Alternate</span><strong>{airports.alternates.map((airport) => airport.icao).join(", ") || "None supplied"}</strong></article>
+        <article><span>OnAir aircraft</span><strong>{comparison?.matched_aircraft?.registration ?? "No deterministic match"}</strong><small>{comparison?.matched_aircraft?.basis?.replaceAll("_", " ") ?? "Comparison is evidence-bound"}</small></article>
+        <article><span>Airport weather</span><strong>{status.weather.availability === "ready" ? `${weather?.airports.length ?? 0} stations` : "Not requested"}</strong><small>{status.weather.cache} session cache</small></article>
       </div>
 
       <div class="dispatch-clearance">

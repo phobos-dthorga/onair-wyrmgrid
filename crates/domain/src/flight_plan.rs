@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
 
-use crate::{Coordinates, ProvenanceKind};
+use crate::{Coordinates, OperationalObservation, valid_code, valid_text};
 
 pub const FLIGHT_PLAN_SNAPSHOT_SCHEMA_VERSION: u32 = 1;
 pub const MAX_FLIGHT_PLAN_ALTERNATES: usize = 8;
@@ -12,33 +12,6 @@ pub const MAX_FLIGHT_PLAN_ROUTE_LEGS: usize = 2_048;
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct FlightPlanSnapshotId(pub Uuid);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum SnapshotFreshness {
-    Current,
-    Stale,
-    Unknown,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct OperationalProvenance {
-    pub kind: ProvenanceKind,
-    pub provider: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub provider_revision: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub generated_at: Option<DateTime<Utc>>,
-    pub retrieved_at: DateTime<Utc>,
-    pub transformation_version: u32,
-    pub freshness: SnapshotFreshness,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct OperationalObservation<T> {
-    pub value: T,
-    pub provenance: OperationalProvenance,
-}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FlightPlanSnapshot {
@@ -212,7 +185,7 @@ impl FlightPlanSnapshot {
         provenance.extend(self.weights.iter().map(|group| &group.provenance));
         provenance.extend(self.fuel.iter().map(|group| &group.provenance));
         provenance.extend(self.route.iter().map(|group| &group.provenance));
-        if provenance.iter().any(|item| !valid_provenance(item)) {
+        if provenance.iter().any(|item| !item.is_valid()) {
             return Err(FlightPlanValidationError::InvalidProvenance);
         }
 
@@ -325,15 +298,6 @@ impl FlightPlanSnapshot {
     }
 }
 
-fn valid_provenance(value: &OperationalProvenance) -> bool {
-    valid_text(&value.provider, 64)
-        && value
-            .provider_revision
-            .as_ref()
-            .is_none_or(|revision| valid_text(revision, 64))
-        && value.transformation_version > 0
-}
-
 fn valid_airport(value: &FlightPlanAirport) -> bool {
     valid_code(&value.icao, 2, 8)
         && value.name.as_ref().is_none_or(|name| valid_text(name, 160))
@@ -342,17 +306,6 @@ fn valid_airport(value: &FlightPlanAirport) -> bool {
             .planned_runway
             .as_ref()
             .is_none_or(|runway| valid_code(runway, 1, 12))
-}
-
-fn valid_code(value: &str, minimum: usize, maximum: usize) -> bool {
-    (minimum..=maximum).contains(&value.len())
-        && value.chars().all(|character| {
-            character.is_ascii_alphanumeric() || character == '-' || character == '/'
-        })
-}
-
-fn valid_text(value: &str, maximum: usize) -> bool {
-    !value.trim().is_empty() && value.len() <= maximum && !value.chars().any(char::is_control)
 }
 
 fn invalid_mass(value: Mass) -> bool {
@@ -380,6 +333,7 @@ fn fuel(value: &PlannedFuel) -> [Option<Mass>; 9] {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{OperationalProvenance, ProvenanceKind, SnapshotFreshness};
 
     fn provenance() -> OperationalProvenance {
         OperationalProvenance {

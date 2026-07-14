@@ -1,6 +1,6 @@
 # OnAir WyrmGrid Privacy Notice
 
-**Version and effective date:** 2026-07-14.1
+**Version and effective date:** 2026-07-14.2
 
 This preliminary notice describes information handled by official builds of
 OnAir WyrmGrid distributed by Phobos A. D'thorga. It does not describe an
@@ -16,6 +16,9 @@ professionally reviewed before a stable or commercial release.
 - If you choose to import a flight plan, your SimBrief Pilot ID or username is
   sent directly to SimBrief to retrieve the account's latest OFP. WyrmGrid does
   not ask for a SimBrief or Navigraph password.
+- If you choose to fetch airport weather, the plan's origin, destination, and
+  alternate ICAO identifiers are sent to AviationWeather.gov for current METAR
+  and TAF products.
 - Atlas downloads its current map style and tiles from MapLibre's public demo
   service after legal onboarding is complete.
 - Privacy-filtered error diagnostics are optional, off by default, and only
@@ -36,7 +39,10 @@ WyrmGrid currently keeps the following information on the user's device:
 - while the application is running, a user-supplied SimBrief Pilot ID or
   username for the duration of one import request and the translated latest OFP
   in process memory. The identifier and plan are not currently written to the
-  WyrmGrid database.
+  WyrmGrid database; and
+- after an explicit weather request, translated METAR and TAF observations for
+  at most ten plan airports in process memory. The current cache is tied to the
+  session plan, reused for ten minutes, and not written to the WyrmGrid database.
 
 The API key is cleared when the OnAir session disconnects or the process exits.
 Normal session-only handling cannot guarantee removal from operating-system
@@ -79,6 +85,26 @@ WyrmGrid removes the application's in-memory reference, subject to the same
 operating-system memory limitations described above. SimBrief operates
 independently under its own terms and privacy practices.
 
+### AviationWeather.gov
+
+When the user explicitly chooses **Fetch airport weather**, WyrmGrid sends a
+bounded list containing the imported plan's origin, destination, and alternate
+ICAO identifiers to AviationWeather.gov's public METAR and TAF JSON endpoints
+over HTTPS. AviationWeather.gov and intermediate network providers receive the
+station identifiers, source IP address, request time, WyrmGrid user agent, and
+other normal connection metadata. WyrmGrid does not include the SimBrief Pilot
+ID or username, SimBrief plan identifier, route, OnAir API key, company ID,
+fleet record, or other OFP fields in these requests.
+
+Raw provider JSON remains inside the weather adapter. WyrmGrid retains only a
+bounded translated `WeatherSnapshot` in process memory, visibly identifies the
+source and product times, and reuses a successful combined airport result for
+ten minutes to reduce provider load. Weather is not sent to Sentry or plugins.
+The provider may return no report for a valid station; absence of data is not a
+claim of safe or clear conditions. AviationWeather.gov is operated by the
+United States National Weather Service and operates independently under its own
+notices and policies.
+
 ### Optional Sentry diagnostics
 
 If the user opts in and the build has been deliberately configured for public
@@ -106,16 +132,18 @@ will be increased.
 ## Purposes
 
 WyrmGrid handles information to provide user-requested OnAir connectivity,
-retrieve a user-requested SimBrief plan, display operational context, remember
-local choices, secure and diagnose the application, and improve reliability.
+retrieve a user-requested SimBrief plan and airport weather, compare separately
+sourced operational facts, display operational context, remember local choices,
+secure and diagnose the application, and improve reliability.
 Information is not used for behavioural advertising, data brokerage, or
 unrelated user profiling.
 
 ## Retention and deletion
 
 Session-only credentials, account references, fleet state, and imported
-SimBrief plans are discarded when the process exits. A Dispatch user can also
-clear the imported plan during the session.
+SimBrief plans and weather snapshots are discarded when the process exits. A
+Dispatch user can also clear the imported plan and its associated weather during
+the session.
 Local preferences remain until changed, removed by a future reset function, or
 deleted with the application's local data. Optional diagnostic events follow
 the Sentry retention configuration disclosed when public telemetry is enabled.

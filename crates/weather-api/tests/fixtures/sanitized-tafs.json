@@ -1,0 +1,23 @@
+[
+  {
+    "icaoId": "YSSY",
+    "issueTime": "2026-07-13T23:24:00.000Z",
+    "validTimeFrom": 1783987200,
+    "validTimeTo": 1784095200,
+    "rawTAF": "TAF YSSY 132324Z 1400/1506 32014KT CAVOK FM140200 26018KT CAVOK FM140700 26010KT CAVOK"
+  },
+  {
+    "icaoId": "NZAA",
+    "issueTime": "2026-07-13T23:08:00.000Z",
+    "validTimeFrom": 1783987200,
+    "validTimeTo": 1784095200,
+    "rawTAF": "TAF NZAA 132308Z 1400/1506 03010KT 9999 -SHRA SCT020 BKN030 BECMG 1406/1408 VRB02KT"
+  },
+  {
+    "icaoId": "NZWN",
+    "issueTime": "2026-07-13T23:08:00.000Z",
+    "validTimeFrom": 1783987200,
+    "validTimeTo": 1784095200,
+    "rawTAF": "TAF NZWN 132308Z 1400/1506 01020G30KT 9999 BKN020 BECMG 1414/1416 01015KT"
+  }
+]

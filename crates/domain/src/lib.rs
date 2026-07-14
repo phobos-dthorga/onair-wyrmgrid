@@ -1,8 +1,12 @@
 //! Stable domain types shared by WyrmGrid services and public protocol adapters.
 
 mod flight_plan;
+mod operational;
+mod weather;
 
 pub use flight_plan::*;
+pub use operational::*;
+pub use weather::*;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

@@ -85,12 +85,79 @@ export type FlightPlanSnapshot = {
   }>;
 };
 
+export type DispatchFindingStatus =
+  "match" | "difference" | "information" | "unavailable";
+
+export type DispatchFinding = {
+  category:
+    | "aircraft_identity"
+    | "aircraft_model"
+    | "aircraft_position"
+    | "payload"
+    | "schedule";
+  status: DispatchFindingStatus;
+  title: string;
+  explanation: string;
+  plan_value?: string;
+  onair_value?: string;
+};
+
+export type DispatchComparison = {
+  fleet_available: boolean;
+  fleet_observed_at?: string;
+  matched_aircraft?: {
+    basis: "registration" | "exact_model";
+    registration?: string;
+    model?: string;
+    current_airport_icao?: string;
+  };
+  findings: DispatchFinding[];
+  provenance: OperationalProvenance;
+};
+
+export type WeatherSnapshot = {
+  schema_version: number;
+  id: string;
+  airports: Array<{
+    station_icao: string;
+    metar?: Observation<{
+      observed_at: string;
+      raw_text: string;
+      report_type?: string;
+      flight_category?: "vfr" | "mvfr" | "ifr" | "lifr" | "unknown";
+      wind_direction?:
+        { kind: "degrees"; value: number } | { kind: "variable" };
+      wind_speed_kt?: number;
+      wind_gust_kt?: number;
+      visibility_sm?: string;
+      temperature_c?: number;
+      dewpoint_c?: number;
+      altimeter_hpa?: number;
+      present_weather?: string;
+    }>;
+    taf?: Observation<{
+      issued_at: string;
+      valid_from: string;
+      valid_to: string;
+      raw_text: string;
+    }>;
+  }>;
+};
+
 export type DispatchStatus = {
   provider_available: boolean;
   availability: "empty" | "ready";
   persistence: "session_only";
   importing: boolean;
   snapshot?: FlightPlanSnapshot;
+  comparison?: DispatchComparison;
+  weather: {
+    provider_available: boolean;
+    availability: "not_requested" | "ready";
+    refreshing: boolean;
+    cache: "none" | "fresh" | "expired";
+    snapshot?: WeatherSnapshot;
+  };
 };
 
 export type SimBriefReferenceKind = "pilot_id" | "username";

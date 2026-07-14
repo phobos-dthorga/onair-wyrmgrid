@@ -52,9 +52,12 @@ Online networks --------------------------+--> Atlas overlays     |
 3. Import a user's latest SimBrief OFP without storing a password or shared
    application secret. (Implemented as a session-only developer preview;
    authenticated live-field certification remains.)
-4. Add cached airport weather and route-weather summaries.
+4. Add cached airport weather and route-weather summaries. (Initial explicitly
+   requested, session-cached METAR/TAF airport context implemented; route
+   advisories remain.)
 5. Connect OnAir jobs, fleet selection, SimBrief plans, and explainable dispatch
-   checks.
+   checks. (Registration, exact model-label, and current-airport comparison
+   implemented; job payload and deadline checks await those OnAir contracts.)
 6. Export simulator-neutral routes and implement the MSFS 2024 Bridge telemetry
    slice.
 7. Add read-only SayIntentions `flight.json` correlation and selected SAPI reads,

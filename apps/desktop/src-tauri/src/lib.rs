@@ -91,7 +91,11 @@ fn onair_historical_company_data(
 fn dispatch_status(
     state: tauri::State<'_, DesktopState>,
 ) -> Result<wyrmgrid_application::DispatchStatus, wyrmgrid_application::OperationError> {
-    state.dispatch.status().map_err(operation_error)
+    let fleet = state.onair.fleet_snapshot().map_err(operation_error)?;
+    state
+        .dispatch
+        .briefing(fleet.as_ref())
+        .map_err(operation_error)
 }
 
 #[tauri::command]
@@ -104,14 +108,28 @@ async fn import_simbrief_latest(
         .dispatch
         .import_latest(reference_kind, &reference)
         .await
-        .map_err(operation_error)
+        .map_err(operation_error)?;
+    dispatch_status(state)
+}
+
+#[tauri::command]
+async fn refresh_dispatch_weather(
+    state: tauri::State<'_, DesktopState>,
+) -> Result<wyrmgrid_application::DispatchStatus, wyrmgrid_application::OperationError> {
+    state
+        .dispatch
+        .refresh_weather()
+        .await
+        .map_err(operation_error)?;
+    dispatch_status(state)
 }
 
 #[tauri::command]
 fn clear_dispatch_plan(
     state: tauri::State<'_, DesktopState>,
 ) -> Result<wyrmgrid_application::DispatchStatus, wyrmgrid_application::OperationError> {
-    state.dispatch.clear().map_err(operation_error)
+    state.dispatch.clear().map_err(operation_error)?;
+    dispatch_status(state)
 }
 
 #[tauri::command]
@@ -290,6 +308,7 @@ pub fn run() {
             onair_historical_company_data,
             dispatch_status,
             import_simbrief_latest,
+            refresh_dispatch_weather,
             clear_dispatch_plan,
             legal_status,
             acknowledge_legal,
