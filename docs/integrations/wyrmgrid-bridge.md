@@ -5,6 +5,23 @@ and native or simulator-local APIs. MSFS 2024 is the primary target. MSFS 2020,
 FSUIPC, and X-Plane are separate providers behind the same versioned Bridge
 protocol, not conditional code paths inside Svelte or the application domain.
 
+## Implementation status
+
+The version-one foundation is implemented: manifest and Bridge schemas,
+length-prefixed protocol codec, sanitized fixtures, stable telemetry domain
+model, multi-registration supervisor with one selected active provider, the
+MSFS 2024 SimConnect provider executable, desktop connection controls, and
+permission-filtered telemetry delivery to ordinary plugins. The provider is
+compiled and exercised by automated handshake, translation, validation,
+shutdown, and unavailable-simulator tests.
+
+Live MSFS 2024 behaviour has not yet been certified. A sanitized
+outside-repository session with the simulator and representative aircraft is
+still required before the project describes the provider as live-supported.
+The WyrmGrid provider executable is staged as a Windows-only declared Tauri
+external binary. Bundling the Microsoft SimConnect client remains pending
+review of the SDK redistribution terms; no Microsoft binary is committed here.
+
 [SayIntentions.AI](sayintentions.md) is a separate account provider. Its local
 `flight.json` and SAPI describe the AI ATC session, communications, and
 SayIntentions-owned airport state; they do not replace Bridge telemetry. The
@@ -44,8 +61,11 @@ credentials across either boundary.
 - The Bridge binds only to the local mechanism required by its provider and does
   not expose a remotely reachable control service by default.
 
-The Bridge protocol requires its own fixtures, validation tests, documentation,
-and compatibility decision before the first executable sidecar ships.
+The Bridge protocol has independent fixtures, validation tests, documentation,
+and the compatibility decision in
+[ADR-0011](../architecture/decisions/0011-core-simulator-capability-provider-sidecars.md).
+See [simulator provider authoring](simulator-provider-authoring.md) for the
+implemented contract and the FSUIPC/community-provider path.
 
 ## MSFS 2024 slice
 
@@ -141,6 +161,7 @@ flight initialization. Users can disable incoming traffic in X-Plane.
 
 ## References
 
+- [Simulator provider authoring](simulator-provider-authoring.md)
 - [MSFS 2024 SimConnect flight APIs](https://docs.flightsimulator.com/msfs2024/html/6_Programming_APIs/SimConnect/API_Reference/Flights/Flights.htm)
 - [MSFS 2024 SimConnect SDK](https://docs.flightsimulator.com/msfs2024/html/6_Programming_APIs/SimConnect/SimConnect_SDK.htm)
 - [X-Plane local Web API](https://developer.x-plane.com/article/x-plane-web-api/)

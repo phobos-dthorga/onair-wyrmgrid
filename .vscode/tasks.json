@@ -1,0 +1,34 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "wyrmgrid: frontend dev",
+      "type": "npm",
+      "script": "dev",
+      "path": "apps/desktop",
+      "isBackground": true,
+      "presentation": {
+        "reveal": "silent",
+        "panel": "dedicated"
+      },
+      "problemMatcher": {
+        "owner": "vite",
+        "pattern": {
+          "regexp": "^$"
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".*VITE.*",
+          "endsPattern": ".*Local:.*http://localhost:1420/.*"
+        }
+      }
+    },
+    {
+      "label": "wyrmgrid: frontend build",
+      "type": "npm",
+      "script": "build",
+      "path": "apps/desktop",
+      "problemMatcher": []
+    }
+  ]
+}

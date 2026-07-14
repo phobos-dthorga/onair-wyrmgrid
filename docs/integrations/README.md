@@ -59,7 +59,9 @@ Online networks --------------------------+--> Atlas overlays     |
    checks. (Registration, exact model-label, and current-airport comparison
    implemented; job payload and deadline checks await those OnAir contracts.)
 6. Export simulator-neutral routes and implement the MSFS 2024 Bridge telemetry
-   slice.
+   slice. (The read-only Bridge protocol, provider supervisor, SimConnect
+   sidecar, desktop controls, and plugin snapshot delivery are implemented;
+   route export, live certification, and release bundling remain.)
 7. Add read-only SayIntentions `flight.json` correlation and selected SAPI reads,
    followed by explicit user-initiated ACARS, crew, or gate actions.
 8. Reconcile plan versus actual time, route, payload, fuel, and AI ATC context.
@@ -97,6 +99,8 @@ require a sanitized captured response or an outside-repository integration test.
 - [VATSIM and IVAO](online-networks.md)
 - [Navigation data and flight-plan interchange](navigation-and-interchange.md)
 - [WyrmGrid Bridge and simulator providers](wyrmgrid-bridge.md)
+- [Simulator provider authoring and FSUIPC path](simulator-provider-authoring.md)
+- [Simulator connection, recording, in-game control, and graphs](simulator-experience-roadmap.md)
 
 ## Local automation and community handoff
 

@@ -12,6 +12,7 @@
       "oneOf": [
         { "$ref": "#/$defs/hello" },
         { "$ref": "#/$defs/fleetSnapshot" },
+        { "$ref": "#/$defs/simulatorTelemetrySnapshot" },
         { "$ref": "#/$defs/shutdown" },
         { "$ref": "#/$defs/ready" },
         { "$ref": "#/$defs/publishMapLayer" }
@@ -82,6 +83,17 @@
       "properties": {
         "type": { "const": "fleet_snapshot" },
         "snapshot": { "type": "object" }
+      }
+    },
+    "simulatorTelemetrySnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "snapshot"],
+      "properties": {
+        "type": { "const": "simulator_telemetry_snapshot" },
+        "snapshot": {
+          "$ref": "simulator-telemetry-snapshot-v1.schema.json"
+        }
       }
     },
     "shutdown": {

@@ -13,6 +13,7 @@
     "dev": "npm run tauri --workspace @wyrmgrid/desktop -- dev",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "provider:prepare": "node scripts/prepare-simulator-provider.mjs",
     "tauri": "npm run tauri --workspace @wyrmgrid/desktop --"
   },
   "devDependencies": {

@@ -1,15 +1,31 @@
+mod diagnostics;
 mod observability;
 
 use tauri::Manager;
 
+#[derive(Clone, Debug, Default, serde::Serialize)]
+struct StartupOptions {
+    no_launch_art: bool,
+    compact_ui: bool,
+    low_resource: bool,
+}
+
 struct DesktopState {
+    startup_options: StartupOptions,
     onair: wyrmgrid_application::OnAirSession,
     dispatch: wyrmgrid_application::DispatchSession,
     plugins: wyrmgrid_application::PluginService,
+    simulator: wyrmgrid_application::SimulatorBridgeService,
     legal: wyrmgrid_application::LegalSettingsService<wyrmgrid_storage::Store>,
     themes: wyrmgrid_application::ThemeSettingsService<wyrmgrid_storage::Store>,
     languages: wyrmgrid_application::LanguageSettingsService<wyrmgrid_storage::Store>,
+    display: wyrmgrid_application::DisplaySettingsService<wyrmgrid_storage::Store>,
     observability: observability::Controller,
+}
+
+#[tauri::command]
+fn startup_options(state: tauri::State<'_, DesktopState>) -> StartupOptions {
+    state.startup_options.clone()
 }
 
 #[tauri::command]
@@ -49,11 +65,34 @@ async fn synchronize_onair_company_data(
     state: tauri::State<'_, DesktopState>,
     trigger: wyrmgrid_application::DataSyncTrigger,
 ) -> Result<wyrmgrid_application::CompanyDataSyncResult, wyrmgrid_application::OperationError> {
-    state
+    let result = state
         .onair
         .synchronize_company_data(trigger)
         .await
-        .map_err(operation_error)
+        .map_err(operation_error)?;
+    for failure in &result.failures {
+        diagnostics::record(
+            if failure.code == "onair.request_skipped" {
+                "warning"
+            } else {
+                "error"
+            },
+            failure.code,
+            "synchronize_onair_company_data",
+            &failure.message,
+        );
+    }
+    Ok(result)
+}
+
+#[tauri::command]
+fn diagnostic_log() -> diagnostics::DiagnosticLogView {
+    diagnostics::view()
+}
+
+#[tauri::command]
+fn clear_diagnostic_log() -> diagnostics::DiagnosticLogView {
+    diagnostics::clear()
 }
 
 #[tauri::command]
@@ -209,6 +248,21 @@ fn theme_status(
 }
 
 #[tauri::command]
+fn display_preferences(
+    state: tauri::State<'_, DesktopState>,
+) -> Result<wyrmgrid_application::DisplayPreferences, wyrmgrid_application::OperationError> {
+    state.display.status().map_err(operation_error)
+}
+
+#[tauri::command]
+fn update_display_preferences(
+    state: tauri::State<'_, DesktopState>,
+    preferences: wyrmgrid_application::DisplayPreferences,
+) -> Result<wyrmgrid_application::DisplayPreferences, wyrmgrid_application::OperationError> {
+    state.display.update(preferences).map_err(operation_error)
+}
+
+#[tauri::command]
 fn select_theme(
     state: tauri::State<'_, DesktopState>,
     theme_id: String,
@@ -304,10 +358,47 @@ async fn stop_plugin(
         .map_err(operation_error)
 }
 
+#[tauri::command]
+fn simulator_bridge_status(
+    state: tauri::State<'_, DesktopState>,
+) -> Result<wyrmgrid_application::SimulatorBridgeView, wyrmgrid_application::OperationError> {
+    state.simulator.status().map_err(operation_error)
+}
+
+#[tauri::command]
+async fn start_simulator_provider(
+    state: tauri::State<'_, DesktopState>,
+    provider_id: String,
+) -> Result<wyrmgrid_application::SimulatorBridgeView, wyrmgrid_application::OperationError> {
+    let simulator = state.simulator.clone();
+    tauri::async_runtime::spawn_blocking(move || simulator.start(&provider_id))
+        .await
+        .map_err(|_| operation_error(wyrmgrid_application::SimulatorBridgeError::StateUnavailable))?
+        .map_err(operation_error)
+}
+
+#[tauri::command]
+async fn stop_simulator_provider(
+    state: tauri::State<'_, DesktopState>,
+    provider_id: String,
+) -> Result<wyrmgrid_application::SimulatorBridgeView, wyrmgrid_application::OperationError> {
+    let simulator = state.simulator.clone();
+    tauri::async_runtime::spawn_blocking(move || simulator.stop(&provider_id))
+        .await
+        .map_err(|_| operation_error(wyrmgrid_application::SimulatorBridgeError::StateUnavailable))?
+        .map_err(operation_error)
+}
+
 fn operation_error<E: Into<wyrmgrid_application::OperationError>>(
     error: E,
 ) -> wyrmgrid_application::OperationError {
     let operation_error = error.into();
+    diagnostics::record(
+        "error",
+        operation_error.code,
+        "desktop_command",
+        &operation_error.message,
+    );
     if operation_error.reportable {
         let report_id = observability::capture_reportable(operation_error.code);
         operation_error.with_report_id(report_id)
@@ -318,12 +409,14 @@ fn operation_error<E: Into<wyrmgrid_application::OperationError>>(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let parsed_startup_options = parse_startup_options(std::env::args_os().skip(1));
     tauri::Builder::default()
-        .setup(|app| {
+        .setup(move |app| {
             let app_data_directory =
                 app.path().app_data_dir().ok().and_then(|directory| {
                     std::fs::create_dir_all(&directory).ok().map(|_| directory)
                 });
+            diagnostics::initialize(app_data_directory.as_deref());
             let store = app_data_directory
                 .as_ref()
                 .and_then(|directory| {
@@ -337,26 +430,40 @@ pub fn run() {
             let legal_status = legal.status().expect("legal settings should initialize");
             let themes = wyrmgrid_application::ThemeSettingsService::new(store.clone());
             let languages = wyrmgrid_application::LanguageSettingsService::new(store.clone());
+            let display = wyrmgrid_application::DisplaySettingsService::new(store.clone());
             let onair = wyrmgrid_application::OnAirSession::with_default_store(store.clone());
             let dispatch = wyrmgrid_application::DispatchSession::with_default_provider();
+            let simulator_provider =
+                wyrmgrid_application::SimulatorProviderRegistration::from_manifest_json(
+                    include_str!("../../../../providers/msfs2024-simconnect/provider.json"),
+                    simulator_provider_path(),
+                )
+                .expect("bundled simulator provider manifest should validate");
+            let simulator =
+                wyrmgrid_application::SimulatorBridgeService::new(vec![simulator_provider]);
             let plugins = wyrmgrid_application::PluginService::new(
                 app_data_directory.map(|directory| directory.join("plugins")),
                 store,
                 onair.clone(),
+                simulator.clone(),
             );
 
             app.manage(DesktopState {
+                startup_options: parsed_startup_options.clone(),
                 onair,
                 dispatch,
                 plugins,
+                simulator,
                 legal,
                 themes,
                 languages,
+                display,
                 observability: observability::Controller::new(legal_status.telemetry_enabled),
             });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            startup_options,
             platform_status,
             onair_connection_status,
             connect_onair,
@@ -373,10 +480,14 @@ pub fn run() {
             import_simbrief_latest,
             refresh_dispatch_weather,
             clear_dispatch_plan,
+            diagnostic_log,
+            clear_diagnostic_log,
             legal_status,
             acknowledge_legal,
             update_telemetry_preference,
             theme_status,
+            display_preferences,
+            update_display_preferences,
             select_theme,
             import_theme,
             language_status,
@@ -386,8 +497,92 @@ pub fn run() {
             approve_plugin_permissions,
             revoke_plugin_permissions,
             start_plugin,
-            stop_plugin
+            stop_plugin,
+            simulator_bridge_status,
+            start_simulator_provider,
+            stop_simulator_provider
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
+
+fn parse_startup_options<I, S>(arguments: I) -> StartupOptions
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<std::ffi::OsStr>,
+{
+    let mut options = StartupOptions::default();
+    for argument in arguments {
+        match argument.as_ref().to_string_lossy().as_ref() {
+            "--no-launch-art" => options.no_launch_art = true,
+            "--compact-ui" => options.compact_ui = true,
+            "--low-resource" => options.low_resource = true,
+            _ => {}
+        }
+    }
+    if options.low_resource {
+        options.no_launch_art = true;
+        options.compact_ui = true;
+    }
+    options
+}
+
+fn simulator_provider_path() -> std::path::PathBuf {
+    let workspace_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    resolve_simulator_provider_path(
+        std::env::var_os("WYRMGRID_SIMULATOR_PROVIDER_PATH"),
+        std::env::current_exe().ok(),
+        &workspace_root,
+        cfg!(debug_assertions),
+    )
+}
+
+const SIMULATOR_PROVIDER_EXECUTABLE: &str = "wyrmgrid-simconnect-provider.exe";
+
+fn resolve_simulator_provider_path(
+    configured: Option<std::ffi::OsString>,
+    current_executable: Option<std::path::PathBuf>,
+    workspace_root: &std::path::Path,
+    development_mode: bool,
+) -> std::path::PathBuf {
+    if let Some(path) = configured {
+        let path = std::path::PathBuf::from(path);
+        if path.is_absolute()
+            && path.file_name().and_then(|name| name.to_str())
+                == Some(SIMULATOR_PROVIDER_EXECUTABLE)
+        {
+            return path;
+        }
+    }
+    if let Some(directory) = current_executable
+        .as_deref()
+        .and_then(std::path::Path::parent)
+    {
+        let adjacent = directory.join(SIMULATOR_PROVIDER_EXECUTABLE);
+        if adjacent.is_file() {
+            return adjacent;
+        }
+    }
+    if development_mode {
+        let development = workspace_root
+            .join("target/debug")
+            .join(SIMULATOR_PROVIDER_EXECUTABLE);
+        if development.is_file() {
+            return development;
+        }
+        return development;
+    }
+    current_executable
+        .as_deref()
+        .and_then(std::path::Path::parent)
+        .map(|directory| directory.join(SIMULATOR_PROVIDER_EXECUTABLE))
+        .unwrap_or_else(|| std::path::PathBuf::from(SIMULATOR_PROVIDER_EXECUTABLE))
+}
+
+#[cfg(test)]
+#[path = "tests/simulator_provider.rs"]
+mod simulator_provider_tests;
+
+#[cfg(test)]
+#[path = "tests/startup_options.rs"]
+mod startup_options_tests;

@@ -1,0 +1,16 @@
+{
+  "protocol_version": 1,
+  "sequence": 1,
+  "payload": {
+    "type": "hello",
+    "provider": {
+      "id": "io.github.phobosdthorga.wyrmgrid-simconnect-msfs2024",
+      "name": "MSFS 2024 SimConnect",
+      "version": "0.1.0",
+      "simulator": "msfs_2024",
+      "simulator_version": "1.6.9",
+      "architecture": "windows_x86_64",
+      "capabilities": ["telemetry_read"]
+    }
+  }
+}

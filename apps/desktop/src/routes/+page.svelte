@@ -20,6 +20,15 @@
     operationErrorMessage,
   } from "$lib/desktop/client";
   import {
+    clearDiagnosticLog,
+    loadDiagnosticLog,
+  } from "$lib/diagnostics/client";
+  import DiagnosticsDialog from "$lib/diagnostics/DiagnosticsDialog.svelte";
+  import {
+    emptyDiagnosticLog,
+    type DiagnosticLogView,
+  } from "$lib/diagnostics/types";
+  import {
     clearDispatchPlan,
     importLatestSimBriefPlan,
     loadDispatchStatus,
@@ -36,6 +45,18 @@
     SimBriefReferenceKind,
   } from "$lib/dispatch/types";
   import JobsWorkspace from "$lib/jobs/JobsWorkspace.svelte";
+  import LaunchScreen from "$lib/launch/LaunchScreen.svelte";
+  import {
+    remainingLaunchDisplayTime,
+    shouldRenderLaunchArtwork,
+    viewportPresentation,
+    type ViewportPresentation,
+  } from "$lib/launch/presentation";
+  import {
+    defaultStartupOptions,
+    loadStartupOptions,
+    type StartupOptions,
+  } from "$lib/launch/startup";
   import ForgeDialog from "$lib/forge/ForgeDialog.svelte";
   import {
     approvePluginPermissions,
@@ -89,6 +110,25 @@
     disconnectedStatus,
     type OnAirConnectionStatus,
   } from "$lib/onair/types";
+  import {
+    loadSimulatorBridge,
+    startSimulatorProvider,
+    stopSimulatorProvider,
+  } from "$lib/simulator/client";
+  import SimulatorDialog from "$lib/simulator/SimulatorDialog.svelte";
+  import {
+    emptySimulatorBridge,
+    type SimulatorBridgeView,
+  } from "$lib/simulator/types";
+  import {
+    loadDisplayPreferences,
+    saveDisplayPreferences,
+  } from "$lib/settings/client";
+  import SettingsDialog from "$lib/settings/SettingsDialog.svelte";
+  import {
+    aviationDisplayPreferences,
+    type DisplayPreferences,
+  } from "$lib/settings/types";
   import ThemeDialog from "$lib/theme/ThemeDialog.svelte";
   import {
     browserThemeStatus,
@@ -112,6 +152,7 @@
 
   const AUTOMATIC_SYNC_STORAGE_KEY = "wyrmgrid.atlas.automatic-sync-minutes";
   const AUTOMATIC_SYNC_OPTIONS = [0, 15, 30, 60, 120] as const;
+  const launchStartedAt = Date.now();
 
   let status = $state<PlatformStatus>({
     application: "OnAir WyrmGrid",
@@ -119,6 +160,9 @@
     plugin_api_version: 1,
     mode: "browser preview",
   });
+  let startupOptions = $state<StartupOptions>(defaultStartupOptions);
+  let startupOptionsLoaded = $state(false);
+  let viewportMode = $state<ViewportPresentation>("standard");
   let connection = $state<OnAirConnectionStatus>(disconnectedStatus);
   let activeWorkspace = $state<Workspace>("atlas");
   let dispatchStatus = $state<DispatchStatus>(dispatchPreviewEmpty);
@@ -154,6 +198,20 @@
   let showLanguageDialog = $state(false);
   let languageBusy = $state(false);
   let languageError = $state("");
+  let diagnosticLog = $state<DiagnosticLogView>(emptyDiagnosticLog);
+  let showDiagnosticsDialog = $state(false);
+  let diagnosticsBusy = $state(false);
+  let diagnosticsError = $state("");
+  let simulatorBridge = $state<SimulatorBridgeView>(emptySimulatorBridge);
+  let showSimulatorDialog = $state(false);
+  let simulatorBusy = $state(false);
+  let simulatorError = $state("");
+  let displayPreferences = $state<DisplayPreferences>(
+    aviationDisplayPreferences,
+  );
+  let showSettingsDialog = $state(false);
+  let settingsBusy = $state(false);
+  let settingsError = $state("");
   let timeline = $state<HoardTimelineIndex>({
     company: null,
     observation_times: [],
@@ -200,6 +258,12 @@
   );
   const atlasAvailability = $derived(
     activeFleetView?.availability ?? activeFboView?.availability,
+  );
+  const launchArtworkEnabled = $derived(
+    shouldRenderLaunchArtwork(
+      startupOptionsLoaded,
+      startupOptions.no_launch_art,
+    ),
   );
   const atlasStorage = $derived(
     activeFleetView?.storage ?? activeFboView?.storage,
@@ -293,6 +357,11 @@
   const pluginProcessActive = $derived(
     pluginHost.plugins.some((plugin) =>
       ["starting", "running", "stopping"].includes(plugin.state),
+    ),
+  );
+  const simulatorProcessActive = $derived(
+    simulatorBridge.providers.some((provider) =>
+      ["starting", "running", "stopping"].includes(provider.process_state),
     ),
   );
   const layers = $derived([
@@ -441,6 +510,88 @@
     timelineError = "";
     showTimelineDialog = true;
     void refreshTimeline();
+  }
+
+  async function refreshDiagnostics(): Promise<void> {
+    if (!isDesktopRuntime() || diagnosticsBusy) return;
+    diagnosticsBusy = true;
+    diagnosticsError = "";
+    try {
+      diagnosticLog = await loadDiagnosticLog();
+    } catch (error) {
+      diagnosticsError = operationErrorMessage(
+        error,
+        "WyrmGrid could not read the local diagnostic log.",
+      );
+    } finally {
+      diagnosticsBusy = false;
+    }
+  }
+
+  function openDiagnostics(): void {
+    diagnosticsError = "";
+    showDiagnosticsDialog = true;
+    void refreshDiagnostics();
+  }
+
+  async function clearDiagnostics(): Promise<void> {
+    if (!isDesktopRuntime() || diagnosticsBusy) return;
+    diagnosticsBusy = true;
+    diagnosticsError = "";
+    try {
+      diagnosticLog = await clearDiagnosticLog();
+    } catch (error) {
+      diagnosticsError = operationErrorMessage(
+        error,
+        "WyrmGrid could not clear the local diagnostic log.",
+      );
+    } finally {
+      diagnosticsBusy = false;
+    }
+  }
+
+  async function refreshSimulatorBridge(): Promise<void> {
+    if (!isDesktopRuntime()) {
+      simulatorBridge = emptySimulatorBridge;
+      return;
+    }
+    try {
+      simulatorBridge = await loadSimulatorBridge();
+    } catch (error) {
+      simulatorError = operationErrorMessage(
+        error,
+        "WyrmGrid could not read simulator provider status.",
+      );
+    }
+  }
+
+  function openSimulator(): void {
+    simulatorError = "";
+    showSimulatorDialog = true;
+    void refreshSimulatorBridge();
+  }
+
+  async function runSimulatorAction(
+    action: "start" | "stop",
+    providerId: string,
+  ): Promise<void> {
+    if (!isDesktopRuntime() || simulatorBusy) return;
+    simulatorBusy = true;
+    simulatorError = "";
+    try {
+      simulatorBridge =
+        action === "start"
+          ? await startSimulatorProvider(providerId)
+          : await stopSimulatorProvider(providerId);
+    } catch (error) {
+      simulatorError = operationErrorMessage(
+        error,
+        "WyrmGrid could not complete that simulator provider action.",
+      );
+      await refreshSimulatorBridge();
+    } finally {
+      simulatorBusy = false;
+    }
   }
 
   async function viewHistoricalMoment(): Promise<void> {
@@ -719,11 +870,13 @@
       timelineCursor = timeline.observation_times.length - 1;
       fleetLoadState = "ready";
       pluginHost = forgePreviewStopped;
+      simulatorBridge = emptySimulatorBridge;
       dispatchStatus = dispatchPreviewReady;
       return;
     }
 
     void refreshPluginHost();
+    void refreshSimulatorBridge();
     void refreshDispatchStatus();
 
     invokeDesktop<PlatformStatus>("platform_status")
@@ -757,6 +910,15 @@
       legalStatus = await loadLegalStatus();
       legalTelemetryDraft = legalStatus.telemetry_enabled;
       await configureClientTelemetry(legalStatus.telemetry_enabled);
+      const remainingDisplayTime = remainingLaunchDisplayTime(
+        launchStartedAt,
+        Date.now(),
+      );
+      if (remainingDisplayTime > 0) {
+        await new Promise((resolve) =>
+          window.setTimeout(resolve, remainingDisplayTime),
+        );
+      }
       legalLoadState = "ready";
       if (legalStatus.acknowledged) initializeWorkspace();
     } catch (error) {
@@ -863,9 +1025,51 @@
   }
 
   async function initializeApplication(): Promise<void> {
+    try {
+      startupOptions = await loadStartupOptions();
+    } catch {
+      startupOptions = defaultStartupOptions;
+    } finally {
+      startupOptionsLoaded = true;
+    }
     await initializeLanguage();
     await initializeTheme();
+    await initializeDisplayPreferences();
     await initializeLegal();
+  }
+
+  async function initializeDisplayPreferences(): Promise<void> {
+    try {
+      displayPreferences = await loadDisplayPreferences();
+    } catch (error) {
+      settingsError = operationErrorMessage(
+        error,
+        "WyrmGrid could not read its local display settings.",
+      );
+    }
+  }
+
+  async function saveUnitChoices(
+    preferences: DisplayPreferences,
+  ): Promise<void> {
+    settingsBusy = true;
+    settingsError = "";
+    try {
+      displayPreferences = await saveDisplayPreferences(preferences);
+      showSettingsDialog = false;
+    } catch (error) {
+      settingsError = operationErrorMessage(
+        error,
+        "WyrmGrid could not save its local display settings.",
+      );
+    } finally {
+      settingsBusy = false;
+    }
+  }
+
+  function openSettings(): void {
+    settingsError = "";
+    showSettingsDialog = true;
   }
 
   function openLegalSettings(): void {
@@ -926,6 +1130,18 @@
     if (
       typeof window === "undefined" ||
       !isDesktopRuntime() ||
+      (!showSimulatorDialog && !simulatorProcessActive)
+    ) {
+      return;
+    }
+    const timer = window.setInterval(() => void refreshSimulatorBridge(), 1000);
+    return () => window.clearInterval(timer);
+  });
+
+  $effect(() => {
+    if (
+      typeof window === "undefined" ||
+      !isDesktopRuntime() ||
       !pluginProcessActive
     ) {
       return;
@@ -935,6 +1151,15 @@
   });
 
   onMount(() => {
+    const updateViewportMode = () => {
+      viewportMode = viewportPresentation(
+        window.innerWidth,
+        window.innerHeight,
+      );
+    };
+    updateViewportMode();
+    window.addEventListener("resize", updateViewportMode);
+
     const savedAutomaticSync = Number.parseInt(
       localStorage.getItem(AUTOMATIC_SYNC_STORAGE_KEY) ?? "30",
       10,
@@ -948,6 +1173,7 @@
     }
 
     void initializeApplication();
+    return () => window.removeEventListener("resize", updateViewportMode);
   });
 </script>
 
@@ -956,26 +1182,36 @@
 </svelte:head>
 
 {#if legalLoadState === "loading"}
-  <main class="legal-loading" aria-live="polite">
-    <div class="brand-mark" aria-hidden="true">WG</div>
-    <span class="eyebrow">{$translation("app-name")}</span>
-    <strong>{$translation("app-preparing-privacy")}</strong>
-  </main>
+  <LaunchScreen
+    eyebrow={$translation("app-name")}
+    message={$translation("app-preparing-privacy")}
+    canvas={themeStatus.active_theme.colors.canvas}
+    artworkEnabled={launchArtworkEnabled}
+    lowResource={startupOptions.low_resource}
+  />
 {:else if legalLoadState === "error"}
-  <main class="legal-loading legal-load-error">
-    <div class="brand-mark" aria-hidden="true">WG</div>
-    <span class="eyebrow">{$translation("app-settings-unavailable")}</span>
-    <strong>{legalError}</strong>
-    <button type="button" onclick={() => void initializeLegal()}
-      >{$translation("action-try-again")}</button
-    >
-  </main>
+  <LaunchScreen
+    error
+    eyebrow={$translation("app-settings-unavailable")}
+    message={legalError}
+    canvas={themeStatus.active_theme.colors.canvas}
+    artworkEnabled={launchArtworkEnabled}
+    lowResource={startupOptions.low_resource}
+    retryLabel={$translation("action-try-again")}
+    onretry={() => void initializeLegal()}
+  />
 {:else if legalStatus.acknowledged}
   <main
+    class:compact-ui={startupOptions.compact_ui || viewportMode === "narrow"}
+    class:short-ui={viewportMode === "short"}
+    class:low-resource={startupOptions.low_resource}
     class="shell"
     inert={showLegalDialog ||
       showThemeDialog ||
       showLanguageDialog ||
+      showDiagnosticsDialog ||
+      showSettingsDialog ||
+      showSimulatorDialog ||
       showTimelineDialog ||
       showForgeDialog}
   >
@@ -1026,27 +1262,20 @@
         >
       </nav>
       <button
-        class="theme-pill"
+        class:connected={simulatorBridge.providers.some(
+          (provider) => provider.connection_state === "connected",
+        )}
+        class="simulator-pill"
         type="button"
-        onclick={() => {
-          themeError = "";
-          showThemeDialog = true;
-        }}
+        onclick={openSimulator}
       >
-        {$translation("settings-theme")}
+        {$translation("settings-simulator")}
       </button>
-      <button
-        class="language-pill"
-        type="button"
-        onclick={() => {
-          languageError = "";
-          showLanguageDialog = true;
-        }}
-      >
-        {$translation("settings-language")}
+      <button class="diagnostics-pill" type="button" onclick={openDiagnostics}>
+        Diagnostics
       </button>
-      <button class="legal-pill" type="button" onclick={openLegalSettings}>
-        {$translation("settings-privacy-terms")}
+      <button class="settings-pill" type="button" onclick={openSettings}>
+        {$translation("settings-open")}
       </button>
       <button
         class:connected={connection.connected}
@@ -1390,6 +1619,11 @@
 
     <footer>
       <span>{status.application} · {status.mode}</span>
+      {#if startupOptions.low_resource}
+        <span>Low-resource presentation</span>
+      {:else if startupOptions.compact_ui}
+        <span>Compact presentation</span>
+      {/if}
       <span>{$translation("footer-unaffiliated")}</span>
     </footer>
   </main>
@@ -1399,6 +1633,51 @@
     status={connection}
     onclose={() => (showConnectionDialog = false)}
     onstatuschange={handleConnectionStatus}
+  />
+
+  <DiagnosticsDialog
+    open={showDiagnosticsDialog}
+    log={diagnosticLog}
+    busy={diagnosticsBusy}
+    errorMessage={diagnosticsError}
+    onrefresh={() => void refreshDiagnostics()}
+    onclear={() => void clearDiagnostics()}
+    onclose={() => (showDiagnosticsDialog = false)}
+  />
+
+  <SimulatorDialog
+    open={showSimulatorDialog}
+    status={simulatorBridge}
+    busy={simulatorBusy}
+    errorMessage={simulatorError}
+    {displayPreferences}
+    onrefresh={() => void refreshSimulatorBridge()}
+    onstart={(providerId) => void runSimulatorAction("start", providerId)}
+    onstop={(providerId) => void runSimulatorAction("stop", providerId)}
+    onclose={() => (showSimulatorDialog = false)}
+  />
+
+  <SettingsDialog
+    open={showSettingsDialog}
+    preferences={displayPreferences}
+    busy={settingsBusy}
+    errorMessage={settingsError}
+    onsave={(preferences) => void saveUnitChoices(preferences)}
+    onappearance={() => {
+      showSettingsDialog = false;
+      themeError = "";
+      showThemeDialog = true;
+    }}
+    onlanguage={() => {
+      showSettingsDialog = false;
+      languageError = "";
+      showLanguageDialog = true;
+    }}
+    onprivacy={() => {
+      showSettingsDialog = false;
+      openLegalSettings();
+    }}
+    onclose={() => (showSettingsDialog = false)}
   />
 
   <ThemeDialog

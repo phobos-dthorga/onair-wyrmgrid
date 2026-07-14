@@ -57,14 +57,23 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.97.0
       - uses: Swatinem/rust-cache@v2
+      - name: Prepare the bundled simulator provider
+        run: npm run provider:prepare
       - name: Check Tauri backend
         run: cargo check -p wyrmgrid-desktop
       - name: Test Tauri backend
         run: cargo test -p wyrmgrid-desktop
+      - name: Check the Windows SimConnect provider
+        run: cargo check -p wyrmgrid-simconnect-provider --all-targets
+      - name: Test the Windows SimConnect provider
+        run: cargo test -p wyrmgrid-simconnect-provider
 
   rust-coverage:
     name: Rust coverage

@@ -21,10 +21,10 @@ started. The executable Python proof is
 
 Forge presents each plugin's requested and granted capabilities. Grants are
 empty by default and stored locally; the current proof requires every requested
-capability to be approved before launch. Only `on_air_fleet_read` and
-`map_layers_publish` execute in this slice. A plugin receives stable translated
-fleet summaries and publishes data-only point layers that Atlas renders using
-the active host theme.
+capability to be approved before launch. `on_air_fleet_read`,
+`simulator_telemetry_read`, and `map_layers_publish` execute in this slice. A
+plugin receives only the stable translated snapshots it was granted and
+publishes data-only point layers that Atlas renders using the active host theme.
 
 The complete framing, lifecycle, limit, and compatibility contract is in
 [protocol version 1](protocol-v1.md).
@@ -56,11 +56,11 @@ name the bounded operation, keep the account key in the host, apply host-owned
 message templates and limits, and require user confirmation for every external
 effect unless a separately reviewed automation rule exists.
 
-The manifest's existing `simulator_telemetry_read` permission is reserved for a
-future bounded WyrmGrid Bridge snapshot. It does not grant simulator commands,
-flight-plan loading, raw SimConnect or FSUIPC access, arbitrary dataref access,
-or historical tracks. Those would require separate capabilities and protocol
-reviews.
+The manifest's `simulator_telemetry_read` permission now delivers the current
+bounded, versioned WyrmGrid Bridge snapshot when one exists. It does not grant
+simulator commands, flight-plan loading, provider selection, raw SimConnect or
+FSUIPC access, arbitrary dataref access, or historical tracks. Those require
+separate capabilities and protocol reviews.
 
 The version-one `external_network` name must not be interpreted as unrestricted
 internet access or a host endpoint proxy. The host does not implement or grant
@@ -77,7 +77,9 @@ delivery. Community-delivery plugins need destination-specific user approval
 and keep their own service credentials outside host snapshots.
 
 See the [external integrations programme](../integrations/README.md) for planned
-provider boundaries.
+provider boundaries and
+[simulator provider authoring](../integrations/simulator-provider-authoring.md)
+for the distinction between providers and ordinary plugins.
 
 ## Planned first-party demonstrations
 

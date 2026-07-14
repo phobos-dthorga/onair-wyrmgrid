@@ -166,6 +166,55 @@ fn translates_pending_jobs_into_the_stable_snapshot_contract() {
 }
 
 #[test]
+fn accepts_null_job_leg_collections_and_naive_onair_timestamps() {
+    let response: ApiResult<Vec<RawMission>> = serde_json::from_str(
+        r#"{
+            "Content": [{
+                "Id": "77777777-7777-4777-8777-777777777777",
+                "CreationDate": "2026-07-15T10:30:45.123",
+                "TakenDate": null,
+                "ExpirationDate": "not-a-date",
+                "Cargos": null,
+                "Charters": null
+            }],
+            "Error": null
+        }"#,
+    )
+    .expect("schema-compatible provider variations should deserialize");
+
+    let mission = response
+        .content
+        .expect("fixture should contain missions")
+        .into_iter()
+        .next()
+        .expect("fixture should contain one mission");
+    assert_eq!(
+        mission.creation_date,
+        Some(
+            DateTime::parse_from_rfc3339("2026-07-15T10:30:45.123Z")
+                .expect("expected timestamp should parse")
+                .with_timezone(&Utc)
+        )
+    );
+    assert_eq!(mission.taken_date, None);
+    assert_eq!(mission.expiration_date, None);
+    assert!(mission.cargos.is_empty());
+    assert!(mission.charters.is_empty());
+}
+
+#[test]
+fn exposes_stable_diagnostic_codes_without_remote_details() {
+    assert_eq!(
+        ClientError::MalformedResponse.diagnostic_code(),
+        "onair.malformed_response"
+    );
+    assert_eq!(
+        ClientError::ResponseTooLarge.diagnostic_code(),
+        "onair.response_too_large"
+    );
+}
+
+#[test]
 fn never_exposes_the_remote_error_body() {
     let response: ApiResult<RawCompany> =
         serde_json::from_str(r#"{"Content":null,"Error":"credential-specific remote detail"}"#)

@@ -1,4 +1,4 @@
-use crate::{FleetSnapshotView, OnAirSession, SnapshotAvailability};
+use crate::{FleetSnapshotView, OnAirSession, SimulatorBridgeService, SnapshotAvailability};
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -120,6 +120,7 @@ struct PluginServiceInner {
     initialization_error: Option<String>,
     store: Store,
     onair: OnAirSession,
+    simulator: SimulatorBridgeService,
     runtimes: Mutex<BTreeMap<String, Arc<RunningPlugin>>>,
 }
 
@@ -131,6 +132,8 @@ struct RunningPlugin {
     layers: Mutex<BTreeMap<String, MapLayerSpec>>,
     outgoing_sequence: Mutex<u64>,
     last_fleet_observation: Mutex<Option<String>>,
+    last_simulator_snapshot: Mutex<Option<(String, u64)>>,
+    granted_permissions: BTreeSet<Permission>,
 }
 
 struct InstalledPlugin {
@@ -140,7 +143,12 @@ struct InstalledPlugin {
 }
 
 impl PluginService {
-    pub fn new(root: Option<PathBuf>, store: Store, onair: OnAirSession) -> Self {
+    pub fn new(
+        root: Option<PathBuf>,
+        store: Store,
+        onair: OnAirSession,
+        simulator: SimulatorBridgeService,
+    ) -> Self {
         let (root, initialization_error) = match root {
             Some(root) => match initialize_plugin_root(&root) {
                 Ok(()) => (Some(root), None),
@@ -160,6 +168,7 @@ impl PluginService {
                 initialization_error,
                 store,
                 onair,
+                simulator,
                 runtimes: Mutex::new(BTreeMap::new()),
             }),
         }
@@ -307,6 +316,8 @@ impl PluginService {
             layers: Mutex::new(BTreeMap::new()),
             outgoing_sequence: Mutex::new(1),
             last_fleet_observation: Mutex::new(None),
+            last_simulator_snapshot: Mutex::new(None),
+            granted_permissions: granted.clone(),
         });
         self.inner
             .runtimes
@@ -343,6 +354,7 @@ impl PluginService {
             .lock()
             .map_err(|_| PluginError::StateUnavailable)? = PluginProcessState::Running;
         self.send_fleet_if_changed(&runtime)?;
+        self.send_simulator_if_changed(&runtime)?;
         self.spawn_snapshot_poller(runtime);
         self.status()
     }
@@ -443,6 +455,12 @@ impl PluginService {
     }
 
     fn send_fleet_if_changed(&self, runtime: &Arc<RunningPlugin>) -> Result<(), PluginError> {
+        if !runtime
+            .granted_permissions
+            .contains(&Permission::OnAirFleetRead)
+        {
+            return Ok(());
+        }
         let Some(snapshot) = self
             .inner
             .onair
@@ -469,6 +487,39 @@ impl PluginService {
         Ok(())
     }
 
+    fn send_simulator_if_changed(&self, runtime: &Arc<RunningPlugin>) -> Result<(), PluginError> {
+        if !runtime
+            .granted_permissions
+            .contains(&Permission::SimulatorTelemetryRead)
+        {
+            return Ok(());
+        }
+        let Some(snapshot) = self
+            .inner
+            .simulator
+            .latest_snapshot()
+            .map_err(|_| PluginError::StateUnavailable)?
+        else {
+            return Ok(());
+        };
+        let snapshot_key = (snapshot.provenance.provider.clone(), snapshot.sequence);
+        let mut last_snapshot = runtime
+            .last_simulator_snapshot
+            .lock()
+            .map_err(|_| PluginError::StateUnavailable)?;
+        if last_snapshot.as_ref() == Some(&snapshot_key) {
+            return Ok(());
+        }
+        self.send_message(
+            runtime,
+            HostMessage::SimulatorTelemetrySnapshot {
+                snapshot: Box::new(snapshot),
+            },
+        )?;
+        *last_snapshot = Some(snapshot_key);
+        Ok(())
+    }
+
     fn spawn_snapshot_poller(&self, runtime: Arc<RunningPlugin>) {
         let service = Arc::downgrade(&self.inner);
         thread::spawn(move || {
@@ -480,9 +531,9 @@ impl PluginService {
                 let Some(inner) = service.upgrade() else {
                     return;
                 };
-                if (PluginService { inner })
-                    .send_fleet_if_changed(&runtime)
-                    .is_err()
+                let service = PluginService { inner };
+                if service.send_fleet_if_changed(&runtime).is_err()
+                    || service.send_simulator_if_changed(&runtime).is_err()
                 {
                     return;
                 }
@@ -596,7 +647,9 @@ fn ensure_supported_permissions(permissions: &[Permission]) -> Result<(), Plugin
         .all(|permission| {
             matches!(
                 permission,
-                Permission::OnAirFleetRead | Permission::MapLayersPublish
+                Permission::OnAirFleetRead
+                    | Permission::MapLayersPublish
+                    | Permission::SimulatorTelemetryRead
             )
         })
         .then_some(())

@@ -11,6 +11,7 @@ const config = {
   preprocess: vitePreprocess(),
   kit: {
     alias: {
+      $brand: resolve("../../assets/brand"),
       $locales: resolve("../../locales"),
     },
     adapter: adapter({

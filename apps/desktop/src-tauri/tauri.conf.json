@@ -6,7 +6,7 @@
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "npm run tauri:before-build",
     "frontendDist": "../build"
   },
   "app": {
@@ -16,8 +16,8 @@
         "title": "OnAir WyrmGrid",
         "width": 1440,
         "height": 900,
-        "minWidth": 1024,
-        "minHeight": 680,
+        "minWidth": 640,
+        "minHeight": 560,
         "resizable": true
       }
     ],

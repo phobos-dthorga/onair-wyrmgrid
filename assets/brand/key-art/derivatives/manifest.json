@@ -1,0 +1,52 @@
+{
+  "derivatives": {
+    "hero-dark": {
+      "dimensions": [
+        1600,
+        900
+      ],
+      "file": "derivatives/hero-dark.png",
+      "sha256": "FDCE2ADA0FDF7E842BF2938BAA9147C47C4E2E98578E2E966C159E75D0402E55",
+      "source_theme": "dark"
+    },
+    "hero-light": {
+      "dimensions": [
+        1600,
+        900
+      ],
+      "file": "derivatives/hero-light.png",
+      "sha256": "FFBCAD900C9AAAA018309BEA1811E0455FB1AF657FC5834D0D03D1619C28185F",
+      "source_theme": "light"
+    },
+    "social-dark": {
+      "dimensions": [
+        1280,
+        640
+      ],
+      "file": "derivatives/social-dark.png",
+      "sha256": "46FCBF801FA0A76DE15C382ED6AAE3A7607A47DB2AA584914A8E641C37F76DAB",
+      "source_theme": "dark"
+    },
+    "social-light": {
+      "dimensions": [
+        1280,
+        640
+      ],
+      "file": "derivatives/social-light.png",
+      "sha256": "AEFF3BEE26438E7309346780A31FFE7FEA7FCF159204EDFDBBDEAF0886E0575F",
+      "source_theme": "light"
+    }
+  },
+  "generator": "assets/brand/key-art/build_derivatives.py",
+  "originals": {
+    "dark": {
+      "file": "originals/candidate-01-atlas-nocturne.png",
+      "sha256": "2B56B562F3C94F02B7FF8E93D6647A1457866DA67D61CE2B28F666349494231D"
+    },
+    "light": {
+      "file": "originals/candidate-03-world-in-motion.png",
+      "sha256": "95101B8DDCA943222E9CBD9B48F75709503E2E79FF22F54A82B7AFD2537FC272"
+    }
+  },
+  "schema": 1
+}

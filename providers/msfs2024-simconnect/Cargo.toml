@@ -1,0 +1,15 @@
+[package]
+name = "wyrmgrid-simconnect-provider"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+chrono.workspace = true
+libloading.workspace = true
+thiserror.workspace = true
+wyrmgrid-bridge-protocol = { path = "../../crates/bridge-protocol" }
+wyrmgrid-domain = { path = "../../crates/domain" }

@@ -11,6 +11,7 @@ const LEGAL_PREFERENCES_SCHEMA: &str = include_str!("../migrations/0002_legal_pr
 const THEMES_SCHEMA: &str = include_str!("../migrations/0003_themes.sql");
 const PLUGIN_PERMISSIONS_SCHEMA: &str = include_str!("../migrations/0004_plugin_permissions.sql");
 const LANGUAGE_PACKS_SCHEMA: &str = include_str!("../migrations/0005_language_packs.sql");
+const DISPLAY_PREFERENCES_SCHEMA: &str = include_str!("../migrations/0006_display_preferences.sql");
 
 #[derive(Debug, Error)]
 pub enum StorageError {
@@ -44,6 +45,14 @@ pub struct LegalPreferencesRecord {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ThemePreferencesRecord {
     pub selected_theme_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DisplayPreferencesRecord {
+    pub altitude_unit: String,
+    pub speed_unit: String,
+    pub weight_unit: String,
+    pub fuel_unit: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -86,6 +95,7 @@ impl Store {
         connection.execute_batch(THEMES_SCHEMA)?;
         connection.execute_batch(PLUGIN_PERMISSIONS_SCHEMA)?;
         connection.execute_batch(LANGUAGE_PACKS_SCHEMA)?;
+        connection.execute_batch(DISPLAY_PREFERENCES_SCHEMA)?;
         Ok(Self {
             connection: Arc::new(Mutex::new(connection)),
             persistent,
@@ -94,6 +104,61 @@ impl Store {
 
     pub fn is_persistent(&self) -> bool {
         self.persistent
+    }
+
+    pub fn load_display_preferences_record(
+        &self,
+    ) -> Result<Option<DisplayPreferencesRecord>, StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection
+            .query_row(
+                "SELECT altitude_unit, speed_unit, weight_unit, fuel_unit
+                 FROM display_preferences WHERE singleton_id = 1",
+                [],
+                |row| {
+                    Ok(DisplayPreferencesRecord {
+                        altitude_unit: row.get(0)?,
+                        speed_unit: row.get(1)?,
+                        weight_unit: row.get(2)?,
+                        fuel_unit: row.get(3)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(StorageError::from)
+    }
+
+    pub fn save_display_preferences_record(
+        &self,
+        preferences: &DisplayPreferencesRecord,
+    ) -> Result<(), StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection
+            .execute(
+                "INSERT INTO display_preferences (
+                    singleton_id, altitude_unit, speed_unit, weight_unit, fuel_unit
+                 ) VALUES (1, ?1, ?2, ?3, ?4)
+                 ON CONFLICT(singleton_id) DO UPDATE SET
+                    altitude_unit = excluded.altitude_unit,
+                    speed_unit = excluded.speed_unit,
+                    weight_unit = excluded.weight_unit,
+                    fuel_unit = excluded.fuel_unit,
+                    updated_at = CURRENT_TIMESTAMP",
+                params![
+                    preferences.altitude_unit,
+                    preferences.speed_unit,
+                    preferences.weight_unit,
+                    preferences.fuel_unit,
+                ],
+            )
+            .map(|_| ())
+            .map_err(StorageError::from)
     }
 
     pub fn schema_version(&self) -> Result<i64, StorageError> {

@@ -15,6 +15,12 @@ from both external observations and WyrmGrid calculations. Version-one fleet
 messages do not emit that value; plugin and chart schemas accept it for honest
 host-validated contributions.
 
+The `simulator_telemetry_snapshot` host message is another additive version-one
+extension. Its manifest permission was already defined, and plugins that do not
+request `simulator_telemetry_read` never receive the message. Existing plugins
+therefore remain compatible. Raw provider payloads and simulator writes are not
+part of plugin protocol version 1.
+
 The canonical manifest schema is `schemas/plugin-manifest.schema.json`. The
 envelope schema and accepted examples are
 `schemas/plugin-protocol-envelope.schema.json` and `schemas/fixtures/plugin-*-v1.json`.
@@ -56,9 +62,10 @@ sequences stop the plugin.
 4. The host sends `hello` with the expected plugin ID and exact grants.
 5. The plugin has three seconds to return a matching `ready` message with plugin
    API version 1.
-6. If fleet access is granted, the host sends the latest stable fleet snapshot
-   when one exists and sends a new snapshot when its observation timestamp
-   changes. This local check does not trigger an OnAir request.
+6. For each granted read capability, the host sends the latest stable fleet or
+   simulator snapshot when one exists. It sends later fleet observations when
+   their timestamp changes and later simulator observations when their sequence
+   advances. These local checks do not trigger OnAir or simulator requests.
 7. Forge may send `shutdown`; WyrmGrid gives the child a short graceful window,
    then terminates it. Application exit also terminates supervised children.
 
@@ -71,10 +78,15 @@ not relayed to the UI, logs, or telemetry.
 - `hello`: host version, expected plugin ID, and granted capabilities.
 - `fleet_snapshot`: company display identity, translated aircraft summaries,
   source provenance, observation time, and live/cached/offline availability.
+- `simulator_telemetry_snapshot`: current translated simulator identity,
+  aircraft, position, motion, fuel/weight, lifecycle flags, and source
+  provenance. Optional facts remain absent when the provider cannot establish
+  them.
 - `shutdown`: request for an orderly exit.
 
-Fleet snapshots never contain the OnAir API key or raw OnAir JSON. Provider
-models are translated into stable WyrmGrid domain summaries before this adapter.
+Snapshots never contain the OnAir API key, raw OnAir JSON, raw SimConnect
+variables, FSUIPC offsets, provider paths, or native error text. Provider models
+are translated into stable WyrmGrid domain summaries before this adapter.
 
 ## Plugin messages
 

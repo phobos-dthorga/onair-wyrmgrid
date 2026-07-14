@@ -1,9 +1,12 @@
-import { defineConfig } from "vite";
+import { resolve } from "node:path";
+import { defineConfig, searchForWorkspaceRoot } from "vite";
 import { sveltekit } from "@sveltejs/kit/vite";
 import { sentrySvelteKit } from "@sentry/sveltekit";
 import packageMetadata from "./package.json" with { type: "json" };
 
 const host = process.env.TAURI_DEV_HOST;
+const workspaceRoot = searchForWorkspaceRoot(import.meta.dirname);
+const brandAssets = resolve(import.meta.dirname, "../../assets/brand");
 const sentryRelease =
   process.env.SENTRY_RELEASE || `onair-wyrmgrid@${packageMetadata.version}`;
 const uploadSentrySourceMaps =
@@ -43,6 +46,9 @@ export default defineConfig(async () => ({
     port: 1420,
     strictPort: true,
     host: host || false,
+    fs: {
+      allow: [workspaceRoot, brandAssets],
+    },
     hmr: host
       ? {
           protocol: "ws",

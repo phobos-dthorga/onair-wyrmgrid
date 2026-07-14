@@ -1,0 +1,180 @@
+.settings-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--color-overlay);
+  backdrop-filter: blur(9px);
+}
+
+.settings-dialog {
+  width: min(820px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  border: 1px solid var(--color-line-soft);
+  border-radius: 8px;
+  color: var(--color-text);
+  background: var(--color-surface-elevated);
+  box-shadow: 0 28px 90px var(--color-shadow);
+}
+
+.settings-dialog > header,
+.settings-dialog > footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 20px 22px;
+}
+
+.settings-dialog > header {
+  border-bottom: 1px solid var(--color-line-faint);
+}
+
+.settings-dialog header p,
+.section-copy p {
+  margin: 6px 0 0;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+.settings-dialog h2,
+.settings-dialog h3 {
+  margin: 5px 0 0;
+}
+
+.settings-dialog h2 {
+  font-family: Georgia, serif;
+  font-size: 24px;
+  font-weight: 500;
+}
+
+.settings-close {
+  border: 0;
+  color: var(--color-text-muted);
+  background: transparent;
+  font-size: 26px;
+  cursor: pointer;
+}
+
+.settings-section {
+  display: grid;
+  gap: 18px;
+  padding: 22px;
+  border-bottom: 1px solid var(--color-line-faint);
+}
+
+.preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.preset-row button,
+.settings-dialog > footer button {
+  border: 1px solid var(--color-line-faint);
+  border-radius: 4px;
+  padding: 8px 11px;
+  color: var(--color-text-muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.unit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.unit-grid label {
+  display: grid;
+  gap: 7px;
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.unit-grid select {
+  min-width: 0;
+  border: 1px solid var(--color-line-faint);
+  border-radius: 4px;
+  padding: 10px;
+  color: var(--color-text);
+  background: var(--color-surface);
+  font: inherit;
+}
+
+.settings-boundary {
+  margin: 0;
+  border-left: 2px solid var(--color-accent);
+  padding: 10px 12px;
+  color: var(--color-text-muted);
+  background: var(--color-accent-soft);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.settings-links {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.settings-links button {
+  display: grid;
+  gap: 5px;
+  border: 1px solid var(--color-line-faint);
+  padding: 14px;
+  color: var(--color-text);
+  text-align: left;
+  background: var(--color-surface-soft);
+  cursor: pointer;
+}
+
+.settings-links span {
+  color: var(--color-text-muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.settings-error {
+  margin: 16px 22px 0;
+  border: 1px solid var(--color-danger-border);
+  padding: 10px 12px;
+  color: var(--color-danger);
+  background: var(--color-danger-soft);
+}
+
+.settings-dialog > footer {
+  justify-content: flex-end;
+}
+
+.settings-dialog > footer .settings-save {
+  border-color: var(--color-accent);
+  color: var(--color-canvas);
+  background: var(--color-accent);
+  font-weight: 700;
+}
+
+.settings-dialog button:disabled,
+.settings-dialog select:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+@media (max-width: 680px) {
+  .settings-backdrop {
+    padding: 12px;
+  }
+
+  .settings-dialog {
+    width: calc(100vw - 24px);
+    max-height: calc(100vh - 24px);
+  }
+
+  .unit-grid,
+  .settings-links {
+    grid-template-columns: 1fr;
+  }
+}
