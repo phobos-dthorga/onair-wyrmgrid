@@ -45,10 +45,16 @@ The implementation sequence and operating thresholds live in the
 
 ## Vertical slice 2: external plugin proof
 
-- Process supervisor and framed protocol messages
-- Permission review and persisted grants
-- Fleet read and map layer publication capabilities
-- Python SDK and idle-aircraft example plugin
+- Process supervisor, bounded framed messages, startup handshake, monotonic
+  sequences, and graceful/forced shutdown (implemented)
+- Forge permission review and append-only persisted deny-by-default grants
+  (implemented)
+- Sanitized fleet-read and host-rendered map-layer publication capabilities
+  (implemented)
+- Zero-dependency Python SDK and honest Fleet Locations example plugin
+  (implemented)
+- Developer-preview hardening: signed packages, publisher identity, OS sandbox,
+  resource and message-rate ceilings, restart throttling, and conformance tests
 
 ## External operations track
 
@@ -119,7 +125,7 @@ The complete sequence and provider constraints live in the
   routes, utilization, finance, and named milestones
 - WyrmGrid Bridge simulator telemetry, followed by additional simulator and
   aircraft-specific providers
-- Signed plugin packages and WyrmGrid Aerie discovery
+- Signed plugin packages, hardened supervision, and WyrmGrid Aerie discovery
 
 Stable plugin APIs, automatic updates, signing, and a public plugin catalogue
 require separate readiness reviews; they are not implied by the initial shell.

@@ -1,0 +1,10 @@
+{
+  "protocol_version": 1,
+  "sequence": 1,
+  "payload": {
+    "type": "hello",
+    "host_version": "0.1.0",
+    "plugin_id": "org.wyrmgrid.example.fleet-locations",
+    "granted_permissions": ["on_air_fleet_read", "map_layers_publish"]
+  }
+}

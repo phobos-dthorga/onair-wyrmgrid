@@ -27,7 +27,7 @@ export type FboSummary = {
 export type FleetSnapshot = {
   value: AircraftSummary[];
   provenance: {
-    kind: "on_air_fact" | "calculated";
+    kind: "on_air_fact" | "external_fact" | "calculated" | "recommendation";
     source: string;
     observed_at: string;
   };

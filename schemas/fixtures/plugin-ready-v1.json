@@ -1,0 +1,9 @@
+{
+  "protocol_version": 1,
+  "sequence": 1,
+  "payload": {
+    "type": "ready",
+    "plugin_id": "org.wyrmgrid.example.fleet-locations",
+    "api_version": 1
+  }
+}

@@ -22,13 +22,13 @@ continues when the diagnostic service is unavailable.
 
 The core application uses Rust, Tauri, TypeScript, Svelte, MapLibre, and SQLite.
 Public plugins run as separate processes over a language-neutral, versioned,
-permission-controlled protocol. Python is the first intended community SDK;
+permission-controlled protocol. Python is the first executable SDK;
 Rust, C++, and TypeScript SDKs can follow once the protocol is proven.
 
 The project grows through narrow vertical slices. The first slice is company
 and fleet retrieval, validation, persistence, map display, selection, and a
 non-blocking refresh path. The second proves the external plugin system with a
-small idle-aircraft map layer.
+small Fleet Locations map layer built only from known location facts.
 
 The next operational track introduces one canonical flight-plan snapshot before
 connecting SimBrief, SayIntentions.AI, weather, MSFS 2024, online networks, or

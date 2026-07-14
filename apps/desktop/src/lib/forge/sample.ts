@@ -1,0 +1,79 @@
+import type { PluginHostView, PluginView } from "./types";
+
+const requestedPermissions = [
+  "on_air_fleet_read",
+  "map_layers_publish",
+] as const;
+
+const previewPlugin: PluginView = {
+  id: "org.wyrmgrid.example.fleet-locations",
+  name: "Fleet Locations",
+  version: "0.1.0",
+  author: "WyrmGrid contributors",
+  runtime: "python",
+  requested_permissions: [...requestedPermissions],
+  granted_permissions: [],
+  state: "stopped",
+  published_layer_count: 0,
+};
+
+export const forgePreviewStopped: PluginHostView = {
+  available: true,
+  plugins: [previewPlugin],
+  layers: [],
+};
+
+export const forgePreviewApproved: PluginHostView = {
+  available: true,
+  plugins: [
+    {
+      ...previewPlugin,
+      granted_permissions: [...requestedPermissions],
+    },
+  ],
+  layers: [],
+};
+
+export const forgePreviewRunning: PluginHostView = {
+  available: true,
+  plugins: [
+    {
+      ...previewPlugin,
+      granted_permissions: [...requestedPermissions],
+      state: "running",
+      published_layer_count: 1,
+    },
+  ],
+  layers: [
+    {
+      plugin_id: previewPlugin.id,
+      plugin_name: previewPlugin.name,
+      layer: {
+        id: "fleet-locations",
+        title: "Fleet locations",
+        points: [
+          {
+            id: "11111111-1111-4111-8111-111111111111",
+            label: "WYR-101 · Example Turboprop",
+            location: { latitude: -37.8136, longitude: 144.9631 },
+          },
+          {
+            id: "22222222-2222-4222-8222-222222222222",
+            label: "WYR-202 · Example Jet",
+            location: { latitude: 51.5072, longitude: -0.1276 },
+          },
+          {
+            id: "33333333-3333-4333-8333-333333333333",
+            label: "WYR-303 · Example Bush Aircraft",
+            location: { latitude: 61.2181, longitude: -149.9003 },
+          },
+        ],
+        provenance: {
+          kind: "calculated",
+          source: "Fleet Locations example plugin",
+          observed_at: "2026-07-14T00:00:00Z",
+        },
+      },
+    },
+  ],
+};

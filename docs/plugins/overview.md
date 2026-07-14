@@ -1,19 +1,33 @@
 # Plugin platform
 
-WyrmGrid plugins are separate processes. The initial transport will use framed
-JSON messages over standard input and output; JSON-RPC semantics may be adopted
-where they improve tooling, but transport framing and lifecycle messages must be
-specified before plugins execute.
+WyrmGrid plugins are separate processes. Protocol version 1 uses length-prefixed
+JSON messages over standard input and output, a versioned startup handshake,
+monotonic message sequences, and a supervised shutdown. The host—not the
+plugin—owns rendering, credentials, provider adapters, permission persistence,
+and process state.
 
 `plugin.json` declares identity, compatibility, entry point, and requested
 permissions. The host validates it before launch. A manifest is not a sandbox:
 process isolation, operating-system controls, message validation, timeouts, and
 user trust decisions remain necessary.
 
-The version-one manifest groundwork is in
+The version-one manifest is in
 `schemas/plugin-manifest.schema.json`, mirrored by Rust types in
-`wyrmgrid-plugin-protocol`. The example is intentionally non-executable until
-the lifecycle and framing contract are accepted.
+`wyrmgrid-plugin-protocol`. An optional `runtime` field was added compatibly to
+plugin API version 1; manifests without it remain valid metadata but cannot be
+started. The executable Python proof is
+`examples/plugins/fleet-locations`, with its zero-dependency SDK in
+`sdk/python`.
+
+Forge presents each plugin's requested and granted capabilities. Grants are
+empty by default and stored locally; the current proof requires every requested
+capability to be approved before launch. Only `on_air_fleet_read` and
+`map_layers_publish` execute in this slice. A plugin receives stable translated
+fleet summaries and publishes data-only point layers that Atlas renders using
+the active host theme.
+
+The complete framing, lifecycle, limit, and compatibility contract is in
+[protocol version 1](protocol-v1.md).
 
 ## Chart contributions
 
@@ -49,10 +63,13 @@ or historical tracks. Those would require separate capabilities and protocol
 reviews.
 
 The version-one `external_network` name must not be interpreted as unrestricted
-internet access or a host endpoint proxy. No runtime implements it yet. Before a
-plugin runtime ships, the project must either define a destination- and
-operation-scoped broker or supersede the value with narrower provider
-capabilities through an explicit plugin-protocol compatibility decision.
+internet access or a host endpoint proxy. The host does not implement or grant
+it. The current Python developer preview is also not an operating-system
+sandbox: a process may retain ambient access available to the user's account.
+Only trusted plugin code should be run. Before community distribution, the
+project must add reviewed OS isolation or define a destination- and
+operation-scoped broker, and should supersede this broad name with narrower
+provider capabilities through an explicit compatibility decision.
 
 Likewise, `notifications_create` permits a bounded host notification request; it
 does not authorize Discord, email, webhook, calendar, or arbitrary network
@@ -66,7 +83,7 @@ provider boundaries.
 
 The [Operational Planner concept](operational-planner.md) is a planned flagship
 plugin with Charter Desk and Airline Network workspaces. It is intentionally
-later than the small idle-aircraft plugin proof: the planner should exercise a
+later than the small Fleet Locations plugin proof: the planner should exercise a
 proven public plugin surface, not cause private shortcuts to be added for one
 ambitious first-party feature.
 

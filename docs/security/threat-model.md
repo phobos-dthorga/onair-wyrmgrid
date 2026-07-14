@@ -91,8 +91,25 @@
   framing, supervised lifecycle, and local-only provider connections;
 - simulator plan loading and every other external mutation require a distinct
   negotiated capability and explicit user action;
-- deny-by-default plugin capabilities;
-- relative plugin entry-point validation;
+- deny-by-default plugin capabilities persisted separately from manifests; the
+  current runtime starts only after every requested capability is approved and
+  implements only sanitized fleet reads and data-only Atlas publication;
+- plugin directories, manifests, and entry points are bounded and canonicalized;
+  symlinked folders/files, path escape, malformed metadata, and unsupported
+  runtimes or capabilities are rejected;
+- plugin protocol v1 uses a 1 MiB length-prefixed JSON ceiling, independent
+  monotonic sequences, a three-second identity/version handshake, bounded text
+  and WGS84 validation, at most 16 layers per plugin, and at most 10,000 points
+  per layer;
+- Python launches in isolated mode with a scrubbed environment and receives only
+  translated stable domain snapshots; the host does not place the OnAir key,
+  raw OnAir JSON, provider credentials, Sentry settings, or another plugin's
+  traffic in child messages or environment variables;
+- plugin stdout is protocol-only and stderr is discarded; untrusted output,
+  message bodies, coordinates, identifiers, and paths are not relayed into the
+  interface, normal logs, or telemetry;
+- supervised children receive a bounded graceful shutdown and are forcibly
+  terminated after the deadline or when the host exits;
 - content security policy for the desktop webview;
 - locked dependencies, dependency updates, audit jobs, and CI-built releases;
 - Dependency Review allows one documented low-severity SvelteKit `cookie`
@@ -114,8 +131,8 @@
 - Sentry authentication tokens remain CI secrets; DSNs are treated as public
   submission endpoints and restricted to the narrowest required ingress origin
   in desktop content-security policy;
-- no plugin runtime until framing, lifecycle, limits, and permission review are
-  specified and tested.
+- Forge labels the Python runtime a developer preview and states that capability
+  review is not an operating-system sandbox;
 - company synchronization is serialized in Rust; trigger-specific quiet periods
   silently return cached state without making another remote request. Fleet and
   FBO reads are sequential, and an authentication or rate-limit failure stops
@@ -163,6 +180,30 @@ identifies OnAir Client and warns that Companion has not reached credential
 parity; authentication errors repeat that recovery instruction without echoing
 either entered value. When Companion becomes the primary compatible client,
 this guidance must change without weakening secret handling.
+
+## Residual plugin risks
+
+- Process separation and host capability checks are not an operating-system
+  sandbox. A Python plugin still runs as the current user and may access files,
+  processes, and ambient network facilities allowed to that account even when
+  `external_network` is not granted. Run only trusted code in this preview.
+- Plugin packages and publishers are not signed, updates are not authenticated,
+  and installed files have no tamper-evident integrity record. The bundled proof
+  is copied only when absent so user files are not silently overwritten.
+- The supervisor bounds frames, layers, points, paths, startup, and shutdown but
+  does not yet impose CPU, memory, total-process, message-rate, restart, or disk
+  quotas. A hostile plugin can still exhaust local resources within operating-
+  system limits.
+- Permission approval controls only host-provided WyrmGrid capabilities. It does
+  not inspect dependencies, prove code intent, or prevent a plugin from using
+  Python's own libraries and operating-system interfaces.
+- Python discovery and isolated launch depend on the locally installed runtime.
+  Signed runtime packaging, supported-version policy, dependency locking, SDK
+  conformance testing, sandbox profiles, revocation testing, and safe
+  update/rollback are required before recommending unreviewed community plugins.
+
+The exact implemented boundary and deferred hardening are recorded in
+[plugin protocol version 1](../plugins/protocol-v1.md).
 
 ## Residual Hoard risks
 

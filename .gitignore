@@ -4,6 +4,8 @@
 **/build/
 **/dist/
 **/.svelte-kit/
+**/__pycache__/
+*.py[cod]
 *.log
 *.db
 *.db-shm
