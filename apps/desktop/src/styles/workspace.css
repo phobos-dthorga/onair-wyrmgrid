@@ -151,6 +151,14 @@ nav {
 .historical .time-mode-copy strong {
   color: var(--color-highlight);
 }
+.dispatch-mode-bar .time-mode-copy strong {
+  color: var(--color-highlight);
+}
+.dispatch-mode-bar .time-mode-actions {
+  color: var(--color-text-muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
 .time-mode-indicator {
   width: 7px;
   height: 7px;

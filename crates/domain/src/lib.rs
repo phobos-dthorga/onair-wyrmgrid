@@ -1,5 +1,9 @@
 //! Stable domain types shared by WyrmGrid services and public protocol adapters.
 
+mod flight_plan;
+
+pub use flight_plan::*;
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -9,6 +13,7 @@ use uuid::Uuid;
 pub enum ProvenanceKind {
     OnAirFact,
     ExternalFact,
+    ExternalCalculation,
     Calculated,
     Recommendation,
 }

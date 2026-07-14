@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "id": "129cc5ca-94de-46db-a10e-502bd39c7e98",
+  "identity": {
+    "value": {
+      "airac": "2607",
+      "provider_plan_reference": "wyrmgrid-fixture-001"
+    },
+    "provenance": {
+      "kind": "external_calculation",
+      "provider": "simbrief",
+      "provider_revision": "2607",
+      "generated_at": "2026-07-05T00:00:00Z",
+      "retrieved_at": "2026-07-05T01:00:00Z",
+      "transformation_version": 1,
+      "freshness": "current"
+    }
+  },
+  "airports": {
+    "value": {
+      "origin": {
+        "icao": "YSSY",
+        "name": "Sydney Kingsford Smith",
+        "planned_runway": "34L"
+      },
+      "destination": {
+        "icao": "NZAA",
+        "name": "Auckland",
+        "planned_runway": "23L"
+      },
+      "alternates": [{ "icao": "NZWN", "name": "Wellington" }]
+    },
+    "provenance": {
+      "kind": "external_calculation",
+      "provider": "simbrief",
+      "provider_revision": "2607",
+      "generated_at": "2026-07-05T00:00:00Z",
+      "retrieved_at": "2026-07-05T01:00:00Z",
+      "transformation_version": 1,
+      "freshness": "current"
+    }
+  },
+  "route": {
+    "value": {
+      "source_text": "TESAT Q29 LIZZI DCT MARLN A579 LUNBI",
+      "initial_altitude_ft": 36000,
+      "distance_nm": 1184.6,
+      "legs": [
+        { "sequence": 0, "ident": "TESAT", "airway": "DCT" },
+        { "sequence": 1, "ident": "LIZZI", "airway": "Q29" },
+        { "sequence": 2, "ident": "LUNBI", "airway": "A579" }
+      ]
+    },
+    "provenance": {
+      "kind": "external_calculation",
+      "provider": "simbrief",
+      "provider_revision": "2607",
+      "generated_at": "2026-07-05T00:00:00Z",
+      "retrieved_at": "2026-07-05T01:00:00Z",
+      "transformation_version": 1,
+      "freshness": "current"
+    }
+  }
+}

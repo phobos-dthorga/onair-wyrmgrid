@@ -4,6 +4,7 @@ use tauri::Manager;
 
 struct DesktopState {
     onair: wyrmgrid_application::OnAirSession,
+    dispatch: wyrmgrid_application::DispatchSession,
     plugins: wyrmgrid_application::PluginService,
     legal: wyrmgrid_application::LegalSettingsService<wyrmgrid_storage::Store>,
     themes: wyrmgrid_application::ThemeSettingsService<wyrmgrid_storage::Store>,
@@ -84,6 +85,33 @@ fn onair_historical_company_data(
         .onair
         .historical_company_data(&selected_at)
         .map_err(operation_error)
+}
+
+#[tauri::command]
+fn dispatch_status(
+    state: tauri::State<'_, DesktopState>,
+) -> Result<wyrmgrid_application::DispatchStatus, wyrmgrid_application::OperationError> {
+    state.dispatch.status().map_err(operation_error)
+}
+
+#[tauri::command]
+async fn import_simbrief_latest(
+    state: tauri::State<'_, DesktopState>,
+    reference_kind: wyrmgrid_application::SimBriefReferenceKind,
+    reference: String,
+) -> Result<wyrmgrid_application::DispatchStatus, wyrmgrid_application::OperationError> {
+    state
+        .dispatch
+        .import_latest(reference_kind, &reference)
+        .await
+        .map_err(operation_error)
+}
+
+#[tauri::command]
+fn clear_dispatch_plan(
+    state: tauri::State<'_, DesktopState>,
+) -> Result<wyrmgrid_application::DispatchStatus, wyrmgrid_application::OperationError> {
+    state.dispatch.clear().map_err(operation_error)
 }
 
 #[tauri::command]
@@ -233,6 +261,7 @@ pub fn run() {
             let legal_status = legal.status().expect("legal settings should initialize");
             let themes = wyrmgrid_application::ThemeSettingsService::new(store.clone());
             let onair = wyrmgrid_application::OnAirSession::with_default_store(store.clone());
+            let dispatch = wyrmgrid_application::DispatchSession::with_default_provider();
             let plugins = wyrmgrid_application::PluginService::new(
                 app_data_directory.map(|directory| directory.join("plugins")),
                 store,
@@ -241,6 +270,7 @@ pub fn run() {
 
             app.manage(DesktopState {
                 onair,
+                dispatch,
                 plugins,
                 legal,
                 themes,
@@ -258,6 +288,9 @@ pub fn run() {
             onair_fbo_snapshot,
             onair_hoard_timeline,
             onair_historical_company_data,
+            dispatch_status,
+            import_simbrief_latest,
+            clear_dispatch_plan,
             legal_status,
             acknowledge_legal,
             update_telemetry_preference,

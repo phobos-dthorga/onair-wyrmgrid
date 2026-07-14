@@ -9,6 +9,12 @@ metadata remains valid, but a plugin without `runtime: "python"` is not
 executable. Removing fields, changing their meaning, or changing framing would
 require a new protocol or plugin API version.
 
+The provenance vocabulary later gained the additive
+`external_calculation` value so provider-produced calculations remain distinct
+from both external observations and WyrmGrid calculations. Version-one fleet
+messages do not emit that value; plugin and chart schemas accept it for honest
+host-validated contributions.
+
 The canonical manifest schema is `schemas/plugin-manifest.schema.json`. The
 envelope schema and accepted examples are
 `schemas/plugin-protocol-envelope.schema.json` and `schemas/fixtures/plugin-*-v1.json`.

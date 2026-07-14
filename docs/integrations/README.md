@@ -48,9 +48,10 @@ Online networks --------------------------+--> Atlas overlays     |
 
 1. Complete fleet persistence and restart-time offline fallback.
 2. Introduce the first canonical `FlightPlanSnapshot` with fixtures and
-   provenance validation.
+   provenance validation. (Implemented.)
 3. Import a user's latest SimBrief OFP without storing a password or shared
-   application secret.
+   application secret. (Implemented as a session-only developer preview;
+   authenticated live-field certification remains.)
 4. Add cached airport weather and route-weather summaries.
 5. Connect OnAir jobs, fleet selection, SimBrief plans, and explainable dispatch
    checks.

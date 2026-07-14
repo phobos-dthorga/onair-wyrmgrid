@@ -64,14 +64,19 @@ not replace completion of the current vertical slice.
 
 ### Operational plan foundation
 
-- Canonical provenance-aware flight-plan and route snapshots from ADR-0008
-- Stable external provider ports and private raw response models
+- Canonical provenance-aware `FlightPlanSnapshot` version 1 and route model from
+  ADR-0008, with JSON Schema and sanitized fixtures (implemented)
+- Stable SimBrief provider port with bounded private raw response translation
+  (implemented)
 - AIRAC, identifier, unit, timestamp, freshness, and reconciliation policies
+  (initial import policy implemented; persistence and comparison remain)
 - Host-owned import/export validation and deny-by-default plugin capabilities
 
 ### SimBrief and weather
 
-- Latest SimBrief OFP import by an explicitly connected Pilot ID or username
+- Latest SimBrief OFP import by an explicitly supplied Pilot ID or username,
+  session-only Dispatch interface, and explicit clear action (developer preview
+  implemented; authenticated compatibility certification remains)
 - OnAir aircraft, payload, airport, schedule, and deadline comparison
 - Cached AviationWeather.gov METAR and TAF airport context
 - Route advisories and explainable weather findings

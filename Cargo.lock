@@ -5262,6 +5262,7 @@ dependencies = [
  "wyrmgrid-domain",
  "wyrmgrid-onair-api",
  "wyrmgrid-plugin-protocol",
+ "wyrmgrid-simbrief-api",
  "wyrmgrid-storage",
 ]
 
@@ -5284,6 +5285,8 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "serde",
+ "serde_json",
+ "thiserror 2.0.18",
  "uuid",
 ]
 
@@ -5309,6 +5312,20 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+ "wyrmgrid-domain",
+]
+
+[[package]]
+name = "wyrmgrid-simbrief-api"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "reqwest 0.12.28",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "url",
+ "uuid",
  "wyrmgrid-domain",
 ]
 

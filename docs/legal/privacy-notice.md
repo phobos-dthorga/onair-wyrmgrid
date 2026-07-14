@@ -1,6 +1,6 @@
 # OnAir WyrmGrid Privacy Notice
 
-**Version and effective date:** 2026-07-14
+**Version and effective date:** 2026-07-14.1
 
 This preliminary notice describes information handled by official builds of
 OnAir WyrmGrid distributed by Phobos A. D'thorga. It does not describe an
@@ -13,6 +13,9 @@ professionally reviewed before a stable or commercial release.
 - WyrmGrid is local-first and has no WyrmGrid user account or advertising.
 - Your OnAir API key is used for the active connection and is not written to the
   WyrmGrid database.
+- If you choose to import a flight plan, your SimBrief Pilot ID or username is
+  sent directly to SimBrief to retrieve the account's latest OFP. WyrmGrid does
+  not ask for a SimBrief or Navigraph password.
 - Atlas downloads its current map style and tiles from MapLibre's public demo
   service after legal onboarding is complete.
 - Privacy-filtered error diagnostics are optional, off by default, and only
@@ -28,7 +31,12 @@ WyrmGrid currently keeps the following information on the user's device:
 - interface preferences, such as the selected automatic synchronization
   interval, in the desktop webview's local storage; and
 - while the application is running, the supplied OnAir company ID, API key,
-  translated company details, and current fleet observation in process memory.
+  translated company details, and current fleet observation in process memory;
+  and
+- while the application is running, a user-supplied SimBrief Pilot ID or
+  username for the duration of one import request and the translated latest OFP
+  in process memory. The identifier and plan are not currently written to the
+  WyrmGrid database.
 
 The API key is cleared when the OnAir session disconnects or the process exits.
 Normal session-only handling cannot guarantee removal from operating-system
@@ -53,6 +61,23 @@ IP address, request time, requested resource, and user-agent information.
 WyrmGrid does not intentionally put an OnAir API key, company ID, fleet record,
 or selected aircraft into those requests. This public demonstration service
 must be replaced or formally approved before stable release.
+
+### SimBrief
+
+When the user explicitly chooses **Import latest OFP**, WyrmGrid sends the
+entered Pilot ID or username and a request for JSON directly to SimBrief's
+latest-OFP endpoint over HTTPS. SimBrief and its network providers receive that
+identifier, the source IP address, request time, user-agent information, and
+other normal connection metadata. A successful response may contain private
+operational information including airports, route, times, aircraft identity,
+weights, fuel, alternates, coordinates, plan identifiers, and AIRAC details.
+
+WyrmGrid translates allowlisted fields into a local `FlightPlanSnapshot`, keeps
+the result only for the running session, and does not send the identifier, raw
+response, or translated plan to Sentry or plugins. Clearing the plan or closing
+WyrmGrid removes the application's in-memory reference, subject to the same
+operating-system memory limitations described above. SimBrief operates
+independently under its own terms and privacy practices.
 
 ### Optional Sentry diagnostics
 
@@ -81,13 +106,16 @@ will be increased.
 ## Purposes
 
 WyrmGrid handles information to provide user-requested OnAir connectivity,
-display operational context, remember local choices, secure and diagnose the
-application, and improve reliability. Information is not used for behavioural
-advertising, data brokerage, or unrelated user profiling.
+retrieve a user-requested SimBrief plan, display operational context, remember
+local choices, secure and diagnose the application, and improve reliability.
+Information is not used for behavioural advertising, data brokerage, or
+unrelated user profiling.
 
 ## Retention and deletion
 
-Session-only credentials and fleet state are discarded when the process exits.
+Session-only credentials, account references, fleet state, and imported
+SimBrief plans are discarded when the process exits. A Dispatch user can also
+clear the imported plan during the session.
 Local preferences remain until changed, removed by a future reset function, or
 deleted with the application's local data. Optional diagnostic events follow
 the Sentry retention configuration disclosed when public telemetry is enabled.

@@ -5,6 +5,7 @@ members = [
     "crates/domain",
     "crates/onair-api",
     "crates/plugin-protocol",
+    "crates/simbrief-api",
     "crates/storage",
 ]
 resolver = "2"

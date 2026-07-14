@@ -24,7 +24,29 @@ WyrmGrid must not claim more detailed field behaviour until a sanitized captured
 response or an authenticated integration test outside the repository verifies
 it.
 
-## Phase 1: latest-OFP import
+## Implemented developer preview
+
+The first read-only vertical slice is implemented behind WyrmGrid Dispatch:
+
+- `wyrmgrid-simbrief-api` makes a user-requested HTTPS GET to the documented
+  latest-OFP endpoint with `json=1`, follows no redirects, enforces a 15-second
+  timeout and 2 MiB streaming limit, and returns only safe error categories;
+- the Pilot ID or username exists only for the request and is never returned,
+  persisted, logged, reported to Sentry, or exposed to plugins;
+- raw JSON remains private to the adapter and is translated into canonical
+  `FlightPlanSnapshot` version 1 groups with explicit mass units, timestamps,
+  transformation version, freshness, and `external_calculation` provenance;
+- the current Dispatch plan is session-only and can be cleared explicitly; and
+- the interface renders origin, destination, alternates, aircraft, schedule,
+  route, weights, fuel, AIRAC, and provenance only when supplied.
+
+The repository fixture is synthetic and sanitized. It validates bounds,
+translation, optional-field handling, provenance, and redaction, but it is not a
+captured live response. Therefore the interface and documentation describe this
+as a developer preview and do not claim certified live field compatibility. An
+authenticated outside-repository capture remains a release gate.
+
+## Phase 1: latest-OFP import (developer preview implemented)
 
 - Let the user connect a SimBrief Pilot ID or username explicitly.
 - Fetch JSON in a dedicated Rust adapter such as `wyrmgrid-simbrief-api`.

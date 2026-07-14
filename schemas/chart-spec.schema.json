@@ -55,6 +55,7 @@
           "enum": [
             "on_air_fact",
             "external_fact",
+            "external_calculation",
             "calculated",
             "recommendation"
           ]

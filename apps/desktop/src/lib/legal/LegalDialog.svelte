@@ -111,7 +111,8 @@
             <p>
               WyrmGrid is a local-first, independent community application. It
               connects to OnAir only when you provide credentials. Atlas uses
-              MapLibre's public demo map service.
+              MapLibre's public demo map service. Dispatch contacts SimBrief
+              only when you explicitly import the latest OFP.
             </p>
             <div class="summary-grid">
               <article>
@@ -138,8 +139,8 @@
               <article>
                 <strong>Independent providers</strong>
                 <span
-                  >OnAir, Sentry, map services, and community plugins operate
-                  under their own terms.</span
+                  >OnAir, SimBrief, Sentry, map services, and community plugins
+                  operate under their own terms.</span
                 >
               </article>
             </div>

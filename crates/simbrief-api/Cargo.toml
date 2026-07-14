@@ -1,5 +1,5 @@
 [package]
-name = "wyrmgrid-domain"
+name = "wyrmgrid-simbrief-api"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -9,9 +9,12 @@ repository.workspace = true
 
 [dependencies]
 chrono.workspace = true
-serde.workspace = true
+reqwest.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
+url.workspace = true
 uuid.workspace = true
+wyrmgrid-domain = { path = "../domain" }
 
 [dev-dependencies]
-serde_json.workspace = true
+tokio.workspace = true
