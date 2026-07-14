@@ -1,6 +1,6 @@
 # OnAir WyrmGrid Privacy Notice
 
-**Version and effective date:** 2026-07-14.2
+**Version and effective date:** 2026-07-14.3
 
 This preliminary notice describes information handled by official builds of
 OnAir WyrmGrid distributed by Phobos A. D'thorga. It does not describe an
@@ -23,6 +23,8 @@ professionally reviewed before a stable or commercial release.
   service after legal onboarding is complete.
 - Privacy-filtered error diagnostics are optional, off by default, and only
   operate when both the user and the official build enable Sentry.
+- Imported community language packs, their message text, and optional author
+  metadata remain local and are not sent to translation services.
 - WyrmGrid does not sell personal information.
 
 ## Information kept locally
@@ -31,6 +33,10 @@ WyrmGrid currently keeps the following information on the user's device:
 
 - the accepted Terms and Privacy Notice versions, the optional diagnostics
   preference, and acknowledgement timestamps in WyrmGrid's SQLite database;
+- the selected theme and language pack, imported custom theme manifests, and
+  imported community language-pack manifests in WyrmGrid's SQLite database. A
+  language-pack manifest includes its translated text and may include the
+  author name supplied by the pack creator;
 - interface preferences, such as the selected automatic synchronization
   interval, in the desktop webview's local storage; and
 - while the application is running, the supplied OnAir company ID, API key,
@@ -49,6 +55,10 @@ Normal session-only handling cannot guarantee removal from operating-system
 crash dumps, virtual memory, or a compromised computer.
 
 ## Connections to other services
+
+Selecting or importing a language pack does not contact a translation service.
+WyrmGrid validates the supplied file locally and does not send its messages or
+author metadata to Sentry, external providers, or plugins.
 
 ### OnAir
 
@@ -144,8 +154,10 @@ Session-only credentials, account references, fleet state, and imported
 SimBrief plans and weather snapshots are discarded when the process exits. A
 Dispatch user can also clear the imported plan and its associated weather during
 the session.
-Local preferences remain until changed, removed by a future reset function, or
-deleted with the application's local data. Optional diagnostic events follow
+Local preferences and imported customisation manifests remain until changed,
+removed by a future management function, or deleted with the application's
+local data. Version 1 does not yet provide an individual language-pack deletion
+control. Optional diagnostic events follow
 the Sentry retention configuration disclosed when public telemetry is enabled.
 Uninstallers and operating systems may not remove every application-data file;
 users can request instructions for locating it.

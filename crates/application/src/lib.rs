@@ -1,9 +1,11 @@
 //! Application-level orchestration independent of Tauri and other interfaces.
 
 mod dispatch;
+mod localization;
 mod plugins;
 
 pub use dispatch::*;
+pub use localization::*;
 pub use plugins::*;
 
 use chrono::{DateTime, SecondsFormat, Utc};
@@ -44,7 +46,7 @@ pub fn platform_status() -> PlatformStatus {
 }
 
 pub const TERMS_VERSION: &str = "2026-07-14";
-pub const PRIVACY_NOTICE_VERSION: &str = "2026-07-14.2";
+pub const PRIVACY_NOTICE_VERSION: &str = "2026-07-14.3";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PersistedLegalPreferences {
@@ -891,6 +893,29 @@ impl From<ThemeSettingsError> for OperationError {
             ThemeSettingsError::InvalidColour => ("theme.invalid_colour", false),
             ThemeSettingsError::InsufficientContrast => ("theme.insufficient_contrast", false),
             ThemeSettingsError::UnknownTheme => ("theme.unknown_theme", false),
+        };
+        Self {
+            code,
+            message: error.to_string(),
+            retryable,
+            reportable: false,
+            report_id: None,
+        }
+    }
+}
+
+impl From<LanguageSettingsError> for OperationError {
+    fn from(error: LanguageSettingsError) -> Self {
+        let (code, retryable) = match error {
+            LanguageSettingsError::StorageUnavailable => ("language.storage_unavailable", true),
+            LanguageSettingsError::ManifestTooLarge => ("language.manifest_too_large", false),
+            LanguageSettingsError::InvalidManifest => ("language.invalid_manifest", false),
+            LanguageSettingsError::UnsupportedVersion => ("language.unsupported_version", false),
+            LanguageSettingsError::InvalidIdentifier => ("language.invalid_identifier", false),
+            LanguageSettingsError::InvalidMetadata => ("language.invalid_metadata", false),
+            LanguageSettingsError::InvalidMessage => ("language.invalid_message", false),
+            LanguageSettingsError::ProtectedMessage => ("language.protected_message", false),
+            LanguageSettingsError::UnknownLanguagePack => ("language.unknown_pack", false),
         };
         Self {
             code,
@@ -2227,5 +2252,9 @@ mod tests {
         );
         assert!(OperationError::from(ConnectionError::StateUnavailable).reportable);
         assert!(!OperationError::from(ConnectionError::AuthenticationRejected).reportable);
+        assert_eq!(
+            OperationError::from(LanguageSettingsError::ProtectedMessage).code,
+            "language.protected_message"
+        );
     }
 }

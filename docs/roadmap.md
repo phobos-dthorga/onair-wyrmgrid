@@ -12,6 +12,11 @@
 - Semantic styling, four built-in appearances, and a persisted, contrast-checked,
   data-only community theme manifest (implemented); authoring, export, deletion,
   and any curated distribution remain later ecosystem work
+- Canonical `en-AU` Fluent catalogue, persisted language preference, bounded
+  data-only community language packs, per-message English fallback, and initial
+  shell/Theme/Dispatch migration (implemented); complete string extraction,
+  pseudo-locales, reviewed translations, RTL certification, export, and deletion
+  remain localization work
 
 ## Observability foundation
 

@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "id": "community-fr-example",
+  "locale": "fr",
+  "name": "Français communautaire (exemple)",
+  "author": "WyrmGrid fixture",
+  "source_locale": "en-AU",
+  "source_catalog_version": 1,
+  "direction": "left_to_right",
+  "messages": {
+    "action-try-again": "Réessayer",
+    "nav-primary": "Navigation principale",
+    "nav-atlas": "Atlas",
+    "nav-fleet": "Flotte",
+    "nav-dispatch": "Répartition",
+    "nav-hoard": "Trésor",
+    "nav-forge": "Forge",
+    "settings-theme": "Thème",
+    "settings-language": "Langue",
+    "onair-connect": "Connecter OnAir",
+    "footer-unaffiliated": "Projet communautaire non affilié",
+    "language-coverage": "{ $translated } messages communautaires sur { $total }"
+  }
+}

@@ -123,6 +123,7 @@ export const dispatchPreviewReady: DispatchStatus = {
       {
         category: "aircraft_identity",
         status: "match",
+        message_key: "dispatch-finding-registration-match",
         title: "Registration matched",
         explanation:
           "The SimBrief registration exactly matches one aircraft in the observed OnAir fleet.",
@@ -132,6 +133,7 @@ export const dispatchPreviewReady: DispatchStatus = {
       {
         category: "aircraft_model",
         status: "difference",
+        message_key: "dispatch-finding-model-difference",
         title: "Model labels differ",
         explanation:
           "The source labels differ. No unverified aircraft-type crosswalk was applied.",
@@ -141,6 +143,7 @@ export const dispatchPreviewReady: DispatchStatus = {
       {
         category: "aircraft_position",
         status: "difference",
+        message_key: "dispatch-finding-position-difference",
         title: "Aircraft is away from origin",
         explanation:
           "The matched OnAir aircraft is observed at another airport; positioning may be required.",
@@ -150,6 +153,7 @@ export const dispatchPreviewReady: DispatchStatus = {
       {
         category: "payload",
         status: "unavailable",
+        message_key: "dispatch-finding-payload-unavailable",
         title: "Payload limits not observed",
         explanation:
           "The current OnAir fleet contract does not include weight limits, so no compatibility is inferred.",
@@ -158,6 +162,7 @@ export const dispatchPreviewReady: DispatchStatus = {
       {
         category: "schedule",
         status: "unavailable",
+        message_key: "dispatch-finding-deadline-unavailable",
         title: "Deadlines not observed",
         explanation:
           "The current OnAir slice does not include job schedules or deadlines.",

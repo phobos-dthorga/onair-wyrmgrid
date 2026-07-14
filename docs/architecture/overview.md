@@ -17,7 +17,7 @@ Rust provider adapters   WyrmGrid Bridge
       Tauri commands
           |
           v
-  Svelte presentation
+  Svelte presentation <--- Fluent catalogue + data-only language pack
      |          |
  MapLibre    WyrmChart
   (Atlas)    (ECharts)
@@ -26,6 +26,16 @@ Rust provider adapters   WyrmGrid Bridge
 The dependency direction points inward. Interface and infrastructure adapters
 depend on application-owned domain contracts; domain code does not depend on
 Tauri, SQLite, HTTP, MapLibre, or a plugin language.
+
+## Localization boundary
+
+Domain models remain language-neutral. Application services return semantic
+states, stable message or error codes, and formatting arguments; they do not
+select a locale. Svelte resolves presentation messages from the selected
+community pack and falls back to the canonical `en-AU` catalogue. Raw provider
+facts, user content, logs, and protocol identifiers are never treated as
+translation keys. See [ADR-0010](decisions/0010-community-localization.md) and
+the [language-pack authoring guide](../localization/README.md).
 
 External providers include OnAir, SimBrief, SayIntentions.AI, aviation weather,
 online networks, and optional navigation data. Each owns a private raw schema

@@ -10,6 +10,7 @@ const INITIAL_SCHEMA: &str = include_str!("../migrations/0001_initial.sql");
 const LEGAL_PREFERENCES_SCHEMA: &str = include_str!("../migrations/0002_legal_preferences.sql");
 const THEMES_SCHEMA: &str = include_str!("../migrations/0003_themes.sql");
 const PLUGIN_PERMISSIONS_SCHEMA: &str = include_str!("../migrations/0004_plugin_permissions.sql");
+const LANGUAGE_PACKS_SCHEMA: &str = include_str!("../migrations/0005_language_packs.sql");
 
 #[derive(Debug, Error)]
 pub enum StorageError {
@@ -51,6 +52,17 @@ pub struct CustomThemeRecord {
     pub manifest_json: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LanguagePreferencesRecord {
+    pub selected_language_pack_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CustomLanguagePackRecord {
+    pub pack_id: String,
+    pub manifest_json: String,
+}
+
 impl Store {
     pub fn open(path: impl AsRef<Path>) -> Result<Self, StorageError> {
         let connection = Connection::open(path)?;
@@ -73,6 +85,7 @@ impl Store {
         connection.execute_batch(LEGAL_PREFERENCES_SCHEMA)?;
         connection.execute_batch(THEMES_SCHEMA)?;
         connection.execute_batch(PLUGIN_PERMISSIONS_SCHEMA)?;
+        connection.execute_batch(LANGUAGE_PACKS_SCHEMA)?;
         Ok(Self {
             connection: Arc::new(Mutex::new(connection)),
             persistent,
@@ -320,6 +333,92 @@ impl Store {
 }
 
 impl Store {
+    pub fn load_language_preferences_record(
+        &self,
+    ) -> Result<Option<LanguagePreferencesRecord>, StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection
+            .query_row(
+                "SELECT selected_language_pack_id
+                 FROM language_preferences
+                 WHERE singleton_id = 1",
+                [],
+                |row| {
+                    Ok(LanguagePreferencesRecord {
+                        selected_language_pack_id: row.get(0)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(StorageError::from)
+    }
+
+    pub fn save_selected_language_pack_record(&self, pack_id: &str) -> Result<(), StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection
+            .execute(
+                "INSERT INTO language_preferences (singleton_id, selected_language_pack_id)
+                 VALUES (1, ?1)
+                 ON CONFLICT(singleton_id) DO UPDATE SET
+                    selected_language_pack_id = excluded.selected_language_pack_id,
+                    updated_at = CURRENT_TIMESTAMP",
+                [pack_id],
+            )
+            .map(|_| ())
+            .map_err(StorageError::from)
+    }
+
+    pub fn list_custom_language_pack_records(
+        &self,
+    ) -> Result<Vec<CustomLanguagePackRecord>, StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        let mut statement = connection.prepare(
+            "SELECT pack_id, manifest_json FROM custom_language_packs ORDER BY pack_id ASC",
+        )?;
+        statement
+            .query_map([], |row| {
+                Ok(CustomLanguagePackRecord {
+                    pack_id: row.get(0)?,
+                    manifest_json: row.get(1)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StorageError::from)
+    }
+
+    pub fn save_custom_language_pack_record(
+        &self,
+        pack_id: &str,
+        manifest_json: &str,
+    ) -> Result<(), StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection
+            .execute(
+                "INSERT INTO custom_language_packs (pack_id, manifest_json)
+                 VALUES (?1, ?2)
+                 ON CONFLICT(pack_id) DO UPDATE SET
+                    manifest_json = excluded.manifest_json,
+                    updated_at = CURRENT_TIMESTAMP",
+                params![pack_id, manifest_json],
+            )
+            .map(|_| ())
+            .map_err(StorageError::from)
+    }
+}
+
+impl Store {
     pub fn load_legal_preferences_record(
         &self,
     ) -> Result<Option<LegalPreferencesRecord>, StorageError> {
@@ -473,7 +572,7 @@ mod tests {
         let store = Store::open_in_memory().expect("in-memory database should open");
         assert_eq!(
             store.schema_version().expect("version should be readable"),
-            4
+            5
         );
     }
 
@@ -678,6 +777,42 @@ mod tests {
                 .expect("theme preference should be readable"),
             Some(ThemePreferencesRecord {
                 selected_theme_id: "night-flight".into(),
+            })
+        );
+    }
+
+    #[test]
+    fn persists_custom_language_packs_and_the_selected_pack() {
+        let store = Store::open_in_memory().expect("in-memory database should open");
+        assert!(
+            store
+                .load_language_preferences_record()
+                .expect("language preference should be readable")
+                .is_none()
+        );
+
+        store
+            .save_custom_language_pack_record("community-fr", "{\"schema_version\":1}")
+            .expect("custom language pack should save");
+        store
+            .save_selected_language_pack_record("community-fr")
+            .expect("language selection should save");
+
+        assert_eq!(
+            store
+                .list_custom_language_pack_records()
+                .expect("custom language packs should be readable"),
+            vec![CustomLanguagePackRecord {
+                pack_id: "community-fr".into(),
+                manifest_json: "{\"schema_version\":1}".into(),
+            }]
+        );
+        assert_eq!(
+            store
+                .load_language_preferences_record()
+                .expect("language preference should be readable"),
+            Some(LanguagePreferencesRecord {
+                selected_language_pack_id: "community-fr".into(),
             })
         );
     }

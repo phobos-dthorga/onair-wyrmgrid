@@ -9,6 +9,7 @@
 - [WyrmGrid Atlas](atlas/README.md)
 - [WyrmGrid Hoard](hoard/README.md)
 - [Themes and community theme manifests](themes/README.md)
+- [Localization and community language packs](localization/README.md)
 - [Plugin platform](plugins/overview.md)
 - [Operational Planner plugin concept](plugins/operational-planner.md)
 - [OnAir API boundary](onair/api-boundary.md)

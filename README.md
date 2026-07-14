@@ -35,6 +35,7 @@ plugin boundary available to third-party developers.
 | Interface                    | Svelte 5 and TypeScript                 |
 | Map                          | MapLibre GL JS                          |
 | Charts                       | Apache ECharts behind WyrmChart         |
+| Localization                 | Fluent with canonical `en-AU` fallback  |
 | Local storage                | SQLite                                  |
 | Plugin boundary              | Out-of-process, versioned JSON messages |
 | Native simulator integration | Separate versioned provider sidecars    |
@@ -62,6 +63,8 @@ The Rust workspace currently uses seven cohesive libraries:
 8. SimBrief, weather, online networks, navigation data, and simulators remain
    optional providers behind application-owned models; the current SimBrief and
    airport-weather flows are explicit, session-only, and read-only.
+9. Community language packs are bounded, data-only, locally validated, and
+   unable to replace protected legal, credential, permission, or error text.
 
 ## Development
 

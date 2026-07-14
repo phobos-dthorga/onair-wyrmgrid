@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { translation } from "$lib/i18n/runtime";
   import type { ThemeStatus } from "./types";
 
   let {
@@ -48,24 +49,23 @@
     >
       <header>
         <div>
-          <span class="eyebrow">Appearance</span>
-          <h2 id="theme-title">WyrmGrid themes</h2>
+          <span class="eyebrow">{$translation("theme-eyebrow")}</span>
+          <h2 id="theme-title">{$translation("theme-title")}</h2>
         </div>
         <button
           class="close-button"
           type="button"
-          aria-label="Close theme settings"
+          aria-label={$translation("theme-close")}
           disabled={busy}
           onclick={onclose}>×</button
         >
       </header>
 
       <p class="introduction">
-        Themes can change WyrmGrid's approved colour roles. They cannot run
-        code, load remote assets, move controls, or read application data.
+        {$translation("theme-introduction")}
       </p>
 
-      <div class="theme-list" aria-label="Available themes">
+      <div class="theme-list" aria-label={$translation("theme-list-label")}>
         {#each status.themes as theme}
           <button
             class="theme-card"
@@ -84,12 +84,16 @@
               <strong>{theme.manifest.name}</strong>
               <small>
                 {theme.built_in
-                  ? "Built into WyrmGrid"
-                  : `Community theme · ${theme.manifest.author ?? "Unknown author"}`}
+                  ? $translation("theme-built-in")
+                  : $translation("theme-community", {
+                      author:
+                        theme.manifest.author ??
+                        $translation("theme-unknown-author"),
+                    })}
               </small>
             </span>
             {#if theme.manifest.id === status.selected_theme_id}
-              <span class="selected-label">Active</span>
+              <span class="selected-label">{$translation("theme-active")}</span>
             {/if}
           </button>
         {/each}
@@ -101,8 +105,8 @@
 
       <footer>
         <div>
-          <strong>Community theme files</strong>
-          <span>Versioned JSON, validated locally before it is saved.</span>
+          <strong>{$translation("theme-community-files")}</strong>
+          <span>{$translation("theme-community-files-detail")}</span>
         </div>
         <input
           bind:this={fileInput}
@@ -116,11 +120,13 @@
           type="button"
           disabled={busy || !desktopRuntime}
           title={desktopRuntime
-            ? "Import a WyrmGrid theme manifest"
-            : "Theme import is available in the desktop application"}
+            ? $translation("theme-import-title")
+            : $translation("theme-import-desktop-only")}
           onclick={() => fileInput?.click()}
         >
-          {busy ? "Applying…" : "Import theme"}
+          {busy
+            ? $translation("theme-applying")
+            : $translation("theme-import")}
         </button>
       </footer>
     </div>
