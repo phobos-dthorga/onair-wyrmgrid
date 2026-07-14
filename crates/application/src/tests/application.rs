@@ -2,6 +2,7 @@ use super::*;
 use chrono::{Duration as ChronoDuration, Timelike, Utc};
 use tempfile::tempdir;
 use wyrmgrid_domain::{AircraftId, AirportId, AirportSummary, FboId, Provenance, ProvenanceKind};
+use wyrmgrid_storage::DatabaseKey;
 
 #[derive(Default)]
 struct MemoryLegalPreferences {
@@ -180,6 +181,7 @@ fn starts_disconnected_without_persistent_credentials() {
 fn restores_the_latest_persistent_company_data_as_offline() {
     let directory = tempdir().expect("temporary Hoard directory should exist");
     let database_path = directory.path().join("wyrmgrid.db");
+    let database_key = DatabaseKey::from_bytes([17; 32]);
     let company = CompanySummary {
         id: CompanyId(Uuid::new_v4()),
         name: "Cached Charter".into(),
@@ -239,7 +241,8 @@ fn restores_the_latest_persistent_company_data_as_offline() {
             },
         },
     };
-    let mut store = Store::open(&database_path).expect("persistent Hoard should open");
+    let mut store =
+        Store::open(&database_path, &database_key).expect("persistent Hoard should open");
     save_stored_fleet(&mut store, &stored).expect("fleet should persist");
     save_stored_fbos(&mut store, &stored_fbos).expect("FBOs should persist");
     save_stored_jobs(&mut store, &stored_jobs).expect("jobs should persist");
@@ -247,7 +250,7 @@ fn restores_the_latest_persistent_company_data_as_offline() {
 
     let session = OnAirSession::with_store(
         DEFAULT_BASE_URL,
-        Store::open(&database_path).expect("persistent Hoard should reopen"),
+        Store::open(&database_path, &database_key).expect("persistent Hoard should reopen"),
     );
     let fleet_view = session
         .fleet_snapshot()

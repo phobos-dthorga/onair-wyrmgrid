@@ -1,6 +1,6 @@
 # OnAir WyrmGrid Privacy Notice
 
-**Version and effective date:** 2026-07-15
+**Version and effective date:** 2026-07-15.2 (storage-protection revision)
 
 This preliminary notice describes information handled by official builds of
 OnAir WyrmGrid distributed by Phobos A. D'thorga. It does not describe an
@@ -11,6 +11,11 @@ professionally reviewed before a stable or commercial release.
 ## Privacy at a glance
 
 - WyrmGrid is local-first and has no WyrmGrid user account or advertising.
+- WyrmGrid's local database is encrypted with SQLCipher. Its random key is held
+  separately by the operating-system credential service.
+- Portable backups are created only when you request one, are encrypted with a
+  password you choose, and remain wherever you place them until you or your
+  storage provider deletes them.
 - Your OnAir API key is used for the active connection and is not written to the
   WyrmGrid database.
 - If you choose to import a flight plan, your SimBrief Pilot ID or username is
@@ -35,9 +40,10 @@ professionally reviewed before a stable or commercial release.
 WyrmGrid currently keeps the following information on the user's device:
 
 - the accepted Terms and Privacy Notice versions, the optional diagnostics
-  preference, and acknowledgement timestamps in WyrmGrid's SQLite database;
+  preference, and acknowledgement timestamps in WyrmGrid's SQLCipher-encrypted
+  SQLite database;
 - the selected theme and language pack, imported custom theme manifests, and
-  imported community language-pack manifests in WyrmGrid's SQLite database. A
+  imported community language-pack manifests in WyrmGrid's encrypted database. A
   language-pack manifest includes its translated text and may include the
   author name supplied by the pack creator;
 - interface preferences, such as the selected automatic synchronization
@@ -57,6 +63,9 @@ WyrmGrid currently keeps the following information on the user's device:
   capability scope revision, capability count, and decision time. These records
   are limited to the newest 4,096 decisions and never contain API keys, raw
   plugin output, or simulator payloads; and
+- a random 32-byte database key in the operating-system credential service,
+  identified by WyrmGrid's application service and key-version label. The key
+  is not stored in the database or portable backups; and
 - while the application is running, a user-supplied SimBrief Pilot ID or
   username for the duration of one import request and the translated latest OFP
   in process memory. The identifier and plan are not currently written to the
@@ -68,6 +77,13 @@ WyrmGrid currently keeps the following information on the user's device:
 The API key is cleared when the OnAir session disconnects or the process exits.
 Normal session-only handling cannot guarantee removal from operating-system
 crash dumps, virtual memory, or a compromised computer.
+
+When the user creates or restores a portable backup, WyrmGrid briefly handles
+the selected local path and supplied backup password in process memory. It does
+not persist the password or send either value to WyrmGrid, Sentry, plugins, or
+an external service. The chosen backup is a complete encrypted copy of local
+database content. Restore creates encrypted pending and rollback files beside
+the active database until the next successful startup completes activation.
 
 ## Connections to other services
 
@@ -191,18 +207,29 @@ not send session content to WyrmGrid, Sentry, simulator providers, or plugins.
 Uninstallers and operating systems may not remove every application-data file;
 users can request instructions for locating it.
 
+Portable backups are not managed by WyrmGrid after creation. They remain at the
+user-selected location and may also be retained by synchronisation providers,
+system backups, snapshots, removable media, or deleted-file recovery. Removing
+local application data does not delete those copies. WyrmGrid cannot recover a
+forgotten backup password or an encrypted database whose operating-system key
+and usable portable backups have both been lost.
+
 ## Security and limits
 
 WyrmGrid minimises diagnostic fields, keeps credentials out of plugins, uses
-encrypted HTTPS connections to external services, and treats remote data as
-untrusted. No system can promise absolute security. The threat model documents
-known boundaries and remaining work.
+encrypted HTTPS connections to external services, encrypts its persistent
+database and portable backups, and treats remote data as untrusted. Encryption
+at rest does not protect data already opened by the running application, a
+compromised operating-system account, process memory, crash dumps, screenshots,
+or a disclosed backup password. No system can promise absolute security. The
+threat model documents known boundaries and remaining work.
 
 ## Choices and requests
 
 Users can decline optional diagnostics without losing the core application,
-change that preference later, disconnect OnAir, and delete local application
-data. Questions or requests can be raised through the project repository. Use
+change that preference later, disconnect OnAir, create an encrypted portable
+backup, restore it on another installation, and delete local application data.
+Questions or requests can be raised through the project repository. Use
 GitHub private vulnerability reporting for sensitive privacy or security
 matters and never include a real API key. A dedicated non-public privacy contact
 must be established before broad public distribution.

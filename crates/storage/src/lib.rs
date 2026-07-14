@@ -1,6 +1,13 @@
 //! Local-first SQLite storage and migration ownership.
 
-use std::path::Path;
+mod data_protection;
+
+pub use data_protection::{
+    DatabaseKey, PORTABLE_BACKUP_FORMAT_VERSION, PortableBackupRecord, PortableRestoreRecord,
+    encrypted_database_state_exists,
+};
+
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use rusqlite::{Connection, OptionalExtension, params};
@@ -26,12 +33,27 @@ pub enum StorageError {
     StateUnavailable,
     #[error("Local storage record is outside supported bounds")]
     InvalidRecord,
+    #[error("The database encryption key is invalid")]
+    InvalidDatabaseKey,
+    #[error("SQLCipher is unavailable in this build")]
+    EncryptionUnavailable,
+    #[error("This operation requires persistent encrypted storage")]
+    PersistentStorageRequired,
+    #[error("The portable backup is invalid, damaged, or uses an unsupported format")]
+    InvalidPortableBackup,
+    #[error("The selected backup destination already exists")]
+    BackupDestinationExists,
+    #[error("A portable restore cannot use the active database as its source")]
+    RestoreSourceIsActiveDatabase,
+    #[error("Local storage file operation failed")]
+    FileOperation(#[source] std::io::Error),
 }
 
 #[derive(Clone)]
 pub struct Store {
     connection: Arc<Mutex<Connection>>,
     persistent: bool,
+    path: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -142,19 +164,23 @@ pub struct CustomLanguagePackRecord {
 }
 
 impl Store {
-    pub fn open(path: impl AsRef<Path>) -> Result<Self, StorageError> {
-        let connection = Connection::open(path)?;
-        Self::configure_and_migrate(connection, true)
+    pub fn open(path: impl AsRef<Path>, key: &DatabaseKey) -> Result<Self, StorageError> {
+        let path = path.as_ref().to_path_buf();
+        data_protection::activate_pending_restore(&path, key)?;
+        let connection = data_protection::open_encrypted_connection(&path, key)?;
+        let store = Self::configure_and_migrate(connection, Some(path.clone()))?;
+        data_protection::finish_pending_restore(&path)?;
+        Ok(store)
     }
 
     pub fn open_in_memory() -> Result<Self, StorageError> {
         let connection = Connection::open_in_memory()?;
-        Self::configure_and_migrate(connection, false)
+        Self::configure_and_migrate(connection, None)
     }
 
     fn configure_and_migrate(
         connection: Connection,
-        persistent: bool,
+        path: Option<PathBuf>,
     ) -> Result<Self, StorageError> {
         connection.execute_batch(
             "PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;",
@@ -168,9 +194,13 @@ impl Store {
         connection.execute_batch(SIMULATOR_PREFERENCES_SCHEMA)?;
         connection.execute_batch(SIMULATOR_RECORDINGS_SCHEMA)?;
         connection.execute_batch(AUTHORIZATION_SCHEMA)?;
+        if path.is_some() {
+            data_protection::mark_wyrmgrid_database(&connection)?;
+        }
         Ok(Self {
             connection: Arc::new(Mutex::new(connection)),
-            persistent,
+            persistent: path.is_some(),
+            path,
         })
     }
 

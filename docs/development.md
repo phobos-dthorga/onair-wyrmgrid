@@ -3,8 +3,23 @@
 ## Windows
 
 Install Microsoft C++ Build Tools with Desktop development with C++, WebView2,
-Rust through rustup, Node.js 22, and npm 10 or later. The repository pins the
-Rust toolchain in `rust-toolchain.toml`.
+Rust through rustup, Node.js 22, npm 10 or later, and a complete Perl
+distribution such as Strawberry Perl. The repository pins the Rust toolchain
+in `rust-toolchain.toml`. Perl is a build-time requirement for vendored OpenSSL;
+it is not installed or invoked by a released WyrmGrid application.
+
+The repository's synchronized path can exceed limits encountered by OpenSSL's
+MSVC build and debug-symbol tooling. Keep Cargo output in a short local cache
+while building WyrmGrid from a long checkout:
+
+```powershell
+$env:CARGO_TARGET_DIR = "$env:LOCALAPPDATA\WyrmGrid\cargo-target"
+$env:OPENSSL_SRC_PERL = "C:\Strawberry\perl\bin\perl.exe"
+```
+
+Run Rust compilation from a Visual Studio developer terminal, or initialise
+the matching Developer PowerShell before invoking Cargo. The short target path
+is local build output only and must never be committed.
 
 ```powershell
 npm ci
@@ -77,6 +92,42 @@ community-pack fixtures when variables or message meaning change.
 Keep real credentials outside `.env` files in the repository. The committed
 `.env.example` contains names only and is not the planned production secret
 storage mechanism.
+
+## Encrypted storage development
+
+Persistent desktop storage is SQLCipher-encrypted. A 32-byte random database
+key is stored through the platform credential service (Windows Credential
+Manager, macOS Keychain, or a supported Linux Secret Service backend). Existing
+encrypted database or recovery state without that credential fails closed; do
+not add plaintext SQLite or memory-only fallback paths to make local startup
+appear successful.
+
+Portable backup tests create temporary encrypted databases and never use the
+developer's credential store. See [ADR-0013](architecture/decisions/0013-sqlcipher-device-keys-and-portable-backups.md)
+and the [backup and recovery guide](user-guide/backups-and-recovery.md). The
+first full build of vendored OpenSSL is intentionally slower; subsequent builds
+reuse the Cargo cache.
+
+### Local cache and data locations on Windows
+
+Do not confuse disposable compiler output with persistent WyrmGrid data:
+
+- `%LOCALAPPDATA%\WyrmGrid\cargo-target` is a disposable build cache. Deleting
+  it while WyrmGrid and Cargo are closed loses no user data, but forces a full
+  SQLCipher/OpenSSL rebuild and may take several minutes. Repository-local
+  `target\debug` output is likewise disposable.
+- `%APPDATA%\io.github.phobosdthorga.onairwyrmgrid` contains the encrypted
+  application database and recovery state. It is not a cache and must not be
+  used as routine space-reclamation material.
+- Windows Credential Manager holds the database key separately. Copying only
+  the application-data directory does not create a recoverable or portable
+  backup.
+
+On development machines where directory cleanup is routine, a local warning
+notice may be placed at the root of each WyrmGrid directory. Such notices are
+advisory and are not application-managed files. Use the in-app portable-backup
+flow before reinstalling Windows, moving machines, or deliberately resetting
+local data.
 
 ## Authenticated API testing
 

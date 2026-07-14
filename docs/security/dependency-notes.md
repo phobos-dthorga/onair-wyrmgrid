@@ -1,5 +1,24 @@
 # Dependency security notes
 
+## 2026-07-15: SQLCipher Community Edition and vendored OpenSSL
+
+`rusqlite` is built with `bundled-sqlcipher-vendored-openssl` so persistent
+storage does not silently vary with a host SQLite installation. SQLCipher
+Community Edition supplies at-rest encryption but not SQLCipher's commercial
+support, FIPS packages, or enterprise extensions. WyrmGrid must not imply those
+properties.
+
+The vendored build improves reproducibility at the cost of larger and slower
+native builds plus responsibility for monitoring and updating both SQLCipher
+and OpenSSL. `cargo-deny`, dependency review, release licence inventory, and
+binary notices all remain required. Windows developers need a complete Perl
+distribution at build time; released applications do not.
+
+The device key is supplied through SQLCipher's binary key API rather than SQL
+text. Portable-backup passwords are bound parameters. Neither choice eliminates
+plaintext in process memory or protects a compromised logged-in account; those
+limits remain explicit in the threat model.
+
 ## 2026-07-13: SvelteKit development dependency
 
 `npm audit` reports a low-severity advisory in `cookie` 0.6 through SvelteKit.

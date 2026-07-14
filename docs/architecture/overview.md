@@ -10,7 +10,7 @@ Rust provider adapters   WyrmGrid Bridge
                     |
           +---------+---------+
           |                   |
-       SQLite             plugin broker
+ SQLCipher SQLite         plugin broker
      (Hoard)                   |
           |              external plugins
           v

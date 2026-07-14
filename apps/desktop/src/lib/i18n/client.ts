@@ -11,6 +11,7 @@ const protectedPrefixes = [
   "telemetry-",
   "plugin-permission-",
   "security-",
+  "data-protection-",
   "destructive-",
   "error-",
 ];

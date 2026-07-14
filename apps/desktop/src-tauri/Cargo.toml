@@ -22,13 +22,18 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 chrono.workspace = true
+getrandom.workspace = true
+keyring.workspace = true
 tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2.7.1"
 sentry.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+thiserror.workspace = true
 wyrmgrid-application = { path = "../../../crates/application" }
 wyrmgrid-domain = { path = "../../../crates/domain" }
 wyrmgrid-storage = { path = "../../../crates/storage" }
+zeroize.workspace = true
 
 [dev-dependencies]
 uuid.workspace = true

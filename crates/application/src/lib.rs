@@ -1,6 +1,7 @@
 //! Application-level orchestration independent of Tauri and other interfaces.
 
 mod authorization;
+mod data_protection;
 mod dispatch;
 mod display;
 mod localization;
@@ -14,6 +15,7 @@ pub use authorization::{
     SecurityCentreError, SecurityCentreRepository, SecurityCentreService, SecurityCentreStatus,
     SecurityDecision, SecurityDecisionView, SecurityGrantView, SecuritySubjectKind, TERMS_VERSION,
 };
+pub use data_protection::*;
 pub use dispatch::*;
 pub use display::*;
 pub use localization::*;
@@ -806,6 +808,47 @@ impl From<SecurityCentreError> for OperationError {
             message: error.to_string(),
             retryable: matches!(error, SecurityCentreError::StorageUnavailable),
             reportable: true,
+            report_id: None,
+        }
+    }
+}
+
+impl From<DataProtectionError> for OperationError {
+    fn from(error: DataProtectionError) -> Self {
+        let (code, retryable, reportable) = match error {
+            DataProtectionError::PasswordTooShort => {
+                ("data_protection.password_too_short", false, false)
+            }
+            DataProtectionError::PasswordTooLong => {
+                ("data_protection.password_too_long", false, false)
+            }
+            DataProtectionError::PasswordConfirmationMismatch => {
+                ("data_protection.password_mismatch", false, false)
+            }
+            DataProtectionError::RestoreConfirmationRequired => (
+                "data_protection.restore_confirmation_required",
+                false,
+                false,
+            ),
+            DataProtectionError::DestinationExists => {
+                ("data_protection.destination_exists", false, false)
+            }
+            DataProtectionError::InvalidBackup => ("data_protection.invalid_backup", false, false),
+            DataProtectionError::SourceIsActiveDatabase => {
+                ("data_protection.active_database_selected", false, false)
+            }
+            DataProtectionError::PersistentStorageRequired => {
+                ("data_protection.persistent_storage_required", false, true)
+            }
+            DataProtectionError::StorageUnavailable => {
+                ("data_protection.storage_unavailable", true, true)
+            }
+        };
+        Self {
+            code,
+            message: error.to_string(),
+            retryable,
+            reportable,
             report_id: None,
         }
     }

@@ -54,6 +54,19 @@ fn community_packs_cannot_relabel_security_centre_authority() {
 }
 
 #[test]
+fn community_packs_cannot_relabel_backup_password_or_restore_controls() {
+    let mut manifest: LanguagePackManifest = serde_json::from_str(COMMUNITY_FIXTURE).unwrap();
+    manifest.messages.insert(
+        "data-protection-restore-confirm".into(),
+        "Aucun remplacement ne sera effectué".into(),
+    );
+    assert_eq!(
+        validate_manifest(&manifest, PackValidationMode::Community),
+        Err(LanguageSettingsError::ProtectedMessage)
+    );
+}
+
+#[test]
 fn imports_selects_and_restores_a_community_pack() {
     let store = Store::open_in_memory().unwrap();
     let service = LanguageSettingsService::new(store.clone());

@@ -25,8 +25,9 @@ test code from normal application builds.
   boundaries, redirects, timeouts, response-size limits, malformed responses,
   and provider error classification. Live credentials never enter fixtures or
   CI.
-- Storage: migrations on empty and previously released databases, round trips,
-  corrupt records, retention behaviour, and transaction rollback.
+- Storage: migrations on empty and previously released databases, encrypted
+  open with correct and incorrect keys, portable-backup round trips, corrupt or
+  wrong-password restores, retention behaviour, staged activation, and rollback.
 - Protocols and community data: versioned fixtures, unknown fields, size limits,
   deny-by-default permissions, and backwards-compatibility decisions.
 - Interface: important user journeys, empty/loading/error states, keyboard use,
