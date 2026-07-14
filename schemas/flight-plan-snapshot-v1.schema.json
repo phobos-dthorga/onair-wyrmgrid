@@ -1,0 +1,276 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wyrmgrid.dev/schemas/flight-plan-snapshot-v1.json",
+  "title": "WyrmGrid FlightPlanSnapshot v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "id", "identity", "airports"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "id": { "type": "string", "format": "uuid" },
+    "identity": { "$ref": "#/$defs/identityObservation" },
+    "airports": { "$ref": "#/$defs/airportsObservation" },
+    "aircraft": { "$ref": "#/$defs/aircraftObservation" },
+    "schedule": { "$ref": "#/$defs/scheduleObservation" },
+    "weights": { "$ref": "#/$defs/weightsObservation" },
+    "fuel": { "$ref": "#/$defs/fuelObservation" },
+    "route": { "$ref": "#/$defs/routeObservation" }
+  },
+  "$defs": {
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "provider",
+        "retrieved_at",
+        "transformation_version",
+        "freshness"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "on_air_fact",
+            "external_fact",
+            "external_calculation",
+            "calculated",
+            "recommendation"
+          ]
+        },
+        "provider": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "provider_revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "generated_at": { "type": "string", "format": "date-time" },
+        "retrieved_at": { "type": "string", "format": "date-time" },
+        "transformation_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "freshness": { "enum": ["current", "stale", "unknown"] }
+      }
+    },
+    "coordinates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["latitude", "longitude"],
+      "properties": {
+        "latitude": { "type": "number", "minimum": -90, "maximum": 90 },
+        "longitude": { "type": "number", "minimum": -180, "maximum": 180 }
+      }
+    },
+    "airport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["icao"],
+      "properties": {
+        "icao": {
+          "type": "string",
+          "pattern": "^[A-Z0-9][A-Z0-9/-]{1,7}$"
+        },
+        "name": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "location": { "$ref": "#/$defs/coordinates" },
+        "planned_runway": {
+          "type": "string",
+          "pattern": "^[A-Z0-9][A-Z0-9/-]{0,11}$"
+        }
+      }
+    },
+    "mass": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "unit"],
+      "properties": {
+        "value": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2000000000
+        },
+        "unit": { "enum": ["kilograms", "pounds"] }
+      }
+    },
+    "identityObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "provenance"],
+      "properties": {
+        "value": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "airac": { "type": "string", "minLength": 1, "maxLength": 16 },
+            "provider_plan_reference": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        },
+        "provenance": { "$ref": "#/$defs/provenance" }
+      }
+    },
+    "airportsObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "provenance"],
+      "properties": {
+        "value": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["origin", "destination", "alternates"],
+          "properties": {
+            "origin": { "$ref": "#/$defs/airport" },
+            "destination": { "$ref": "#/$defs/airport" },
+            "alternates": {
+              "type": "array",
+              "maxItems": 8,
+              "items": { "$ref": "#/$defs/airport" }
+            }
+          }
+        },
+        "provenance": { "$ref": "#/$defs/provenance" }
+      }
+    },
+    "aircraftObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "provenance"],
+      "properties": {
+        "value": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "icao_type": {
+              "type": "string",
+              "pattern": "^[A-Z0-9][A-Z0-9/-]{1,15}$"
+            },
+            "registration": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32
+            },
+            "model": { "type": "string", "minLength": 1, "maxLength": 160 }
+          }
+        },
+        "provenance": { "$ref": "#/$defs/provenance" }
+      }
+    },
+    "scheduleObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "provenance"],
+      "properties": {
+        "value": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "scheduled_out": { "type": "string", "format": "date-time" },
+            "scheduled_off": { "type": "string", "format": "date-time" },
+            "scheduled_on": { "type": "string", "format": "date-time" },
+            "scheduled_in": { "type": "string", "format": "date-time" },
+            "estimated_enroute_seconds": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 604800
+            }
+          }
+        },
+        "provenance": { "$ref": "#/$defs/provenance" }
+      }
+    },
+    "weightsObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "provenance"],
+      "properties": {
+        "value": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "payload": { "$ref": "#/$defs/mass" },
+            "zero_fuel": { "$ref": "#/$defs/mass" },
+            "takeoff": { "$ref": "#/$defs/mass" },
+            "landing": { "$ref": "#/$defs/mass" }
+          }
+        },
+        "provenance": { "$ref": "#/$defs/provenance" }
+      }
+    },
+    "fuelObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "provenance"],
+      "properties": {
+        "value": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "taxi": { "$ref": "#/$defs/mass" },
+            "enroute": { "$ref": "#/$defs/mass" },
+            "reserve": { "$ref": "#/$defs/mass" },
+            "alternate": { "$ref": "#/$defs/mass" },
+            "contingency": { "$ref": "#/$defs/mass" },
+            "extra": { "$ref": "#/$defs/mass" },
+            "ramp": { "$ref": "#/$defs/mass" },
+            "takeoff": { "$ref": "#/$defs/mass" },
+            "landing": { "$ref": "#/$defs/mass" }
+          }
+        },
+        "provenance": { "$ref": "#/$defs/provenance" }
+      }
+    },
+    "routeObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "provenance"],
+      "properties": {
+        "value": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["legs"],
+          "properties": {
+            "source_text": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32768
+            },
+            "initial_altitude_ft": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 70000
+            },
+            "distance_nm": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 30000
+            },
+            "legs": {
+              "type": "array",
+              "maxItems": 2048,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["sequence", "ident"],
+                "properties": {
+                  "sequence": { "type": "integer", "minimum": 0 },
+                  "ident": {
+                    "type": "string",
+                    "pattern": "^[A-Z0-9][A-Z0-9/-]{0,23}$"
+                  },
+                  "airway": {
+                    "type": "string",
+                    "pattern": "^[A-Z0-9][A-Z0-9/-]{0,23}$"
+                  },
+                  "location": { "$ref": "#/$defs/coordinates" }
+                }
+              }
+            }
+          }
+        },
+        "provenance": { "$ref": "#/$defs/provenance" }
+      }
+    }
+  }
+}

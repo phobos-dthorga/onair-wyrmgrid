@@ -1,7 +1,9 @@
 //! Application-level orchestration independent of Tauri and other interfaces.
 
+mod dispatch;
 mod plugins;
 
+pub use dispatch::*;
 pub use plugins::*;
 
 use chrono::{DateTime, SecondsFormat, Utc};
@@ -42,7 +44,7 @@ pub fn platform_status() -> PlatformStatus {
 }
 
 pub const TERMS_VERSION: &str = "2026-07-14";
-pub const PRIVACY_NOTICE_VERSION: &str = "2026-07-14";
+pub const PRIVACY_NOTICE_VERSION: &str = "2026-07-14.1";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PersistedLegalPreferences {
@@ -917,6 +919,46 @@ impl From<PluginError> for OperationError {
             PluginError::HandshakeFailed => ("plugin.handshake_failed", true, false),
             PluginError::ProtocolViolation => ("plugin.protocol_violation", false, false),
             PluginError::StateUnavailable => ("plugin.state_unavailable", true, true),
+        };
+        Self {
+            code,
+            message: error.to_string(),
+            retryable,
+            reportable,
+            report_id: None,
+        }
+    }
+}
+
+impl From<DispatchError> for OperationError {
+    fn from(error: DispatchError) -> Self {
+        let (code, retryable, reportable) = match error {
+            DispatchError::ProviderUnavailable => ("dispatch.provider_unavailable", true, false),
+            DispatchError::ImportInProgress => ("dispatch.import_in_progress", true, false),
+            DispatchError::StateUnavailable => ("application.state_unavailable", true, true),
+            DispatchError::Provider(wyrmgrid_simbrief_api::ClientError::InvalidUserReference) => {
+                ("simbrief.invalid_user_reference", false, false)
+            }
+            DispatchError::Provider(wyrmgrid_simbrief_api::ClientError::NoPlan) => {
+                ("simbrief.no_plan", false, false)
+            }
+            DispatchError::Provider(wyrmgrid_simbrief_api::ClientError::RateLimited) => {
+                ("simbrief.rate_limited", true, false)
+            }
+            DispatchError::Provider(
+                wyrmgrid_simbrief_api::ClientError::TimedOut
+                | wyrmgrid_simbrief_api::ClientError::Offline
+                | wyrmgrid_simbrief_api::ClientError::ProviderUnavailable,
+            ) => ("simbrief.unavailable", true, false),
+            DispatchError::Provider(wyrmgrid_simbrief_api::ClientError::ResponseTooLarge) => {
+                ("simbrief.response_too_large", false, false)
+            }
+            DispatchError::Provider(
+                wyrmgrid_simbrief_api::ClientError::ConfigurationUnavailable
+                | wyrmgrid_simbrief_api::ClientError::UnexpectedResponse
+                | wyrmgrid_simbrief_api::ClientError::InvalidContentType
+                | wyrmgrid_simbrief_api::ClientError::MalformedPlan,
+            ) => ("simbrief.invalid_response", false, true),
         };
         Self {
             code,

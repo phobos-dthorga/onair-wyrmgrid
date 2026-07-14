@@ -51,7 +51,10 @@ live/cached/offline availability and returns to LIVE explicitly or at restart.
 Fleet size, ranked fleet composition, and FBO-network size are calculated in
 the application service from those same bounded retained observations.
 
-The later SimBrief, weather, online-network, navigation, and simulator work is
-sequenced in the [external integrations programme](../integrations/README.md).
-Those providers build on this slice's persistence, provenance, and degraded-state
-rules rather than adding shortcuts around them.
+The first operational-provider increment adds canonical `FlightPlanSnapshot`
+version 1 and a session-only, read-only SimBrief latest-OFP developer preview in
+Dispatch. Weather, online-network, navigation, simulator, persistence, and
+cross-provider comparison work remains sequenced in the
+[external integrations programme](../integrations/README.md). Those providers
+build on the same provenance and degraded-state rules rather than adding
+shortcuts around them.

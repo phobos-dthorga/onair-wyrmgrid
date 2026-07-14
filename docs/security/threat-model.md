@@ -236,6 +236,13 @@ The detailed collection boundary and rollout gates are defined in
 
 ## Residual external-integration risks
 
+The SimBrief preview follows no redirects, bounds streamed JSON to 2 MiB, uses a
+15-second timeout, validates the account-reference shape, normalizes only
+allowlisted fields, validates the canonical snapshot again in the application
+service, serializes concurrent imports, and returns stable errors without URLs,
+response bodies, identifiers, or plan content. Imported plans and identifiers
+are session-only, excluded from plugins and Sentry, and removable from Dispatch.
+
 - A translated snapshot can still be wrong because the provider, captured
   fixture, mapping, unit conversion, identifier correlation, or local clock is
   wrong. WyrmGrid exposes source and age and does not market these integrations

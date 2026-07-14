@@ -18,6 +18,20 @@
     isDesktopRuntime,
     operationErrorMessage,
   } from "$lib/desktop/client";
+  import {
+    clearDispatchPlan,
+    importLatestSimBriefPlan,
+    loadDispatchStatus,
+  } from "$lib/dispatch/client";
+  import DispatchWorkspace from "$lib/dispatch/DispatchWorkspace.svelte";
+  import {
+    dispatchPreviewEmpty,
+    dispatchPreviewReady,
+  } from "$lib/dispatch/sample";
+  import type {
+    DispatchStatus,
+    SimBriefReferenceKind,
+  } from "$lib/dispatch/types";
   import ForgeDialog from "$lib/forge/ForgeDialog.svelte";
   import {
     approvePluginPermissions,
@@ -81,6 +95,7 @@
 
   type FleetLoadState = "idle" | "loading" | "ready" | "error";
   type LegalLoadState = "loading" | "ready" | "error";
+  type Workspace = "atlas" | "dispatch";
 
   const AUTOMATIC_SYNC_STORAGE_KEY = "wyrmgrid.atlas.automatic-sync-minutes";
   const AUTOMATIC_SYNC_OPTIONS = [0, 15, 30, 60, 120] as const;
@@ -92,6 +107,10 @@
     mode: "browser preview",
   });
   let connection = $state<OnAirConnectionStatus>(disconnectedStatus);
+  let activeWorkspace = $state<Workspace>("atlas");
+  let dispatchStatus = $state<DispatchStatus>(dispatchPreviewEmpty);
+  let dispatchBusy = $state(false);
+  let dispatchError = $state("");
   let showConnectionDialog = $state(false);
   let fleetView = $state<FleetSnapshotView | null>(null);
   let fboView = $state<FboSnapshotView | null>(null);
@@ -524,6 +543,58 @@
     }
   }
 
+  async function refreshDispatchStatus(): Promise<void> {
+    if (!isDesktopRuntime()) return;
+    try {
+      dispatchStatus = await loadDispatchStatus();
+    } catch (error) {
+      dispatchError = operationErrorMessage(
+        error,
+        "WyrmGrid could not read the current Dispatch plan.",
+      );
+    }
+  }
+
+  async function importDispatchPlan(
+    kind: SimBriefReferenceKind,
+    reference: string,
+  ): Promise<void> {
+    if (dispatchBusy) return;
+    dispatchBusy = true;
+    dispatchError = "";
+    try {
+      dispatchStatus = isDesktopRuntime()
+        ? await importLatestSimBriefPlan(kind, reference)
+        : dispatchPreviewReady;
+    } catch (error) {
+      dispatchError = operationErrorMessage(
+        error,
+        "WyrmGrid could not import the latest SimBrief plan.",
+      );
+      await refreshDispatchStatus();
+    } finally {
+      dispatchBusy = false;
+    }
+  }
+
+  async function clearCurrentDispatchPlan(): Promise<void> {
+    if (dispatchBusy) return;
+    dispatchBusy = true;
+    dispatchError = "";
+    try {
+      dispatchStatus = isDesktopRuntime()
+        ? await clearDispatchPlan()
+        : dispatchPreviewEmpty;
+    } catch (error) {
+      dispatchError = operationErrorMessage(
+        error,
+        "WyrmGrid could not clear the session flight plan.",
+      );
+    } finally {
+      dispatchBusy = false;
+    }
+  }
+
   function openForge(): void {
     pluginError = "";
     showForgeDialog = true;
@@ -579,10 +650,12 @@
       timelineCursor = timeline.observation_times.length - 1;
       fleetLoadState = "ready";
       pluginHost = forgePreviewStopped;
+      dispatchStatus = dispatchPreviewReady;
       return;
     }
 
     void refreshPluginHost();
+    void refreshDispatchStatus();
 
     invokeDesktop<PlatformStatus>("platform_status")
       .then((value) => (status = value))
@@ -795,9 +868,22 @@
         <h1>WyrmGrid</h1>
       </div>
       <nav aria-label="Primary navigation">
-        <button class="nav-item active" type="button">Atlas</button>
+        <button
+          class="nav-item"
+          class:active={activeWorkspace === "atlas"}
+          type="button"
+          onclick={() => (activeWorkspace = "atlas")}>Atlas</button
+        >
         <button class="nav-item" type="button" disabled>Fleet</button>
-        <button class="nav-item" type="button" disabled>Dispatch</button>
+        <button
+          class="nav-item"
+          class:active={activeWorkspace === "dispatch"}
+          type="button"
+          onclick={() => {
+            activeWorkspace = "dispatch";
+            void refreshDispatchStatus();
+          }}>Dispatch</button
+        >
         <button
           class="nav-item"
           class:active={showTimelineDialog}
@@ -837,7 +923,8 @@
       </button>
     </header>
 
-    <section
+    {#if activeWorkspace === "atlas"}
+      <section
       class:historical={timelineMode === "historical"}
       class="time-mode-bar"
     >
@@ -860,9 +947,9 @@
           >Open Hoard Timeline</button
         >
       </div>
-    </section>
+      </section>
 
-    <section class="workspace">
+      <section class="workspace">
       <aside class="sidebar" aria-label="Map layers">
         <div class="section-heading">
           <div>
@@ -1110,7 +1197,30 @@
           </article>
         </div>
       </aside>
-    </section>
+      </section>
+    {:else}
+      <section class="time-mode-bar dispatch-mode-bar">
+        <div class="time-mode-copy">
+          <span class="time-mode-indicator" aria-hidden="true"></span>
+          <strong>Read only</strong>
+          <span>
+            SimBrief plans remain external calculations and live only in this
+            WyrmGrid session
+          </span>
+        </div>
+        <div class="time-mode-actions">
+          <span>Snapshot contract · v1</span>
+        </div>
+      </section>
+
+      <DispatchWorkspace
+        status={dispatchStatus}
+        busy={dispatchBusy}
+        errorMessage={dispatchError}
+        onimport={(kind, reference) => void importDispatchPlan(kind, reference)}
+        onclear={() => void clearCurrentDispatchPlan()}
+      />
+    {/if}
 
     <footer>
       <span>{status.application} · {status.mode}</span>

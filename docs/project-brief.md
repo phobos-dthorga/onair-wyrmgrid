@@ -30,7 +30,9 @@ and fleet retrieval, validation, persistence, map display, selection, and a
 non-blocking refresh path. The second proves the external plugin system with a
 small Fleet Locations map layer built only from known location facts.
 
-The next operational track introduces one canonical flight-plan snapshot before
-connecting SimBrief, SayIntentions.AI, weather, MSFS 2024, online networks, or
-additional navigation sources. This prevents provider schemas from becoming
-application or plugin contracts.
+The operational track now includes canonical `FlightPlanSnapshot` version 1 and
+a session-only, read-only SimBrief latest-OFP developer preview rendered in
+Dispatch. Authenticated live-field certification remains outstanding before
+compatibility claims expand. SayIntentions.AI, weather, MSFS 2024, online
+networks, and additional navigation sources follow the same provider-neutral
+boundary so their schemas never become application or plugin contracts.
