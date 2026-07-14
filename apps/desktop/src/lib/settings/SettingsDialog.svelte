@@ -1,11 +1,17 @@
 <script lang="ts">
   import { translation } from "$lib/i18n/runtime";
   import { displayPresets, type DisplayPreferences } from "./types";
+  import type {
+    SimulatorPreferences,
+    SimulatorProviderView,
+  } from "$lib/simulator/types";
   import "./settings.css";
 
   let {
     open,
     preferences,
+    simulatorPreferences,
+    simulatorProviders,
     busy = false,
     errorMessage = "",
     onsave,
@@ -16,9 +22,14 @@
   }: {
     open: boolean;
     preferences: DisplayPreferences;
+    simulatorPreferences: SimulatorPreferences;
+    simulatorProviders: SimulatorProviderView[];
     busy?: boolean;
     errorMessage?: string;
-    onsave: (preferences: DisplayPreferences) => void;
+    onsave: (
+      preferences: DisplayPreferences,
+      simulatorPreferences: SimulatorPreferences,
+    ) => void;
     onappearance: () => void;
     onlanguage: () => void;
     onprivacy: () => void;
@@ -26,9 +37,15 @@
   } = $props();
 
   let draft = $state<DisplayPreferences>({ ...displayPresets.aviation });
+  let simulatorDraft = $state<SimulatorPreferences>({
+    start_with_wyrmgrid: false,
+  });
 
   $effect(() => {
-    if (open) draft = { ...preferences };
+    if (open) {
+      draft = { ...preferences };
+      simulatorDraft = { ...simulatorPreferences };
+    }
   });
 
   function applyPreset(preset: keyof typeof displayPresets): void {
@@ -158,6 +175,52 @@
 
       <section class="settings-section">
         <div class="section-copy">
+          <span class="eyebrow">{$translation("settings-simulator-eyebrow")}</span>
+          <h3>{$translation("settings-simulator-title")}</h3>
+          <p>{$translation("settings-simulator-detail")}</p>
+        </div>
+
+        <div class="unit-grid simulator-settings-grid">
+          <label>
+            <span>{$translation("settings-simulator-provider")}</span>
+            <select
+              disabled={busy || simulatorProviders.length === 0}
+              value={simulatorDraft.selected_provider_id ?? ""}
+              onchange={(event) =>
+                (simulatorDraft = {
+                  ...simulatorDraft,
+                  selected_provider_id: event.currentTarget.value || undefined,
+                })}
+            >
+              {#if simulatorProviders.length === 0}
+                <option value="">{$translation("simulator-no-providers")}</option>
+              {/if}
+              {#each simulatorProviders as provider}
+                <option value={provider.id}>{provider.name}</option>
+              {/each}
+            </select>
+          </label>
+
+          <label class="settings-toggle">
+            <input
+              type="checkbox"
+              disabled={busy || !simulatorDraft.selected_provider_id}
+              bind:checked={simulatorDraft.start_with_wyrmgrid}
+            />
+            <span>
+              <strong>{$translation("settings-simulator-auto-start")}</strong>
+              <small>{$translation("settings-simulator-auto-start-detail")}</small>
+            </span>
+          </label>
+        </div>
+
+        <p class="settings-boundary">
+          {$translation("settings-simulator-boundary")}
+        </p>
+      </section>
+
+      <section class="settings-section">
+        <div class="section-copy">
           <span class="eyebrow">{$translation("settings-more-eyebrow")}</span>
           <h3>{$translation("settings-more-title")}</h3>
         </div>
@@ -189,7 +252,7 @@
           class="settings-save"
           type="button"
           disabled={busy}
-          onclick={() => onsave({ ...draft })}
+          onclick={() => onsave({ ...draft }, { ...simulatorDraft })}
         >
           {busy
             ? $translation("settings-saving")

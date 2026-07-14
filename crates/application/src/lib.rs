@@ -1028,6 +1028,12 @@ impl From<SimulatorBridgeError> for OperationError {
                 ("simulator.provider_protocol_violation", false, false)
             }
             SimulatorBridgeError::StateUnavailable => ("simulator.state_unavailable", true, true),
+            SimulatorBridgeError::PreferencesUnavailable => {
+                ("simulator.preferences_unavailable", true, false)
+            }
+            SimulatorBridgeError::InvalidPreferences => {
+                ("simulator.invalid_preferences", false, false)
+            }
         };
         Self {
             code,

@@ -6,7 +6,7 @@ fn initializes_the_database_schema() {
     let store = Store::open_in_memory().expect("in-memory database should open");
     assert_eq!(
         store.schema_version().expect("version should be readable"),
-        6
+        7
     );
 }
 
@@ -34,6 +34,25 @@ fn persists_independent_display_preferences() {
         store
             .load_display_preferences_record()
             .expect("display preferences should be readable"),
+        Some(preferences)
+    );
+}
+
+#[test]
+fn persists_simulator_provider_preferences_default_off() {
+    let store = Store::open_in_memory().expect("store should initialize");
+    assert!(store.load_simulator_preferences_record().unwrap().is_none());
+
+    let preferences = SimulatorPreferencesRecord {
+        selected_provider_id: Some("io.example.simulator".into()),
+        start_with_wyrmgrid: true,
+    };
+    store
+        .save_simulator_preferences_record(&preferences)
+        .expect("preferences should save");
+
+    assert_eq!(
+        store.load_simulator_preferences_record().unwrap(),
         Some(preferences)
     );
 }

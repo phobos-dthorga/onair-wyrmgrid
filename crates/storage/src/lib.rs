@@ -12,6 +12,8 @@ const THEMES_SCHEMA: &str = include_str!("../migrations/0003_themes.sql");
 const PLUGIN_PERMISSIONS_SCHEMA: &str = include_str!("../migrations/0004_plugin_permissions.sql");
 const LANGUAGE_PACKS_SCHEMA: &str = include_str!("../migrations/0005_language_packs.sql");
 const DISPLAY_PREFERENCES_SCHEMA: &str = include_str!("../migrations/0006_display_preferences.sql");
+const SIMULATOR_PREFERENCES_SCHEMA: &str =
+    include_str!("../migrations/0007_simulator_preferences.sql");
 
 #[derive(Debug, Error)]
 pub enum StorageError {
@@ -56,6 +58,12 @@ pub struct DisplayPreferencesRecord {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SimulatorPreferencesRecord {
+    pub selected_provider_id: Option<String>,
+    pub start_with_wyrmgrid: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CustomThemeRecord {
     pub theme_id: String,
     pub manifest_json: String,
@@ -96,6 +104,7 @@ impl Store {
         connection.execute_batch(PLUGIN_PERMISSIONS_SCHEMA)?;
         connection.execute_batch(LANGUAGE_PACKS_SCHEMA)?;
         connection.execute_batch(DISPLAY_PREFERENCES_SCHEMA)?;
+        connection.execute_batch(SIMULATOR_PREFERENCES_SCHEMA)?;
         Ok(Self {
             connection: Arc::new(Mutex::new(connection)),
             persistent,
@@ -155,6 +164,55 @@ impl Store {
                     preferences.speed_unit,
                     preferences.weight_unit,
                     preferences.fuel_unit,
+                ],
+            )
+            .map(|_| ())
+            .map_err(StorageError::from)
+    }
+
+    pub fn load_simulator_preferences_record(
+        &self,
+    ) -> Result<Option<SimulatorPreferencesRecord>, StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection
+            .query_row(
+                "SELECT selected_provider_id, start_with_wyrmgrid
+                 FROM simulator_preferences WHERE singleton_id = 1",
+                [],
+                |row| {
+                    Ok(SimulatorPreferencesRecord {
+                        selected_provider_id: row.get(0)?,
+                        start_with_wyrmgrid: row.get(1)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(StorageError::from)
+    }
+
+    pub fn save_simulator_preferences_record(
+        &self,
+        preferences: &SimulatorPreferencesRecord,
+    ) -> Result<(), StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection
+            .execute(
+                "INSERT INTO simulator_preferences (
+                    singleton_id, selected_provider_id, start_with_wyrmgrid
+                 ) VALUES (1, ?1, ?2)
+                 ON CONFLICT(singleton_id) DO UPDATE SET
+                    selected_provider_id = excluded.selected_provider_id,
+                    start_with_wyrmgrid = excluded.start_with_wyrmgrid,
+                    updated_at = CURRENT_TIMESTAMP",
+                params![
+                    preferences.selected_provider_id,
+                    preferences.start_with_wyrmgrid,
                 ],
             )
             .map(|_| ())

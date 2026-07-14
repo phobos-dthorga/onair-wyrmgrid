@@ -112,13 +112,17 @@
   } from "$lib/onair/types";
   import {
     loadSimulatorBridge,
+    loadSimulatorPreferences,
+    saveSimulatorPreferences,
     startSimulatorProvider,
     stopSimulatorProvider,
   } from "$lib/simulator/client";
   import SimulatorDialog from "$lib/simulator/SimulatorDialog.svelte";
   import {
     emptySimulatorBridge,
+    defaultSimulatorPreferences,
     type SimulatorBridgeView,
+    type SimulatorPreferences,
   } from "$lib/simulator/types";
   import {
     loadDisplayPreferences,
@@ -206,6 +210,9 @@
   let showSimulatorDialog = $state(false);
   let simulatorBusy = $state(false);
   let simulatorError = $state("");
+  let simulatorPreferences = $state<SimulatorPreferences>(
+    defaultSimulatorPreferences,
+  );
   let displayPreferences = $state<DisplayPreferences>(
     aviationDisplayPreferences,
   );
@@ -583,6 +590,12 @@
         action === "start"
           ? await startSimulatorProvider(providerId)
           : await stopSimulatorProvider(providerId);
+      if (action === "start") {
+        simulatorPreferences = {
+          ...simulatorPreferences,
+          selected_provider_id: providerId,
+        };
+      }
     } catch (error) {
       simulatorError = operationErrorMessage(
         error,
@@ -1035,6 +1048,7 @@
     await initializeLanguage();
     await initializeTheme();
     await initializeDisplayPreferences();
+    await initializeSimulatorPreferences();
     await initializeLegal();
   }
 
@@ -1049,13 +1063,32 @@
     }
   }
 
-  async function saveUnitChoices(
+  async function initializeSimulatorPreferences(): Promise<void> {
+    if (!isDesktopRuntime()) return;
+    try {
+      [simulatorPreferences, simulatorBridge] = await Promise.all([
+        loadSimulatorPreferences(),
+        loadSimulatorBridge(),
+      ]);
+    } catch (error) {
+      settingsError = operationErrorMessage(
+        error,
+        "WyrmGrid could not read its local simulator settings.",
+      );
+    }
+  }
+
+  async function saveSettings(
     preferences: DisplayPreferences,
+    nextSimulatorPreferences: SimulatorPreferences,
   ): Promise<void> {
     settingsBusy = true;
     settingsError = "";
     try {
-      displayPreferences = await saveDisplayPreferences(preferences);
+      [displayPreferences, simulatorPreferences] = await Promise.all([
+        saveDisplayPreferences(preferences),
+        saveSimulatorPreferences(nextSimulatorPreferences),
+      ]);
       showSettingsDialog = false;
     } catch (error) {
       settingsError = operationErrorMessage(
@@ -1070,6 +1103,7 @@
   function openSettings(): void {
     settingsError = "";
     showSettingsDialog = true;
+    void refreshSimulatorBridge();
   }
 
   function openLegalSettings(): void {
@@ -1263,7 +1297,9 @@
       </nav>
       <button
         class:connected={simulatorBridge.providers.some(
-          (provider) => provider.connection_state === "connected",
+          (provider) =>
+            provider.connection_state === "connected" &&
+            !provider.telemetry_stale,
         )}
         class="simulator-pill"
         type="button"
@@ -1660,9 +1696,12 @@
   <SettingsDialog
     open={showSettingsDialog}
     preferences={displayPreferences}
+    {simulatorPreferences}
+    simulatorProviders={simulatorBridge.providers}
     busy={settingsBusy}
     errorMessage={settingsError}
-    onsave={(preferences) => void saveUnitChoices(preferences)}
+    onsave={(preferences, nextSimulatorPreferences) =>
+      void saveSettings(preferences, nextSimulatorPreferences)}
     onappearance={() => {
       showSettingsDialog = false;
       themeError = "";

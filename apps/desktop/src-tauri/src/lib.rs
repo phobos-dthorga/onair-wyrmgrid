@@ -16,6 +16,7 @@ struct DesktopState {
     dispatch: wyrmgrid_application::DispatchSession,
     plugins: wyrmgrid_application::PluginService,
     simulator: wyrmgrid_application::SimulatorBridgeService,
+    simulator_settings: wyrmgrid_application::SimulatorSettingsService<wyrmgrid_storage::Store>,
     legal: wyrmgrid_application::LegalSettingsService<wyrmgrid_storage::Store>,
     themes: wyrmgrid_application::ThemeSettingsService<wyrmgrid_storage::Store>,
     languages: wyrmgrid_application::LanguageSettingsService<wyrmgrid_storage::Store>,
@@ -366,10 +367,32 @@ fn simulator_bridge_status(
 }
 
 #[tauri::command]
+fn simulator_preferences(
+    state: tauri::State<'_, DesktopState>,
+) -> Result<wyrmgrid_application::SimulatorPreferences, wyrmgrid_application::OperationError> {
+    state.simulator_settings.status().map_err(operation_error)
+}
+
+#[tauri::command]
+fn update_simulator_preferences(
+    state: tauri::State<'_, DesktopState>,
+    preferences: wyrmgrid_application::SimulatorPreferences,
+) -> Result<wyrmgrid_application::SimulatorPreferences, wyrmgrid_application::OperationError> {
+    state
+        .simulator_settings
+        .update(preferences)
+        .map_err(operation_error)
+}
+
+#[tauri::command]
 async fn start_simulator_provider(
     state: tauri::State<'_, DesktopState>,
     provider_id: String,
 ) -> Result<wyrmgrid_application::SimulatorBridgeView, wyrmgrid_application::OperationError> {
+    state
+        .simulator_settings
+        .select_provider(&provider_id)
+        .map_err(operation_error)?;
     let simulator = state.simulator.clone();
     tauri::async_runtime::spawn_blocking(move || simulator.start(&provider_id))
         .await
@@ -441,6 +464,11 @@ pub fn run() {
                 .expect("bundled simulator provider manifest should validate");
             let simulator =
                 wyrmgrid_application::SimulatorBridgeService::new(vec![simulator_provider]);
+            let simulator_settings = wyrmgrid_application::SimulatorSettingsService::new(
+                store.clone(),
+                simulator.provider_ids(),
+            );
+            let automatic_provider = simulator_settings.startup_provider_id().ok().flatten();
             let plugins = wyrmgrid_application::PluginService::new(
                 app_data_directory.map(|directory| directory.join("plugins")),
                 store,
@@ -454,12 +482,26 @@ pub fn run() {
                 dispatch,
                 plugins,
                 simulator,
+                simulator_settings,
                 legal,
                 themes,
                 languages,
                 display,
                 observability: observability::Controller::new(legal_status.telemetry_enabled),
             });
+            if let Some(provider_id) = automatic_provider {
+                let simulator = app.state::<DesktopState>().simulator.clone();
+                std::thread::spawn(move || {
+                    if let Err(error) = simulator.start(&provider_id) {
+                        diagnostics::record(
+                            "warning",
+                            "simulator.automatic_start_failed",
+                            "desktop_startup",
+                            &error.to_string(),
+                        );
+                    }
+                });
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -499,6 +541,8 @@ pub fn run() {
             start_plugin,
             stop_plugin,
             simulator_bridge_status,
+            simulator_preferences,
+            update_simulator_preferences,
             start_simulator_provider,
             stop_simulator_provider
         ])

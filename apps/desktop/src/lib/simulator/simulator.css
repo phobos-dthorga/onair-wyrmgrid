@@ -90,6 +90,14 @@
   border-color: var(--color-accent-border);
 }
 
+.provider-list article.stale {
+  border-color: var(--color-danger-border);
+}
+
+.provider-list article.stale .provider-state {
+  color: var(--color-danger);
+}
+
 .provider-list h3,
 .telemetry-panel h3 {
   margin: 4px 0;
