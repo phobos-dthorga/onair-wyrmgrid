@@ -1,5 +1,11 @@
 # OnAir WyrmGrid
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/brand/key-art/derivatives/hero-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="assets/brand/key-art/derivatives/hero-light.png">
+  <img alt="OnAir WyrmGrid — See the network. Command the skies." src="assets/brand/key-art/derivatives/hero-dark.png">
+</picture>
+
 **A modular, open-source operations and intelligence platform for OnAir Airline Manager.**
 
 OnAir WyrmGrid is a local-first desktop application for understanding fleets,
