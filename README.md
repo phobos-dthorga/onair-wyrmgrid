@@ -23,7 +23,8 @@ plugin boundary available to third-party developers.
 - **WyrmGrid Oracle** — explainable scoring and recommendations
 - **WyrmGrid Watch** — alerts and monitoring
 - **WyrmGrid Dispatch** — canonical flight-plan inspection with a session-only,
-  read-only SimBrief latest-OFP developer preview
+  read-only SimBrief latest-OFP developer preview, explainable OnAir fleet
+  cross-checks, and session-cached airport METAR/TAF context
 
 ## Technical foundation
 
@@ -38,7 +39,7 @@ plugin boundary available to third-party developers.
 | Plugin boundary              | Out-of-process, versioned JSON messages |
 | Native simulator integration | Separate versioned provider sidecars    |
 
-The Rust workspace currently uses six cohesive libraries:
+The Rust workspace currently uses seven cohesive libraries:
 
 - `wyrmgrid-domain` — stable application-owned types and provenance;
 - `wyrmgrid-onair-api` — credential-safe, read-only OnAir boundary;
@@ -46,6 +47,7 @@ The Rust workspace currently uses six cohesive libraries:
 - `wyrmgrid-application` — interface-independent orchestration;
 - `wyrmgrid-plugin-protocol` — public manifest and permission contracts;
 - `wyrmgrid-simbrief-api` — bounded private SimBrief response translation.
+- `wyrmgrid-weather-api` — bounded AviationWeather.gov METAR/TAF translation.
 
 ## Core promises
 
@@ -58,8 +60,8 @@ The Rust workspace currently uses six cohesive libraries:
 6. Plugin permissions are explicit and deny-by-default.
 7. Unsupported browser or UI automation is outside the official platform.
 8. SimBrief, weather, online networks, navigation data, and simulators remain
-   optional providers behind application-owned models; SimBrief's current
-   importer is session-only and read-only.
+   optional providers behind application-owned models; the current SimBrief and
+   airport-weather flows are explicit, session-only, and read-only.
 
 ## Development
 

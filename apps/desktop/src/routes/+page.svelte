@@ -22,6 +22,7 @@
     clearDispatchPlan,
     importLatestSimBriefPlan,
     loadDispatchStatus,
+    refreshDispatchWeather,
   } from "$lib/dispatch/client";
   import DispatchWorkspace from "$lib/dispatch/DispatchWorkspace.svelte";
   import {
@@ -353,6 +354,7 @@
     ) {
       selectedAircraftId = null;
     }
+    if (dispatchStatus.snapshot) void refreshDispatchStatus();
   }
 
   function acceptFboView(view: FboSnapshotView): void {
@@ -590,6 +592,25 @@
         error,
         "WyrmGrid could not clear the session flight plan.",
       );
+    } finally {
+      dispatchBusy = false;
+    }
+  }
+
+  async function refreshCurrentDispatchWeather(): Promise<void> {
+    if (dispatchBusy) return;
+    dispatchBusy = true;
+    dispatchError = "";
+    try {
+      dispatchStatus = isDesktopRuntime()
+        ? await refreshDispatchWeather()
+        : dispatchPreviewReady;
+    } catch (error) {
+      dispatchError = operationErrorMessage(
+        error,
+        "WyrmGrid could not refresh airport weather.",
+      );
+      await refreshDispatchStatus();
     } finally {
       dispatchBusy = false;
     }
@@ -1218,6 +1239,7 @@
         busy={dispatchBusy}
         errorMessage={dispatchError}
         onimport={(kind, reference) => void importDispatchPlan(kind, reference)}
+        onweather={() => void refreshCurrentDispatchWeather()}
         onclear={() => void clearCurrentDispatchPlan()}
       />
     {/if}

@@ -1,5 +1,5 @@
 [package]
-name = "wyrmgrid-application"
+name = "wyrmgrid-weather-api"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -9,18 +9,12 @@ repository.workspace = true
 
 [dependencies]
 chrono.workspace = true
-secrecy.workspace = true
-serde.workspace = true
+reqwest.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+url.workspace = true
 uuid.workspace = true
 wyrmgrid-domain = { path = "../domain" }
-wyrmgrid-onair-api = { path = "../onair-api" }
-wyrmgrid-plugin-protocol = { path = "../plugin-protocol" }
-wyrmgrid-simbrief-api = { path = "../simbrief-api" }
-wyrmgrid-storage = { path = "../storage" }
-wyrmgrid-weather-api = { path = "../weather-api" }
 
 [dev-dependencies]
-tempfile = "3.20.0"
 tokio.workspace = true

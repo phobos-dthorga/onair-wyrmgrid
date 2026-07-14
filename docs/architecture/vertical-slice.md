@@ -53,8 +53,10 @@ the application service from those same bounded retained observations.
 
 The first operational-provider increment adds canonical `FlightPlanSnapshot`
 version 1 and a session-only, read-only SimBrief latest-OFP developer preview in
-Dispatch. Weather, online-network, navigation, simulator, persistence, and
-cross-provider comparison work remains sequenced in the
-[external integrations programme](../integrations/README.md). Those providers
-build on the same provenance and degraded-state rules rather than adding
-shortcuts around them.
+Dispatch. The next increment compares observed OnAir registration, model, and
+aircraft position without collapsing either source, reports unavailable payload
+and deadline evidence rather than guessing, and adds an explicitly requested
+ten-minute session cache of AviationWeather.gov METAR and TAF facts for plan
+airports. Route advisories, online-network, navigation, simulator, and persistent
+operational caches remain sequenced in the
+[external integrations programme](../integrations/README.md).

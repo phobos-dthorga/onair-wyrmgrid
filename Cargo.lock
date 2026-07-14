@@ -5264,6 +5264,7 @@ dependencies = [
  "wyrmgrid-plugin-protocol",
  "wyrmgrid-simbrief-api",
  "wyrmgrid-storage",
+ "wyrmgrid-weather-api",
 ]
 
 [[package]]
@@ -5337,6 +5338,20 @@ dependencies = [
  "rusqlite",
  "tempfile",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "wyrmgrid-weather-api"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "reqwest 0.12.28",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "url",
+ "uuid",
+ "wyrmgrid-domain",
 ]
 
 [[package]]

@@ -7,6 +7,7 @@ members = [
     "crates/plugin-protocol",
     "crates/simbrief-api",
     "crates/storage",
+    "crates/weather-api",
 ]
 resolver = "2"
 

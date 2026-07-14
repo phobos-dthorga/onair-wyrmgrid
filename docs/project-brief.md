@@ -32,7 +32,11 @@ small Fleet Locations map layer built only from known location facts.
 
 The operational track now includes canonical `FlightPlanSnapshot` version 1 and
 a session-only, read-only SimBrief latest-OFP developer preview rendered in
-Dispatch. Authenticated live-field certification remains outstanding before
-compatibility claims expand. SayIntentions.AI, weather, MSFS 2024, online
-networks, and additional navigation sources follow the same provider-neutral
-boundary so their schemas never become application or plugin contracts.
+Dispatch. Dispatch also produces explainable aircraft identity, model, and
+position findings against the observed OnAir fleet and explicitly identifies
+payload and deadline facts that the current OnAir slice cannot compare. A
+bounded AviationWeather.gov adapter supplies explicitly requested, session-
+cached METAR and TAF context for plan airports. Authenticated SimBrief live-field
+certification remains outstanding; route-weather advisories, SayIntentions.AI,
+MSFS 2024, online networks, and additional navigation sources follow the same
+provider-neutral boundary.

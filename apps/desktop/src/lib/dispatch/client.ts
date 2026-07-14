@@ -21,3 +21,7 @@ export function importLatestSimBriefPlan(
 export function clearDispatchPlan(): Promise<DispatchStatus> {
   return invokeDesktop<DispatchStatus>("clear_dispatch_plan");
 }
+
+export function refreshDispatchWeather(): Promise<DispatchStatus> {
+  return invokeDesktop<DispatchStatus>("refresh_dispatch_weather");
+}

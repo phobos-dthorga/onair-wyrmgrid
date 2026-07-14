@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "id": "f5501d52-b462-4f96-86b0-57e283d19de7",
+  "airports": [
+    {
+      "station_icao": "YSSY",
+      "metar": {
+        "value": {
+          "observed_at": "2026-07-14T01:00:00Z",
+          "raw_text": "METAR YSSY 140100Z AUTO 31013KT 9999 NCD 18/04 Q1021",
+          "report_type": "METAR",
+          "flight_category": "vfr",
+          "wind_direction": { "kind": "degrees", "value": 310 },
+          "wind_speed_kt": 13,
+          "visibility_sm": "6+",
+          "temperature_c": 18,
+          "dewpoint_c": 4,
+          "altimeter_hpa": 1021
+        },
+        "provenance": {
+          "kind": "external_fact",
+          "provider": "aviationweather.gov",
+          "provider_revision": "data-api-v4",
+          "generated_at": "2026-07-14T01:00:00Z",
+          "retrieved_at": "2026-07-14T01:40:00Z",
+          "transformation_version": 1,
+          "freshness": "current"
+        }
+      },
+      "taf": {
+        "value": {
+          "issued_at": "2026-07-13T23:24:00Z",
+          "valid_from": "2026-07-14T00:00:00Z",
+          "valid_to": "2026-07-15T06:00:00Z",
+          "raw_text": "TAF YSSY 132324Z 1400/1506 32014KT CAVOK FM140200 26018KT CAVOK"
+        },
+        "provenance": {
+          "kind": "external_fact",
+          "provider": "aviationweather.gov",
+          "provider_revision": "data-api-v4",
+          "generated_at": "2026-07-13T23:24:00Z",
+          "retrieved_at": "2026-07-14T01:40:00Z",
+          "transformation_version": 1,
+          "freshness": "current"
+        }
+      }
+    }
+  ]
+}

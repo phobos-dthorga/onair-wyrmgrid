@@ -8,6 +8,29 @@ hazard products.
 WyrmGrid weather is for flight-simulation planning. It must not be presented as
 a real-world briefing or as evidence that a flight is operationally safe.
 
+## Implemented airport-weather slice
+
+The first read-only increment is implemented behind WyrmGrid Dispatch:
+
+- the user explicitly requests weather after importing a plan;
+- `wyrmgrid-weather-api` sends one bounded JSON request each to the documented
+  METAR and TAF endpoints for at most ten normalized plan-airport identifiers;
+- the adapter follows no redirects, uses a custom WyrmGrid user agent, enforces
+  a 15-second timeout and 512 KiB streaming limit per product, returns safe error
+  categories, and keeps raw JSON private;
+- the application coalesces concurrent refreshes, applies a one-minute retry
+  floor, reuses a successful combined result for ten minutes, and retains the
+  last valid result if a later refresh fails;
+- immutable `WeatherSnapshot` version 1 products retain source, generated,
+  retrieved, validity, transformation, and freshness metadata; and
+- Dispatch shows raw coded METAR and TAF text plus a small allowlisted set of
+  provider-decoded METAR fields without converting them into a go/no-go score.
+
+The sanitized fixtures follow the official OpenAPI field contract and public
+responses captured on 2026-07-14. No provider credentials or private operational
+identifiers are present. The cache is currently process-memory only; persistent
+offline weather and route hazard products remain future increments.
+
 ## Initial products
 
 | Product                         | Initial use                                                             |

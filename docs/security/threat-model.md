@@ -243,10 +243,23 @@ service, serializes concurrent imports, and returns stable errors without URLs,
 response bodies, identifiers, or plan content. Imported plans and identifiers
 are session-only, excluded from plugins and Sentry, and removable from Dispatch.
 
+The AviationWeather.gov adapter accepts at most ten normalized four-character
+station identifiers, follows no redirects, bounds each streamed JSON product to
+512 KiB, uses a 15-second timeout, and translates only allowlisted METAR and TAF
+fields into a validated `WeatherSnapshot`. Dispatch sends no account reference,
+route, fleet record, or OnAir credential. Concurrent refreshes are coalesced,
+successful data is reused for ten minutes, failed attempts have a one-minute
+retry floor, response bodies and URLs never cross safe errors, and weather is
+excluded from plugins and Sentry.
+
 - A translated snapshot can still be wrong because the provider, captured
   fixture, mapping, unit conversion, identifier correlation, or local clock is
   wrong. WyrmGrid exposes source and age and does not market these integrations
   for real-world operational use.
+- METAR and TAF availability, provider flight categories, and raw coded text do
+  not establish aircraft-specific suitability or a complete briefing. Missing
+  data is displayed as missing, regional/route hazards are not yet assessed,
+  and the interface makes no real-world safety claim.
 - SimBrief's public latest-OFP lookup makes a Pilot ID or username capable of
   revealing operational plan data. Treat the identifier as private, minimize
   persistence, and never expose it through telemetry or plugins.

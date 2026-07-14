@@ -21,6 +21,9 @@ relevant release issue or architecture decision.
 - Diff outbound hosts, native sidecars, plugins, imported content, update
   services, support links, and authentication flows against the third-party
   service register.
+- Reconfirm AviationWeather.gov's current Data API contract, request guidance,
+  availability notices, and public-service attribution before declaring the
+  airport-weather integration supported by a release.
 - Confirm the in-app document versions match the Rust application constants.
 - Decide whether changes require renewed acknowledgement.
 - Verify that no network request occurs before required notice or consent.

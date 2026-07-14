@@ -76,6 +76,14 @@ plausible defaults.
 
 ## Phase 2: WyrmGrid dispatch comparison
 
+The first comparison increment is implemented for facts available in the
+current OnAir fleet snapshot. It deterministically matches registration, can
+identify a unique exact model-label candidate without claiming airframe
+identity, compares the matched aircraft's current airport with the plan origin,
+and retains both source values in every finding. Payload, aircraft limits, job
+airports, schedules, and deadlines are visibly reported as unavailable until
+those facts enter stable OnAir domain contracts; WyrmGrid does not infer them.
+
 Application services compare, without silently merging:
 
 - selected OnAir aircraft versus SimBrief aircraft type and airframe;

@@ -69,7 +69,7 @@ not replace completion of the current vertical slice.
 - Stable SimBrief provider port with bounded private raw response translation
   (implemented)
 - AIRAC, identifier, unit, timestamp, freshness, and reconciliation policies
-  (initial import policy implemented; persistence and comparison remain)
+  (initial import and fleet-comparison policies implemented; persistence remains)
 - Host-owned import/export validation and deny-by-default plugin capabilities
 
 ### SimBrief and weather
@@ -77,9 +77,13 @@ not replace completion of the current vertical slice.
 - Latest SimBrief OFP import by an explicitly supplied Pilot ID or username,
   session-only Dispatch interface, and explicit clear action (developer preview
   implemented; authenticated compatibility certification remains)
-- OnAir aircraft, payload, airport, schedule, and deadline comparison
-- Cached AviationWeather.gov METAR and TAF airport context
-- Route advisories and explainable weather findings
+- OnAir aircraft identity, exact model-label, and current-airport comparison,
+  with unavailable payload and deadline evidence exposed instead of inferred
+  (implemented for the current fleet contract)
+- Explicitly requested, ten-minute session-cached AviationWeather.gov METAR and
+  TAF airport context with raw coded text and provenance (implemented)
+- Route advisories and explainable weather findings (airport observation context
+  implemented; route hazard products remain)
 - SimBrief generation only after Navigraph approves the desktop flow and any
   required hosted-secret boundary receives a separate decision
 

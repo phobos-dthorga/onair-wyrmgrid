@@ -1,0 +1,166 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wyrmgrid.org/schemas/weather-snapshot-v1.schema.json",
+  "title": "WyrmGrid WeatherSnapshot v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "id", "airports"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "id": { "type": "string", "format": "uuid" },
+    "airports": {
+      "type": "array",
+      "maxItems": 10,
+      "items": { "$ref": "#/$defs/airportWeather" }
+    }
+  },
+  "$defs": {
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "provider",
+        "retrieved_at",
+        "transformation_version",
+        "freshness"
+      ],
+      "properties": {
+        "kind": { "const": "external_fact" },
+        "provider": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "provider_revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "generated_at": { "type": "string", "format": "date-time" },
+        "retrieved_at": { "type": "string", "format": "date-time" },
+        "transformation_version": { "type": "integer", "minimum": 1 },
+        "freshness": { "enum": ["current", "stale", "unknown"] }
+      }
+    },
+    "airportWeather": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["station_icao"],
+      "properties": {
+        "station_icao": {
+          "type": "string",
+          "pattern": "^[A-Z0-9]{4}$"
+        },
+        "metar": { "$ref": "#/$defs/metarObservation" },
+        "taf": { "$ref": "#/$defs/tafObservation" }
+      }
+    },
+    "metarObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "provenance"],
+      "properties": {
+        "value": { "$ref": "#/$defs/metar" },
+        "provenance": { "$ref": "#/$defs/provenance" }
+      }
+    },
+    "tafObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "provenance"],
+      "properties": {
+        "value": { "$ref": "#/$defs/taf" },
+        "provenance": { "$ref": "#/$defs/provenance" }
+      }
+    },
+    "metar": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observed_at", "raw_text"],
+      "properties": {
+        "observed_at": { "type": "string", "format": "date-time" },
+        "raw_text": { "type": "string", "minLength": 1, "maxLength": 2048 },
+        "report_type": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 16,
+          "pattern": "^[A-Z0-9/-]+$"
+        },
+        "flight_category": {
+          "enum": ["vfr", "mvfr", "ifr", "lifr", "unknown"]
+        },
+        "wind_direction": { "$ref": "#/$defs/windDirection" },
+        "wind_speed_kt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 300
+        },
+        "wind_gust_kt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 400
+        },
+        "visibility_sm": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24
+        },
+        "temperature_c": {
+          "type": "number",
+          "minimum": -150,
+          "maximum": 100
+        },
+        "dewpoint_c": {
+          "type": "number",
+          "minimum": -150,
+          "maximum": 100
+        },
+        "altimeter_hpa": {
+          "type": "number",
+          "minimum": 800,
+          "maximum": 1200
+        },
+        "present_weather": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      }
+    },
+    "windDirection": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "value"],
+          "properties": {
+            "kind": { "const": "degrees" },
+            "value": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 360
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": { "kind": { "const": "variable" } }
+        }
+      ]
+    },
+    "taf": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["issued_at", "valid_from", "valid_to", "raw_text"],
+      "properties": {
+        "issued_at": { "type": "string", "format": "date-time" },
+        "valid_from": { "type": "string", "format": "date-time" },
+        "valid_to": { "type": "string", "format": "date-time" },
+        "raw_text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32768
+        }
+      }
+    }
+  }
+}

@@ -18,6 +18,12 @@ export const dispatchPreviewEmpty: DispatchStatus = {
   availability: "empty",
   persistence: "session_only",
   importing: false,
+  weather: {
+    provider_available: true,
+    availability: "not_requested",
+    refreshing: false,
+    cache: "none",
+  },
 };
 
 export const dispatchPreviewReady: DispatchStatus = {
@@ -54,7 +60,7 @@ export const dispatchPreviewReady: DispatchStatus = {
     aircraft: {
       value: {
         icao_type: "B738",
-        registration: "VH-WYR",
+        registration: "WYR-101",
         model: "Boeing 737-800",
       },
       provenance,
@@ -102,6 +108,202 @@ export const dispatchPreviewReady: DispatchStatus = {
         ],
       },
       provenance,
+    },
+  },
+  comparison: {
+    fleet_available: true,
+    fleet_observed_at: "2026-07-14T00:00:00Z",
+    matched_aircraft: {
+      basis: "registration",
+      registration: "WYR-101",
+      model: "Example Turboprop",
+      current_airport_icao: "YTEST",
+    },
+    findings: [
+      {
+        category: "aircraft_identity",
+        status: "match",
+        title: "Registration matched",
+        explanation:
+          "The SimBrief registration exactly matches one aircraft in the observed OnAir fleet.",
+        plan_value: "WYR-101",
+        onair_value: "WYR-101",
+      },
+      {
+        category: "aircraft_model",
+        status: "difference",
+        title: "Model labels differ",
+        explanation:
+          "The source labels differ. No unverified aircraft-type crosswalk was applied.",
+        plan_value: "Boeing 737-800",
+        onair_value: "Example Turboprop",
+      },
+      {
+        category: "aircraft_position",
+        status: "difference",
+        title: "Aircraft is away from origin",
+        explanation:
+          "The matched OnAir aircraft is observed at another airport; positioning may be required.",
+        plan_value: "YSSY",
+        onair_value: "YTEST",
+      },
+      {
+        category: "payload",
+        status: "unavailable",
+        title: "Payload limits not observed",
+        explanation:
+          "The current OnAir fleet contract does not include weight limits, so no compatibility is inferred.",
+        plan_value: "14820 kg",
+      },
+      {
+        category: "schedule",
+        status: "unavailable",
+        title: "Deadlines not observed",
+        explanation:
+          "The current OnAir slice does not include job schedules or deadlines.",
+        plan_value: "2026-07-05T02:00:00Z",
+      },
+    ],
+    provenance: {
+      kind: "calculated",
+      provider: "wyrmgrid",
+      generated_at: "2026-07-14T00:00:00Z",
+      retrieved_at: "2026-07-14T00:00:00Z",
+      transformation_version: 1,
+      freshness: "current",
+    },
+  },
+  weather: {
+    provider_available: true,
+    availability: "ready",
+    refreshing: false,
+    cache: "fresh",
+    snapshot: {
+      schema_version: 1,
+      id: "f5501d52-b462-4f96-86b0-57e283d19de7",
+      airports: [
+        {
+          station_icao: "YSSY",
+          metar: {
+            value: {
+              observed_at: "2026-07-14T01:00:00Z",
+              raw_text: "METAR YSSY 140100Z AUTO 31013KT 9999 NCD 18/04 Q1021",
+              report_type: "METAR",
+              flight_category: "vfr",
+              wind_direction: { kind: "degrees", value: 310 },
+              wind_speed_kt: 13,
+              visibility_sm: "6+",
+              temperature_c: 18,
+              dewpoint_c: 4,
+              altimeter_hpa: 1021,
+            },
+            provenance: {
+              ...provenance,
+              kind: "external_fact",
+              provider: "aviationweather.gov",
+              provider_revision: "data-api-v4",
+              generated_at: "2026-07-14T01:00:00Z",
+            },
+          },
+          taf: {
+            value: {
+              issued_at: "2026-07-13T23:24:00Z",
+              valid_from: "2026-07-14T00:00:00Z",
+              valid_to: "2026-07-15T06:00:00Z",
+              raw_text:
+                "TAF YSSY 132324Z 1400/1506 32014KT CAVOK FM140200 26018KT CAVOK",
+            },
+            provenance: {
+              ...provenance,
+              kind: "external_fact",
+              provider: "aviationweather.gov",
+              provider_revision: "data-api-v4",
+              generated_at: "2026-07-13T23:24:00Z",
+            },
+          },
+        },
+        {
+          station_icao: "NZAA",
+          metar: {
+            value: {
+              observed_at: "2026-07-14T01:30:00Z",
+              raw_text: "METAR NZAA 140130Z AUTO 32007KT 9999 NCD 18/12 Q1024",
+              report_type: "METAR",
+              flight_category: "vfr",
+              wind_direction: { kind: "degrees", value: 320 },
+              wind_speed_kt: 7,
+              visibility_sm: "6+",
+              temperature_c: 18,
+              dewpoint_c: 12,
+              altimeter_hpa: 1024,
+            },
+            provenance: {
+              ...provenance,
+              kind: "external_fact",
+              provider: "aviationweather.gov",
+              provider_revision: "data-api-v4",
+              generated_at: "2026-07-14T01:30:00Z",
+            },
+          },
+          taf: {
+            value: {
+              issued_at: "2026-07-13T23:08:00Z",
+              valid_from: "2026-07-14T00:00:00Z",
+              valid_to: "2026-07-15T06:00:00Z",
+              raw_text:
+                "TAF NZAA 132308Z 1400/1506 03010KT 9999 -SHRA SCT020 BKN030",
+            },
+            provenance: {
+              ...provenance,
+              kind: "external_fact",
+              provider: "aviationweather.gov",
+              provider_revision: "data-api-v4",
+              generated_at: "2026-07-13T23:08:00Z",
+            },
+          },
+        },
+        {
+          station_icao: "NZWN",
+          metar: {
+            value: {
+              observed_at: "2026-07-14T01:30:00Z",
+              raw_text:
+                "METAR NZWN 140130Z AUTO 35018G28KT 9999 BKN018 15/11 Q1019",
+              report_type: "METAR",
+              flight_category: "mvfr",
+              wind_direction: { kind: "degrees", value: 350 },
+              wind_speed_kt: 18,
+              wind_gust_kt: 28,
+              visibility_sm: "6+",
+              temperature_c: 15,
+              dewpoint_c: 11,
+              altimeter_hpa: 1019,
+            },
+            provenance: {
+              ...provenance,
+              kind: "external_fact",
+              provider: "aviationweather.gov",
+              provider_revision: "data-api-v4",
+              generated_at: "2026-07-14T01:30:00Z",
+            },
+          },
+          taf: {
+            value: {
+              issued_at: "2026-07-13T23:08:00Z",
+              valid_from: "2026-07-14T00:00:00Z",
+              valid_to: "2026-07-15T06:00:00Z",
+              raw_text: "TAF NZWN 132308Z 1400/1506 01020G30KT 9999 BKN020",
+            },
+            provenance: {
+              ...provenance,
+              kind: "external_fact",
+              provider: "aviationweather.gov",
+              provider_revision: "data-api-v4",
+              generated_at: "2026-07-13T23:08:00Z",
+            },
+          },
+        },
+      ],
     },
   },
 };
