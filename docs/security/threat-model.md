@@ -14,6 +14,8 @@
 - diagnostic events, telemetry preferences, and Sentry report identifiers;
 - release source maps, native debug information, and telemetry upload credentials;
 - legal-document versions, acknowledgement records, and privacy preferences;
+- selected language, imported community language-pack content, translator
+  metadata, and the integrity of security-sensitive interface wording;
 - update integrity and release artifacts.
 
 ## Primary threats
@@ -25,6 +27,8 @@
 - hostile API payloads, imported files, map styles, and URLs;
 - imported themes concealing security text, counterfeiting controls, loading
   remote resources, or exhausting local storage;
+- malicious or stale translations mislabelling credentials, permissions,
+  destructive actions, diagnostics, provenance, or legal disclosures;
 - malicious or oversized OFPs, flight-plan files, compressed feeds, navigation
   packages, weather geometries, and simulator messages;
 - spoofed localhost simulator services, sidecars, callbacks, or OAuth redirect
@@ -154,6 +158,13 @@
   chart palette, and contrast-checked in Rust. Unknown fields, arbitrary CSS,
   code, markup, URLs, fonts, images, paths, selectors, layout, and reserved host
   identifiers are rejected before persistence.
+- community language packs are data-only, limited to 256 KiB, parsed and
+  canonicalized in Rust, restricted to known source-catalogue keys, and checked
+  for schema/source version, metadata, Fluent syntax, variable parity, message
+  counts, markup delimiters, and dangerous bidirectional controls. Partial packs
+  fall back per message to canonical English. Unreviewed packs cannot replace
+  legal, privacy, credential, telemetry, plugin-permission, destructive-action,
+  or diagnostic namespaces and cannot load resources or execute code.
 
 Before stable release, the project needs operating-system credential storage,
 signed updates, hardened plugin supervision, abuse-case tests, and a formal
@@ -164,6 +175,23 @@ infrastructure after onboarding. WyrmGrid does not intentionally include OnAir
 payloads in those requests, but ordinary network metadata reaches that service.
 Production suitability, retention, attribution, availability limits, and a
 replacement or approval decision remain stable-release requirements.
+
+## Residual localization risks
+
+A translation can be grammatically valid and still be inaccurate, incomplete,
+offensive, or intentionally misleading. Protected namespaces reduce the most
+serious risks but do not make ordinary community wording trustworthy. WyrmGrid
+therefore identifies pack provenance, reports coverage, preserves English
+fallback, and keeps a built-in English selection available. Reviewed translation
+governance, signatures, revocation, update compatibility, complete right-to-left
+testing, font/script coverage, and a dedicated legal-document process remain
+required before WyrmGrid endorses non-English packs.
+
+Locale direction can materially rearrange presentation. Version 1 changes the
+root writing direction but the existing interface has not completed logical-CSS
+or RTL visual certification, so community RTL packs are an authoring preview.
+Fluent isolation protects interpolated mixed-direction values but cannot correct
+the meaning of a poor translation.
 
 ## Residual connection risks
 

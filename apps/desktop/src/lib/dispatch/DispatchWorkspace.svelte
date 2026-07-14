@@ -1,5 +1,6 @@
 <script lang="ts">
   import "./dispatch.css";
+  import { translation } from "$lib/i18n/runtime";
   import type {
     DispatchStatus,
     Mass,
@@ -227,8 +228,16 @@
                     <span>{formatFindingCategory(finding.category)}</span>
                     <b>{finding.status}</b>
                   </div>
-                  <strong>{finding.title}</strong>
-                  <p>{finding.explanation}</p>
+                  <strong>{$translation(
+                    `${finding.message_key}-title`,
+                    {},
+                    finding.title,
+                  )}</strong>
+                  <p>{$translation(
+                      `${finding.message_key}-explanation`,
+                      {},
+                      finding.explanation,
+                    )}</p>
                   {#if finding.plan_value || finding.onair_value}
                     <dl>
                       <div><dt>Plan</dt><dd>{finding.plan_value ?? "Not supplied"}</dd></div>

@@ -12,3 +12,4 @@ record rather than silently rewriting history.
 - [ADR-0007: Hosted Sentry behind observability adapters](0007-hosted-sentry-observability.md)
 - [ADR-0008: Provider adapters and canonical operational snapshots](0008-provider-adapters-and-operational-snapshots.md)
 - [ADR-0009: Data-only community themes](0009-data-only-community-themes.md)
+- [ADR-0010: Canonical English catalogue and data-only community language packs](0010-community-localization.md)

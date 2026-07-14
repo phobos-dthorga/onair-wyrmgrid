@@ -71,6 +71,15 @@
     HoardTimelineIndex,
     TimelineMode,
   } from "$lib/hoard/types";
+  import LanguageDialog from "$lib/i18n/LanguageDialog.svelte";
+  import {
+    browserLanguageStatus,
+    importLanguagePack,
+    loadLanguageStatus,
+    selectLanguagePack,
+  } from "$lib/i18n/client";
+  import { applyLanguage, translation } from "$lib/i18n/runtime";
+  import type { LanguageStatus } from "$lib/i18n/types";
   import { configureClientTelemetry } from "$lib/observability/client";
   import ConnectionDialog from "$lib/onair/ConnectionDialog.svelte";
   import {
@@ -137,6 +146,10 @@
   let showThemeDialog = $state(false);
   let themeBusy = $state(false);
   let themeError = $state("");
+  let languageStatus = $state<LanguageStatus>(browserLanguageStatus);
+  let showLanguageDialog = $state(false);
+  let languageBusy = $state(false);
+  let languageError = $state("");
   let timeline = $state<HoardTimelineIndex>({
     company: null,
     observation_times: [],
@@ -734,6 +747,53 @@
     }
   }
 
+  async function initializeLanguage(): Promise<void> {
+    languageError = "";
+    try {
+      languageStatus = await loadLanguageStatus();
+      applyLanguage(languageStatus.active_pack);
+    } catch (error) {
+      applyLanguage(browserLanguageStatus.active_pack);
+      languageError = operationErrorMessage(
+        error,
+        $translation("error-language-storage-unavailable"),
+      );
+    }
+  }
+
+  async function chooseLanguage(packId: string): Promise<void> {
+    if (packId === languageStatus.selected_language_pack_id) return;
+    languageBusy = true;
+    languageError = "";
+    try {
+      languageStatus = await selectLanguagePack(packId);
+      applyLanguage(languageStatus.active_pack);
+    } catch (error) {
+      languageError = operationErrorMessage(
+        error,
+        $translation("error-language-apply-failed"),
+      );
+    } finally {
+      languageBusy = false;
+    }
+  }
+
+  async function addLanguagePack(manifestJson: string): Promise<void> {
+    languageBusy = true;
+    languageError = "";
+    try {
+      languageStatus = await importLanguagePack(manifestJson);
+      applyLanguage(languageStatus.active_pack);
+    } catch (error) {
+      languageError = operationErrorMessage(
+        error,
+        $translation("error-language-import-failed"),
+      );
+    } finally {
+      languageBusy = false;
+    }
+  }
+
   async function chooseTheme(themeId: string): Promise<void> {
     if (themeId === themeStatus.selected_theme_id) return;
     themeBusy = true;
@@ -768,6 +828,7 @@
   }
 
   async function initializeApplication(): Promise<void> {
+    await initializeLanguage();
     await initializeTheme();
     await initializeLegal();
   }
@@ -862,16 +923,16 @@
 {#if legalLoadState === "loading"}
   <main class="legal-loading" aria-live="polite">
     <div class="brand-mark" aria-hidden="true">WG</div>
-    <span class="eyebrow">OnAir WyrmGrid</span>
-    <strong>Preparing local privacy settings…</strong>
+    <span class="eyebrow">{$translation("app-name")}</span>
+    <strong>{$translation("app-preparing-privacy")}</strong>
   </main>
 {:else if legalLoadState === "error"}
   <main class="legal-loading legal-load-error">
     <div class="brand-mark" aria-hidden="true">WG</div>
-    <span class="eyebrow">Local settings unavailable</span>
+    <span class="eyebrow">{$translation("app-settings-unavailable")}</span>
     <strong>{legalError}</strong>
     <button type="button" onclick={() => void initializeLegal()}
-      >Try again</button
+      >{$translation("action-try-again")}</button
     >
   </main>
 {:else if legalStatus.acknowledged}
@@ -879,6 +940,7 @@
     class="shell"
     inert={showLegalDialog ||
       showThemeDialog ||
+      showLanguageDialog ||
       showTimelineDialog ||
       showForgeDialog}
   >
@@ -888,14 +950,17 @@
         <span class="eyebrow">OnAir</span>
         <h1>WyrmGrid</h1>
       </div>
-      <nav aria-label="Primary navigation">
+      <nav aria-label={$translation("nav-primary")}>
         <button
           class="nav-item"
           class:active={activeWorkspace === "atlas"}
           type="button"
-          onclick={() => (activeWorkspace = "atlas")}>Atlas</button
+          onclick={() => (activeWorkspace = "atlas")}
+          >{$translation("nav-atlas")}</button
         >
-        <button class="nav-item" type="button" disabled>Fleet</button>
+        <button class="nav-item" type="button" disabled
+          >{$translation("nav-fleet")}</button
+        >
         <button
           class="nav-item"
           class:active={activeWorkspace === "dispatch"}
@@ -903,19 +968,19 @@
           onclick={() => {
             activeWorkspace = "dispatch";
             void refreshDispatchStatus();
-          }}>Dispatch</button
+          }}>{$translation("nav-dispatch")}</button
         >
         <button
           class="nav-item"
           class:active={showTimelineDialog}
           type="button"
-          onclick={openHoardTimeline}>Hoard</button
+          onclick={openHoardTimeline}>{$translation("nav-hoard")}</button
         >
         <button
           class="nav-item"
           class:active={showForgeDialog}
           type="button"
-          onclick={openForge}>Forge</button
+          onclick={openForge}>{$translation("nav-forge")}</button
         >
       </nav>
       <button
@@ -926,10 +991,20 @@
           showThemeDialog = true;
         }}
       >
-        Theme
+        {$translation("settings-theme")}
+      </button>
+      <button
+        class="language-pill"
+        type="button"
+        onclick={() => {
+          languageError = "";
+          showLanguageDialog = true;
+        }}
+      >
+        {$translation("settings-language")}
       </button>
       <button class="legal-pill" type="button" onclick={openLegalSettings}>
-        Privacy &amp; Terms
+        {$translation("settings-privacy-terms")}
       </button>
       <button
         class:connected={connection.connected}
@@ -940,7 +1015,7 @@
         <span></span>
         {connection.connected && connection.company
           ? connection.company.name
-          : "Connect OnAir"}
+          : $translation("onair-connect")}
       </button>
     </header>
 
@@ -1246,7 +1321,7 @@
 
     <footer>
       <span>{status.application} · {status.mode}</span>
-      <span>Unaffiliated community project</span>
+      <span>{$translation("footer-unaffiliated")}</span>
     </footer>
   </main>
 
@@ -1266,6 +1341,17 @@
     onselect={(themeId) => void chooseTheme(themeId)}
     onimport={(manifestJson) => void addTheme(manifestJson)}
     onclose={() => (showThemeDialog = false)}
+  />
+
+  <LanguageDialog
+    open={showLanguageDialog}
+    status={languageStatus}
+    desktopRuntime={isDesktopRuntime()}
+    busy={languageBusy}
+    errorMessage={languageError}
+    onselect={(packId) => void chooseLanguage(packId)}
+    onimport={(manifestJson) => void addLanguagePack(manifestJson)}
+    onclose={() => (showLanguageDialog = false)}
   />
 
   <HoardTimelineDialog

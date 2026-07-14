@@ -1,4 +1,5 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { translate } from "$lib/i18n/runtime";
 
 export type OperationError = {
   code: string;
@@ -46,9 +47,9 @@ export function operationErrorMessage(
   error: unknown,
   fallback: string,
 ): string {
-  return error instanceof DesktopOperationFailure
-    ? error.operation.message
-    : fallback;
+  if (!(error instanceof DesktopOperationFailure)) return fallback;
+  const messageId = `error-${error.operation.code.replaceAll(/[._]/g, "-")}`;
+  return translate(messageId, {}, error.operation.message);
 }
 
 function normalizeOperationError(value: unknown): OperationError {

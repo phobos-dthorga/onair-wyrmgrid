@@ -85,6 +85,7 @@ nav {
   font-size: 12px;
 }
 .theme-pill,
+.language-pill,
 .legal-pill {
   border: 1px solid transparent;
   padding: 8px 10px;
@@ -97,6 +98,7 @@ nav {
   margin-left: auto;
 }
 .theme-pill:hover,
+.language-pill:hover,
 .legal-pill:hover {
   border-color: var(--color-line-faint);
   color: var(--color-accent);

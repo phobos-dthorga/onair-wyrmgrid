@@ -96,6 +96,7 @@ export type DispatchFinding = {
     | "payload"
     | "schedule";
   status: DispatchFindingStatus;
+  message_key: string;
   title: string;
   explanation: string;
   plan_value?: string;

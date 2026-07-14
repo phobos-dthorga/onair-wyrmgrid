@@ -9,6 +9,7 @@ repository.workspace = true
 
 [dependencies]
 chrono.workspace = true
+fluent-syntax.workspace = true
 secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true

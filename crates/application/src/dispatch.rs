@@ -90,6 +90,7 @@ pub struct MatchedFleetAircraft {
 pub struct DispatchFinding {
     pub category: DispatchFindingCategory,
     pub status: DispatchFindingStatus,
+    pub message_key: &'static str,
     pub title: String,
     pub explanation: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -495,6 +496,7 @@ fn compare_plan_to_fleet(
         findings.push(finding(
             DispatchFindingCategory::AircraftIdentity,
             DispatchFindingStatus::Unavailable,
+            "dispatch-finding-onair-fleet-unavailable",
             "OnAir fleet unavailable",
             "Connect or synchronize OnAir to compare this plan with an observed company aircraft.",
             plan_aircraft_label(plan),
@@ -506,6 +508,7 @@ fn compare_plan_to_fleet(
     findings.push(finding(
         DispatchFindingCategory::Payload,
         DispatchFindingStatus::Unavailable,
+        "dispatch-finding-payload-unavailable",
         "Payload limits not observed",
         "The current OnAir fleet contract does not include job payload or aircraft weight limits, so WyrmGrid does not infer compatibility.",
         plan.weights
@@ -517,6 +520,7 @@ fn compare_plan_to_fleet(
     findings.push(finding(
         DispatchFindingCategory::Schedule,
         DispatchFindingStatus::Unavailable,
+        "dispatch-finding-deadline-unavailable",
         "Deadlines not observed",
         "The current OnAir slice does not include job schedules or deadlines. Planned block times remain visible without an OnAir deadline verdict.",
         plan.schedule
@@ -580,6 +584,7 @@ fn match_aircraft<'a>(
                 findings.push(finding(
                     DispatchFindingCategory::AircraftIdentity,
                     DispatchFindingStatus::Match,
+                    "dispatch-finding-registration-match",
                     "Registration matched",
                     "The SimBrief registration exactly matches one aircraft in the observed OnAir fleet.",
                     Some(registration.into()),
@@ -591,6 +596,7 @@ fn match_aircraft<'a>(
                 findings.push(finding(
                     DispatchFindingCategory::AircraftIdentity,
                     DispatchFindingStatus::Difference,
+                    "dispatch-finding-registration-not-found",
                     "Registration not found",
                     "No aircraft in the observed OnAir fleet has the SimBrief registration.",
                     Some(registration.into()),
@@ -602,6 +608,7 @@ fn match_aircraft<'a>(
                 findings.push(finding(
                     DispatchFindingCategory::AircraftIdentity,
                     DispatchFindingStatus::Unavailable,
+                    "dispatch-finding-registration-ambiguous",
                     "Registration is ambiguous",
                     "More than one observed aircraft uses this registration, so WyrmGrid will not choose one.",
                     Some(registration.into()),
@@ -626,6 +633,7 @@ fn match_aircraft<'a>(
             findings.push(finding(
                 DispatchFindingCategory::AircraftIdentity,
                 DispatchFindingStatus::Information,
+                "dispatch-finding-model-candidate",
                 "Unique model candidate",
                 "One OnAir aircraft has the exact model label, but a model match does not prove it is the same airframe.",
                 Some(model.into()),
@@ -636,6 +644,7 @@ fn match_aircraft<'a>(
         findings.push(finding(
             DispatchFindingCategory::AircraftIdentity,
             DispatchFindingStatus::Unavailable,
+            "dispatch-finding-airframe-unmatched",
             "No deterministic airframe match",
             "The plan has no registration and its model label does not identify exactly one OnAir aircraft.",
             Some(model.into()),
@@ -647,6 +656,7 @@ fn match_aircraft<'a>(
     findings.push(finding(
         DispatchFindingCategory::AircraftIdentity,
         DispatchFindingStatus::Unavailable,
+        "dispatch-finding-plan-aircraft-missing",
         "Plan aircraft identity missing",
         "SimBrief supplied neither a registration nor a model that can be compared deterministically.",
         plan_aircraft_label(plan),
@@ -664,28 +674,32 @@ fn append_model_finding(
     let plan_model = planned.and_then(|aircraft| aircraft.model.clone());
     let plan_type = planned.and_then(|aircraft| aircraft.icao_type.clone());
     let onair_model = matched.and_then(|aircraft| aircraft.model.clone());
-    let (status, title, explanation) = match (&plan_model, &onair_model) {
+    let (status, message_key, title, explanation) = match (&plan_model, &onair_model) {
         (Some(plan_model), Some(onair_model))
             if normalize_identity(plan_model) == normalize_identity(onair_model) =>
         {
             (
                 DispatchFindingStatus::Match,
+                "dispatch-finding-model-match",
                 "Model label matched",
                 "SimBrief and OnAir supplied the same normalized model label.",
             )
         }
         (Some(_), Some(_)) => (
             DispatchFindingStatus::Difference,
+            "dispatch-finding-model-difference",
             "Model labels differ",
             "The source labels differ. WyrmGrid has not used a type catalogue to declare them compatible or incompatible.",
         ),
         (_, Some(_)) if plan_type.is_some() => (
             DispatchFindingStatus::Information,
+            "dispatch-finding-aircraft-vocabularies",
             "Different aircraft vocabularies",
             "SimBrief supplied an ICAO type while OnAir supplied a model label; no unverified crosswalk was applied.",
         ),
         _ => (
             DispatchFindingStatus::Unavailable,
+            "dispatch-finding-model-unavailable",
             "Model comparison unavailable",
             "One or both sources did not provide comparable aircraft model text.",
         ),
@@ -693,6 +707,7 @@ fn append_model_finding(
     findings.push(finding(
         DispatchFindingCategory::AircraftModel,
         status,
+        message_key,
         title,
         explanation,
         plan_model.or(plan_type),
@@ -709,19 +724,22 @@ fn append_position_finding(
     let current_airport = matched
         .and_then(|aircraft| aircraft.current_airport.as_ref())
         .and_then(|airport| airport.icao.clone());
-    let (status, title, explanation) = match current_airport.as_deref() {
+    let (status, message_key, title, explanation) = match current_airport.as_deref() {
         Some(value) if value.eq_ignore_ascii_case(&origin) => (
             DispatchFindingStatus::Match,
+            "dispatch-finding-position-match",
             "Aircraft positioned at origin",
             "The matched OnAir aircraft is currently observed at the planned departure airport.",
         ),
         Some(_) => (
             DispatchFindingStatus::Difference,
+            "dispatch-finding-position-difference",
             "Aircraft is away from origin",
             "The matched OnAir aircraft is observed at a different airport; positioning may be required.",
         ),
         None => (
             DispatchFindingStatus::Unavailable,
+            "dispatch-finding-position-unavailable",
             "Position comparison unavailable",
             "No deterministically matched aircraft with a current OnAir airport is available.",
         ),
@@ -729,6 +747,7 @@ fn append_position_finding(
     findings.push(finding(
         DispatchFindingCategory::AircraftPosition,
         status,
+        message_key,
         title,
         explanation,
         Some(origin),
@@ -739,6 +758,7 @@ fn append_position_finding(
 fn finding(
     category: DispatchFindingCategory,
     status: DispatchFindingStatus,
+    message_key: &'static str,
     title: &str,
     explanation: &str,
     plan_value: Option<String>,
@@ -747,6 +767,7 @@ fn finding(
     DispatchFinding {
         category,
         status,
+        message_key,
         title: title.into(),
         explanation: explanation.into(),
         plan_value,

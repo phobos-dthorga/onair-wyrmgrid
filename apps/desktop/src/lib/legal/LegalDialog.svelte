@@ -144,6 +144,13 @@
                   and community plugins operate under their own terms.</span
                 >
               </article>
+              <article>
+                <strong>Local customisation</strong>
+                <span
+                  >Imported themes and language packs remain in WyrmGrid's
+                  local database and are not sent to translation services.</span
+                >
+              </article>
             </div>
             <p class="foundation-note">
               This is foundation-stage software, not an OnAir service or a

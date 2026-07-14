@@ -8,6 +8,7 @@ struct DesktopState {
     plugins: wyrmgrid_application::PluginService,
     legal: wyrmgrid_application::LegalSettingsService<wyrmgrid_storage::Store>,
     themes: wyrmgrid_application::ThemeSettingsService<wyrmgrid_storage::Store>,
+    languages: wyrmgrid_application::LanguageSettingsService<wyrmgrid_storage::Store>,
     observability: observability::Controller,
 }
 
@@ -193,6 +194,32 @@ fn import_theme(
 }
 
 #[tauri::command]
+fn language_status(
+    state: tauri::State<'_, DesktopState>,
+) -> Result<wyrmgrid_application::LanguageStatus, wyrmgrid_application::OperationError> {
+    state.languages.status().map_err(operation_error)
+}
+
+#[tauri::command]
+fn select_language_pack(
+    state: tauri::State<'_, DesktopState>,
+    pack_id: String,
+) -> Result<wyrmgrid_application::LanguageStatus, wyrmgrid_application::OperationError> {
+    state.languages.select(&pack_id).map_err(operation_error)
+}
+
+#[tauri::command]
+fn import_language_pack(
+    state: tauri::State<'_, DesktopState>,
+    manifest_json: String,
+) -> Result<wyrmgrid_application::LanguageStatus, wyrmgrid_application::OperationError> {
+    state
+        .languages
+        .import(&manifest_json)
+        .map_err(operation_error)
+}
+
+#[tauri::command]
 fn plugin_host_status(
     state: tauri::State<'_, DesktopState>,
 ) -> Result<wyrmgrid_application::PluginHostView, wyrmgrid_application::OperationError> {
@@ -278,6 +305,7 @@ pub fn run() {
             let legal = wyrmgrid_application::LegalSettingsService::new(store.clone());
             let legal_status = legal.status().expect("legal settings should initialize");
             let themes = wyrmgrid_application::ThemeSettingsService::new(store.clone());
+            let languages = wyrmgrid_application::LanguageSettingsService::new(store.clone());
             let onair = wyrmgrid_application::OnAirSession::with_default_store(store.clone());
             let dispatch = wyrmgrid_application::DispatchSession::with_default_provider();
             let plugins = wyrmgrid_application::PluginService::new(
@@ -292,6 +320,7 @@ pub fn run() {
                 plugins,
                 legal,
                 themes,
+                languages,
                 observability: observability::Controller::new(legal_status.telemetry_enabled),
             });
             Ok(())
@@ -316,6 +345,9 @@ pub fn run() {
             theme_status,
             select_theme,
             import_theme,
+            language_status,
+            select_language_pack,
+            import_language_pack,
             plugin_host_status,
             approve_plugin_permissions,
             revoke_plugin_permissions,

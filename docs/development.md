@@ -21,8 +21,16 @@ crates/                application-owned Rust libraries
 docs/                  durable design and operating documentation
 examples/plugins/      public protocol examples
 schemas/               language-neutral public contracts
+locales/               canonical interface message catalogues
 .github/               contribution and automation policy
 ```
+
+When adding user-facing interface text, add a stable semantic key to
+`locales/en-AU.json` and resolve it through the localization runtime. Rust
+services should return a semantic code and arguments plus a temporary bounded
+English fallback when compatibility requires one; do not choose a locale in a
+domain or application service. Update source-catalogue compatibility and
+community-pack fixtures when variables or message meaning change.
 
 Keep real credentials outside `.env` files in the repository. The committed
 `.env.example` contains names only and is not the planned production secret
