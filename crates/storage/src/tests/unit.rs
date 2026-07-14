@@ -6,7 +6,7 @@ fn initializes_the_database_schema() {
     let store = Store::open_in_memory().expect("in-memory database should open");
     assert_eq!(
         store.schema_version().expect("version should be readable"),
-        7
+        8
     );
 }
 
@@ -55,6 +55,108 @@ fn persists_simulator_provider_preferences_default_off() {
         store.load_simulator_preferences_record().unwrap(),
         Some(preferences)
     );
+}
+
+#[test]
+fn persists_and_deletes_bounded_simulator_recordings() {
+    let store = Store::open_in_memory().expect("store should initialize");
+    assert!(
+        store
+            .load_simulator_recording_preferences_record()
+            .unwrap()
+            .is_none()
+    );
+    store
+        .save_simulator_recording_preferences_record(&SimulatorRecordingPreferencesRecord {
+            retention_days: 30,
+        })
+        .unwrap();
+
+    let session = SimulatorSessionRecord {
+        id: "session-1".into(),
+        provider_id: "provider-1".into(),
+        simulator_family: "MSFS_2024".into(),
+        simulator_version: Some("1.0".into()),
+        aircraft_title: "Cessna 172".into(),
+        aircraft_registration: Some("VH-WYR".into()),
+        started_at: "2026-07-15T00:00:00Z".into(),
+        ended_at: None,
+        origin: "manual".into(),
+        status: "active".into(),
+        sample_count: 0,
+    };
+    store.create_simulator_session_record(&session).unwrap();
+    let sample = SimulatorSampleRecord {
+        source_sequence: 1,
+        observed_at: "2026-07-15T00:00:01Z".into(),
+        simulation_time_utc: None,
+        altitude_feet: 1_234.0,
+        indicated_airspeed_knots: 90.0,
+        true_airspeed_knots: 95.0,
+        ground_speed_knots: 88.0,
+        fuel_total_weight_pounds: Some(200.0),
+        gross_weight_pounds: Some(2_100.0),
+        pitch_degrees: 2.0,
+        bank_degrees: -1.0,
+        gap_before: false,
+    };
+    assert!(
+        store
+            .append_simulator_sample_record(&session.id, &sample)
+            .unwrap()
+    );
+    assert!(
+        !store
+            .append_simulator_sample_record(&session.id, &sample)
+            .unwrap()
+    );
+
+    let sessions = store.list_simulator_session_records(10).unwrap();
+    assert_eq!(sessions.len(), 1);
+    assert_eq!(sessions[0].sample_count, 1);
+    assert_eq!(
+        store
+            .list_simulator_sample_records(&session.id, 600)
+            .unwrap(),
+        vec![sample]
+    );
+
+    store
+        .finish_simulator_session_record(&session.id, "2026-07-15T00:10:00Z", "completed")
+        .unwrap();
+    assert_eq!(
+        store
+            .prune_simulator_session_records("2026-07-16T00:00:00Z")
+            .unwrap(),
+        1
+    );
+    assert!(store.list_simulator_session_records(10).unwrap().is_empty());
+}
+
+#[test]
+fn opening_storage_marks_abandoned_recordings_interrupted() {
+    let store = Store::open_in_memory().expect("store should initialize");
+    store
+        .create_simulator_session_record(&SimulatorSessionRecord {
+            id: "abandoned".into(),
+            provider_id: "provider-1".into(),
+            simulator_family: "MSFS_2024".into(),
+            simulator_version: None,
+            aircraft_title: "Cessna 172".into(),
+            aircraft_registration: None,
+            started_at: "2026-07-15T00:00:00Z".into(),
+            ended_at: None,
+            origin: "manual".into(),
+            status: "active".into(),
+            sample_count: 0,
+        })
+        .unwrap();
+    store
+        .interrupt_active_simulator_sessions("2026-07-15T00:01:00Z")
+        .unwrap();
+    let session = store.list_simulator_session_records(1).unwrap().remove(0);
+    assert_eq!(session.status, "interrupted");
+    assert_eq!(session.ended_at.as_deref(), Some("2026-07-15T00:01:00Z"));
 }
 
 #[test]

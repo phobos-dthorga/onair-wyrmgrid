@@ -1,6 +1,7 @@
 mod diagnostics;
 mod observability;
 
+use std::sync::Arc;
 use tauri::Manager;
 
 #[derive(Clone, Debug, Default, serde::Serialize)]
@@ -17,6 +18,7 @@ struct DesktopState {
     plugins: wyrmgrid_application::PluginService,
     simulator: wyrmgrid_application::SimulatorBridgeService,
     simulator_settings: wyrmgrid_application::SimulatorSettingsService<wyrmgrid_storage::Store>,
+    simulator_recording: wyrmgrid_application::SimulatorRecordingService,
     legal: wyrmgrid_application::LegalSettingsService<wyrmgrid_storage::Store>,
     themes: wyrmgrid_application::ThemeSettingsService<wyrmgrid_storage::Store>,
     languages: wyrmgrid_application::LanguageSettingsService<wyrmgrid_storage::Store>,
@@ -412,6 +414,78 @@ async fn stop_simulator_provider(
         .map_err(operation_error)
 }
 
+#[tauri::command]
+fn simulator_recording_status(
+    state: tauri::State<'_, DesktopState>,
+) -> Result<wyrmgrid_application::SimulatorRecordingView, wyrmgrid_application::OperationError> {
+    state.simulator_recording.status().map_err(operation_error)
+}
+
+#[tauri::command]
+fn update_simulator_recording_preferences(
+    state: tauri::State<'_, DesktopState>,
+    preferences: wyrmgrid_application::SimulatorRecordingPreferences,
+) -> Result<wyrmgrid_application::SimulatorRecordingPreferences, wyrmgrid_application::OperationError>
+{
+    state
+        .simulator_recording
+        .update_preferences(preferences)
+        .map_err(operation_error)
+}
+
+#[tauri::command]
+fn start_simulator_recording(
+    state: tauri::State<'_, DesktopState>,
+) -> Result<wyrmgrid_application::SimulatorRecordingView, wyrmgrid_application::OperationError> {
+    let bridge = state.simulator.status().map_err(operation_error)?;
+    let provider_id = bridge.active_provider_id.ok_or_else(|| {
+        operation_error(wyrmgrid_application::SimulatorRecordingError::FreshTelemetryRequired)
+    })?;
+    state
+        .simulator_recording
+        .start(&provider_id, bridge.latest_snapshot)
+        .map_err(operation_error)
+}
+
+#[tauri::command]
+fn stop_simulator_recording(
+    state: tauri::State<'_, DesktopState>,
+) -> Result<wyrmgrid_application::SimulatorRecordingView, wyrmgrid_application::OperationError> {
+    state.simulator_recording.stop().map_err(operation_error)
+}
+
+#[tauri::command]
+fn simulator_recording_session(
+    state: tauri::State<'_, DesktopState>,
+    session_id: String,
+) -> Result<wyrmgrid_application::SimulatorSessionView, wyrmgrid_application::OperationError> {
+    state
+        .simulator_recording
+        .session(&session_id)
+        .map_err(operation_error)
+}
+
+#[tauri::command]
+fn delete_simulator_recording(
+    state: tauri::State<'_, DesktopState>,
+    session_id: String,
+) -> Result<wyrmgrid_application::SimulatorRecordingView, wyrmgrid_application::OperationError> {
+    state
+        .simulator_recording
+        .delete_session(&session_id)
+        .map_err(operation_error)
+}
+
+#[tauri::command]
+fn delete_all_simulator_recordings(
+    state: tauri::State<'_, DesktopState>,
+) -> Result<wyrmgrid_application::SimulatorRecordingView, wyrmgrid_application::OperationError> {
+    state
+        .simulator_recording
+        .delete_all()
+        .map_err(operation_error)
+}
+
 fn operation_error<E: Into<wyrmgrid_application::OperationError>>(
     error: E,
 ) -> wyrmgrid_application::OperationError {
@@ -462,8 +536,12 @@ pub fn run() {
                     simulator_provider_path(),
                 )
                 .expect("bundled simulator provider manifest should validate");
-            let simulator =
-                wyrmgrid_application::SimulatorBridgeService::new(vec![simulator_provider]);
+            let simulator_recording =
+                wyrmgrid_application::SimulatorRecordingService::new(store.clone());
+            let simulator = wyrmgrid_application::SimulatorBridgeService::with_telemetry_observer(
+                vec![simulator_provider],
+                Some(Arc::new(simulator_recording.clone())),
+            );
             let simulator_settings = wyrmgrid_application::SimulatorSettingsService::new(
                 store.clone(),
                 simulator.provider_ids(),
@@ -483,6 +561,7 @@ pub fn run() {
                 plugins,
                 simulator,
                 simulator_settings,
+                simulator_recording,
                 legal,
                 themes,
                 languages,
@@ -544,7 +623,14 @@ pub fn run() {
             simulator_preferences,
             update_simulator_preferences,
             start_simulator_provider,
-            stop_simulator_provider
+            stop_simulator_provider,
+            simulator_recording_status,
+            update_simulator_recording_preferences,
+            start_simulator_recording,
+            stop_simulator_recording,
+            simulator_recording_session,
+            delete_simulator_recording,
+            delete_all_simulator_recordings
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

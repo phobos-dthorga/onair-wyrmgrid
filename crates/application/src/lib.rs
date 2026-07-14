@@ -5,12 +5,14 @@ mod display;
 mod localization;
 mod plugins;
 mod simulator;
+mod simulator_recording;
 
 pub use dispatch::*;
 pub use display::*;
 pub use localization::*;
 pub use plugins::*;
 pub use simulator::*;
+pub use simulator_recording::*;
 
 use chrono::{DateTime, SecondsFormat, Utc};
 use secrecy::SecretString;
@@ -1033,6 +1035,44 @@ impl From<SimulatorBridgeError> for OperationError {
             }
             SimulatorBridgeError::InvalidPreferences => {
                 ("simulator.invalid_preferences", false, false)
+            }
+        };
+        Self {
+            code,
+            message: error.to_string(),
+            retryable,
+            reportable,
+            report_id: None,
+        }
+    }
+}
+
+impl From<SimulatorRecordingError> for OperationError {
+    fn from(error: SimulatorRecordingError) -> Self {
+        let (code, retryable, reportable) = match error {
+            SimulatorRecordingError::AlreadyRecording => {
+                ("simulator.recording_already_active", false, false)
+            }
+            SimulatorRecordingError::NotRecording => {
+                ("simulator.recording_not_active", false, false)
+            }
+            SimulatorRecordingError::FreshTelemetryRequired => {
+                ("simulator.recording_requires_telemetry", true, false)
+            }
+            SimulatorRecordingError::InvalidRetention => {
+                ("simulator.recording_invalid_retention", false, false)
+            }
+            SimulatorRecordingError::UnknownSession => {
+                ("simulator.recording_unknown_session", false, false)
+            }
+            SimulatorRecordingError::ActiveSession => {
+                ("simulator.recording_active_session", false, false)
+            }
+            SimulatorRecordingError::StorageUnavailable => {
+                ("simulator.recording_storage_unavailable", true, false)
+            }
+            SimulatorRecordingError::StateUnavailable => {
+                ("simulator.recording_state_unavailable", true, true)
             }
         };
         Self {

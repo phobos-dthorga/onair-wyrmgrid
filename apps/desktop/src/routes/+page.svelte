@@ -113,16 +113,27 @@
   import {
     loadSimulatorBridge,
     loadSimulatorPreferences,
+    loadSimulatorRecording,
+    loadSimulatorRecordingSession,
     saveSimulatorPreferences,
+    saveSimulatorRecordingPreferences,
     startSimulatorProvider,
+    startSimulatorRecording,
     stopSimulatorProvider,
+    stopSimulatorRecording,
+    deleteSimulatorRecording,
+    deleteAllSimulatorRecordings,
   } from "$lib/simulator/client";
   import SimulatorDialog from "$lib/simulator/SimulatorDialog.svelte";
   import {
     emptySimulatorBridge,
+    emptySimulatorRecording,
     defaultSimulatorPreferences,
     type SimulatorBridgeView,
     type SimulatorPreferences,
+    type SimulatorRecordingPreferences,
+    type SimulatorRecordingView,
+    type SimulatorSessionView,
   } from "$lib/simulator/types";
   import {
     loadDisplayPreferences,
@@ -213,6 +224,11 @@
   let simulatorPreferences = $state<SimulatorPreferences>(
     defaultSimulatorPreferences,
   );
+  let simulatorRecording = $state<SimulatorRecordingView>(
+    emptySimulatorRecording,
+  );
+  let simulatorRecordingSession = $state<SimulatorSessionView>();
+  let simulatorRecordingBusy = $state(false);
   let displayPreferences = $state<DisplayPreferences>(
     aviationDisplayPreferences,
   );
@@ -572,10 +588,85 @@
     }
   }
 
+  async function refreshSimulatorRecording(): Promise<void> {
+    if (!isDesktopRuntime()) {
+      simulatorRecording = emptySimulatorRecording;
+      simulatorRecordingSession = undefined;
+      return;
+    }
+    try {
+      simulatorRecording = await loadSimulatorRecording();
+      const currentSessionId = simulatorRecordingSession?.session.id;
+      const selectedId =
+        simulatorRecording.active_session_id ??
+        (currentSessionId &&
+        simulatorRecording.sessions.some(
+          (session) => session.id === currentSessionId,
+        )
+          ? currentSessionId
+          : undefined) ??
+        simulatorRecording.sessions[0]?.id;
+      if (selectedId) {
+        simulatorRecordingSession =
+          await loadSimulatorRecordingSession(selectedId);
+      } else {
+        simulatorRecordingSession = undefined;
+      }
+    } catch (error) {
+      simulatorError = operationErrorMessage(
+        error,
+        "WyrmGrid could not read local simulator recordings.",
+      );
+    }
+  }
+
   function openSimulator(): void {
     simulatorError = "";
     showSimulatorDialog = true;
-    void refreshSimulatorBridge();
+    void Promise.all([refreshSimulatorBridge(), refreshSimulatorRecording()]);
+  }
+
+  async function runRecordingAction(
+    action: "start" | "stop" | "delete" | "delete_all",
+    sessionId?: string,
+  ): Promise<void> {
+    if (!isDesktopRuntime() || simulatorRecordingBusy) return;
+    simulatorRecordingBusy = true;
+    simulatorError = "";
+    try {
+      if (action === "start") simulatorRecording = await startSimulatorRecording();
+      if (action === "stop") simulatorRecording = await stopSimulatorRecording();
+      if (action === "delete" && sessionId)
+        simulatorRecording = await deleteSimulatorRecording(sessionId);
+      if (action === "delete_all")
+        simulatorRecording = await deleteAllSimulatorRecordings();
+      simulatorRecordingSession = undefined;
+      await refreshSimulatorRecording();
+    } catch (error) {
+      simulatorError = operationErrorMessage(
+        error,
+        "WyrmGrid could not complete that recording action.",
+      );
+      await refreshSimulatorRecording();
+    } finally {
+      simulatorRecordingBusy = false;
+    }
+  }
+
+  async function selectRecordingSession(sessionId: string): Promise<void> {
+    if (!isDesktopRuntime() || simulatorRecordingBusy) return;
+    simulatorRecordingBusy = true;
+    simulatorError = "";
+    try {
+      simulatorRecordingSession = await loadSimulatorRecordingSession(sessionId);
+    } catch (error) {
+      simulatorError = operationErrorMessage(
+        error,
+        "WyrmGrid could not open that local simulator recording.",
+      );
+    } finally {
+      simulatorRecordingBusy = false;
+    }
   }
 
   async function runSimulatorAction(
@@ -1066,9 +1157,10 @@
   async function initializeSimulatorPreferences(): Promise<void> {
     if (!isDesktopRuntime()) return;
     try {
-      [simulatorPreferences, simulatorBridge] = await Promise.all([
+      [simulatorPreferences, simulatorBridge, simulatorRecording] = await Promise.all([
         loadSimulatorPreferences(),
         loadSimulatorBridge(),
+        loadSimulatorRecording(),
       ]);
     } catch (error) {
       settingsError = operationErrorMessage(
@@ -1081,14 +1173,22 @@
   async function saveSettings(
     preferences: DisplayPreferences,
     nextSimulatorPreferences: SimulatorPreferences,
+    nextRecordingPreferences: SimulatorRecordingPreferences,
   ): Promise<void> {
     settingsBusy = true;
     settingsError = "";
     try {
-      [displayPreferences, simulatorPreferences] = await Promise.all([
+      const [savedDisplay, savedSimulator, savedRecording] = await Promise.all([
         saveDisplayPreferences(preferences),
         saveSimulatorPreferences(nextSimulatorPreferences),
+        saveSimulatorRecordingPreferences(nextRecordingPreferences),
       ]);
+      displayPreferences = savedDisplay;
+      simulatorPreferences = savedSimulator;
+      simulatorRecording = {
+        ...simulatorRecording,
+        preferences: savedRecording,
+      };
       showSettingsDialog = false;
     } catch (error) {
       settingsError = operationErrorMessage(
@@ -1168,7 +1268,14 @@
     ) {
       return;
     }
-    const timer = window.setInterval(() => void refreshSimulatorBridge(), 1000);
+    const timer = window.setInterval(
+      () =>
+        void Promise.all([
+          refreshSimulatorBridge(),
+          refreshSimulatorRecording(),
+        ]),
+      1000,
+    );
     return () => window.clearInterval(timer);
   });
 
@@ -1687,9 +1794,17 @@
     busy={simulatorBusy}
     errorMessage={simulatorError}
     {displayPreferences}
+    recordingStatus={simulatorRecording}
+    recordingSession={simulatorRecordingSession}
+    recordingBusy={simulatorRecordingBusy}
     onrefresh={() => void refreshSimulatorBridge()}
     onstart={(providerId) => void runSimulatorAction("start", providerId)}
     onstop={(providerId) => void runSimulatorAction("stop", providerId)}
+    onrecordstart={() => void runRecordingAction("start")}
+    onrecordstop={() => void runRecordingAction("stop")}
+    onsessionselect={(sessionId) => void selectRecordingSession(sessionId)}
+    onsessiondelete={(sessionId) => void runRecordingAction("delete", sessionId)}
+    ondeleteall={() => void runRecordingAction("delete_all")}
     onclose={() => (showSimulatorDialog = false)}
   />
 
@@ -1697,11 +1812,16 @@
     open={showSettingsDialog}
     preferences={displayPreferences}
     {simulatorPreferences}
+    recordingPreferences={simulatorRecording.preferences}
     simulatorProviders={simulatorBridge.providers}
     busy={settingsBusy}
     errorMessage={settingsError}
-    onsave={(preferences, nextSimulatorPreferences) =>
-      void saveSettings(preferences, nextSimulatorPreferences)}
+    onsave={(preferences, nextSimulatorPreferences, nextRecordingPreferences) =>
+      void saveSettings(
+        preferences,
+        nextSimulatorPreferences,
+        nextRecordingPreferences,
+      )}
     onappearance={() => {
       showSettingsDialog = false;
       themeError = "";

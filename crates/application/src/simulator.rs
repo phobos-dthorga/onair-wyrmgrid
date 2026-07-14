@@ -244,6 +244,10 @@ pub struct SimulatorBridgeView {
     pub latest_snapshot: Option<SimulatorTelemetrySnapshot>,
 }
 
+pub trait SimulatorTelemetryObserver: Send + Sync + 'static {
+    fn observe(&self, provider_id: &str, snapshot: &SimulatorTelemetrySnapshot);
+}
+
 #[derive(Clone)]
 pub struct SimulatorBridgeService {
     inner: Arc<SimulatorBridgeInner>,
@@ -252,6 +256,7 @@ pub struct SimulatorBridgeService {
 struct SimulatorBridgeInner {
     registrations: BTreeMap<String, SimulatorProviderRegistration>,
     runtime: Mutex<Option<Arc<RunningProvider>>>,
+    telemetry_observer: Option<Arc<dyn SimulatorTelemetryObserver>>,
 }
 
 struct RunningProvider {
@@ -270,6 +275,13 @@ struct RunningProvider {
 
 impl SimulatorBridgeService {
     pub fn new(registrations: Vec<SimulatorProviderRegistration>) -> Self {
+        Self::with_telemetry_observer(registrations, None)
+    }
+
+    pub fn with_telemetry_observer(
+        registrations: Vec<SimulatorProviderRegistration>,
+        telemetry_observer: Option<Arc<dyn SimulatorTelemetryObserver>>,
+    ) -> Self {
         let registrations = registrations
             .into_iter()
             .map(|registration| (registration.manifest.id.clone(), registration))
@@ -278,6 +290,7 @@ impl SimulatorBridgeService {
             inner: Arc::new(SimulatorBridgeInner {
                 registrations,
                 runtime: Mutex::new(None),
+                telemetry_observer,
             }),
         }
     }
@@ -521,6 +534,7 @@ impl SimulatorBridgeService {
             stdout,
             Arc::clone(&runtime),
             ready_sender,
+            self.inner.telemetry_observer.clone(),
         );
         send_message(
             &runtime,
@@ -697,6 +711,7 @@ fn spawn_provider_reader(
     mut stdout: std::process::ChildStdout,
     runtime: Arc<RunningProvider>,
     ready_sender: Sender<bool>,
+    telemetry_observer: Option<Arc<dyn SimulatorTelemetryObserver>>,
 ) {
     thread::spawn(move || {
         let mut ready_sender = Some(ready_sender);
@@ -765,6 +780,9 @@ fn spawn_provider_reader(
                     }
                 }
                 ValidatedProviderEvent::Telemetry(snapshot) => {
+                    if let Some(observer) = telemetry_observer.as_ref() {
+                        observer.observe(&runtime.provider_id, &snapshot);
+                    }
                     if let Ok(mut latest) = runtime.latest_snapshot.lock() {
                         *latest = Some(snapshot);
                     }

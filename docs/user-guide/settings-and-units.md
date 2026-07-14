@@ -14,6 +14,27 @@ This preference does not start MSFS, begin flight recording, change simulator
 state, or grant telemetry access to community plugins. Disable it at any time
 to return to explicit manual provider start on future launches.
 
+## Manual telemetry recording
+
+Open **Simulator**, wait for a fresh live aircraft snapshot, and select
+**Start recording**. This creates a local session and stores translated,
+validated one-hertz samples until **Stop recording** is selected. Starting the
+provider alone never starts a recording, and automatic recording remains off
+because flight-start evidence has not yet been certified.
+
+Recent sessions appear in the same dialog. Selecting one opens altitude and
+speed graphs for its latest 600 exact samples. A visible break means samples
+were missing; WyrmGrid does not draw a continuous line across that interval.
+Changing aircraft or registration interrupts the active session so facts from
+two aircraft are not silently combined.
+
+**Keep completed recordings** defaults to 30 days and can be changed to 7, 90,
+or 365 days in Settings. Expired completed and interrupted sessions are pruned
+locally. Each inactive session can be deleted individually, or all inactive
+sessions can be deleted together. Stop an active recording before deleting it.
+Recorded sessions remain in `wyrmgrid.db`, may include precise operational
+measurements, and are not automatically exposed to community plugins.
+
 If a connected provider stops supplying samples, WyrmGrid marks the stream
 stale after five seconds and hides the old snapshot. Waiting for MSFS,
 reconnecting after MSFS closes, stale telemetry, and provider failure remain
@@ -76,3 +97,9 @@ The append-only `0007_simulator_preferences.sql` migration stores the selected
 provider ID and the default-off launch preference. `SimulatorSettingsService`
 validates the selection against installed provider registrations; the frontend
 cannot supply an arbitrary executable path.
+
+The append-only `0008_simulator_recordings.sql` migration owns the separate
+recording-retention preference, session identity and provenance, and bounded
+translated samples. `SimulatorRecordingService` owns start, stop, interruption,
+gap detection, pruning, and deletion; Svelte handlers only delegate actions and
+format canonical measurements into the user's selected display units.

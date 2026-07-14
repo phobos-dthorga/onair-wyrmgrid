@@ -1,5 +1,6 @@
 <script lang="ts">
   import { translation } from "$lib/i18n/runtime";
+  import WyrmChart from "$lib/charts/WyrmChart.svelte";
   import type { DisplayPreferences } from "$lib/settings/types";
   import {
     presentAltitude,
@@ -9,10 +10,13 @@
     type PresentedMeasurement,
   } from "$lib/settings/units";
   import "./simulator.css";
+  import { altitudeRecordingChart, speedRecordingChart } from "./recordingCharts";
   import type {
     ProviderConnectionState,
     SimulatorBridgeView,
     SimulatorProviderView,
+    SimulatorRecordingView,
+    SimulatorSessionView,
   } from "./types";
 
   let {
@@ -21,9 +25,17 @@
     busy = false,
     errorMessage = "",
     displayPreferences,
+    recordingStatus,
+    recordingSession,
+    recordingBusy = false,
     onrefresh,
     onstart,
     onstop,
+    onrecordstart,
+    onrecordstop,
+    onsessionselect,
+    onsessiondelete,
+    ondeleteall,
     onclose,
   }: {
     open: boolean;
@@ -31,13 +43,22 @@
     busy?: boolean;
     errorMessage?: string;
     displayPreferences: DisplayPreferences;
+    recordingStatus: SimulatorRecordingView;
+    recordingSession?: SimulatorSessionView;
+    recordingBusy?: boolean;
     onrefresh: () => void;
     onstart: (providerId: string) => void;
     onstop: (providerId: string) => void;
+    onrecordstart: () => void;
+    onrecordstop: () => void;
+    onsessionselect: (sessionId: string) => void;
+    onsessiondelete: (sessionId: string) => void;
+    ondeleteall: () => void;
     onclose: () => void;
   } = $props();
 
   const snapshot = $derived(status.latest_snapshot);
+  const recordingActive = $derived(Boolean(recordingStatus.active_session_id));
 
   function stateLabel(state: ProviderConnectionState): string {
     return $translation(`simulator-state-${state.replaceAll("_", "-")}`);
@@ -133,7 +154,19 @@
   }
 
   function handleKeydown(event: KeyboardEvent): void {
-    if (open && event.key === "Escape" && !busy) onclose();
+    if (open && event.key === "Escape" && !busy && !recordingBusy) onclose();
+  }
+
+  function confirmDelete(sessionId: string): void {
+    if (window.confirm($translation("simulator-recording-delete-confirm"))) {
+      onsessiondelete(sessionId);
+    }
+  }
+
+  function confirmDeleteAll(): void {
+    if (window.confirm($translation("simulator-recording-delete-all-confirm"))) {
+      ondeleteall();
+    }
   }
 </script>
 
@@ -365,6 +398,97 @@
             <dd>{formatTime(snapshot?.provenance.retrieved_at)}</dd>
           </div>
         </dl>
+      </section>
+
+      <section class="recording-panel" aria-live="polite">
+        <div class="recording-heading">
+          <div>
+            <span class="eyebrow">{$translation("simulator-recording-eyebrow")}</span>
+            <h3>{$translation("simulator-recording-title")}</h3>
+            <p>{$translation("simulator-recording-detail", {
+              days: recordingStatus.preferences.retention_days,
+            })}</p>
+          </div>
+          {#if recordingActive}
+            <button
+              class="recording-stop"
+              type="button"
+              disabled={recordingBusy}
+              onclick={onrecordstop}
+            >{$translation("simulator-recording-stop")}</button>
+          {:else}
+            <button
+              type="button"
+              disabled={recordingBusy || !snapshot}
+              onclick={onrecordstart}
+            >{$translation("simulator-recording-start")}</button>
+          {/if}
+        </div>
+
+        {#if recordingStatus.last_code}
+          <p class="recording-notice">
+            {$translation(
+              recordingStatus.last_code === "recording.aircraft_changed"
+                ? "simulator-recording-aircraft-changed"
+                : "simulator-recording-storage-failed",
+            )}
+          </p>
+        {/if}
+
+        <div class="recording-history-heading">
+          <strong>{$translation("simulator-recording-history")}</strong>
+          {#if recordingStatus.sessions.length > 0}
+            <button
+              class="recording-delete-all"
+              type="button"
+              disabled={recordingBusy || recordingActive}
+              onclick={confirmDeleteAll}
+            >{$translation("simulator-recording-delete-all")}</button>
+          {/if}
+        </div>
+
+        {#if recordingStatus.sessions.length === 0}
+          <p class="recording-empty">{$translation("simulator-recording-empty")}</p>
+        {:else}
+          <div class="recording-sessions">
+            {#each recordingStatus.sessions as session}
+              <article class:active={session.id === recordingStatus.active_session_id}>
+                <button
+                  class="recording-select"
+                  type="button"
+                  disabled={recordingBusy}
+                  onclick={() => onsessionselect(session.id)}
+                >
+                  <strong>{session.aircraft_registration ?? session.aircraft_title}</strong>
+                  <span>{formatTime(session.started_at)} · {session.sample_count.toLocaleString()} {$translation("simulator-recording-samples")}</span>
+                  <small>{$translation(`simulator-recording-status-${session.status}`)}</small>
+                </button>
+                <button
+                  class="recording-delete"
+                  type="button"
+                  aria-label={$translation("simulator-recording-delete")}
+                  disabled={recordingBusy || session.id === recordingStatus.active_session_id}
+                  onclick={() => confirmDelete(session.id)}
+                >×</button>
+              </article>
+            {/each}
+          </div>
+        {/if}
+
+        {#if recordingSession && recordingSession.samples.length > 0}
+          <div class="recording-charts">
+            <WyrmChart
+              spec={altitudeRecordingChart(recordingSession, displayPreferences)}
+              eyebrow="WyrmChart telemetry"
+              height="210px"
+            />
+            <WyrmChart
+              spec={speedRecordingChart(recordingSession, displayPreferences)}
+              eyebrow="WyrmChart telemetry"
+              height="210px"
+            />
+          </div>
+        {/if}
       </section>
 
       <footer class="simulator-footer">

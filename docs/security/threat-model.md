@@ -102,6 +102,13 @@
   SimConnect SDK/client paths cross into the first-party provider;
 - only one selected telemetry provider is active in protocol version 1; the host
   neither merges values nor silently falls back from SimConnect to FSUIPC;
+- simulator recording is explicit and local; only validated translated fields
+  are persisted, active sessions resist deletion, completed sessions have a
+  user-visible bounded retention period, and recorded history is not covered by
+  the live `simulator_telemetry_read` plugin permission;
+- provider sequence or observation-time discontinuities become graph gaps, an
+  aircraft identity change interrupts the session, and abandoned active rows
+  are marked interrupted on the next application start;
 - simulator plan loading and every other external mutation require a distinct
   negotiated capability and explicit user action;
 - deny-by-default plugin capabilities persisted separately from manifests; the
@@ -334,6 +341,11 @@ excluded from plugins and Sentry.
 - A failed provider does not enter an automatic crash loop; the failure remains
   visible for an explicit restart. Connected snapshots are withheld after the
   bounded freshness window so stale aircraft state is not presented as live.
+- Local simulator recordings reveal operational timing and aircraft behaviour.
+  The SQLite database is not encrypted at rest, deletion may remain recoverable
+  in filesystem backups, and the first graph view exposes only the latest 600
+  exact samples rather than claiming a whole-session downsample. Users must omit
+  `wyrmgrid.db` from support bundles unless they intend to share recordings.
 - Licensed navigation data may remain accessible in local caches to a user or
   process with filesystem access. Entitlement checks and application controls do
   not replace operating-system security or provider licence compliance.

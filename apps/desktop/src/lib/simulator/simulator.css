@@ -204,7 +204,8 @@
 }
 
 .provider-list button,
-.simulator-footer button {
+.simulator-footer button,
+.recording-panel button {
   border: 1px solid var(--color-accent-border);
   border-radius: 4px;
   padding: 8px 12px;
@@ -220,7 +221,8 @@
 }
 
 .provider-list button:disabled,
-.simulator-footer button:disabled {
+.simulator-footer button:disabled,
+.recording-panel button:disabled {
   cursor: not-allowed;
   opacity: 0.5;
 }
@@ -301,6 +303,121 @@
   font-size: 11px;
 }
 
+.recording-panel {
+  margin: 0 24px 22px;
+  padding: 18px;
+  border: 1px solid var(--color-line-faint);
+  border-radius: 6px;
+  background: var(--color-surface-soft);
+}
+
+.recording-heading,
+.recording-history-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.recording-heading h3 {
+  margin: 4px 0;
+}
+
+.recording-heading p,
+.recording-empty,
+.recording-notice {
+  margin: 5px 0 0;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.recording-heading button,
+.recording-history-heading button,
+.recording-sessions button {
+  flex: 0 0 auto;
+}
+
+.recording-heading button.recording-stop,
+.recording-history-heading button.recording-delete-all,
+.recording-sessions button.recording-delete {
+  border-color: var(--color-danger-border);
+  color: var(--color-danger);
+  background: var(--color-danger-soft);
+}
+
+.recording-notice {
+  padding: 10px;
+  border: 1px solid var(--color-danger-border);
+  color: var(--color-danger);
+  background: var(--color-danger-soft);
+}
+
+.recording-history-heading {
+  align-items: center;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-line-faint);
+  font-size: 12px;
+}
+
+.recording-history-heading button {
+  padding: 6px 9px;
+  font-size: 10px;
+}
+
+.recording-sessions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.recording-sessions article {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  min-width: 0;
+  border: 1px solid var(--color-line-faint);
+  background: var(--color-surface);
+}
+
+.recording-sessions article.active {
+  border-color: var(--color-accent-border);
+}
+
+.recording-sessions button.recording-select {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  border: 0;
+  padding: 10px;
+  color: var(--color-text);
+  background: transparent;
+  text-align: left;
+}
+
+.recording-select span,
+.recording-select small {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recording-sessions button.recording-delete {
+  align-self: center;
+  margin-right: 8px;
+  padding: 3px 7px;
+}
+
+.recording-charts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 8px;
+}
+
 @media (max-width: 760px) {
   .telemetry-panel dl {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -312,6 +429,11 @@
 
   .bridge-ritual ol {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .recording-sessions,
+  .recording-charts {
+    grid-template-columns: 1fr;
   }
 }
 
