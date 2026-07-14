@@ -180,34 +180,5 @@ fn valid_optional_text(value: Option<&str>, maximum: usize) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn validates_the_version_one_fixture() {
-        let snapshot: JobSnapshot = serde_json::from_str(include_str!(
-            "../../../schemas/fixtures/job-snapshot-v1.json"
-        ))
-        .expect("job fixture should deserialize");
-        snapshot.validate().expect("job fixture should validate");
-        assert_eq!(snapshot.jobs[0].cargo_weight_lb(), Some(4_000.0));
-        assert_eq!(snapshot.jobs[1].passenger_count(), Some(8));
-    }
-
-    #[test]
-    fn rejects_duplicate_jobs_and_non_monotonic_legs() {
-        let mut snapshot: JobSnapshot = serde_json::from_str(include_str!(
-            "../../../schemas/fixtures/job-snapshot-v1.json"
-        ))
-        .unwrap();
-        snapshot.jobs.push(snapshot.jobs[0].clone());
-        assert_eq!(
-            snapshot.validate(),
-            Err(JobValidationError::InvalidSnapshot)
-        );
-
-        snapshot.jobs.pop();
-        snapshot.jobs[0].legs[1].sequence = 0;
-        assert_eq!(snapshot.validate(), Err(JobValidationError::InvalidLegs));
-    }
-}
+#[path = "tests/job.rs"]
+mod tests;
