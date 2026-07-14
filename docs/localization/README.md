@@ -8,7 +8,7 @@ grammar, plurals, number and date formatting, and bidirectional text.
 
 ## Implemented foundation
 
-- `locales/en-AU.json` is source catalogue version 1.
+- `locales/en-AU.json` is source catalogue version 5.
 - Language-pack manifest schema version 1 is defined in
   `schemas/language-pack-v1.schema.json`.
 - Rust validates and canonicalizes imported packs before SQLite persistence.
@@ -51,7 +51,8 @@ syntax, markup delimiters, dangerous bidirectional controls, reserved pack IDs,
 and unsupported versions are rejected.
 
 Community packs cannot override keys beginning with `legal-`, `privacy-`,
-`credential-`, `telemetry-`, `plugin-permission-`, `destructive-`, or `error-`.
+`credential-`, `telemetry-`, `plugin-permission-`, `security-`, `destructive-`,
+or `error-`.
 These prompts remain canonical English until a translation is reviewed and
 bundled through a future trusted release path.
 

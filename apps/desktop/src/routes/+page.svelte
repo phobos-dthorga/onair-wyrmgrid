@@ -148,6 +148,14 @@
     aviationDisplayPreferences,
     type DisplayPreferences,
   } from "$lib/settings/types";
+  import SecurityCentreDialog from "$lib/security/SecurityCentreDialog.svelte";
+  import { loadSecurityCentre } from "$lib/security/client";
+  import {
+    securityPreviewEmpty,
+    securityPreviewGranted,
+    securityPreviewRevoked,
+  } from "$lib/security/sample";
+  import type { SecurityCentreStatus } from "$lib/security/types";
   import ThemeDialog from "$lib/theme/ThemeDialog.svelte";
   import {
     browserThemeStatus,
@@ -239,6 +247,11 @@
   let showSettingsDialog = $state(false);
   let settingsBusy = $state(false);
   let settingsError = $state("");
+  let securityCentre = $state<SecurityCentreStatus>(securityPreviewEmpty);
+  let securityCentreLoaded = $state(false);
+  let showSecurityCentre = $state(false);
+  let securityBusy = $state(false);
+  let securityError = $state("");
   let timeline = $state<HoardTimelineIndex>({
     company: null,
     observation_times: [],
@@ -836,6 +849,24 @@
     }
   }
 
+  async function refreshSecurityCentre(): Promise<void> {
+    if (!isDesktopRuntime()) return;
+    securityBusy = true;
+    securityError = "";
+    try {
+      securityCentre = await loadSecurityCentre();
+      securityCentreLoaded = true;
+    } catch (error) {
+      securityCentreLoaded = false;
+      securityError = operationErrorMessage(
+        error,
+        "WyrmGrid could not read its local authorization record.",
+      );
+    } finally {
+      securityBusy = false;
+    }
+  }
+
   async function refreshDispatchStatus(): Promise<void> {
     if (!isDesktopRuntime()) return;
     try {
@@ -947,6 +978,9 @@
               : action === "stop"
                 ? forgePreviewApproved
                 : forgePreviewStopped;
+        securityCentre =
+          action === "revoke" ? securityPreviewRevoked : securityPreviewGranted;
+        securityCentreLoaded = true;
         return;
       }
       pluginHost =
@@ -958,13 +992,16 @@
               ? await startPlugin(pluginId)
               : await stopPlugin(pluginId);
     } catch (error) {
-      pluginError = operationErrorMessage(
+      const message = operationErrorMessage(
         error,
         "WyrmGrid could not complete that plugin action.",
       );
+      pluginError = message;
+      if (showSecurityCentre) securityError = message;
       await refreshPluginHost();
     } finally {
       pluginBusy = false;
+      if (showSecurityCentre && isDesktopRuntime()) void refreshSecurityCentre();
     }
   }
 
@@ -978,7 +1015,9 @@
       timeline = hoardPreviewTimeline;
       timelineCursor = timeline.observation_times.length - 1;
       fleetLoadState = "ready";
-      pluginHost = forgePreviewStopped;
+      pluginHost = forgePreviewApproved;
+      securityCentre = securityPreviewGranted;
+      securityCentreLoaded = true;
       simulatorBridge = emptySimulatorBridge;
       dispatchStatus = dispatchPreviewReady;
       return;
@@ -1211,6 +1250,19 @@
     void refreshSimulatorBridge();
   }
 
+  function openSecurityCentre(): void {
+    securityError = "";
+    if (isDesktopRuntime()) {
+      securityCentreLoaded = false;
+      securityCentre = {
+        ...securityPreviewEmpty,
+        legal: legalStatus,
+      };
+    }
+    showSecurityCentre = true;
+    void refreshSecurityCentre();
+  }
+
   function openLegalSettings(): void {
     legalTelemetryDraft = legalStatus.telemetry_enabled;
     legalError = "";
@@ -1357,6 +1409,7 @@
       showLanguageDialog ||
       showDiagnosticsDialog ||
       showSettingsDialog ||
+      showSecurityCentre ||
       showSimulatorDialog ||
       showTimelineDialog ||
       showForgeDialog}
@@ -1841,7 +1894,26 @@
       showSettingsDialog = false;
       openLegalSettings();
     }}
+    onsecurity={() => {
+      showSettingsDialog = false;
+      openSecurityCentre();
+    }}
     onclose={() => (showSettingsDialog = false)}
+  />
+
+  <SecurityCentreDialog
+    open={showSecurityCentre}
+    status={securityCentre}
+    loaded={securityCentreLoaded}
+    busy={securityBusy || pluginBusy}
+    errorMessage={securityError}
+    onrefresh={() => void refreshSecurityCentre()}
+    onrevoke={(subjectId) => void runPluginAction("revoke", subjectId)}
+    onprivacy={() => {
+      showSecurityCentre = false;
+      openLegalSettings();
+    }}
+    onclose={() => (showSecurityCentre = false)}
   />
 
   <ThemeDialog

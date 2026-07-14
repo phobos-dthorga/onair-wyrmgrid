@@ -40,6 +40,12 @@ The first read-only vertical slice is implemented behind WyrmGrid Dispatch:
 - the interface renders origin, destination, alternates, aircraft, schedule,
   route, weights, fuel, AIRAC, and provenance only when supplied.
 
+Atlas will project this same validated snapshot rather than fetching or parsing
+the OFP again. Full-route framing, linked fixes and procedures, unresolved-leg
+behaviour, and the requirement for navigation/AIRAC evidence before claiming a
+clickable STAR are defined in the
+[Atlas flight-plan and weather contract](../atlas/flight-plan-and-weather.md).
+
 The repository fixture is synthetic and sanitized. It validates bounds,
 translation, optional-field handling, provenance, and redaction, but it is not a
 captured live response. Therefore the interface and documentation describe this

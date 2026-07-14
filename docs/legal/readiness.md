@@ -55,6 +55,8 @@ relevant release issue or architecture decision.
 ## Before the first broadly distributed prerelease
 
 - Establish a private privacy-contact address not dependent on public issues.
+- Have the photosensitivity disclosure and the separate default-on reduced-flash
+  control reviewed before any lightning or comparable flashing effect ships.
 - Decide and document the legal publisher identity and contact jurisdiction.
 - Complete a lightweight privacy impact assessment and data inventory.
 - Replace or formally approve MapLibre's public demonstration tiles, including

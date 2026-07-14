@@ -35,9 +35,16 @@ The policy vocabulary distinguishes four decisions:
 
 Durable capability grants are deny-by-default and keyed by subject kind,
 subject identifier, capability, and scope revision. Grant and revoke decisions
-produce local audit entries bounded to the newest 4,096 decisions. A changed plugin version or requested
-permission set has a new scope revision and therefore requires review again.
-Revocation stops an active plugin before its grants are removed.
+produce local audit entries bounded to the newest 4,096 decisions. A changed
+plugin version or requested permission set has a new scope revision and
+therefore requires review again. Revocation stops an active plugin before its
+grants are removed.
+
+The user-facing Security Centre receives a validated, bounded read model from
+this core. It shows current actors and symbolic decisions but receives no raw
+provider data, credentials, plugin messages, or simulator history. Revocation
+from that surface reuses the supervised feature-service path rather than
+removing database rows directly.
 
 Migration `0009_authorization.sql` creates the new grant and decision tables.
 The earlier `plugin_permission_grants` table remains untouched because shipped
@@ -68,5 +75,6 @@ not authorize feature data sharing.
 - Whether grants may be session-only, time-limited, or always persistent.
 - Whether signed publisher identity can safely allow grants to survive a plugin
   version update with an unchanged permission set.
-- What a future user-visible Security Centre should expose without leaking
-  sensitive operational history into support captures.
+- Whether the Security Centre should later expose filters, explanatory decision
+  details, and signed publisher identity without leaking operational history
+  into support captures.

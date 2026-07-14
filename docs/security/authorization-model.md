@@ -31,8 +31,8 @@ The categories never imply one another. In particular:
 6. Store only symbolic identifiers and bounded decision metadata in the local
    audit trail; retain only the newest 4,096 decisions and never store API keys,
    raw payloads, or plugin output there.
-7. Keep protected permission, credential, legal, telemetry, destructive-action,
-   and error wording under canonical WyrmGrid control.
+7. Keep protected permission, credential, legal, telemetry, Security Centre,
+   destructive-action, and error wording under canonical WyrmGrid control.
 
 The initial subject kind is `plugin`. Adding an in-game client, provider write
 capability, notification sender, or external-network proxy requires an explicit
@@ -53,15 +53,35 @@ set because a partially approved plugin could not currently start. Optional
 capabilities require a future protocol decision and fixtures before the UI
 offers per-capability toggles.
 
+## User-facing Security Centre
+
+The first Security Centre slice is available from **Settings > Security &
+permissions**. It reads a bounded application-owned view from the same Rust
+authorization service and shows:
+
+- current Terms, Privacy Notice, and optional diagnostics status;
+- actors with active grants, their exact scope revision, capability names, and
+  grant time;
+- the newest 100 symbolic grant/revoke decisions while storage retains at most
+  4,096; and
+- a plugin revocation action routed through Forge so an active child process is
+  stopped before its persisted authority is removed.
+
+The interface does not query SQLite directly and is not an enforcement
+boundary. It receives no credentials, raw OnAir or provider payloads, plugin
+messages, or historical simulator samples. Unknown or malformed actor kinds,
+scopes, capabilities, counts, or audit decisions make the view fail visibly
+rather than being presented as trusted history.
+
 ## Suggested next security slices
 
-1. Add a Security Centre that lists actors, grant scope, grant time, and a
-   revoke action without exposing raw data.
-2. Add session-only and time-limited grants before introducing actors that can
+1. Add session-only and time-limited grants before introducing actors that can
    write, send notifications, or reach external networks.
-3. Define signed publisher identity before deciding whether an unchanged grant
+2. Define signed publisher identity before deciding whether an unchanged grant
    may survive safe plugin updates.
-4. Add explicit `allow once`, `allow until WyrmGrid closes`, and `always allow`
+3. Add explicit `allow once`, `allow until WyrmGrid closes`, and `always allow`
    semantics only when an actual capability benefits from each lifetime.
-5. Add integration tests proving every Tauri command for privileged work fails
+4. Add integration tests proving every Tauri command for privileged work fails
    when called directly without authorization, regardless of UI state.
+5. Add filters, decision-detail explanations, and actor publisher identity only
+   after those fields have stable, privacy-reviewed contracts.

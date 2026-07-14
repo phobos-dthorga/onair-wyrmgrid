@@ -30,13 +30,19 @@
 - imported themes concealing security text, counterfeiting controls, loading
   remote resources, or exhausting local storage;
 - malicious or stale translations mislabelling credentials, permissions,
-  destructive actions, diagnostics, provenance, or legal disclosures;
+  Security Centre authority, destructive actions, diagnostics, provenance, or
+  legal disclosures;
 - malicious or oversized OFPs, flight-plan files, compressed feeds, navigation
   packages, weather geometries, and simulator messages;
 - spoofed localhost simulator services, sidecars, callbacks, or OAuth redirect
   state;
 - provider schema drift, identifier collisions, AIRAC mismatch, and unit or
   timestamp confusion producing plausible but incorrect plans;
+- GPU weather effects implying invented precipitation, lightning, cloud,
+  location, precision, or validity beyond the sourced product;
+- flashing weather or warning effects causing photosensitive harm, being
+  enabled through ambiguous consent, or ignoring reduced-motion/reduced-flash
+  preferences;
 - personal network data, routes, coordinates, callsigns, or free-form content
   leaking through persistence, plugins, support output, or diagnostics;
 - embedded desktop application secrets being extracted and abused;
@@ -154,6 +160,9 @@
 - telemetry is off by default; first-run onboarding prevents Atlas from mounting
   before the current Terms and Privacy Notice are acknowledged, and stale
   document versions suppress both Rust and interface diagnostics until review;
+- first-run Terms disclose future flashing weather and warning effects;
+  reduced-flash presentation remains an independent default-on safety control,
+  and stronger effects require a separate explicit confirmation;
 - an optional user preference and a deliberately configured build are both
   required before diagnostics can be transmitted;
 - Sentry authentication tokens remain CI secrets; DSNs are treated as public
@@ -367,6 +376,12 @@ excluded from plugins and Sentry.
   authorization audit trail. They contain no API key, raw provider payload, or
   plugin output.
 - Revocation stops an active plugin before its capabilities are removed.
+- The Security Centre reads its grouped, validated status through the Rust
+  service, shows at most 100 recent decisions, and routes plugin revocation
+  through supervised Forge shutdown. Svelte and the Tauri command do not decide
+  whether an operation is authorized.
+- Security Centre labels and capability descriptions use a protected canonical
+  localization namespace that unreviewed community packs cannot replace.
 - The migration-4 preview grant table remains for append-only migration
   integrity but is no longer authoritative after migration 9.
 

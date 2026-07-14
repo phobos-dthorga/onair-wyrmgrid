@@ -50,6 +50,26 @@ pub struct LegalPreferencesRecord {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AuthorizationGrantRecord {
+    pub subject_kind: String,
+    pub subject_id: String,
+    pub scope_revision: String,
+    pub capability: String,
+    pub granted_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AuthorizationDecisionRecord {
+    pub id: i64,
+    pub subject_kind: String,
+    pub subject_id: String,
+    pub scope_revision: String,
+    pub decision: String,
+    pub capability_count: u32,
+    pub decided_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ThemePreferencesRecord {
     pub selected_theme_id: String,
 }
@@ -723,6 +743,70 @@ impl Store {
 }
 
 impl Store {
+    pub fn list_active_authorization_grant_records(
+        &self,
+        limit: usize,
+    ) -> Result<Vec<AuthorizationGrantRecord>, StorageError> {
+        let limit = i64::try_from(limit).unwrap_or(i64::MAX);
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        let mut statement = connection.prepare(
+            "SELECT subject_kind, subject_id, scope_revision, capability, granted_at
+             FROM authorization_grants
+             ORDER BY subject_kind ASC, subject_id ASC, scope_revision ASC, capability ASC
+             LIMIT ?1",
+        )?;
+        statement
+            .query_map([limit], |row| {
+                Ok(AuthorizationGrantRecord {
+                    subject_kind: row.get(0)?,
+                    subject_id: row.get(1)?,
+                    scope_revision: row.get(2)?,
+                    capability: row.get(3)?,
+                    granted_at: row.get(4)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StorageError::from)
+    }
+
+    pub fn list_authorization_decision_records(
+        &self,
+        limit: usize,
+    ) -> Result<Vec<AuthorizationDecisionRecord>, StorageError> {
+        let limit = i64::try_from(limit).unwrap_or(i64::MAX);
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        let mut statement = connection.prepare(
+            "SELECT id, subject_kind, subject_id, scope_revision, decision,
+                    capability_count, decided_at
+             FROM authorization_decisions
+             ORDER BY id DESC
+             LIMIT ?1",
+        )?;
+        statement
+            .query_map([limit], |row| {
+                let capability_count = row.get::<_, i64>(5)?;
+                let capability_count = u32::try_from(capability_count)
+                    .map_err(|_| rusqlite::Error::IntegralValueOutOfRange(5, capability_count))?;
+                Ok(AuthorizationDecisionRecord {
+                    id: row.get(0)?,
+                    subject_kind: row.get(1)?,
+                    subject_id: row.get(2)?,
+                    scope_revision: row.get(3)?,
+                    decision: row.get(4)?,
+                    capability_count,
+                    decided_at: row.get(6)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StorageError::from)
+    }
+
     pub fn list_authorization_grant_records(
         &self,
         subject_kind: &str,

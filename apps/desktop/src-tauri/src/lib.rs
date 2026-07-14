@@ -20,6 +20,7 @@ struct DesktopState {
     simulator_settings: wyrmgrid_application::SimulatorSettingsService<wyrmgrid_storage::Store>,
     simulator_recording: wyrmgrid_application::SimulatorRecordingService,
     legal: wyrmgrid_application::LegalSettingsService<wyrmgrid_storage::Store>,
+    security: wyrmgrid_application::SecurityCentreService<wyrmgrid_storage::Store>,
     themes: wyrmgrid_application::ThemeSettingsService<wyrmgrid_storage::Store>,
     languages: wyrmgrid_application::LanguageSettingsService<wyrmgrid_storage::Store>,
     display: wyrmgrid_application::DisplaySettingsService<wyrmgrid_storage::Store>,
@@ -211,6 +212,13 @@ fn legal_status(
     state: tauri::State<'_, DesktopState>,
 ) -> Result<wyrmgrid_application::LegalStatus, wyrmgrid_application::OperationError> {
     state.legal.status().map_err(operation_error)
+}
+
+#[tauri::command]
+fn security_centre_status(
+    state: tauri::State<'_, DesktopState>,
+) -> Result<wyrmgrid_application::SecurityCentreStatus, wyrmgrid_application::OperationError> {
+    state.security.status().map_err(operation_error)
 }
 
 #[tauri::command]
@@ -528,6 +536,7 @@ pub fn run() {
             let themes = wyrmgrid_application::ThemeSettingsService::new(store.clone());
             let languages = wyrmgrid_application::LanguageSettingsService::new(store.clone());
             let display = wyrmgrid_application::DisplaySettingsService::new(store.clone());
+            let security = wyrmgrid_application::SecurityCentreService::new(store.clone());
             let onair = wyrmgrid_application::OnAirSession::with_default_store(store.clone());
             let dispatch = wyrmgrid_application::DispatchSession::with_default_provider();
             let simulator_provider =
@@ -563,6 +572,7 @@ pub fn run() {
                 simulator_settings,
                 simulator_recording,
                 legal,
+                security,
                 themes,
                 languages,
                 display,
@@ -606,6 +616,7 @@ pub fn run() {
             legal_status,
             acknowledge_legal,
             update_telemetry_preference,
+            security_centre_status,
             theme_status,
             display_preferences,
             update_display_preferences,

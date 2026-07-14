@@ -1,16 +1,20 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
+use chrono::{DateTime, NaiveDateTime};
 use serde::Serialize;
 use thiserror::Error;
-use wyrmgrid_storage::Store;
+use wyrmgrid_storage::{AuthorizationDecisionRecord, AuthorizationGrantRecord, Store};
 
-pub const TERMS_VERSION: &str = "2026-07-14";
+pub const TERMS_VERSION: &str = "2026-07-15";
 pub const PRIVACY_NOTICE_VERSION: &str = "2026-07-15";
 
 const MAX_SUBJECT_ID_BYTES: usize = 256;
 const MAX_SCOPE_REVISION_BYTES: usize = 1_024;
 const MAX_CAPABILITY_BYTES: usize = 128;
 const MAX_CAPABILITIES_PER_SUBJECT: usize = 128;
+const MAX_ACTIVE_GRANT_RECORDS: usize = 4_096;
+const MAX_VISIBLE_DECISIONS: usize = 100;
+pub const AUTHORIZATION_DECISION_RETENTION_LIMIT: usize = 4_096;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PersistedLegalPreferences {
@@ -88,29 +92,9 @@ impl<R: LegalPreferencesRepository> LegalSettingsService<R> {
     }
 
     pub fn status(&self) -> Result<LegalStatus, LegalSettingsError> {
-        let stored = self.repository.load_legal_preferences()?;
-        let acknowledged = stored.as_ref().is_some_and(|preferences| {
-            preferences.terms_version == TERMS_VERSION
-                && preferences.privacy_notice_version == PRIVACY_NOTICE_VERSION
-        });
-        let acknowledged_at = if acknowledged {
-            stored
-                .as_ref()
-                .map(|preferences| preferences.acknowledged_at.clone())
-        } else {
-            None
-        };
-
-        Ok(LegalStatus {
-            terms_version: TERMS_VERSION,
-            privacy_notice_version: PRIVACY_NOTICE_VERSION,
-            acknowledged,
-            telemetry_enabled: acknowledged
-                && stored
-                    .as_ref()
-                    .is_some_and(|preferences| preferences.telemetry_enabled),
-            acknowledged_at,
-        })
+        self.repository
+            .load_legal_preferences()
+            .map(legal_status_from_preferences)
     }
 
     pub fn acknowledge(&self, telemetry_enabled: bool) -> Result<LegalStatus, LegalSettingsError> {
@@ -135,6 +119,31 @@ impl<R: LegalPreferencesRepository> LegalSettingsService<R> {
             telemetry_enabled,
         )?;
         self.status()
+    }
+}
+
+fn legal_status_from_preferences(stored: Option<PersistedLegalPreferences>) -> LegalStatus {
+    let acknowledged = stored.as_ref().is_some_and(|preferences| {
+        preferences.terms_version == TERMS_VERSION
+            && preferences.privacy_notice_version == PRIVACY_NOTICE_VERSION
+    });
+    let acknowledged_at = acknowledged
+        .then(|| {
+            stored
+                .as_ref()
+                .map(|preferences| preferences.acknowledged_at.clone())
+        })
+        .flatten();
+
+    LegalStatus {
+        terms_version: TERMS_VERSION,
+        privacy_notice_version: PRIVACY_NOTICE_VERSION,
+        acknowledged,
+        telemetry_enabled: acknowledged
+            && stored
+                .as_ref()
+                .is_some_and(|preferences| preferences.telemetry_enabled),
+        acknowledged_at,
     }
 }
 
@@ -284,6 +293,236 @@ impl<R: AuthorizationRepository> AuthorizationService<R> {
         }
         Ok(granted)
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SecuritySubjectKind {
+    Plugin,
+}
+
+impl SecuritySubjectKind {
+    fn parse(value: &str) -> Option<Self> {
+        match value {
+            "plugin" => Some(Self::Plugin),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SecurityDecision {
+    Grant,
+    Revoke,
+}
+
+impl SecurityDecision {
+    fn parse(value: &str) -> Option<Self> {
+        match value {
+            "grant" => Some(Self::Grant),
+            "revoke" => Some(Self::Revoke),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SecurityGrantView {
+    pub subject_kind: SecuritySubjectKind,
+    pub subject_id: String,
+    pub scope_revision: String,
+    pub capabilities: Vec<String>,
+    pub granted_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SecurityDecisionView {
+    pub id: i64,
+    pub subject_kind: SecuritySubjectKind,
+    pub subject_id: String,
+    pub scope_revision: String,
+    pub decision: SecurityDecision,
+    pub capability_count: u32,
+    pub decided_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SecurityCentreStatus {
+    pub legal: LegalStatus,
+    pub active_grants: Vec<SecurityGrantView>,
+    pub recent_decisions: Vec<SecurityDecisionView>,
+    pub decision_retention_limit: usize,
+}
+
+#[derive(Debug, Error, Clone, Copy, PartialEq, Eq)]
+pub enum SecurityCentreError {
+    #[error("WyrmGrid could not read the local authorization record.")]
+    StorageUnavailable,
+    #[error("The local authorization record contains invalid data.")]
+    InvalidRecord,
+}
+
+pub trait SecurityCentreRepository: Send + Sync + 'static {
+    fn load_security_legal_preferences(
+        &self,
+    ) -> Result<Option<PersistedLegalPreferences>, SecurityCentreError>;
+    fn list_security_grants(
+        &self,
+        limit: usize,
+    ) -> Result<Vec<AuthorizationGrantRecord>, SecurityCentreError>;
+    fn list_security_decisions(
+        &self,
+        limit: usize,
+    ) -> Result<Vec<AuthorizationDecisionRecord>, SecurityCentreError>;
+}
+
+impl SecurityCentreRepository for Store {
+    fn load_security_legal_preferences(
+        &self,
+    ) -> Result<Option<PersistedLegalPreferences>, SecurityCentreError> {
+        self.load_legal_preferences()
+            .map_err(|_| SecurityCentreError::StorageUnavailable)
+    }
+
+    fn list_security_grants(
+        &self,
+        limit: usize,
+    ) -> Result<Vec<AuthorizationGrantRecord>, SecurityCentreError> {
+        self.list_active_authorization_grant_records(limit)
+            .map_err(|_| SecurityCentreError::StorageUnavailable)
+    }
+
+    fn list_security_decisions(
+        &self,
+        limit: usize,
+    ) -> Result<Vec<AuthorizationDecisionRecord>, SecurityCentreError> {
+        self.list_authorization_decision_records(limit)
+            .map_err(|_| SecurityCentreError::StorageUnavailable)
+    }
+}
+
+pub struct SecurityCentreService<R> {
+    repository: R,
+}
+
+impl<R: SecurityCentreRepository> SecurityCentreService<R> {
+    pub fn new(repository: R) -> Self {
+        Self { repository }
+    }
+
+    pub fn status(&self) -> Result<SecurityCentreStatus, SecurityCentreError> {
+        let legal =
+            legal_status_from_preferences(self.repository.load_security_legal_preferences()?);
+        let grant_records = self
+            .repository
+            .list_security_grants(MAX_ACTIVE_GRANT_RECORDS + 1)?;
+        if grant_records.len() > MAX_ACTIVE_GRANT_RECORDS {
+            return Err(SecurityCentreError::InvalidRecord);
+        }
+        let active_grants = group_security_grants(grant_records)?;
+        let recent_decisions = self
+            .repository
+            .list_security_decisions(MAX_VISIBLE_DECISIONS)?
+            .into_iter()
+            .map(validate_security_decision)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(SecurityCentreStatus {
+            legal,
+            active_grants,
+            recent_decisions,
+            decision_retention_limit: AUTHORIZATION_DECISION_RETENTION_LIMIT,
+        })
+    }
+}
+
+fn group_security_grants(
+    records: Vec<AuthorizationGrantRecord>,
+) -> Result<Vec<SecurityGrantView>, SecurityCentreError> {
+    type GrantKey = (SecuritySubjectKind, String, String);
+    let mut grouped: BTreeMap<GrantKey, (BTreeSet<String>, String)> = BTreeMap::new();
+    for record in records {
+        let subject_kind = SecuritySubjectKind::parse(&record.subject_kind)
+            .ok_or(SecurityCentreError::InvalidRecord)?;
+        let subject = AuthorizationSubject {
+            kind: AuthorizationSubjectKind::Plugin,
+            id: record.subject_id.clone(),
+        };
+        let capabilities = BTreeSet::from([record.capability.clone()]);
+        validate_request(&subject, &record.scope_revision, &capabilities)
+            .map_err(|_| SecurityCentreError::InvalidRecord)?;
+        if !valid_security_timestamp(&record.granted_at) {
+            return Err(SecurityCentreError::InvalidRecord);
+        }
+
+        let entry = grouped
+            .entry((subject_kind, record.subject_id, record.scope_revision))
+            .or_insert_with(|| (BTreeSet::new(), record.granted_at.clone()));
+        entry.0.insert(record.capability);
+        if record.granted_at < entry.1 {
+            entry.1 = record.granted_at;
+        }
+    }
+
+    grouped
+        .into_iter()
+        .map(
+            |((subject_kind, subject_id, scope_revision), (capabilities, granted_at))| {
+                if capabilities.len() > MAX_CAPABILITIES_PER_SUBJECT {
+                    return Err(SecurityCentreError::InvalidRecord);
+                }
+                Ok(SecurityGrantView {
+                    subject_kind,
+                    subject_id,
+                    scope_revision,
+                    capabilities: capabilities.into_iter().collect(),
+                    granted_at,
+                })
+            },
+        )
+        .collect()
+}
+
+fn validate_security_decision(
+    record: AuthorizationDecisionRecord,
+) -> Result<SecurityDecisionView, SecurityCentreError> {
+    let subject_kind = SecuritySubjectKind::parse(&record.subject_kind)
+        .ok_or(SecurityCentreError::InvalidRecord)?;
+    let subject = AuthorizationSubject {
+        kind: AuthorizationSubjectKind::Plugin,
+        id: record.subject_id.clone(),
+    };
+    validate_subject(&subject).map_err(|_| SecurityCentreError::InvalidRecord)?;
+    validate_scope_revision(&record.scope_revision)
+        .map_err(|_| SecurityCentreError::InvalidRecord)?;
+    let decision =
+        SecurityDecision::parse(&record.decision).ok_or(SecurityCentreError::InvalidRecord)?;
+    let count_is_valid = match decision {
+        SecurityDecision::Grant => {
+            (1..=MAX_CAPABILITIES_PER_SUBJECT as u32).contains(&record.capability_count)
+        }
+        SecurityDecision::Revoke => record.capability_count == 0,
+    };
+    if record.id <= 0 || !count_is_valid || !valid_security_timestamp(&record.decided_at) {
+        return Err(SecurityCentreError::InvalidRecord);
+    }
+
+    Ok(SecurityDecisionView {
+        id: record.id,
+        subject_kind,
+        subject_id: record.subject_id,
+        scope_revision: record.scope_revision,
+        decision,
+        capability_count: record.capability_count,
+        decided_at: record.decided_at,
+    })
+}
+
+fn valid_security_timestamp(value: &str) -> bool {
+    value.len() <= 64
+        && (DateTime::parse_from_rfc3339(value).is_ok()
+            || NaiveDateTime::parse_from_str(value, "%Y-%m-%d %H:%M:%S").is_ok())
 }
 
 fn validate_request(

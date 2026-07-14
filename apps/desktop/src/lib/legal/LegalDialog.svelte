@@ -153,6 +153,14 @@
                   local database and are not sent to translation services.</span
                 >
               </article>
+              <article>
+                <strong>Photosensitivity</strong>
+                <span
+                  >Future weather and warning effects may include lightning or
+                  flashing light. Reduced-flash presentation will remain on by
+                  default before stronger effects are offered.</span
+                >
+              </article>
             </div>
             <p class="foundation-note">
               This is foundation-stage software, not an OnAir service or a

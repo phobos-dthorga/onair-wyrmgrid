@@ -78,3 +78,7 @@ Hoard persistence, as-of historical resolution, fleet-history calculations, and
 the live/cached/offline decision belong to the Rust application and storage
 services. Svelte receives explicit live and historical views and only chooses
 how those states are presented.
+
+The route-selection, clickable SID/STAR, live/historical weather, Hoard, and
+GPU-profile contract is detailed in
+[Flight plans and weather in Atlas](flight-plan-and-weather.md).

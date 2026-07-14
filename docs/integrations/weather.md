@@ -97,6 +97,13 @@ These are WyrmGrid operating limits, not claims about provider guarantees.
 Weather must not be reduced to a single hidden score. Recommendations retain the
 observations, thresholds, and uncertainty that produced them.
 
+GPU-enhanced rain, snow, cloud, wind, and lightning are valid presentation
+goals only when the adopted product supplies the corresponding phenomenon,
+spatial precision, and valid time. A coded thunderstorm observation may support
+a storm indication but not fabricated strike locations. The detailed
+source-shaped rendering rule lives in the
+[Atlas flight-plan and weather contract](../atlas/flight-plan-and-weather.md#source-shaped-phenomena).
+
 ## Required validation
 
 - sanitized fixtures for each adopted product and each response format used;
@@ -110,6 +117,10 @@ observations, thresholds, and uncertainty that produced them.
 WIFS, graphical forecast imagery, radar tiles, and commercial weather sources
 are deferred. Each introduces authentication, licensing, rendering, volume, or
 coverage questions beyond the initial airport and route-weather slice.
+
+The planned Atlas projection, historical Hoard model, conservative-by-default
+rendering profile, and optional GPU-enhanced presentation are defined in the
+[Atlas flight-plan and weather contract](../atlas/flight-plan-and-weather.md).
 
 ## References
 

@@ -20,6 +20,7 @@
     onappearance,
     onlanguage,
     onprivacy,
+    onsecurity,
     onclose,
   }: {
     open: boolean;
@@ -37,6 +38,7 @@
     onappearance: () => void;
     onlanguage: () => void;
     onprivacy: () => void;
+    onsecurity: () => void;
     onclose: () => void;
   } = $props();
 
@@ -253,6 +255,10 @@
           <button type="button" disabled={busy} onclick={onprivacy}>
             <strong>{$translation("settings-privacy-terms")}</strong>
             <span>{$translation("settings-privacy-detail")}</span>
+          </button>
+          <button type="button" disabled={busy} onclick={onsecurity}>
+            <strong>{$translation("security-settings-link-title")}</strong>
+            <span>{$translation("security-settings-link-detail")}</span>
           </button>
         </div>
       </section>

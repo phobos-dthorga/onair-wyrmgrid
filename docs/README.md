@@ -10,6 +10,7 @@
 - [Testing strategy](testing.md)
 - [Roadmap](roadmap.md)
 - [WyrmGrid Atlas](atlas/README.md)
+  - [Flight plans, linked procedures, and live/historical weather](atlas/flight-plan-and-weather.md)
 - [WyrmGrid Hoard](hoard/README.md)
 - [Core authorization model](security/authorization-model.md)
 - [Themes and community theme manifests](themes/README.md)

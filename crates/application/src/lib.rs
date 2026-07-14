@@ -9,8 +9,10 @@ mod simulator;
 mod simulator_recording;
 
 pub use authorization::{
-    LegalPreferencesRepository, LegalSettingsError, LegalSettingsService, LegalStatus,
-    PRIVACY_NOTICE_VERSION, PersistedLegalPreferences, TERMS_VERSION,
+    AUTHORIZATION_DECISION_RETENTION_LIMIT, LegalPreferencesRepository, LegalSettingsError,
+    LegalSettingsService, LegalStatus, PRIVACY_NOTICE_VERSION, PersistedLegalPreferences,
+    SecurityCentreError, SecurityCentreRepository, SecurityCentreService, SecurityCentreStatus,
+    SecurityDecision, SecurityDecisionView, SecurityGrantView, SecuritySubjectKind, TERMS_VERSION,
 };
 pub use dispatch::*;
 pub use display::*;
@@ -788,6 +790,22 @@ impl From<LegalSettingsError> for OperationError {
             message: error.to_string(),
             retryable: matches!(error, LegalSettingsError::StorageUnavailable),
             reportable: false,
+            report_id: None,
+        }
+    }
+}
+
+impl From<SecurityCentreError> for OperationError {
+    fn from(error: SecurityCentreError) -> Self {
+        let code = match error {
+            SecurityCentreError::StorageUnavailable => "security.storage_unavailable",
+            SecurityCentreError::InvalidRecord => "security.invalid_record",
+        };
+        Self {
+            code,
+            message: error.to_string(),
+            retryable: matches!(error, SecurityCentreError::StorageUnavailable),
+            reportable: true,
             report_id: None,
         }
     }
