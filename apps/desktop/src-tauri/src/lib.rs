@@ -4,6 +4,7 @@ use tauri::Manager;
 
 struct DesktopState {
     onair: wyrmgrid_application::OnAirSession,
+    plugins: wyrmgrid_application::PluginService,
     legal: wyrmgrid_application::LegalSettingsService<wyrmgrid_storage::Store>,
     themes: wyrmgrid_application::ThemeSettingsService<wyrmgrid_storage::Store>,
     observability: observability::Controller,
@@ -145,6 +146,60 @@ fn import_theme(
     state.themes.import(&manifest_json).map_err(operation_error)
 }
 
+#[tauri::command]
+fn plugin_host_status(
+    state: tauri::State<'_, DesktopState>,
+) -> Result<wyrmgrid_application::PluginHostView, wyrmgrid_application::OperationError> {
+    state.plugins.status().map_err(operation_error)
+}
+
+#[tauri::command]
+fn approve_plugin_permissions(
+    state: tauri::State<'_, DesktopState>,
+    plugin_id: String,
+) -> Result<wyrmgrid_application::PluginHostView, wyrmgrid_application::OperationError> {
+    state
+        .plugins
+        .approve_requested_permissions(&plugin_id)
+        .map_err(operation_error)
+}
+
+#[tauri::command]
+async fn revoke_plugin_permissions(
+    state: tauri::State<'_, DesktopState>,
+    plugin_id: String,
+) -> Result<wyrmgrid_application::PluginHostView, wyrmgrid_application::OperationError> {
+    let plugins = state.plugins.clone();
+    tauri::async_runtime::spawn_blocking(move || plugins.revoke_permissions(&plugin_id))
+        .await
+        .map_err(|_| operation_error(wyrmgrid_application::PluginError::StateUnavailable))?
+        .map_err(operation_error)
+}
+
+#[tauri::command]
+async fn start_plugin(
+    state: tauri::State<'_, DesktopState>,
+    plugin_id: String,
+) -> Result<wyrmgrid_application::PluginHostView, wyrmgrid_application::OperationError> {
+    let plugins = state.plugins.clone();
+    tauri::async_runtime::spawn_blocking(move || plugins.start(&plugin_id))
+        .await
+        .map_err(|_| operation_error(wyrmgrid_application::PluginError::StateUnavailable))?
+        .map_err(operation_error)
+}
+
+#[tauri::command]
+async fn stop_plugin(
+    state: tauri::State<'_, DesktopState>,
+    plugin_id: String,
+) -> Result<wyrmgrid_application::PluginHostView, wyrmgrid_application::OperationError> {
+    let plugins = state.plugins.clone();
+    tauri::async_runtime::spawn_blocking(move || plugins.stop(&plugin_id))
+        .await
+        .map_err(|_| operation_error(wyrmgrid_application::PluginError::StateUnavailable))?
+        .map_err(operation_error)
+}
+
 fn operation_error<E: Into<wyrmgrid_application::OperationError>>(
     error: E,
 ) -> wyrmgrid_application::OperationError {
@@ -161,11 +216,12 @@ fn operation_error<E: Into<wyrmgrid_application::OperationError>>(
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
-            let store = app
-                .path()
-                .app_data_dir()
-                .ok()
-                .and_then(|directory| std::fs::create_dir_all(&directory).ok().map(|_| directory))
+            let app_data_directory =
+                app.path().app_data_dir().ok().and_then(|directory| {
+                    std::fs::create_dir_all(&directory).ok().map(|_| directory)
+                });
+            let store = app_data_directory
+                .as_ref()
                 .and_then(|directory| {
                     wyrmgrid_storage::Store::open(directory.join("wyrmgrid.db")).ok()
                 })
@@ -176,9 +232,16 @@ pub fn run() {
             let legal = wyrmgrid_application::LegalSettingsService::new(store.clone());
             let legal_status = legal.status().expect("legal settings should initialize");
             let themes = wyrmgrid_application::ThemeSettingsService::new(store.clone());
+            let onair = wyrmgrid_application::OnAirSession::with_default_store(store.clone());
+            let plugins = wyrmgrid_application::PluginService::new(
+                app_data_directory.map(|directory| directory.join("plugins")),
+                store,
+                onair.clone(),
+            );
 
             app.manage(DesktopState {
-                onair: wyrmgrid_application::OnAirSession::with_default_store(store),
+                onair,
+                plugins,
                 legal,
                 themes,
                 observability: observability::Controller::new(legal_status.telemetry_enabled),
@@ -200,7 +263,12 @@ pub fn run() {
             update_telemetry_preference,
             theme_status,
             select_theme,
-            import_theme
+            import_theme,
+            plugin_host_status,
+            approve_plugin_permissions,
+            revoke_plugin_permissions,
+            start_plugin,
+            stop_plugin
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wyrmgrid.dev/schemas/plugin-protocol-envelope-v1.json",
+  "title": "WyrmGrid plugin protocol envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol_version", "sequence", "payload"],
+  "properties": {
+    "protocol_version": { "const": 1 },
+    "sequence": { "type": "integer", "minimum": 1 },
+    "payload": {
+      "oneOf": [
+        { "$ref": "#/$defs/hello" },
+        { "$ref": "#/$defs/fleetSnapshot" },
+        { "$ref": "#/$defs/shutdown" },
+        { "$ref": "#/$defs/ready" },
+        { "$ref": "#/$defs/publishMapLayer" }
+      ]
+    }
+  },
+  "$defs": {
+    "permission": {
+      "enum": [
+        "on_air_company_read",
+        "on_air_fleet_read",
+        "on_air_jobs_read",
+        "on_air_finance_read",
+        "map_layers_publish",
+        "charts_publish",
+        "notifications_create",
+        "plugin_storage",
+        "simulator_telemetry_read",
+        "external_network"
+      ]
+    },
+    "coordinates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["latitude", "longitude"],
+      "properties": {
+        "latitude": { "type": "number", "minimum": -90, "maximum": 90 },
+        "longitude": { "type": "number", "minimum": -180, "maximum": 180 }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "source", "observed_at"],
+      "properties": {
+        "kind": {
+          "enum": [
+            "on_air_fact",
+            "external_fact",
+            "calculated",
+            "recommendation"
+          ]
+        },
+        "source": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "observed_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "hello": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "host_version", "plugin_id", "granted_permissions"],
+      "properties": {
+        "type": { "const": "hello" },
+        "host_version": { "type": "string", "minLength": 1 },
+        "plugin_id": { "type": "string", "minLength": 1 },
+        "granted_permissions": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/permission" }
+        }
+      }
+    },
+    "fleetSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "snapshot"],
+      "properties": {
+        "type": { "const": "fleet_snapshot" },
+        "snapshot": { "type": "object" }
+      }
+    },
+    "shutdown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": { "type": { "const": "shutdown" } }
+    },
+    "ready": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "plugin_id", "api_version"],
+      "properties": {
+        "type": { "const": "ready" },
+        "plugin_id": { "type": "string", "minLength": 1 },
+        "api_version": { "const": 1 }
+      }
+    },
+    "mapPoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label", "location"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 96 },
+        "label": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "location": { "$ref": "#/$defs/coordinates" }
+      }
+    },
+    "publishMapLayer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "layer"],
+      "properties": {
+        "type": { "const": "publish_map_layer" },
+        "layer": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "title", "points", "provenance"],
+          "properties": {
+            "id": { "type": "string", "minLength": 1, "maxLength": 96 },
+            "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+            "points": {
+              "type": "array",
+              "maxItems": 10000,
+              "items": { "$ref": "#/$defs/mapPoint" }
+            },
+            "provenance": { "$ref": "#/$defs/provenance" }
+          }
+        }
+      }
+    }
+  }
+}

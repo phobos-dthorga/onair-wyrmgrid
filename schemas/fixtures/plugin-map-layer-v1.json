@@ -1,0 +1,26 @@
+{
+  "protocol_version": 1,
+  "sequence": 2,
+  "payload": {
+    "type": "publish_map_layer",
+    "layer": {
+      "id": "fleet-locations",
+      "title": "Fleet locations",
+      "points": [
+        {
+          "id": "VH-WRM",
+          "label": "VH-WRM · Airbus A320",
+          "location": {
+            "latitude": -33.8688,
+            "longitude": 151.2093
+          }
+        }
+      ],
+      "provenance": {
+        "kind": "calculated",
+        "source": "Fleet Locations example plugin",
+        "observed_at": "2026-07-14T00:00:00Z"
+      }
+    }
+  }
+}

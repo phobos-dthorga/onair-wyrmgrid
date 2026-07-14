@@ -18,6 +18,20 @@
     isDesktopRuntime,
     operationErrorMessage,
   } from "$lib/desktop/client";
+  import ForgeDialog from "$lib/forge/ForgeDialog.svelte";
+  import {
+    approvePluginPermissions,
+    loadPluginHost,
+    revokePluginPermissions,
+    startPlugin,
+    stopPlugin,
+  } from "$lib/forge/client";
+  import {
+    forgePreviewApproved,
+    forgePreviewRunning,
+    forgePreviewStopped,
+  } from "$lib/forge/sample";
+  import type { PluginHostView } from "$lib/forge/types";
   import LegalDialog from "$lib/legal/LegalDialog.svelte";
   import {
     CURRENT_PRIVACY_NOTICE_VERSION,
@@ -116,6 +130,11 @@
   let timelineBusy = $state(false);
   let timelineError = $state("");
   let showTimelineDialog = $state(false);
+  let pluginHost = $state<PluginHostView>(forgePreviewStopped);
+  let pluginLayersVisible = $state(true);
+  let showForgeDialog = $state(false);
+  let pluginBusy = $state(false);
+  let pluginError = $state("");
   let workspaceInitialized = false;
 
   const activeFleetView = $derived(
@@ -213,9 +232,7 @@
   const timelineGrowthChart = $derived(
     fleetGrowthChart(timeline.fleet_history),
   );
-  const timelineFboGrowthChart = $derived(
-    fboGrowthChart(timeline.fbo_history),
-  );
+  const timelineFboGrowthChart = $derived(fboGrowthChart(timeline.fbo_history));
   const timelineComposition = $derived(
     timelineMode === "historical"
       ? (historicalData?.fleet_composition ?? [])
@@ -228,6 +245,17 @@
   );
   const timelineFleetCompositionChart = $derived(
     fleetCompositionChart(timelineComposition, timelineCompositionObservedAt),
+  );
+  const pluginPointCount = $derived(
+    pluginHost.layers.reduce(
+      (total, published) => total + published.layer.points.length,
+      0,
+    ),
+  );
+  const pluginProcessActive = $derived(
+    pluginHost.plugins.some((plugin) =>
+      ["starting", "running", "stopping"].includes(plugin.state),
+    ),
   );
   const layers = $derived([
     {
@@ -251,6 +279,13 @@
       count: 0,
       active: false,
       available: false,
+    },
+    {
+      id: "plugins",
+      name: "Plugin layers",
+      count: pluginPointCount,
+      active: pluginLayersVisible && pluginPointCount > 0,
+      available: pluginPointCount > 0,
     },
   ]);
 
@@ -477,6 +512,62 @@
     }
   }
 
+  async function refreshPluginHost(): Promise<void> {
+    if (!isDesktopRuntime()) return;
+    try {
+      pluginHost = await loadPluginHost();
+    } catch (error) {
+      pluginError = operationErrorMessage(
+        error,
+        "WyrmGrid could not read the local plugin workshop.",
+      );
+    }
+  }
+
+  function openForge(): void {
+    pluginError = "";
+    showForgeDialog = true;
+    void refreshPluginHost();
+  }
+
+  async function runPluginAction(
+    action: "approve" | "revoke" | "start" | "stop",
+    pluginId: string,
+  ): Promise<void> {
+    if (pluginBusy) return;
+    pluginBusy = true;
+    pluginError = "";
+    try {
+      if (!isDesktopRuntime()) {
+        pluginHost =
+          action === "approve"
+            ? forgePreviewApproved
+            : action === "start"
+              ? forgePreviewRunning
+              : action === "stop"
+                ? forgePreviewApproved
+                : forgePreviewStopped;
+        return;
+      }
+      pluginHost =
+        action === "approve"
+          ? await approvePluginPermissions(pluginId)
+          : action === "revoke"
+            ? await revokePluginPermissions(pluginId)
+            : action === "start"
+              ? await startPlugin(pluginId)
+              : await stopPlugin(pluginId);
+    } catch (error) {
+      pluginError = operationErrorMessage(
+        error,
+        "WyrmGrid could not complete that plugin action.",
+      );
+      await refreshPluginHost();
+    } finally {
+      pluginBusy = false;
+    }
+  }
+
   function initializeWorkspace(): void {
     if (workspaceInitialized) return;
     workspaceInitialized = true;
@@ -487,8 +578,11 @@
       timeline = hoardPreviewTimeline;
       timelineCursor = timeline.observation_times.length - 1;
       fleetLoadState = "ready";
+      pluginHost = forgePreviewStopped;
       return;
     }
+
+    void refreshPluginHost();
 
     invokeDesktop<PlatformStatus>("platform_status")
       .then((value) => (status = value))
@@ -638,6 +732,18 @@
     return () => window.clearInterval(timer);
   });
 
+  $effect(() => {
+    if (
+      typeof window === "undefined" ||
+      !isDesktopRuntime() ||
+      !pluginProcessActive
+    ) {
+      return;
+    }
+    const timer = window.setInterval(() => void refreshPluginHost(), 1000);
+    return () => window.clearInterval(timer);
+  });
+
   onMount(() => {
     const savedAutomaticSync = Number.parseInt(
       localStorage.getItem(AUTOMATIC_SYNC_STORAGE_KEY) ?? "30",
@@ -677,7 +783,10 @@
 {:else if legalStatus.acknowledged}
   <main
     class="shell"
-    inert={showLegalDialog || showThemeDialog || showTimelineDialog}
+    inert={showLegalDialog ||
+      showThemeDialog ||
+      showTimelineDialog ||
+      showForgeDialog}
   >
     <header class="topbar">
       <div class="brand-mark" aria-hidden="true">WG</div>
@@ -695,7 +804,12 @@
           type="button"
           onclick={openHoardTimeline}>Hoard</button
         >
-        <button class="nav-item" type="button" disabled>Forge</button>
+        <button
+          class="nav-item"
+          class:active={showForgeDialog}
+          type="button"
+          onclick={openForge}>Forge</button
+        >
       </nav>
       <button
         class="theme-pill"
@@ -801,6 +915,8 @@
               onclick={() => {
                 if (layer.id === "fleet") fleetVisible = !fleetVisible;
                 if (layer.id === "fbos") fboVisible = !fboVisible;
+                if (layer.id === "plugins")
+                  pluginLayersVisible = !pluginLayersVisible;
               }}
             >
               <span class="layer-indicator"></span>
@@ -852,6 +968,8 @@
           {fbos}
           {fleetVisible}
           {fboVisible}
+          pluginLayers={pluginHost.layers}
+          {pluginLayersVisible}
           {selectedAircraftId}
           {selectedFboId}
           onselectaircraft={(aircraftId) => {
@@ -1032,6 +1150,18 @@
     onview={() => void viewHistoricalMoment()}
     onreturn={returnToPresent}
     onclose={() => (showTimelineDialog = false)}
+  />
+
+  <ForgeDialog
+    open={showForgeDialog}
+    status={pluginHost}
+    busy={pluginBusy}
+    errorMessage={pluginError}
+    onapprove={(pluginId) => void runPluginAction("approve", pluginId)}
+    onrevoke={(pluginId) => void runPluginAction("revoke", pluginId)}
+    onstart={(pluginId) => void runPluginAction("start", pluginId)}
+    onstop={(pluginId) => void runPluginAction("stop", pluginId)}
+    onclose={() => (showForgeDialog = false)}
   />
 {/if}
 

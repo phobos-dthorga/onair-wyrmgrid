@@ -2,6 +2,7 @@
   import type { GeoJSONSource, Map } from "maplibre-gl";
   import "maplibre-gl/dist/maplibre-gl.css";
   import { onMount } from "svelte";
+  import type { PublishedPluginLayer } from "$lib/forge/types";
   import { activeTheme } from "$lib/theme/runtime";
   import type { AircraftSummary, FboSummary } from "./types";
 
@@ -10,6 +11,8 @@
     fbos,
     fleetVisible,
     fboVisible,
+    pluginLayers,
+    pluginLayersVisible,
     selectedAircraftId,
     selectedFboId,
     onselectaircraft,
@@ -19,6 +22,8 @@
     fbos: FboSummary[];
     fleetVisible: boolean;
     fboVisible: boolean;
+    pluginLayers: PublishedPluginLayer[];
+    pluginLayersVisible: boolean;
     selectedAircraftId: string | null;
     selectedFboId: string | null;
     onselectaircraft: (aircraftId: string) => void;
@@ -31,6 +36,9 @@
   const FBO_SOURCE_ID = "wyrmgrid-fbos";
   const FBO_LAYER_ID = "wyrmgrid-fbo-network";
   const FBO_LABEL_LAYER_ID = "wyrmgrid-fbo-labels";
+  const PLUGIN_SOURCE_ID = "wyrmgrid-plugin-layers";
+  const PLUGIN_LAYER_ID = "wyrmgrid-plugin-points";
+  const PLUGIN_LABEL_LAYER_ID = "wyrmgrid-plugin-labels";
 
   let mapContainer: HTMLDivElement;
   let map: Map | undefined;
@@ -59,6 +67,20 @@
     }>;
   };
 
+  type PluginFeatureCollection = {
+    type: "FeatureCollection";
+    features: Array<{
+      type: "Feature";
+      geometry: { type: "Point"; coordinates: [number, number] };
+      properties: {
+        id: string;
+        label: string;
+        plugin_id: string;
+        layer_title: string;
+      };
+    }>;
+  };
+
   function fleetFeatures(): FleetFeatureCollection {
     return {
       type: "FeatureCollection",
@@ -69,10 +91,10 @@
                 type: "Feature" as const,
                 geometry: {
                   type: "Point" as const,
-                  coordinates: [item.location.longitude, item.location.latitude] as [
-                    number,
-                    number,
-                  ],
+                  coordinates: [
+                    item.location.longitude,
+                    item.location.latitude,
+                  ] as [number, number],
                 },
                 properties: {
                   id: item.id,
@@ -91,18 +113,48 @@
       type: "FeatureCollection",
       features: fbos.flatMap((item) =>
         item.airport?.location
-          ? [{
-              type: "Feature" as const,
-              geometry: {
-                type: "Point" as const,
-                coordinates: [
-                  item.airport.location.longitude,
-                  item.airport.location.latitude,
-                ] as [number, number],
+          ? [
+              {
+                type: "Feature" as const,
+                geometry: {
+                  type: "Point" as const,
+                  coordinates: [
+                    item.airport.location.longitude,
+                    item.airport.location.latitude,
+                  ] as [number, number],
+                },
+                properties: {
+                  id: item.id,
+                  name: item.name,
+                  icao: item.airport.icao,
+                },
               },
-              properties: { id: item.id, name: item.name, icao: item.airport.icao },
-            }]
+            ]
           : [],
+      ),
+    };
+  }
+
+  function pluginFeatures(): PluginFeatureCollection {
+    return {
+      type: "FeatureCollection",
+      features: pluginLayers.flatMap((published) =>
+        published.layer.points.map((point) => ({
+          type: "Feature" as const,
+          geometry: {
+            type: "Point" as const,
+            coordinates: [
+              point.location.longitude,
+              point.location.latitude,
+            ] as [number, number],
+          },
+          properties: {
+            id: `${published.plugin_id}:${published.layer.id}:${point.id}`,
+            label: point.label,
+            plugin_id: published.plugin_id,
+            layer_title: published.layer.title,
+          },
+        })),
       ),
     };
   }
@@ -112,8 +164,16 @@
 
     const fleet = fleetFeatures();
     const fboNetwork = fboFeatures();
-    (map.getSource(FLEET_SOURCE_ID) as GeoJSONSource | undefined)?.setData(fleet);
-    (map.getSource(FBO_SOURCE_ID) as GeoJSONSource | undefined)?.setData(fboNetwork);
+    const pluginData = pluginFeatures();
+    (map.getSource(FLEET_SOURCE_ID) as GeoJSONSource | undefined)?.setData(
+      fleet,
+    );
+    (map.getSource(FBO_SOURCE_ID) as GeoJSONSource | undefined)?.setData(
+      fboNetwork,
+    );
+    (map.getSource(PLUGIN_SOURCE_ID) as GeoJSONSource | undefined)?.setData(
+      pluginData,
+    );
 
     const visibility = fleetVisible ? "visible" : "none";
     map.setLayoutProperty(FLEET_LAYER_ID, "visibility", visibility);
@@ -121,6 +181,13 @@
     const fboVisibility = fboVisible ? "visible" : "none";
     map.setLayoutProperty(FBO_LAYER_ID, "visibility", fboVisibility);
     map.setLayoutProperty(FBO_LABEL_LAYER_ID, "visibility", fboVisibility);
+    const pluginVisibility = pluginLayersVisible ? "visible" : "none";
+    map.setLayoutProperty(PLUGIN_LAYER_ID, "visibility", pluginVisibility);
+    map.setLayoutProperty(
+      PLUGIN_LABEL_LAYER_ID,
+      "visibility",
+      pluginVisibility,
+    );
     map.setPaintProperty(FLEET_LAYER_ID, "circle-color", [
       "case",
       ["==", ["get", "id"], selectedAircraftId ?? ""],
@@ -133,25 +200,75 @@
       $activeTheme.colors.highlight,
       $activeTheme.colors.map_fbo,
     ]);
-    map.setPaintProperty(FLEET_LAYER_ID, "circle-stroke-color", $activeTheme.colors.map_halo);
-    map.setPaintProperty(FBO_LAYER_ID, "circle-stroke-color", $activeTheme.colors.map_halo);
-    map.setPaintProperty(FLEET_LABEL_LAYER_ID, "text-color", $activeTheme.colors.map_label);
-    map.setPaintProperty(FBO_LABEL_LAYER_ID, "text-color", $activeTheme.colors.map_label);
-    map.setPaintProperty(FLEET_LABEL_LAYER_ID, "text-halo-color", $activeTheme.colors.map_halo);
-    map.setPaintProperty(FBO_LABEL_LAYER_ID, "text-halo-color", $activeTheme.colors.map_halo);
+    map.setPaintProperty(
+      FLEET_LAYER_ID,
+      "circle-stroke-color",
+      $activeTheme.colors.map_halo,
+    );
+    map.setPaintProperty(
+      FBO_LAYER_ID,
+      "circle-stroke-color",
+      $activeTheme.colors.map_halo,
+    );
+    map.setPaintProperty(
+      FLEET_LABEL_LAYER_ID,
+      "text-color",
+      $activeTheme.colors.map_label,
+    );
+    map.setPaintProperty(
+      FBO_LABEL_LAYER_ID,
+      "text-color",
+      $activeTheme.colors.map_label,
+    );
+    map.setPaintProperty(
+      FLEET_LABEL_LAYER_ID,
+      "text-halo-color",
+      $activeTheme.colors.map_halo,
+    );
+    map.setPaintProperty(
+      FBO_LABEL_LAYER_ID,
+      "text-halo-color",
+      $activeTheme.colors.map_halo,
+    );
+    map.setPaintProperty(
+      PLUGIN_LAYER_ID,
+      "circle-color",
+      $activeTheme.colors.highlight,
+    );
+    map.setPaintProperty(
+      PLUGIN_LAYER_ID,
+      "circle-stroke-color",
+      $activeTheme.colors.highlight,
+    );
+    map.setPaintProperty(
+      PLUGIN_LABEL_LAYER_ID,
+      "text-color",
+      $activeTheme.colors.highlight,
+    );
+    map.setPaintProperty(
+      PLUGIN_LABEL_LAYER_ID,
+      "text-halo-color",
+      $activeTheme.colors.map_halo,
+    );
 
     const visibleFeatures = [
       ...(fleetVisible ? fleet.features : []),
       ...(fboVisible ? fboNetwork.features : []),
+      ...(pluginLayersVisible ? pluginData.features : []),
     ];
     const signature = visibleFeatures
-      .map((feature) => `${feature.properties.id}:${feature.geometry.coordinates.join(",")}`)
+      .map(
+        (feature) =>
+          `${feature.properties.id}:${feature.geometry.coordinates.join(",")}`,
+      )
       .sort()
       .join("|");
     if (!signature || signature === fittedAtlasSignature) return;
 
     fittedAtlasSignature = signature;
-    const coordinates = visibleFeatures.map((feature) => feature.geometry.coordinates);
+    const coordinates = visibleFeatures.map(
+      (feature) => feature.geometry.coordinates,
+    );
     const bounds = coordinates.reduce(
       (current, coordinate) => current.extend(coordinate),
       new maplibregl.LngLatBounds(coordinates[0], coordinates[0]),
@@ -166,6 +283,8 @@
     fbos;
     fleetVisible;
     fboVisible;
+    pluginLayers;
+    pluginLayersVisible;
     selectedAircraftId;
     selectedFboId;
     $activeTheme;
@@ -205,6 +324,10 @@
         atlasMap.addSource(FBO_SOURCE_ID, {
           type: "geojson",
           data: fboFeatures(),
+        });
+        atlasMap.addSource(PLUGIN_SOURCE_ID, {
+          type: "geojson",
+          data: pluginFeatures(),
         });
         atlasMap.addLayer({
           id: FBO_LAYER_ID,
@@ -253,7 +376,12 @@
           source: FLEET_SOURCE_ID,
           minzoom: 3,
           layout: {
-            "text-field": ["coalesce", ["get", "registration"], ["get", "model"], "Aircraft"],
+            "text-field": [
+              "coalesce",
+              ["get", "registration"],
+              ["get", "model"],
+              "Aircraft",
+            ],
             "text-size": 11,
             "text-offset": [0, 1.35],
             "text-anchor": "top",
@@ -261,6 +389,37 @@
           },
           paint: {
             "text-color": $activeTheme.colors.map_label,
+            "text-halo-color": $activeTheme.colors.map_halo,
+            "text-halo-width": 1.5,
+          },
+        });
+        atlasMap.addLayer({
+          id: PLUGIN_LAYER_ID,
+          type: "circle",
+          source: PLUGIN_SOURCE_ID,
+          paint: {
+            "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, 8, 7, 14],
+            "circle-color": $activeTheme.colors.highlight,
+            "circle-opacity": 0.16,
+            "circle-stroke-color": $activeTheme.colors.highlight,
+            "circle-stroke-width": 2,
+            "circle-stroke-opacity": 0.95,
+          },
+        });
+        atlasMap.addLayer({
+          id: PLUGIN_LABEL_LAYER_ID,
+          type: "symbol",
+          source: PLUGIN_SOURCE_ID,
+          minzoom: 4,
+          layout: {
+            "text-field": ["get", "label"],
+            "text-size": 10,
+            "text-offset": [0, -1.6],
+            "text-anchor": "bottom",
+            "text-allow-overlap": false,
+          },
+          paint: {
+            "text-color": $activeTheme.colors.highlight,
             "text-halo-color": $activeTheme.colors.map_halo,
             "text-halo-width": 1.5,
           },

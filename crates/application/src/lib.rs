@@ -1,5 +1,9 @@
 //! Application-level orchestration independent of Tauri and other interfaces.
 
+mod plugins;
+
+pub use plugins::*;
+
 use chrono::{DateTime, SecondsFormat, Utc};
 use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
@@ -891,6 +895,34 @@ impl From<ThemeSettingsError> for OperationError {
             message: error.to_string(),
             retryable,
             reportable: false,
+            report_id: None,
+        }
+    }
+}
+
+impl From<PluginError> for OperationError {
+    fn from(error: PluginError) -> Self {
+        let (code, retryable, reportable) = match error {
+            PluginError::RootUnavailable => ("plugin.root_unavailable", true, true),
+            PluginError::StorageUnavailable => ("plugin.storage_unavailable", true, true),
+            PluginError::InvalidPlugin => ("plugin.invalid_plugin", false, false),
+            PluginError::UnknownPlugin => ("plugin.unknown_plugin", false, false),
+            PluginError::UnsupportedRuntime => ("plugin.unsupported_runtime", false, false),
+            PluginError::UnsupportedCapability => ("plugin.unsupported_capability", false, false),
+            PluginError::PermissionRequired => ("plugin.permission_required", false, false),
+            PluginError::AlreadyRunning => ("plugin.already_running", false, false),
+            PluginError::NotRunning => ("plugin.not_running", false, false),
+            PluginError::RuntimeUnavailable => ("plugin.runtime_unavailable", false, false),
+            PluginError::LaunchFailed => ("plugin.launch_failed", true, true),
+            PluginError::HandshakeFailed => ("plugin.handshake_failed", true, false),
+            PluginError::ProtocolViolation => ("plugin.protocol_violation", false, false),
+            PluginError::StateUnavailable => ("plugin.state_unavailable", true, true),
+        };
+        Self {
+            code,
+            message: error.to_string(),
+            retryable,
+            reportable,
             report_id: None,
         }
     }

@@ -1,0 +1,10 @@
+{
+  "id": "org.wyrmgrid.example.fleet-locations",
+  "name": "Fleet Locations",
+  "version": "0.1.0",
+  "api_version": 1,
+  "author": "WyrmGrid contributors",
+  "runtime": "python",
+  "entry_point": "src/main.py",
+  "permissions": ["on_air_fleet_read", "map_layers_publish"]
+}

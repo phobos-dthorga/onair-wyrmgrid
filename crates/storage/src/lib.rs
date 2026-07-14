@@ -9,6 +9,7 @@ use thiserror::Error;
 const INITIAL_SCHEMA: &str = include_str!("../migrations/0001_initial.sql");
 const LEGAL_PREFERENCES_SCHEMA: &str = include_str!("../migrations/0002_legal_preferences.sql");
 const THEMES_SCHEMA: &str = include_str!("../migrations/0003_themes.sql");
+const PLUGIN_PERMISSIONS_SCHEMA: &str = include_str!("../migrations/0004_plugin_permissions.sql");
 
 #[derive(Debug, Error)]
 pub enum StorageError {
@@ -71,6 +72,7 @@ impl Store {
         connection.execute_batch(INITIAL_SCHEMA)?;
         connection.execute_batch(LEGAL_PREFERENCES_SCHEMA)?;
         connection.execute_batch(THEMES_SCHEMA)?;
+        connection.execute_batch(PLUGIN_PERMISSIONS_SCHEMA)?;
         Ok(Self {
             connection: Arc::new(Mutex::new(connection)),
             persistent,
@@ -272,6 +274,52 @@ impl Store {
 }
 
 impl Store {
+    pub fn list_plugin_permission_records(
+        &self,
+        plugin_id: &str,
+    ) -> Result<Vec<String>, StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        let mut statement = connection.prepare(
+            "SELECT permission
+             FROM plugin_permission_grants
+             WHERE plugin_id = ?1
+             ORDER BY permission ASC",
+        )?;
+        statement
+            .query_map([plugin_id], |row| row.get(0))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StorageError::from)
+    }
+
+    pub fn replace_plugin_permission_records(
+        &self,
+        plugin_id: &str,
+        permissions: &[String],
+    ) -> Result<(), StorageError> {
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        let transaction = connection.transaction()?;
+        transaction.execute(
+            "DELETE FROM plugin_permission_grants WHERE plugin_id = ?1",
+            [plugin_id],
+        )?;
+        for permission in permissions {
+            transaction.execute(
+                "INSERT INTO plugin_permission_grants (plugin_id, permission)
+                 VALUES (?1, ?2)",
+                params![plugin_id, permission],
+            )?;
+        }
+        transaction.commit().map_err(StorageError::from)
+    }
+}
+
+impl Store {
     pub fn load_legal_preferences_record(
         &self,
     ) -> Result<Option<LegalPreferencesRecord>, StorageError> {
@@ -425,7 +473,7 @@ mod tests {
         let store = Store::open_in_memory().expect("in-memory database should open");
         assert_eq!(
             store.schema_version().expect("version should be readable"),
-            3
+            4
         );
     }
 
@@ -631,6 +679,41 @@ mod tests {
             Some(ThemePreferencesRecord {
                 selected_theme_id: "night-flight".into(),
             })
+        );
+    }
+
+    #[test]
+    fn persists_deny_by_default_plugin_permission_grants() {
+        let store = Store::open_in_memory().expect("in-memory database should open");
+        let plugin_id = "org.wyrmgrid.example.fleet-locations";
+        assert!(
+            store
+                .list_plugin_permission_records(plugin_id)
+                .expect("empty grants should be readable")
+                .is_empty()
+        );
+
+        store
+            .replace_plugin_permission_records(
+                plugin_id,
+                &["map_layers_publish".into(), "on_air_fleet_read".into()],
+            )
+            .expect("grants should persist");
+        assert_eq!(
+            store
+                .list_plugin_permission_records(plugin_id)
+                .expect("grants should be readable"),
+            vec!["map_layers_publish", "on_air_fleet_read"]
+        );
+
+        store
+            .replace_plugin_permission_records(plugin_id, &[])
+            .expect("grants should be revocable");
+        assert!(
+            store
+                .list_plugin_permission_records(plugin_id)
+                .expect("revoked grants should be readable")
+                .is_empty()
         );
     }
 }
