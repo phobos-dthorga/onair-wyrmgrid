@@ -17,6 +17,8 @@ use wyrmgrid_plugin_protocol::{
 };
 use wyrmgrid_storage::Store;
 
+use crate::authorization::{AuthorizationError, AuthorizationService, AuthorizationSubject};
+
 const MAX_INSTALLED_PLUGINS: usize = 128;
 const MAX_MANIFEST_BYTES: u64 = 64 * 1024;
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(3);
@@ -118,7 +120,7 @@ pub struct PluginService {
 struct PluginServiceInner {
     root: Option<PathBuf>,
     initialization_error: Option<String>,
-    store: Store,
+    authorization: AuthorizationService<Store>,
     onair: OnAirSession,
     simulator: SimulatorBridgeService,
     runtimes: Mutex<BTreeMap<String, Arc<RunningPlugin>>>,
@@ -166,7 +168,7 @@ impl PluginService {
             inner: Arc::new(PluginServiceInner {
                 root,
                 initialization_error,
-                store,
+                authorization: AuthorizationService::new(store),
                 onair,
                 simulator,
                 runtimes: Mutex::new(BTreeMap::new()),
@@ -257,47 +259,40 @@ impl PluginService {
     ) -> Result<PluginHostView, PluginError> {
         let plugin = self.find_plugin(plugin_id)?;
         ensure_supported_permissions(&plugin.manifest.permissions)?;
-        let permission_names = plugin
-            .manifest
-            .permissions
-            .iter()
-            .map(|permission| permission.as_str().to_owned())
-            .collect::<Vec<_>>();
+        let subject = AuthorizationSubject::plugin(plugin_id);
+        let revision = plugin_scope_revision(&plugin.manifest);
+        let permission_names = requested_capability_names(&plugin.manifest);
         self.inner
-            .store
-            .replace_plugin_permission_records(plugin_id, &permission_names)
-            .map_err(|_| PluginError::StorageUnavailable)?;
+            .authorization
+            .approve(&subject, &revision, &permission_names)
+            .map_err(plugin_authorization_error)?;
         self.status()
     }
 
     pub fn revoke_permissions(&self, plugin_id: &str) -> Result<PluginHostView, PluginError> {
-        self.find_plugin(plugin_id)?;
+        let plugin = self.find_plugin(plugin_id)?;
         if self.runtime_state(plugin_id)?.is_active() {
             self.stop(plugin_id)?;
         }
+        let subject = AuthorizationSubject::plugin(plugin_id);
+        let revision = plugin_scope_revision(&plugin.manifest);
         self.inner
-            .store
-            .replace_plugin_permission_records(plugin_id, &[])
-            .map_err(|_| PluginError::StorageUnavailable)?;
+            .authorization
+            .revoke(&subject, &revision)
+            .map_err(plugin_authorization_error)?;
         self.status()
     }
 
     pub fn start(&self, plugin_id: &str) -> Result<PluginHostView, PluginError> {
         let plugin = self.find_plugin(plugin_id)?;
         ensure_supported_permissions(&plugin.manifest.permissions)?;
-        let granted = self.grants_for(&plugin.manifest)?;
+        let granted = self.required_grants_for(&plugin.manifest)?;
         let requested = plugin
             .manifest
             .permissions
             .iter()
             .copied()
             .collect::<BTreeSet<_>>();
-        if requested
-            .iter()
-            .any(|permission| !granted.contains(permission))
-        {
-            return Err(PluginError::PermissionRequired);
-        }
         if self.runtime_state(plugin_id)?.is_active() {
             return Err(PluginError::AlreadyRunning);
         }
@@ -404,22 +399,28 @@ impl PluginService {
     }
 
     fn grants_for(&self, manifest: &PluginManifest) -> Result<BTreeSet<Permission>, PluginError> {
-        let requested = manifest
-            .permissions
-            .iter()
-            .copied()
-            .collect::<BTreeSet<_>>();
+        let requested = requested_capability_names(manifest);
+        let subject = AuthorizationSubject::plugin(&manifest.id);
+        let revision = plugin_scope_revision(manifest);
         self.inner
-            .store
-            .list_plugin_permission_records(&manifest.id)
-            .map_err(|_| PluginError::StorageUnavailable)
-            .map(|records| {
-                records
-                    .iter()
-                    .filter_map(|record| Permission::from_name(record))
-                    .filter(|permission| requested.contains(permission))
-                    .collect()
-            })
+            .authorization
+            .grants(&subject, &revision, &requested)
+            .map_err(plugin_authorization_error)
+            .map(capability_names_to_permissions)
+    }
+
+    fn required_grants_for(
+        &self,
+        manifest: &PluginManifest,
+    ) -> Result<BTreeSet<Permission>, PluginError> {
+        let requested = requested_capability_names(manifest);
+        let subject = AuthorizationSubject::plugin(&manifest.id);
+        let revision = plugin_scope_revision(manifest);
+        self.inner
+            .authorization
+            .require_all(&subject, &revision, &requested)
+            .map_err(plugin_authorization_error)
+            .map(capability_names_to_permissions)
     }
 
     fn runtime_state(&self, plugin_id: &str) -> Result<PluginProcessState, PluginError> {
@@ -654,6 +655,42 @@ fn ensure_supported_permissions(permissions: &[Permission]) -> Result<(), Plugin
         })
         .then_some(())
         .ok_or(PluginError::UnsupportedCapability)
+}
+
+fn requested_capability_names(manifest: &PluginManifest) -> BTreeSet<String> {
+    manifest
+        .permissions
+        .iter()
+        .map(|permission| permission.as_str().to_owned())
+        .collect()
+}
+
+fn capability_names_to_permissions(capabilities: BTreeSet<String>) -> BTreeSet<Permission> {
+    capabilities
+        .iter()
+        .filter_map(|capability| Permission::from_name(capability))
+        .collect()
+}
+
+fn plugin_scope_revision(manifest: &PluginManifest) -> String {
+    let capabilities = requested_capability_names(manifest);
+    let capability_revision = if capabilities.is_empty() {
+        "none".to_owned()
+    } else {
+        capabilities.into_iter().collect::<Vec<_>>().join("|")
+    };
+    format!("plugin:{}:{capability_revision}", manifest.version)
+}
+
+fn plugin_authorization_error(error: AuthorizationError) -> PluginError {
+    match error {
+        AuthorizationError::StorageUnavailable => PluginError::StorageUnavailable,
+        AuthorizationError::CapabilityRequired => PluginError::PermissionRequired,
+        AuthorizationError::InvalidCapability => PluginError::UnsupportedCapability,
+        AuthorizationError::InvalidSubject | AuthorizationError::InvalidScopeRevision => {
+            PluginError::InvalidPlugin
+        }
+    }
 }
 
 fn spawn_python(plugin: &InstalledPlugin) -> Result<Child, PluginError> {

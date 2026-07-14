@@ -10,6 +10,7 @@ const protectedPrefixes = [
   "credential-",
   "telemetry-",
   "plugin-permission-",
+  "security-",
   "destructive-",
   "error-",
 ];

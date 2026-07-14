@@ -10,10 +10,10 @@ honestly instead of treating all three as “telemetry”:
 3. **Flight recording active**: the user has chosen to persist a bounded session
    for later graphs and planned-versus-actual analysis.
 
-The current slice implements the first two states and displays only the latest
-fresh connected snapshot. It persists the selected provider and offers an
-explicit, default-off provider auto-start preference. It does not persist a
-telemetry history or claim that a flight is being recorded.
+The current slice implements all three states for explicit manual recording.
+It displays the latest fresh connected snapshot, persists the selected provider,
+offers a default-off provider auto-start preference, and records only after the
+user selects **Start recording**. Automatic flight detection is not implemented.
 
 ## Launch and automation settings
 
@@ -115,6 +115,18 @@ still user-owned. WyrmGrid should offer per-session deletion, delete-all,
 export, a visible retention setting, and bounded automatic pruning. Raw native
 SimConnect messages are never persisted.
 
+Migration `0008_simulator_recordings.sql` now supplies sessions, bounded
+translated samples, and a separate retention preference. The initial interface
+offers 7, 30, 90, and 365-day retention, defaults to 30 days, prunes completed
+or interrupted sessions, and provides per-session and delete-all controls.
+Active sessions cannot be deleted. Export, pinning, lifecycle events, summaries,
+and automatic recording remain follow-ups.
+
+An aircraft or registration change interrupts an active session instead of
+joining unrelated samples. A provider sequence discontinuity or observation
+gap longer than three seconds marks the next sample as a gap. An application
+restart marks any abandoned active session interrupted.
+
 ## Graphs
 
 WyrmChart should render host-owned, provenance-aware series rather than raw
@@ -134,6 +146,12 @@ disconnect. Long sessions should use a tested min/max-envelope or equivalent
 downsampling service while retaining exact values for a bounded inspection
 window.
 
+The initial WyrmChart view renders altitude plus indicated, true, and ground
+speed for the latest 600 exact samples. Gap markers insert a visible break and
+the renderer does not connect across it. This bounded window does not yet
+downsample or browse older windows; min/max-envelope downsampling remains
+required before an entire long session can be graphed honestly.
+
 Plugins do not automatically receive recorded sessions. Any future history or
 aggregate permission must be separate from `simulator_telemetry_read`, scoped to
 user-selected sessions, and exclude raw high-frequency data by default.
@@ -145,10 +163,12 @@ user-selected sessions, and exclude raw high-frequency data by default.
    selection, stale-snapshot suppression, and default-off provider auto-start
    are implemented.
 2. Introduce the recording/session schemas, retention controls, and explicit
-   manual recording.
+   manual recording. Implemented with local deletion and bounded graph windows;
+   export and pinning remain.
 3. Add tested lifecycle evidence and the default-off automatic recording
    setting.
-4. Build the first WyrmChart session graphs with gap-aware downsampling.
+4. Expand the implemented altitude/speed WyrmChart window with gap-aware
+   min/max-envelope downsampling, event markers, and older-window navigation.
 5. Prove the MSFS in-simulator CommBus control surface, then package it only
    after compatibility, signing, installation, and removal are documented.
 

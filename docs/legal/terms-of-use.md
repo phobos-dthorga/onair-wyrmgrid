@@ -1,6 +1,6 @@
 # OnAir WyrmGrid Application Terms of Use
 
-**Version and effective date:** 2026-07-14
+**Version and effective date:** 2026-07-15
 
 These preliminary terms apply to official builds of the OnAir WyrmGrid desktop
 application distributed by Phobos A. D'thorga ("WyrmGrid", "we", or "us"). The
@@ -69,7 +69,21 @@ change formats, or stop supporting experimental interfaces. Back up information
 that matters and do not rely on a prerelease as the sole copy of operational
 records.
 
-## 8. Warranties and liability
+## 8. Photosensitivity and animated visual effects
+
+WyrmGrid may present animated maps, weather, precipitation, lightning, warning
+indicators, and other rapidly changing light or colour effects. Flashing or
+flickering visual effects may cause discomfort or adverse reactions for some
+people. Stop viewing the effect if you experience discomfort and use the
+reduced-flash and reduced-motion controls where available.
+
+Before high-detail lightning or comparable flashing effects are released,
+WyrmGrid will enable reduced-flash presentation by default and provide a clear
+user choice before stronger effects are shown. Agreeing to these Terms does not
+silently enable enhanced or cinematic weather effects and does not replace
+those safety controls.
+
+## 9. Warranties and liability
 
 To the maximum extent permitted by law, the official application is provided
 "as is" and "as available", without additional warranties or guarantees.
@@ -83,19 +97,19 @@ right, remedy, or liability that applicable law does not permit us to exclude,
 restrict, or modify. No term requires a user to indemnify WyrmGrid for loss
 caused by WyrmGrid's own conduct or by a provider chosen by WyrmGrid.
 
-## 9. Changes
+## 10. Changes
 
 The version date identifies these terms. WyrmGrid will request a new
 acknowledgement when a change materially affects user rights, responsibilities,
 data handling, or risk. Editorial clarifications may be published without a new
 acknowledgement.
 
-## 10. Governing law
+## 11. Governing law
 
 These terms are governed by the laws of New South Wales, Australia, subject to
 mandatory rights and laws that apply in the user's location.
 
-## 11. Contact
+## 12. Contact
 
 General questions can be raised through the project's GitHub Discussions or
 issue tracker. Use GitHub private vulnerability reporting for a sensitive

@@ -27,5 +27,5 @@ export type ChartSpec = {
 export type ChartSeries = {
   id: string;
   label: string;
-  points: Array<{ category: string; value: number }>;
+  points: Array<{ category: string; value: number; gap_before?: boolean }>;
 };

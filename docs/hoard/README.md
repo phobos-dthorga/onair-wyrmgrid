@@ -106,6 +106,25 @@ versions, observation timestamps, and hourly-to-daily retention policy remain
 the foundation. A separate history store or event-sourcing system was not
 required for the initial timeline, so no database migration was added.
 
+## Simulator recording history
+
+Hoard also presents the bounded local simulator sessions owned by migration 8.
+The **Flight recordings** section lists active, completed, and interrupted
+sessions and opens the same altitude and speed graphs used by the Simulator
+bridge. This shared presentation component prevents the two surfaces from
+disagreeing about selected units, telemetry gaps, retention, or deletion.
+
+Simulator sessions remain a distinct resource family rather than being forced
+into the OnAir company as-of timeline. They have their own provider and aircraft
+identity, sample timestamps, retention preference, and lifecycle. Selecting a
+recording never changes Atlas into HISTORICAL mode, and selecting an OnAir
+observation never implies a simulator flight at the same time.
+
+Recording history remains local, excludes geographic coordinates in its first
+schema, and is not exposed to community plugins. Hoard supports selecting and
+deleting completed recordings; starting and stopping capture remains in the
+Simulator bridge so browsing history cannot accidentally begin collection.
+
 ## Failure mode
 
 The desktop opens `wyrmgrid.db` in the operating system's application-data

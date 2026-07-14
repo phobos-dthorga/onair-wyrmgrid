@@ -113,17 +113,32 @@
   import {
     loadSimulatorBridge,
     loadSimulatorPreferences,
+    loadSimulatorRecording,
+    loadSimulatorRecordingSession,
     saveSimulatorPreferences,
+    saveSimulatorRecordingPreferences,
     startSimulatorProvider,
+    startSimulatorRecording,
     stopSimulatorProvider,
+    stopSimulatorRecording,
+    deleteSimulatorRecording,
+    deleteAllSimulatorRecordings,
   } from "$lib/simulator/client";
   import SimulatorDialog from "$lib/simulator/SimulatorDialog.svelte";
   import {
     emptySimulatorBridge,
+    emptySimulatorRecording,
     defaultSimulatorPreferences,
     type SimulatorBridgeView,
     type SimulatorPreferences,
+    type SimulatorRecordingPreferences,
+    type SimulatorRecordingView,
+    type SimulatorSessionView,
   } from "$lib/simulator/types";
+  import {
+    simulatorRecordingPreview,
+    simulatorRecordingSessionPreview,
+  } from "$lib/simulator/sample";
   import {
     loadDisplayPreferences,
     saveDisplayPreferences,
@@ -133,6 +148,14 @@
     aviationDisplayPreferences,
     type DisplayPreferences,
   } from "$lib/settings/types";
+  import SecurityCentreDialog from "$lib/security/SecurityCentreDialog.svelte";
+  import { loadSecurityCentre } from "$lib/security/client";
+  import {
+    securityPreviewEmpty,
+    securityPreviewGranted,
+    securityPreviewRevoked,
+  } from "$lib/security/sample";
+  import type { SecurityCentreStatus } from "$lib/security/types";
   import ThemeDialog from "$lib/theme/ThemeDialog.svelte";
   import {
     browserThemeStatus,
@@ -213,12 +236,22 @@
   let simulatorPreferences = $state<SimulatorPreferences>(
     defaultSimulatorPreferences,
   );
+  let simulatorRecording = $state<SimulatorRecordingView>(
+    emptySimulatorRecording,
+  );
+  let simulatorRecordingSession = $state<SimulatorSessionView>();
+  let simulatorRecordingBusy = $state(false);
   let displayPreferences = $state<DisplayPreferences>(
     aviationDisplayPreferences,
   );
   let showSettingsDialog = $state(false);
   let settingsBusy = $state(false);
   let settingsError = $state("");
+  let securityCentre = $state<SecurityCentreStatus>(securityPreviewEmpty);
+  let securityCentreLoaded = $state(false);
+  let showSecurityCentre = $state(false);
+  let securityBusy = $state(false);
+  let securityError = $state("");
   let timeline = $state<HoardTimelineIndex>({
     company: null,
     observation_times: [],
@@ -515,8 +548,9 @@
 
   function openHoardTimeline(): void {
     timelineError = "";
+    simulatorError = "";
     showTimelineDialog = true;
-    void refreshTimeline();
+    void Promise.all([refreshTimeline(), refreshSimulatorRecording()]);
   }
 
   async function refreshDiagnostics(): Promise<void> {
@@ -572,10 +606,85 @@
     }
   }
 
+  async function refreshSimulatorRecording(): Promise<void> {
+    if (!isDesktopRuntime()) {
+      simulatorRecording = simulatorRecordingPreview;
+      simulatorRecordingSession = simulatorRecordingSessionPreview;
+      return;
+    }
+    try {
+      simulatorRecording = await loadSimulatorRecording();
+      const currentSessionId = simulatorRecordingSession?.session.id;
+      const selectedId =
+        simulatorRecording.active_session_id ??
+        (currentSessionId &&
+        simulatorRecording.sessions.some(
+          (session) => session.id === currentSessionId,
+        )
+          ? currentSessionId
+          : undefined) ??
+        simulatorRecording.sessions[0]?.id;
+      if (selectedId) {
+        simulatorRecordingSession =
+          await loadSimulatorRecordingSession(selectedId);
+      } else {
+        simulatorRecordingSession = undefined;
+      }
+    } catch (error) {
+      simulatorError = operationErrorMessage(
+        error,
+        "WyrmGrid could not read local simulator recordings.",
+      );
+    }
+  }
+
   function openSimulator(): void {
     simulatorError = "";
     showSimulatorDialog = true;
-    void refreshSimulatorBridge();
+    void Promise.all([refreshSimulatorBridge(), refreshSimulatorRecording()]);
+  }
+
+  async function runRecordingAction(
+    action: "start" | "stop" | "delete" | "delete_all",
+    sessionId?: string,
+  ): Promise<void> {
+    if (!isDesktopRuntime() || simulatorRecordingBusy) return;
+    simulatorRecordingBusy = true;
+    simulatorError = "";
+    try {
+      if (action === "start") simulatorRecording = await startSimulatorRecording();
+      if (action === "stop") simulatorRecording = await stopSimulatorRecording();
+      if (action === "delete" && sessionId)
+        simulatorRecording = await deleteSimulatorRecording(sessionId);
+      if (action === "delete_all")
+        simulatorRecording = await deleteAllSimulatorRecordings();
+      simulatorRecordingSession = undefined;
+      await refreshSimulatorRecording();
+    } catch (error) {
+      simulatorError = operationErrorMessage(
+        error,
+        "WyrmGrid could not complete that recording action.",
+      );
+      await refreshSimulatorRecording();
+    } finally {
+      simulatorRecordingBusy = false;
+    }
+  }
+
+  async function selectRecordingSession(sessionId: string): Promise<void> {
+    if (!isDesktopRuntime() || simulatorRecordingBusy) return;
+    simulatorRecordingBusy = true;
+    simulatorError = "";
+    try {
+      simulatorRecordingSession = await loadSimulatorRecordingSession(sessionId);
+    } catch (error) {
+      simulatorError = operationErrorMessage(
+        error,
+        "WyrmGrid could not open that local simulator recording.",
+      );
+    } finally {
+      simulatorRecordingBusy = false;
+    }
   }
 
   async function runSimulatorAction(
@@ -740,6 +849,24 @@
     }
   }
 
+  async function refreshSecurityCentre(): Promise<void> {
+    if (!isDesktopRuntime()) return;
+    securityBusy = true;
+    securityError = "";
+    try {
+      securityCentre = await loadSecurityCentre();
+      securityCentreLoaded = true;
+    } catch (error) {
+      securityCentreLoaded = false;
+      securityError = operationErrorMessage(
+        error,
+        "WyrmGrid could not read its local authorization record.",
+      );
+    } finally {
+      securityBusy = false;
+    }
+  }
+
   async function refreshDispatchStatus(): Promise<void> {
     if (!isDesktopRuntime()) return;
     try {
@@ -851,6 +978,9 @@
               : action === "stop"
                 ? forgePreviewApproved
                 : forgePreviewStopped;
+        securityCentre =
+          action === "revoke" ? securityPreviewRevoked : securityPreviewGranted;
+        securityCentreLoaded = true;
         return;
       }
       pluginHost =
@@ -862,13 +992,16 @@
               ? await startPlugin(pluginId)
               : await stopPlugin(pluginId);
     } catch (error) {
-      pluginError = operationErrorMessage(
+      const message = operationErrorMessage(
         error,
         "WyrmGrid could not complete that plugin action.",
       );
+      pluginError = message;
+      if (showSecurityCentre) securityError = message;
       await refreshPluginHost();
     } finally {
       pluginBusy = false;
+      if (showSecurityCentre && isDesktopRuntime()) void refreshSecurityCentre();
     }
   }
 
@@ -882,7 +1015,9 @@
       timeline = hoardPreviewTimeline;
       timelineCursor = timeline.observation_times.length - 1;
       fleetLoadState = "ready";
-      pluginHost = forgePreviewStopped;
+      pluginHost = forgePreviewApproved;
+      securityCentre = securityPreviewGranted;
+      securityCentreLoaded = true;
       simulatorBridge = emptySimulatorBridge;
       dispatchStatus = dispatchPreviewReady;
       return;
@@ -1066,9 +1201,10 @@
   async function initializeSimulatorPreferences(): Promise<void> {
     if (!isDesktopRuntime()) return;
     try {
-      [simulatorPreferences, simulatorBridge] = await Promise.all([
+      [simulatorPreferences, simulatorBridge, simulatorRecording] = await Promise.all([
         loadSimulatorPreferences(),
         loadSimulatorBridge(),
+        loadSimulatorRecording(),
       ]);
     } catch (error) {
       settingsError = operationErrorMessage(
@@ -1081,14 +1217,22 @@
   async function saveSettings(
     preferences: DisplayPreferences,
     nextSimulatorPreferences: SimulatorPreferences,
+    nextRecordingPreferences: SimulatorRecordingPreferences,
   ): Promise<void> {
     settingsBusy = true;
     settingsError = "";
     try {
-      [displayPreferences, simulatorPreferences] = await Promise.all([
+      const [savedDisplay, savedSimulator, savedRecording] = await Promise.all([
         saveDisplayPreferences(preferences),
         saveSimulatorPreferences(nextSimulatorPreferences),
+        saveSimulatorRecordingPreferences(nextRecordingPreferences),
       ]);
+      displayPreferences = savedDisplay;
+      simulatorPreferences = savedSimulator;
+      simulatorRecording = {
+        ...simulatorRecording,
+        preferences: savedRecording,
+      };
       showSettingsDialog = false;
     } catch (error) {
       settingsError = operationErrorMessage(
@@ -1104,6 +1248,19 @@
     settingsError = "";
     showSettingsDialog = true;
     void refreshSimulatorBridge();
+  }
+
+  function openSecurityCentre(): void {
+    securityError = "";
+    if (isDesktopRuntime()) {
+      securityCentreLoaded = false;
+      securityCentre = {
+        ...securityPreviewEmpty,
+        legal: legalStatus,
+      };
+    }
+    showSecurityCentre = true;
+    void refreshSecurityCentre();
   }
 
   function openLegalSettings(): void {
@@ -1168,7 +1325,14 @@
     ) {
       return;
     }
-    const timer = window.setInterval(() => void refreshSimulatorBridge(), 1000);
+    const timer = window.setInterval(
+      () =>
+        void Promise.all([
+          refreshSimulatorBridge(),
+          refreshSimulatorRecording(),
+        ]),
+      1000,
+    );
     return () => window.clearInterval(timer);
   });
 
@@ -1245,6 +1409,7 @@
       showLanguageDialog ||
       showDiagnosticsDialog ||
       showSettingsDialog ||
+      showSecurityCentre ||
       showSimulatorDialog ||
       showTimelineDialog ||
       showForgeDialog}
@@ -1687,9 +1852,17 @@
     busy={simulatorBusy}
     errorMessage={simulatorError}
     {displayPreferences}
+    recordingStatus={simulatorRecording}
+    recordingSession={simulatorRecordingSession}
+    recordingBusy={simulatorRecordingBusy}
     onrefresh={() => void refreshSimulatorBridge()}
     onstart={(providerId) => void runSimulatorAction("start", providerId)}
     onstop={(providerId) => void runSimulatorAction("stop", providerId)}
+    onrecordstart={() => void runRecordingAction("start")}
+    onrecordstop={() => void runRecordingAction("stop")}
+    onsessionselect={(sessionId) => void selectRecordingSession(sessionId)}
+    onsessiondelete={(sessionId) => void runRecordingAction("delete", sessionId)}
+    ondeleteall={() => void runRecordingAction("delete_all")}
     onclose={() => (showSimulatorDialog = false)}
   />
 
@@ -1697,11 +1870,16 @@
     open={showSettingsDialog}
     preferences={displayPreferences}
     {simulatorPreferences}
+    recordingPreferences={simulatorRecording.preferences}
     simulatorProviders={simulatorBridge.providers}
     busy={settingsBusy}
     errorMessage={settingsError}
-    onsave={(preferences, nextSimulatorPreferences) =>
-      void saveSettings(preferences, nextSimulatorPreferences)}
+    onsave={(preferences, nextSimulatorPreferences, nextRecordingPreferences) =>
+      void saveSettings(
+        preferences,
+        nextSimulatorPreferences,
+        nextRecordingPreferences,
+      )}
     onappearance={() => {
       showSettingsDialog = false;
       themeError = "";
@@ -1716,7 +1894,26 @@
       showSettingsDialog = false;
       openLegalSettings();
     }}
+    onsecurity={() => {
+      showSettingsDialog = false;
+      openSecurityCentre();
+    }}
     onclose={() => (showSettingsDialog = false)}
+  />
+
+  <SecurityCentreDialog
+    open={showSecurityCentre}
+    status={securityCentre}
+    loaded={securityCentreLoaded}
+    busy={securityBusy || pluginBusy}
+    errorMessage={securityError}
+    onrefresh={() => void refreshSecurityCentre()}
+    onrevoke={(subjectId) => void runPluginAction("revoke", subjectId)}
+    onprivacy={() => {
+      showSecurityCentre = false;
+      openLegalSettings();
+    }}
+    onclose={() => (showSecurityCentre = false)}
   />
 
   <ThemeDialog
@@ -1749,11 +1946,20 @@
     growthChart={timelineGrowthChart}
     fboGrowthChart={timelineFboGrowthChart}
     compositionChart={timelineFleetCompositionChart}
+    {displayPreferences}
+    recordingStatus={simulatorRecording}
+    recordingSession={simulatorRecordingSession}
+    recordingBusy={simulatorRecordingBusy}
+    recordingError={simulatorError}
     busy={timelineBusy}
     errorMessage={timelineError}
     oncursorchange={(cursor) => (timelineCursor = cursor)}
     onview={() => void viewHistoricalMoment()}
     onreturn={returnToPresent}
+    onrecordingselect={(sessionId) => void selectRecordingSession(sessionId)}
+    onrecordingdelete={(sessionId) =>
+      void runRecordingAction("delete", sessionId)}
+    onrecordingdeleteall={() => void runRecordingAction("delete_all")}
     onclose={() => (showTimelineDialog = false)}
   />
 

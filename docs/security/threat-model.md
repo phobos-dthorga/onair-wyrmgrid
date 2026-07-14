@@ -30,13 +30,19 @@
 - imported themes concealing security text, counterfeiting controls, loading
   remote resources, or exhausting local storage;
 - malicious or stale translations mislabelling credentials, permissions,
-  destructive actions, diagnostics, provenance, or legal disclosures;
+  Security Centre authority, destructive actions, diagnostics, provenance, or
+  legal disclosures;
 - malicious or oversized OFPs, flight-plan files, compressed feeds, navigation
   packages, weather geometries, and simulator messages;
 - spoofed localhost simulator services, sidecars, callbacks, or OAuth redirect
   state;
 - provider schema drift, identifier collisions, AIRAC mismatch, and unit or
   timestamp confusion producing plausible but incorrect plans;
+- GPU weather effects implying invented precipitation, lightning, cloud,
+  location, precision, or validity beyond the sourced product;
+- flashing weather or warning effects causing photosensitive harm, being
+  enabled through ambiguous consent, or ignoring reduced-motion/reduced-flash
+  preferences;
 - personal network data, routes, coordinates, callsigns, or free-form content
   leaking through persistence, plugins, support output, or diagnostics;
 - embedded desktop application secrets being extracted and abused;
@@ -102,6 +108,13 @@
   SimConnect SDK/client paths cross into the first-party provider;
 - only one selected telemetry provider is active in protocol version 1; the host
   neither merges values nor silently falls back from SimConnect to FSUIPC;
+- simulator recording is explicit and local; only validated translated fields
+  are persisted, active sessions resist deletion, completed sessions have a
+  user-visible bounded retention period, and recorded history is not covered by
+  the live `simulator_telemetry_read` plugin permission;
+- provider sequence or observation-time discontinuities become graph gaps, an
+  aircraft identity change interrupts the session, and abandoned active rows
+  are marked interrupted on the next application start;
 - simulator plan loading and every other external mutation require a distinct
   negotiated capability and explicit user action;
 - deny-by-default plugin capabilities persisted separately from manifests; the
@@ -147,6 +160,9 @@
 - telemetry is off by default; first-run onboarding prevents Atlas from mounting
   before the current Terms and Privacy Notice are acknowledged, and stale
   document versions suppress both Rust and interface diagnostics until review;
+- first-run Terms disclose future flashing weather and warning effects;
+  reduced-flash presentation remains an independent default-on safety control,
+  and stronger effects require a separate explicit confirmation;
 - an optional user preference and a deliberately configured build are both
   required before diagnostics can be transmitted;
 - Sentry authentication tokens remain CI secrets; DSNs are treated as public
@@ -334,6 +350,11 @@ excluded from plugins and Sentry.
 - A failed provider does not enter an automatic crash loop; the failure remains
   visible for an explicit restart. Connected snapshots are withheld after the
   bounded freshness window so stale aircraft state is not presented as live.
+- Local simulator recordings reveal operational timing and aircraft behaviour.
+  The SQLite database is not encrypted at rest, deletion may remain recoverable
+  in filesystem backups, and the first graph view exposes only the latest 600
+  exact samples rather than claiming a whole-session downsample. Users must omit
+  `wyrmgrid.db` from support bundles unless they intend to share recordings.
 - Licensed navigation data may remain accessible in local caches to a user or
   process with filesystem access. Entitlement checks and application controls do
   not replace operating-system security or provider licence compliance.
@@ -341,6 +362,33 @@ excluded from plugins and Sentry.
   surface. It remains prohibited until Navigraph confirms the required flow and
   a separate hosting decision defines authentication, quotas, retention,
   monitoring, incident response, and shutdown controls.
+
+## Core authorization controls
+
+- Legal acknowledgement, feature preferences, capability grants, and momentary
+  confirmations are distinct policy decisions and cannot authorize one another.
+- Durable grants are denied by default and bound to actor kind, actor ID, exact
+  capabilities, and a scope revision. Plugin version or permission-set changes
+  require a fresh review.
+- Feature services enforce decisions through the Rust authorization module;
+  Tauri commands and Svelte controls are not trusted enforcement boundaries.
+- Grant and revoke events append bounded symbolic metadata to the local
+  authorization audit trail. They contain no API key, raw provider payload, or
+  plugin output.
+- Revocation stops an active plugin before its capabilities are removed.
+- The Security Centre reads its grouped, validated status through the Rust
+  service, shows at most 100 recent decisions, and routes plugin revocation
+  through supervised Forge shutdown. Svelte and the Tauri command do not decide
+  whether an operation is authorized.
+- Security Centre labels and capability descriptions use a protected canonical
+  localization namespace that unreviewed community packs cannot replace.
+- The migration-4 preview grant table remains for append-only migration
+  integrity but is no longer authoritative after migration 9.
+
+Residual risk: the authorization database is not encrypted at rest, a malicious
+plugin may retain facts it received before revocation, and process separation is
+not a complete operating-system sandbox. Users should revoke unneeded grants,
+review permission changes after updates, and run only trusted code.
 
 Provider-specific controls and validation gates are recorded in the
 [external integrations programme](../integrations/README.md).

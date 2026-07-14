@@ -4,6 +4,7 @@
   import type {
     SimulatorPreferences,
     SimulatorProviderView,
+    SimulatorRecordingPreferences,
   } from "$lib/simulator/types";
   import "./settings.css";
 
@@ -11,6 +12,7 @@
     open,
     preferences,
     simulatorPreferences,
+    recordingPreferences,
     simulatorProviders,
     busy = false,
     errorMessage = "",
@@ -18,21 +20,25 @@
     onappearance,
     onlanguage,
     onprivacy,
+    onsecurity,
     onclose,
   }: {
     open: boolean;
     preferences: DisplayPreferences;
     simulatorPreferences: SimulatorPreferences;
+    recordingPreferences: SimulatorRecordingPreferences;
     simulatorProviders: SimulatorProviderView[];
     busy?: boolean;
     errorMessage?: string;
     onsave: (
       preferences: DisplayPreferences,
       simulatorPreferences: SimulatorPreferences,
+      recordingPreferences: SimulatorRecordingPreferences,
     ) => void;
     onappearance: () => void;
     onlanguage: () => void;
     onprivacy: () => void;
+    onsecurity: () => void;
     onclose: () => void;
   } = $props();
 
@@ -40,11 +46,15 @@
   let simulatorDraft = $state<SimulatorPreferences>({
     start_with_wyrmgrid: false,
   });
+  let recordingDraft = $state<SimulatorRecordingPreferences>({
+    retention_days: 30,
+  });
 
   $effect(() => {
     if (open) {
       draft = { ...preferences };
       simulatorDraft = { ...simulatorPreferences };
+      recordingDraft = { ...recordingPreferences };
     }
   });
 
@@ -212,6 +222,15 @@
               <small>{$translation("settings-simulator-auto-start-detail")}</small>
             </span>
           </label>
+          <label>
+            <span>{$translation("settings-simulator-retention")}</span>
+            <select disabled={busy} bind:value={recordingDraft.retention_days}>
+              <option value={7}>{$translation("settings-retention-days", { days: 7 })}</option>
+              <option value={30}>{$translation("settings-retention-days", { days: 30 })}</option>
+              <option value={90}>{$translation("settings-retention-days", { days: 90 })}</option>
+              <option value={365}>{$translation("settings-retention-days", { days: 365 })}</option>
+            </select>
+          </label>
         </div>
 
         <p class="settings-boundary">
@@ -237,6 +256,10 @@
             <strong>{$translation("settings-privacy-terms")}</strong>
             <span>{$translation("settings-privacy-detail")}</span>
           </button>
+          <button type="button" disabled={busy} onclick={onsecurity}>
+            <strong>{$translation("security-settings-link-title")}</strong>
+            <span>{$translation("security-settings-link-detail")}</span>
+          </button>
         </div>
       </section>
 
@@ -252,7 +275,12 @@
           class="settings-save"
           type="button"
           disabled={busy}
-          onclick={() => onsave({ ...draft }, { ...simulatorDraft })}
+          onclick={() =>
+            onsave(
+              { ...draft },
+              { ...simulatorDraft },
+              { ...recordingDraft },
+            )}
         >
           {busy
             ? $translation("settings-saving")

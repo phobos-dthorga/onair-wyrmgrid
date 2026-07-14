@@ -57,6 +57,8 @@ The implementation sequence and operating thresholds live in the
   sequences, and graceful/forced shutdown (implemented)
 - Forge permission review and append-only persisted deny-by-default grants
   (implemented)
+- Core authorization service with revision-bound grants, local decision audit,
+  and distinct legal/preference/grant/confirmation semantics (implemented)
 - Sanitized fleet-read and host-rendered map-layer publication capabilities
   (implemented)
 - Zero-dependency Python SDK and honest Fleet Locations example plugin
@@ -92,6 +94,11 @@ not replace completion of the current vertical slice.
   TAF airport context with raw coded text and provenance (implemented)
 - Route advisories and explainable weather findings (airport observation context
   implemented; route hazard products remain)
+- Dispatch-to-Atlas route projection with full-route framing and linked
+  airports/fixes, followed by clickable SID/STAR geometry only after navigation
+  and AIRAC resolution are implemented
+- Live and Hoard-historical Atlas weather with a default Compatibility renderer,
+  opt-in GPU-enhanced effects, and identical facts across rendering profiles
 - SimBrief generation only after Navigraph approves the desktop flow and any
   required hosted-secret boundary receives a separate decision
 
@@ -116,6 +123,8 @@ not replace completion of the current vertical slice.
   (implemented; live certification and SimConnect client redistribution remain)
 - Default-off provider auto-start and automatic recording, with explicit
   session retention and deletion controls
+- Hoard flight-recording history with shared unit-aware altitude and speed
+  graphs (implemented)
 - WyrmChart telemetry sessions with gap-aware altitude, speed, fuel, attitude,
   and later planned-versus-actual graphs
 - A thin MSFS in-simulator recording controller after an independent CommBus

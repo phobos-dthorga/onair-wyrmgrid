@@ -14,6 +14,9 @@ const LANGUAGE_PACKS_SCHEMA: &str = include_str!("../migrations/0005_language_pa
 const DISPLAY_PREFERENCES_SCHEMA: &str = include_str!("../migrations/0006_display_preferences.sql");
 const SIMULATOR_PREFERENCES_SCHEMA: &str =
     include_str!("../migrations/0007_simulator_preferences.sql");
+const SIMULATOR_RECORDINGS_SCHEMA: &str =
+    include_str!("../migrations/0008_simulator_recordings.sql");
+const AUTHORIZATION_SCHEMA: &str = include_str!("../migrations/0009_authorization.sql");
 
 #[derive(Debug, Error)]
 pub enum StorageError {
@@ -21,6 +24,8 @@ pub enum StorageError {
     Sqlite(#[from] rusqlite::Error),
     #[error("Local storage state is unavailable")]
     StateUnavailable,
+    #[error("Local storage record is outside supported bounds")]
+    InvalidRecord,
 }
 
 #[derive(Clone)]
@@ -45,6 +50,26 @@ pub struct LegalPreferencesRecord {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AuthorizationGrantRecord {
+    pub subject_kind: String,
+    pub subject_id: String,
+    pub scope_revision: String,
+    pub capability: String,
+    pub granted_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AuthorizationDecisionRecord {
+    pub id: i64,
+    pub subject_kind: String,
+    pub subject_id: String,
+    pub scope_revision: String,
+    pub decision: String,
+    pub capability_count: u32,
+    pub decided_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ThemePreferencesRecord {
     pub selected_theme_id: String,
 }
@@ -61,6 +86,42 @@ pub struct DisplayPreferencesRecord {
 pub struct SimulatorPreferencesRecord {
     pub selected_provider_id: Option<String>,
     pub start_with_wyrmgrid: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SimulatorRecordingPreferencesRecord {
+    pub retention_days: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SimulatorSessionRecord {
+    pub id: String,
+    pub provider_id: String,
+    pub simulator_family: String,
+    pub simulator_version: Option<String>,
+    pub aircraft_title: String,
+    pub aircraft_registration: Option<String>,
+    pub started_at: String,
+    pub ended_at: Option<String>,
+    pub origin: String,
+    pub status: String,
+    pub sample_count: u64,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SimulatorSampleRecord {
+    pub source_sequence: u64,
+    pub observed_at: String,
+    pub simulation_time_utc: Option<String>,
+    pub altitude_feet: f64,
+    pub indicated_airspeed_knots: f64,
+    pub true_airspeed_knots: f64,
+    pub ground_speed_knots: f64,
+    pub fuel_total_weight_pounds: Option<f64>,
+    pub gross_weight_pounds: Option<f64>,
+    pub pitch_degrees: f64,
+    pub bank_degrees: f64,
+    pub gap_before: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -105,6 +166,8 @@ impl Store {
         connection.execute_batch(LANGUAGE_PACKS_SCHEMA)?;
         connection.execute_batch(DISPLAY_PREFERENCES_SCHEMA)?;
         connection.execute_batch(SIMULATOR_PREFERENCES_SCHEMA)?;
+        connection.execute_batch(SIMULATOR_RECORDINGS_SCHEMA)?;
+        connection.execute_batch(AUTHORIZATION_SCHEMA)?;
         Ok(Self {
             connection: Arc::new(Mutex::new(connection)),
             persistent,
@@ -216,6 +279,276 @@ impl Store {
                 ],
             )
             .map(|_| ())
+            .map_err(StorageError::from)
+    }
+
+    pub fn load_simulator_recording_preferences_record(
+        &self,
+    ) -> Result<Option<SimulatorRecordingPreferencesRecord>, StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection
+            .query_row(
+                "SELECT retention_days FROM simulator_recording_preferences WHERE singleton_id = 1",
+                [],
+                |row| {
+                    Ok(SimulatorRecordingPreferencesRecord {
+                        retention_days: row.get(0)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(StorageError::from)
+    }
+
+    pub fn save_simulator_recording_preferences_record(
+        &self,
+        preferences: &SimulatorRecordingPreferencesRecord,
+    ) -> Result<(), StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection
+            .execute(
+                "INSERT INTO simulator_recording_preferences (singleton_id, retention_days)
+                 VALUES (1, ?1)
+                 ON CONFLICT(singleton_id) DO UPDATE SET
+                    retention_days = excluded.retention_days,
+                    updated_at = CURRENT_TIMESTAMP",
+                [preferences.retention_days],
+            )
+            .map(|_| ())
+            .map_err(StorageError::from)
+    }
+
+    pub fn interrupt_active_simulator_sessions(&self, ended_at: &str) -> Result<(), StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection
+            .execute(
+                "UPDATE simulator_sessions
+                 SET status = 'interrupted', ended_at = ?1
+                 WHERE status = 'active'",
+                [ended_at],
+            )
+            .map(|_| ())
+            .map_err(StorageError::from)
+    }
+
+    pub fn create_simulator_session_record(
+        &self,
+        session: &SimulatorSessionRecord,
+    ) -> Result<(), StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection
+            .execute(
+                "INSERT INTO simulator_sessions (
+                    id, provider_id, simulator_family, simulator_version,
+                    aircraft_title, aircraft_registration, started_at, ended_at,
+                    origin, status
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                params![
+                    session.id,
+                    session.provider_id,
+                    session.simulator_family,
+                    session.simulator_version,
+                    session.aircraft_title,
+                    session.aircraft_registration,
+                    session.started_at,
+                    session.ended_at,
+                    session.origin,
+                    session.status,
+                ],
+            )
+            .map(|_| ())
+            .map_err(StorageError::from)
+    }
+
+    pub fn append_simulator_sample_record(
+        &self,
+        session_id: &str,
+        sample: &SimulatorSampleRecord,
+    ) -> Result<bool, StorageError> {
+        let source_sequence =
+            i64::try_from(sample.source_sequence).map_err(|_| StorageError::InvalidRecord)?;
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection
+            .execute(
+                "INSERT OR IGNORE INTO simulator_samples (
+                    session_id, source_sequence, observed_at, simulation_time_utc,
+                    altitude_feet, indicated_airspeed_knots, true_airspeed_knots,
+                    ground_speed_knots, fuel_total_weight_pounds, gross_weight_pounds,
+                    pitch_degrees, bank_degrees, gap_before
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+                params![
+                    session_id,
+                    source_sequence,
+                    sample.observed_at,
+                    sample.simulation_time_utc,
+                    sample.altitude_feet,
+                    sample.indicated_airspeed_knots,
+                    sample.true_airspeed_knots,
+                    sample.ground_speed_knots,
+                    sample.fuel_total_weight_pounds,
+                    sample.gross_weight_pounds,
+                    sample.pitch_degrees,
+                    sample.bank_degrees,
+                    i64::from(sample.gap_before),
+                ],
+            )
+            .map(|changed| changed == 1)
+            .map_err(StorageError::from)
+    }
+
+    pub fn finish_simulator_session_record(
+        &self,
+        session_id: &str,
+        ended_at: &str,
+        status: &str,
+    ) -> Result<(), StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection
+            .execute(
+                "UPDATE simulator_sessions SET ended_at = ?2, status = ?3
+                 WHERE id = ?1 AND status = 'active'",
+                params![session_id, ended_at, status],
+            )
+            .map(|_| ())
+            .map_err(StorageError::from)
+    }
+
+    pub fn list_simulator_session_records(
+        &self,
+        limit: u32,
+    ) -> Result<Vec<SimulatorSessionRecord>, StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        let mut statement = connection.prepare(
+            "SELECT s.id, s.provider_id, s.simulator_family, s.simulator_version,
+                    s.aircraft_title, s.aircraft_registration, s.started_at, s.ended_at,
+                    s.origin, s.status, COUNT(p.id)
+             FROM simulator_sessions s
+             LEFT JOIN simulator_samples p ON p.session_id = s.id
+             GROUP BY s.id
+             ORDER BY s.started_at DESC
+             LIMIT ?1",
+        )?;
+        let rows = statement.query_map([limit], |row| {
+            let sample_count = row.get::<_, i64>(10)?;
+            Ok(SimulatorSessionRecord {
+                id: row.get(0)?,
+                provider_id: row.get(1)?,
+                simulator_family: row.get(2)?,
+                simulator_version: row.get(3)?,
+                aircraft_title: row.get(4)?,
+                aircraft_registration: row.get(5)?,
+                started_at: row.get(6)?,
+                ended_at: row.get(7)?,
+                origin: row.get(8)?,
+                status: row.get(9)?,
+                sample_count: u64::try_from(sample_count)
+                    .map_err(|_| rusqlite::Error::IntegralValueOutOfRange(10, sample_count))?,
+            })
+        })?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(StorageError::from)
+    }
+
+    pub fn list_simulator_sample_records(
+        &self,
+        session_id: &str,
+        limit: u32,
+    ) -> Result<Vec<SimulatorSampleRecord>, StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        let mut statement = connection.prepare(
+            "SELECT source_sequence, observed_at, simulation_time_utc, altitude_feet,
+                    indicated_airspeed_knots, true_airspeed_knots, ground_speed_knots,
+                    fuel_total_weight_pounds, gross_weight_pounds, pitch_degrees,
+                    bank_degrees, gap_before
+             FROM (
+                SELECT id, source_sequence, observed_at, simulation_time_utc, altitude_feet,
+                       indicated_airspeed_knots, true_airspeed_knots, ground_speed_knots,
+                       fuel_total_weight_pounds, gross_weight_pounds, pitch_degrees,
+                       bank_degrees, gap_before
+                FROM simulator_samples WHERE session_id = ?1
+                ORDER BY id DESC LIMIT ?2
+             ) ORDER BY id ASC",
+        )?;
+        let rows = statement.query_map(params![session_id, limit], |row| {
+            let source_sequence = row.get::<_, i64>(0)?;
+            Ok(SimulatorSampleRecord {
+                source_sequence: u64::try_from(source_sequence)
+                    .map_err(|_| rusqlite::Error::IntegralValueOutOfRange(0, source_sequence))?,
+                observed_at: row.get(1)?,
+                simulation_time_utc: row.get(2)?,
+                altitude_feet: row.get(3)?,
+                indicated_airspeed_knots: row.get(4)?,
+                true_airspeed_knots: row.get(5)?,
+                ground_speed_knots: row.get(6)?,
+                fuel_total_weight_pounds: row.get(7)?,
+                gross_weight_pounds: row.get(8)?,
+                pitch_degrees: row.get(9)?,
+                bank_degrees: row.get(10)?,
+                gap_before: row.get(11)?,
+            })
+        })?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(StorageError::from)
+    }
+
+    pub fn delete_simulator_session_record(&self, session_id: &str) -> Result<(), StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection
+            .execute("DELETE FROM simulator_sessions WHERE id = ?1", [session_id])
+            .map(|_| ())
+            .map_err(StorageError::from)
+    }
+
+    pub fn delete_all_simulator_session_records(&self) -> Result<(), StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection
+            .execute("DELETE FROM simulator_sessions", [])
+            .map(|_| ())
+            .map_err(StorageError::from)
+    }
+
+    pub fn prune_simulator_session_records(&self, before: &str) -> Result<u64, StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection
+            .execute(
+                "DELETE FROM simulator_sessions
+                 WHERE status != 'active' AND COALESCE(ended_at, started_at) < ?1",
+                [before],
+            )
+            .map(|count| count as u64)
             .map_err(StorageError::from)
     }
 
@@ -406,6 +739,147 @@ impl Store {
             )?
             .collect::<Result<Vec<_>, _>>()
             .map_err(StorageError::from)
+    }
+}
+
+impl Store {
+    pub fn list_active_authorization_grant_records(
+        &self,
+        limit: usize,
+    ) -> Result<Vec<AuthorizationGrantRecord>, StorageError> {
+        let limit = i64::try_from(limit).unwrap_or(i64::MAX);
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        let mut statement = connection.prepare(
+            "SELECT subject_kind, subject_id, scope_revision, capability, granted_at
+             FROM authorization_grants
+             ORDER BY subject_kind ASC, subject_id ASC, scope_revision ASC, capability ASC
+             LIMIT ?1",
+        )?;
+        statement
+            .query_map([limit], |row| {
+                Ok(AuthorizationGrantRecord {
+                    subject_kind: row.get(0)?,
+                    subject_id: row.get(1)?,
+                    scope_revision: row.get(2)?,
+                    capability: row.get(3)?,
+                    granted_at: row.get(4)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StorageError::from)
+    }
+
+    pub fn list_authorization_decision_records(
+        &self,
+        limit: usize,
+    ) -> Result<Vec<AuthorizationDecisionRecord>, StorageError> {
+        let limit = i64::try_from(limit).unwrap_or(i64::MAX);
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        let mut statement = connection.prepare(
+            "SELECT id, subject_kind, subject_id, scope_revision, decision,
+                    capability_count, decided_at
+             FROM authorization_decisions
+             ORDER BY id DESC
+             LIMIT ?1",
+        )?;
+        statement
+            .query_map([limit], |row| {
+                let capability_count = row.get::<_, i64>(5)?;
+                let capability_count = u32::try_from(capability_count)
+                    .map_err(|_| rusqlite::Error::IntegralValueOutOfRange(5, capability_count))?;
+                Ok(AuthorizationDecisionRecord {
+                    id: row.get(0)?,
+                    subject_kind: row.get(1)?,
+                    subject_id: row.get(2)?,
+                    scope_revision: row.get(3)?,
+                    decision: row.get(4)?,
+                    capability_count,
+                    decided_at: row.get(6)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StorageError::from)
+    }
+
+    pub fn list_authorization_grant_records(
+        &self,
+        subject_kind: &str,
+        subject_id: &str,
+        scope_revision: &str,
+    ) -> Result<Vec<String>, StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        let mut statement = connection.prepare(
+            "SELECT capability
+             FROM authorization_grants
+             WHERE subject_kind = ?1 AND subject_id = ?2 AND scope_revision = ?3
+             ORDER BY capability ASC",
+        )?;
+        statement
+            .query_map(params![subject_kind, subject_id, scope_revision], |row| {
+                row.get(0)
+            })?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StorageError::from)
+    }
+
+    pub fn replace_authorization_grant_records(
+        &self,
+        subject_kind: &str,
+        subject_id: &str,
+        scope_revision: &str,
+        capabilities: &[String],
+    ) -> Result<(), StorageError> {
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        let transaction = connection.transaction()?;
+        transaction.execute(
+            "DELETE FROM authorization_grants
+             WHERE subject_kind = ?1 AND subject_id = ?2",
+            params![subject_kind, subject_id],
+        )?;
+        for capability in capabilities {
+            transaction.execute(
+                "INSERT INTO authorization_grants (
+                    subject_kind, subject_id, scope_revision, capability
+                 ) VALUES (?1, ?2, ?3, ?4)",
+                params![subject_kind, subject_id, scope_revision, capability],
+            )?;
+        }
+        transaction.execute(
+            "INSERT INTO authorization_decisions (
+                subject_kind, subject_id, scope_revision, decision, capability_count
+             ) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                subject_kind,
+                subject_id,
+                scope_revision,
+                if capabilities.is_empty() {
+                    "revoke"
+                } else {
+                    "grant"
+                },
+                capabilities.len() as i64,
+            ],
+        )?;
+        transaction.execute(
+            "DELETE FROM authorization_decisions
+             WHERE id NOT IN (
+                 SELECT id FROM authorization_decisions ORDER BY id DESC LIMIT 4096
+             )",
+            [],
+        )?;
+        transaction.commit().map_err(StorageError::from)
     }
 }
 

@@ -31,16 +31,16 @@
   let {
     spec,
     height = "180px",
+    eyebrow = "WyrmGrid Hoard",
   }: {
     spec: ChartSpec;
     height?: string;
+    eyebrow?: string;
   } = $props();
 
   let container = $state<HTMLDivElement>();
   let chart = $state.raw<ECharts>();
-  const categories = $derived(
-    spec.series[0]?.points.map((point) => point.category) ?? [],
-  );
+  const categories = $derived(expandedCategories(spec.series[0]?.points ?? []));
   const resolvedHeight = $derived(
     usesHorizontalBars(spec.kind, categories)
       ? categoricalChartHeight(categories.length)
@@ -62,12 +62,29 @@
       : parsed.toLocaleString();
   }
 
+  function expandedCategories(
+    points: Array<{ category: string; gap_before?: boolean }>,
+  ): string[] {
+    return points.flatMap((point) =>
+      point.gap_before
+        ? [`${point.category} · gap`, point.category]
+        : [point.category],
+    );
+  }
+
+  function expandedValues(
+    points: Array<{ value: number; gap_before?: boolean }>,
+  ): Array<number | null> {
+    return points.flatMap((point) =>
+      point.gap_before ? [null, point.value] : [point.value],
+    );
+  }
+
   function optionFor(
     chartSpec: ChartSpec,
     theme: ThemeManifest,
   ): EChartsCoreOption {
-    const categories =
-      chartSpec.series[0]?.points.map((point) => point.category) ?? [];
+    const categories = expandedCategories(chartSpec.series[0]?.points ?? []);
     const presentation = chartPresentation(theme);
     const horizontalBars = usesHorizontalBars(chartSpec.kind, categories);
     const categoryAxis = {
@@ -129,7 +146,8 @@
         id: series.id,
         name: series.label,
         type: chartSpec.kind === "bar" ? "bar" : "line",
-        data: series.points.map((point) => point.value),
+        data: expandedValues(series.points),
+        connectNulls: false,
         smooth: chartSpec.kind !== "bar",
         symbol: "circle",
         symbolSize: 6,
@@ -165,7 +183,7 @@
 <article class="chart-card">
   <header>
     <div>
-      <span class="chart-eyebrow">WyrmGrid Hoard</span>
+      <span class="chart-eyebrow">{eyebrow}</span>
       <h3>{spec.title}</h3>
     </div>
     <span class="provenance" data-kind={spec.provenance.kind}
@@ -190,7 +208,10 @@
     <div class="screen-reader-summary">
       {#each spec.series as series}
         {series.label}: {series.points
-          .map((point) => `${point.category}, ${formatValue(point.value)}`)
+          .map(
+            (point) =>
+              `${point.gap_before ? "gap before, " : ""}${point.category}, ${formatValue(point.value)}`,
+          )
           .join("; ")}.
       {/each}
     </div>

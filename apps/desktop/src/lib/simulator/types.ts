@@ -94,3 +94,60 @@ export const emptySimulatorBridge: SimulatorBridgeView = {
   telemetry_schema_version: 1,
   providers: [],
 };
+
+export type SimulatorRecordingPreferences = {
+  retention_days: number;
+};
+
+export const defaultSimulatorRecordingPreferences: SimulatorRecordingPreferences =
+  {
+    retention_days: 30,
+  };
+
+export type SimulatorRecordingStatus = "active" | "completed" | "interrupted";
+
+export type SimulatorSessionSummary = {
+  id: string;
+  provider_id: string;
+  simulator_family: string;
+  simulator_version?: string;
+  aircraft_title: string;
+  aircraft_registration?: string;
+  started_at: string;
+  ended_at?: string;
+  status: SimulatorRecordingStatus;
+  sample_count: number;
+};
+
+export type SimulatorRecordedSample = {
+  source_sequence: number;
+  observed_at: string;
+  simulation_time_utc?: string;
+  altitude_feet: number;
+  indicated_airspeed_knots: number;
+  true_airspeed_knots: number;
+  ground_speed_knots: number;
+  fuel_total_weight_pounds?: number;
+  gross_weight_pounds?: number;
+  pitch_degrees: number;
+  bank_degrees: number;
+  gap_before: boolean;
+};
+
+export type SimulatorRecordingView = {
+  preferences: SimulatorRecordingPreferences;
+  active_session_id?: string;
+  sessions: SimulatorSessionSummary[];
+  last_code?: string;
+};
+
+export type SimulatorSessionView = {
+  session: SimulatorSessionSummary;
+  samples: SimulatorRecordedSample[];
+  sample_window_limit: number;
+};
+
+export const emptySimulatorRecording: SimulatorRecordingView = {
+  preferences: defaultSimulatorRecordingPreferences,
+  sessions: [],
+};

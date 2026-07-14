@@ -9,10 +9,13 @@
     type PresentedMeasurement,
   } from "$lib/settings/units";
   import "./simulator.css";
+  import RecordingHistory from "./RecordingHistory.svelte";
   import type {
     ProviderConnectionState,
     SimulatorBridgeView,
     SimulatorProviderView,
+    SimulatorRecordingView,
+    SimulatorSessionView,
   } from "./types";
 
   let {
@@ -21,9 +24,17 @@
     busy = false,
     errorMessage = "",
     displayPreferences,
+    recordingStatus,
+    recordingSession,
+    recordingBusy = false,
     onrefresh,
     onstart,
     onstop,
+    onrecordstart,
+    onrecordstop,
+    onsessionselect,
+    onsessiondelete,
+    ondeleteall,
     onclose,
   }: {
     open: boolean;
@@ -31,9 +42,17 @@
     busy?: boolean;
     errorMessage?: string;
     displayPreferences: DisplayPreferences;
+    recordingStatus: SimulatorRecordingView;
+    recordingSession?: SimulatorSessionView;
+    recordingBusy?: boolean;
     onrefresh: () => void;
     onstart: (providerId: string) => void;
     onstop: (providerId: string) => void;
+    onrecordstart: () => void;
+    onrecordstop: () => void;
+    onsessionselect: (sessionId: string) => void;
+    onsessiondelete: (sessionId: string) => void;
+    ondeleteall: () => void;
     onclose: () => void;
   } = $props();
 
@@ -133,8 +152,9 @@
   }
 
   function handleKeydown(event: KeyboardEvent): void {
-    if (open && event.key === "Escape" && !busy) onclose();
+    if (open && event.key === "Escape" && !busy && !recordingBusy) onclose();
   }
+
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
@@ -366,6 +386,20 @@
           </div>
         </dl>
       </section>
+
+      <RecordingHistory
+        status={recordingStatus}
+        session={recordingSession}
+        {displayPreferences}
+        busy={recordingBusy}
+        captureControls
+        canStart={Boolean(snapshot)}
+        onstart={onrecordstart}
+        onstop={onrecordstop}
+        {onsessionselect}
+        {onsessiondelete}
+        {ondeleteall}
+      />
 
       <footer class="simulator-footer">
         <span>

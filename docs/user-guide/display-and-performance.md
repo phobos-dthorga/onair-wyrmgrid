@@ -52,3 +52,24 @@ simulator. A low screen resolution alone is not a reason to select
 
 The switches are local presentation preferences. They are not transmitted to
 OnAir, simulator providers, plugins, or diagnostic telemetry.
+
+## Planned Atlas weather profiles
+
+Atlas weather will use a separate rendering preference because window size and
+graphics capability are independent. **Prefer compatibility weather rendering**
+will be enabled by default. It will retain route, time, provenance, and hazard
+facts while using simpler symbols, shapes, and animation. Users with suitable
+hardware may opt into GPU-enhanced wind, imagery, and time animation after
+capability detection.
+
+**Reduce flashes** will remain enabled by default independently of the selected
+profile. Enhanced or cinematic weather will not disable it automatically.
+Turning it off will require an explicit photosensitivity warning and user
+confirmation; accepting the Application Terms alone will not enable stronger
+flashing effects.
+
+`--low-resource` will force the Compatibility profile for that run. It will not
+silently change the saved preference, and a low display resolution alone will
+never be treated as evidence of a weak GPU. See the
+[Atlas flight-plan and weather contract](../atlas/flight-plan-and-weather.md)
+for the planned profiles and safeguards.

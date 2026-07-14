@@ -26,6 +26,13 @@ capability to be approved before launch. `on_air_fleet_read`,
 plugin receives only the stable translated snapshots it was granted and
 publishes data-only point layers that Atlas renders using the active host theme.
 
+Grant enforcement is owned by the core authorization service. Approval is
+bound to the plugin identifier, version, and exact requested permission set.
+Changing the version or requested permissions requires a fresh review. The
+append-only migration-4 preview grant table is no longer authoritative after
+migration 9, so an existing preview installation asks once more rather than
+silently carrying an unverifiable grant forward.
+
 The complete framing, lifecycle, limit, and compatibility contract is in
 [protocol version 1](protocol-v1.md).
 

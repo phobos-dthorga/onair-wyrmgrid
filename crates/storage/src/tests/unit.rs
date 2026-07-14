@@ -6,8 +6,88 @@ fn initializes_the_database_schema() {
     let store = Store::open_in_memory().expect("in-memory database should open");
     assert_eq!(
         store.schema_version().expect("version should be readable"),
-        7
+        9
     );
+}
+
+#[test]
+fn authorization_grants_are_revision_bound_and_decisions_are_audited() {
+    let store = Store::open_in_memory().expect("store should initialize");
+    let subject_kind = "plugin";
+    let subject_id = "org.example.weather";
+    let first_revision = "plugin:1.0.0:on_air_company_read";
+    let second_revision = "plugin:1.1.0:on_air_company_read|external_network";
+
+    store
+        .replace_authorization_grant_records(
+            subject_kind,
+            subject_id,
+            first_revision,
+            &["on_air_company_read".into()],
+        )
+        .expect("grant should save");
+    assert_eq!(
+        store
+            .list_authorization_grant_records(subject_kind, subject_id, first_revision)
+            .expect("matching revision should load"),
+        vec!["on_air_company_read"]
+    );
+    assert!(
+        store
+            .list_authorization_grant_records(subject_kind, subject_id, second_revision)
+            .expect("new revision should fail closed")
+            .is_empty()
+    );
+
+    store
+        .replace_authorization_grant_records(subject_kind, subject_id, second_revision, &[])
+        .expect("revocation should save");
+    let connection = store
+        .connection
+        .lock()
+        .expect("storage connection should be available");
+    let decisions: Vec<(String, i64)> = connection
+        .prepare(
+            "SELECT decision, capability_count FROM authorization_decisions
+             WHERE subject_kind = ?1 AND subject_id = ?2 ORDER BY id ASC",
+        )
+        .expect("decision query should prepare")
+        .query_map(params![subject_kind, subject_id], |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        })
+        .expect("decisions should query")
+        .collect::<Result<_, _>>()
+        .expect("decisions should collect");
+    assert_eq!(decisions, vec![("grant".into(), 1), ("revoke".into(), 0)]);
+}
+
+#[test]
+fn authorization_decision_history_is_bounded() {
+    let store = Store::open_in_memory().expect("store should initialize");
+    for index in 0..4_100 {
+        store
+            .replace_authorization_grant_records(
+                "plugin",
+                "org.example.weather",
+                &format!("plugin:{index}:on_air_company_read"),
+                &["on_air_company_read".into()],
+            )
+            .expect("decision should save");
+    }
+
+    let connection = store
+        .connection
+        .lock()
+        .expect("storage connection should be available");
+    let (count, oldest_id): (i64, i64) = connection
+        .query_row(
+            "SELECT COUNT(*), MIN(id) FROM authorization_decisions",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .expect("bounded decisions should be readable");
+    assert_eq!(count, 4_096);
+    assert_eq!(oldest_id, 5);
 }
 
 #[test]
@@ -55,6 +135,108 @@ fn persists_simulator_provider_preferences_default_off() {
         store.load_simulator_preferences_record().unwrap(),
         Some(preferences)
     );
+}
+
+#[test]
+fn persists_and_deletes_bounded_simulator_recordings() {
+    let store = Store::open_in_memory().expect("store should initialize");
+    assert!(
+        store
+            .load_simulator_recording_preferences_record()
+            .unwrap()
+            .is_none()
+    );
+    store
+        .save_simulator_recording_preferences_record(&SimulatorRecordingPreferencesRecord {
+            retention_days: 30,
+        })
+        .unwrap();
+
+    let session = SimulatorSessionRecord {
+        id: "session-1".into(),
+        provider_id: "provider-1".into(),
+        simulator_family: "MSFS_2024".into(),
+        simulator_version: Some("1.0".into()),
+        aircraft_title: "Cessna 172".into(),
+        aircraft_registration: Some("VH-WYR".into()),
+        started_at: "2026-07-15T00:00:00Z".into(),
+        ended_at: None,
+        origin: "manual".into(),
+        status: "active".into(),
+        sample_count: 0,
+    };
+    store.create_simulator_session_record(&session).unwrap();
+    let sample = SimulatorSampleRecord {
+        source_sequence: 1,
+        observed_at: "2026-07-15T00:00:01Z".into(),
+        simulation_time_utc: None,
+        altitude_feet: 1_234.0,
+        indicated_airspeed_knots: 90.0,
+        true_airspeed_knots: 95.0,
+        ground_speed_knots: 88.0,
+        fuel_total_weight_pounds: Some(200.0),
+        gross_weight_pounds: Some(2_100.0),
+        pitch_degrees: 2.0,
+        bank_degrees: -1.0,
+        gap_before: false,
+    };
+    assert!(
+        store
+            .append_simulator_sample_record(&session.id, &sample)
+            .unwrap()
+    );
+    assert!(
+        !store
+            .append_simulator_sample_record(&session.id, &sample)
+            .unwrap()
+    );
+
+    let sessions = store.list_simulator_session_records(10).unwrap();
+    assert_eq!(sessions.len(), 1);
+    assert_eq!(sessions[0].sample_count, 1);
+    assert_eq!(
+        store
+            .list_simulator_sample_records(&session.id, 600)
+            .unwrap(),
+        vec![sample]
+    );
+
+    store
+        .finish_simulator_session_record(&session.id, "2026-07-15T00:10:00Z", "completed")
+        .unwrap();
+    assert_eq!(
+        store
+            .prune_simulator_session_records("2026-07-16T00:00:00Z")
+            .unwrap(),
+        1
+    );
+    assert!(store.list_simulator_session_records(10).unwrap().is_empty());
+}
+
+#[test]
+fn opening_storage_marks_abandoned_recordings_interrupted() {
+    let store = Store::open_in_memory().expect("store should initialize");
+    store
+        .create_simulator_session_record(&SimulatorSessionRecord {
+            id: "abandoned".into(),
+            provider_id: "provider-1".into(),
+            simulator_family: "MSFS_2024".into(),
+            simulator_version: None,
+            aircraft_title: "Cessna 172".into(),
+            aircraft_registration: None,
+            started_at: "2026-07-15T00:00:00Z".into(),
+            ended_at: None,
+            origin: "manual".into(),
+            status: "active".into(),
+            sample_count: 0,
+        })
+        .unwrap();
+    store
+        .interrupt_active_simulator_sessions("2026-07-15T00:01:00Z")
+        .unwrap();
+    let session = store.list_simulator_session_records(1).unwrap().remove(0);
+    assert_eq!(session.status, "interrupted");
+    assert_eq!(session.ended_at.as_deref(), Some("2026-07-15T00:01:00Z"));
 }
 
 #[test]

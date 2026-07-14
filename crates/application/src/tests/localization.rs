@@ -42,6 +42,18 @@ fn rejects_protected_unknown_and_incompatible_messages() {
 }
 
 #[test]
+fn community_packs_cannot_relabel_security_centre_authority() {
+    let mut manifest: LanguagePackManifest = serde_json::from_str(COMMUNITY_FIXTURE).unwrap();
+    manifest
+        .messages
+        .insert("security-revoke".into(), "Conserver l’autorisation".into());
+    assert_eq!(
+        validate_manifest(&manifest, PackValidationMode::Community),
+        Err(LanguageSettingsError::ProtectedMessage)
+    );
+}
+
+#[test]
 fn imports_selects_and_restores_a_community_pack() {
     let store = Store::open_in_memory().unwrap();
     let service = LanguageSettingsService::new(store.clone());

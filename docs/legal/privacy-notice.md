@@ -19,6 +19,9 @@ professionally reviewed before a stable or commercial release.
 - If you choose to fetch airport weather, the plan's origin, destination, and
   alternate ICAO identifiers are sent to AviationWeather.gov for current METAR
   and TAF products.
+- Simulator telemetry is stored only after you explicitly start a recording.
+  These local sessions can contain precise flight times and measurements and
+  can be deleted from WyrmGrid.
 - Atlas downloads its current map style and tiles from MapLibre's public demo
   service after legal onboarding is complete.
 - Privacy-filtered error diagnostics are optional, off by default, and only
@@ -45,7 +48,15 @@ WyrmGrid currently keeps the following information on the user's device:
 - successful translated fleet, FBO, and pending-job observations in WyrmGrid's
   local Hoard database. These records contain stable WyrmGrid fields and
   provenance, not the raw OnAir response or API key;
-  and
+- after the user explicitly starts recording, translated simulator session
+  identity and one-hertz altitude, speed, fuel, weight, attitude,
+  simulator-time, and observation-time samples in the local WyrmGrid database.
+  Raw SimConnect messages and geographic coordinates are not persisted in the
+  initial recording schema;
+- symbolic authorization grant and revoke decisions, including actor ID,
+  capability scope revision, capability count, and decision time. These records
+  are limited to the newest 4,096 decisions and never contain API keys, raw
+  plugin output, or simulator payloads; and
 - while the application is running, a user-supplied SimBrief Pilot ID or
   username for the duration of one import request and the translated latest OFP
   in process memory. The identifier and plan are not currently written to the
@@ -173,6 +184,10 @@ local data. Version 1 does not yet provide an individual language-pack deletion
 control. The local diagnostic log rotates at 200 entries and can be cleared
 from the application. Optional Sentry diagnostic events follow
 the Sentry retention configuration disclosed when public telemetry is enabled.
+Completed and interrupted simulator recordings use the retention period chosen
+in Settings (30 days by default). They can be deleted individually or together;
+active recordings must first be stopped. Retention pruning is local and does
+not send session content to WyrmGrid, Sentry, simulator providers, or plugins.
 Uninstallers and operating systems may not remove every application-data file;
 users can request instructions for locating it.
 
