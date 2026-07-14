@@ -4,13 +4,16 @@
   "description": "OnAir WyrmGrid desktop application",
   "type": "module",
   "scripts": {
+    "predev": "node ../../scripts/prepare-simulator-provider.mjs",
     "dev": "vite dev",
     "build": "vite build",
+    "postbuild": "node ../../scripts/verify-desktop-key-art.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "tauri:before-build": "node ../../scripts/prepare-simulator-provider.mjs --release --build-frontend"
   },
   "license": "MIT",
   "dependencies": {

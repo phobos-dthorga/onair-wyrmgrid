@@ -6,7 +6,7 @@
 use chrono::{DateTime, Utc};
 use reqwest::{Client, StatusCode, header};
 use secrecy::{ExposeSecret, SecretString};
-use serde::{Deserialize, de::DeserializeOwned};
+use serde::{Deserialize, Deserializer, de::DeserializeOwned};
 use std::time::Duration;
 use thiserror::Error;
 use url::Url;
@@ -41,6 +41,26 @@ impl std::fmt::Debug for OnAirClient {
             .field("company_id", &"[REDACTED]")
             .field("api_key", &"[REDACTED]")
             .finish()
+    }
+}
+
+impl ClientError {
+    pub fn diagnostic_code(&self) -> &'static str {
+        match self {
+            Self::InvalidBaseUrl(_) => "onair.invalid_base_url",
+            Self::InvalidRequestHeader(_) => "onair.invalid_request_header",
+            Self::Transport(error) if error.is_timeout() => "onair.request_timeout",
+            Self::Transport(_) => "onair.transport_failure",
+            Self::Http(_) => "onair.http_failure",
+            Self::AuthenticationRejected => "onair.authentication_rejected",
+            Self::CompanyNotFound => "onair.company_not_found",
+            Self::RateLimited => "onair.rate_limited",
+            Self::ApiRejected => "onair.api_rejected",
+            Self::MissingContent => "onair.missing_content",
+            Self::ResponseTooLarge => "onair.response_too_large",
+            Self::InvalidContentType => "onair.invalid_content_type",
+            Self::MalformedResponse => "onair.malformed_response",
+        }
     }
 }
 
@@ -150,15 +170,35 @@ struct RawMission {
     description: Option<String>,
     #[serde(rename = "Pay", default)]
     pay: Option<f64>,
-    #[serde(rename = "CreationDate", default)]
+    #[serde(
+        rename = "CreationDate",
+        default,
+        deserialize_with = "deserialize_onair_datetime"
+    )]
     creation_date: Option<DateTime<Utc>>,
-    #[serde(rename = "TakenDate", default)]
+    #[serde(
+        rename = "TakenDate",
+        default,
+        deserialize_with = "deserialize_onair_datetime"
+    )]
     taken_date: Option<DateTime<Utc>>,
-    #[serde(rename = "ExpirationDate", default)]
+    #[serde(
+        rename = "ExpirationDate",
+        default,
+        deserialize_with = "deserialize_onair_datetime"
+    )]
     expiration_date: Option<DateTime<Utc>>,
-    #[serde(rename = "Cargos", default)]
+    #[serde(
+        rename = "Cargos",
+        default,
+        deserialize_with = "deserialize_null_default"
+    )]
     cargos: Vec<RawCargo>,
-    #[serde(rename = "Charters", default)]
+    #[serde(
+        rename = "Charters",
+        default,
+        deserialize_with = "deserialize_null_default"
+    )]
     charters: Vec<RawCharter>,
 }
 
@@ -530,6 +570,40 @@ fn bounded_text(value: Option<String>, maximum: usize) -> Option<String> {
 
 fn non_negative_finite(value: Option<f64>) -> Option<f64> {
     value.filter(|value| value.is_finite() && *value >= 0.0)
+}
+
+fn deserialize_null_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de> + Default,
+{
+    Ok(Option::<T>::deserialize(deserializer)?.unwrap_or_default())
+}
+
+fn deserialize_onair_datetime<'de, D>(deserializer: D) -> Result<Option<DateTime<Utc>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let Some(value) = Option::<String>::deserialize(deserializer)? else {
+        return Ok(None);
+    };
+    let value = value.trim();
+    if value.is_empty() {
+        return Ok(None);
+    }
+
+    if let Ok(timestamp) = DateTime::parse_from_rfc3339(value) {
+        return Ok(Some(timestamp.with_timezone(&Utc)));
+    }
+
+    const NAIVE_ONAIR_FORMATS: [&str; 2] = ["%Y-%m-%dT%H:%M:%S%.f", "%Y-%m-%d %H:%M:%S%.f"];
+    for format in NAIVE_ONAIR_FORMATS {
+        if let Ok(timestamp) = chrono::NaiveDateTime::parse_from_str(value, format) {
+            return Ok(Some(timestamp.and_utc()));
+        }
+    }
+
+    Ok(None)
 }
 
 #[cfg(test)]

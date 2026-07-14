@@ -86,6 +86,8 @@ nav {
 }
 .theme-pill,
 .language-pill,
+.simulator-pill,
+.diagnostics-pill,
 .legal-pill {
   border: 1px solid transparent;
   padding: 8px 10px;
@@ -94,13 +96,19 @@ nav {
   font-size: 11px;
   cursor: pointer;
 }
-.theme-pill {
+.simulator-pill {
   margin-left: auto;
 }
 .theme-pill:hover,
 .language-pill:hover,
+.simulator-pill:hover,
+.diagnostics-pill:hover,
 .legal-pill:hover {
   border-color: var(--color-line-faint);
+  color: var(--color-accent);
+}
+.simulator-pill.connected {
+  border-color: var(--color-accent-border);
   color: var(--color-accent);
 }
 .connection-pill span {
@@ -185,47 +193,6 @@ nav {
 .time-mode-actions button:hover {
   border-color: var(--color-highlight-border);
   color: var(--color-highlight);
-}
-
-.legal-loading {
-  display: grid;
-  place-content: center;
-  justify-items: center;
-  gap: 14px;
-  width: 100vw;
-  height: 100vh;
-  color: var(--color-text);
-  background:
-    radial-gradient(
-      circle at center,
-      var(--color-accent-soft),
-      transparent 34%
-    ),
-    var(--color-canvas);
-}
-.legal-loading .brand-mark {
-  margin-bottom: 6px;
-}
-.legal-loading strong {
-  max-width: 460px;
-  color: var(--color-text-muted);
-  text-align: center;
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1.5;
-}
-.legal-loading button {
-  border: 1px solid var(--color-accent-border);
-  border-radius: 3px;
-  padding: 9px 14px;
-  color: var(--color-canvas);
-  background: var(--color-accent);
-  font: inherit;
-  font-weight: 700;
-  cursor: pointer;
-}
-.legal-load-error .eyebrow {
-  color: var(--color-danger);
 }
 
 .workspace {

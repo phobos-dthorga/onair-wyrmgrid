@@ -1,7 +1,7 @@
 import { invokeDesktop, isDesktopRuntime } from "$lib/desktop/client";
 
 export const CURRENT_TERMS_VERSION = "2026-07-14";
-export const CURRENT_PRIVACY_NOTICE_VERSION = "2026-07-14.4";
+export const CURRENT_PRIVACY_NOTICE_VERSION = "2026-07-15";
 
 const PREVIEW_STORAGE_KEY = "wyrmgrid.preview.legal-preferences";
 

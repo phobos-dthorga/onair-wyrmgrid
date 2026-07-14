@@ -1,0 +1,10 @@
+{
+  "protocol_version": 1,
+  "sequence": 1,
+  "payload": {
+    "type": "hello",
+    "host_version": "0.1.0",
+    "provider_id": "io.github.phobosdthorga.wyrmgrid-simconnect-msfs2024",
+    "requested_capabilities": ["telemetry_read"]
+  }
+}

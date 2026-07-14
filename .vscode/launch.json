@@ -1,0 +1,92 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "WyrmGrid: debug desktop",
+      "type": "lldb",
+      "request": "launch",
+      "cargo": {
+        "args": [
+          "build",
+          "--package",
+          "wyrmgrid-desktop",
+          "--bin",
+          "wyrmgrid-desktop"
+        ],
+        "cwd": "${workspaceFolder}",
+        "problemMatcher": "$rustc"
+      },
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "wyrmgrid: frontend dev",
+      "env": {
+        "RUST_BACKTRACE": "1"
+      },
+      "sourceLanguages": ["rust"],
+      "terminal": "integrated"
+    },
+    {
+      "name": "WyrmGrid: attach to desktop",
+      "type": "lldb",
+      "request": "attach",
+      "pid": "${command:pickMyProcess}",
+      "sourceLanguages": ["rust"]
+    },
+    {
+      "name": "WyrmGrid: debug Rust tests",
+      "type": "lldb",
+      "request": "launch",
+      "cargo": {
+        "args": ["test", "--package", "${input:rustPackage}", "--no-run"],
+        "cwd": "${workspaceFolder}",
+        "problemMatcher": "$rustc"
+      },
+      "args": ["${input:rustTestName}", "--nocapture", "--test-threads=1"],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "RUST_BACKTRACE": "1"
+      },
+      "sourceLanguages": ["rust"],
+      "terminal": "integrated"
+    },
+    {
+      "name": "WyrmGrid: debug desktop Rust tests",
+      "type": "lldb",
+      "request": "launch",
+      "cargo": {
+        "args": ["test", "--package", "wyrmgrid-desktop", "--lib", "--no-run"],
+        "cwd": "${workspaceFolder}",
+        "problemMatcher": "$rustc"
+      },
+      "args": ["${input:rustTestName}", "--nocapture", "--test-threads=1"],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "RUST_BACKTRACE": "1"
+      },
+      "sourceLanguages": ["rust"],
+      "terminal": "integrated"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "rustPackage",
+      "type": "pickString",
+      "description": "Rust package containing the test",
+      "options": [
+        "wyrmgrid-application",
+        "wyrmgrid-domain",
+        "wyrmgrid-onair-api",
+        "wyrmgrid-plugin-protocol",
+        "wyrmgrid-simbrief-api",
+        "wyrmgrid-storage",
+        "wyrmgrid-weather-api"
+      ],
+      "default": "wyrmgrid-application"
+    },
+    {
+      "id": "rustTestName",
+      "type": "promptString",
+      "description": "Test-name filter; leave empty to run the target's tests",
+      "default": ""
+    }
+  ]
+}

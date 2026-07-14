@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wyrmgrid.dev/schemas/simulator-telemetry-snapshot-v1.json",
+  "title": "WyrmGrid simulator telemetry snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "sequence",
+    "provenance",
+    "simulator",
+    "aircraft",
+    "position",
+    "altitude_feet",
+    "pitch_degrees",
+    "bank_degrees",
+    "true_heading_degrees",
+    "indicated_airspeed_knots",
+    "true_airspeed_knots",
+    "ground_speed_knots",
+    "on_ground"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "sequence": { "type": "integer", "minimum": 1 },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "provider",
+        "retrieved_at",
+        "transformation_version",
+        "freshness"
+      ],
+      "properties": {
+        "kind": { "const": "external_fact" },
+        "provider": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "provider_revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "generated_at": { "type": "string", "format": "date-time" },
+        "retrieved_at": { "type": "string", "format": "date-time" },
+        "transformation_version": { "type": "integer", "minimum": 1 },
+        "freshness": { "enum": ["current", "stale", "unknown"] }
+      }
+    },
+    "simulator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["family"],
+      "properties": {
+        "family": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "version": { "type": "string", "minLength": 1, "maxLength": 64 }
+      }
+    },
+    "aircraft": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title"],
+      "properties": {
+        "title": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "registration": { "type": "string", "minLength": 1, "maxLength": 32 }
+      }
+    },
+    "position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["latitude", "longitude"],
+      "properties": {
+        "latitude": { "type": "number", "minimum": -90, "maximum": 90 },
+        "longitude": { "type": "number", "minimum": -180, "maximum": 180 }
+      }
+    },
+    "altitude_feet": { "type": "number", "minimum": -2000, "maximum": 100000 },
+    "pitch_degrees": { "type": "number", "minimum": -180, "maximum": 180 },
+    "bank_degrees": { "type": "number", "minimum": -180, "maximum": 180 },
+    "true_heading_degrees": { "type": "number", "minimum": 0, "maximum": 360 },
+    "indicated_airspeed_knots": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 2000
+    },
+    "true_airspeed_knots": { "type": "number", "minimum": 0, "maximum": 2000 },
+    "ground_speed_knots": { "type": "number", "minimum": 0, "maximum": 2000 },
+    "on_ground": { "type": "boolean" },
+    "simulation_time_utc": { "type": "string", "format": "date-time" },
+    "fuel_total_gallons": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 10000000
+    },
+    "fuel_total_weight_pounds": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 10000000
+    },
+    "gross_weight_pounds": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 10000000
+    },
+    "engines_running": { "type": "boolean" },
+    "parking_brake_set": { "type": "boolean" },
+    "paused": { "type": "boolean" },
+    "simulation_rate": { "type": "number", "minimum": 0, "maximum": 128 }
+  }
+}

@@ -55,6 +55,12 @@ Community packs cannot override keys beginning with `legal-`, `privacy-`,
 These prompts remain canonical English until a translation is reviewed and
 bundled through a future trusted release path.
 
+The desktop **Diagnostics** surface and its local structured log are also
+English-only and do not resolve message keys through language packs. This is an
+operational compatibility boundary: the stable code and controlled message
+must mean the same thing in every support report. Localized user-facing recovery
+guidance remains a separate presentation concern.
+
 Imported pack contents and author metadata remain in the local WyrmGrid
 database. They are not sent to Sentry, external providers, or plugins. A pack
 author should not place contact details or other private information in a

@@ -85,7 +85,8 @@ SayIntentions context ---------------+
 ```
 
 See [ADR-0008](decisions/0008-provider-adapters-and-operational-snapshots.md)
-and the [external integrations programme](../integrations/README.md).
+and [ADR-0011](decisions/0011-core-simulator-capability-provider-sidecars.md),
+plus the [external integrations programme](../integrations/README.md).
 
 ## Extension boundary
 

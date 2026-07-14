@@ -2,12 +2,14 @@
 members = [
     "apps/desktop/src-tauri",
     "crates/application",
+    "crates/bridge-protocol",
     "crates/domain",
     "crates/onair-api",
     "crates/plugin-protocol",
     "crates/simbrief-api",
     "crates/storage",
     "crates/weather-api",
+    "providers/msfs2024-simconnect",
 ]
 resolver = "2"
 
@@ -22,6 +24,7 @@ repository = "https://github.com/phobos-dthorga/onair-wyrmgrid"
 [workspace.dependencies]
 chrono = { version = "0.4.41", default-features = false, features = ["clock", "serde"] }
 fluent-syntax = "0.12.0"
+libloading = "0.8.9"
 reqwest = { version = "0.12.22", default-features = false, features = ["json", "rustls-tls"] }
 rusqlite = { version = "0.40.1", features = ["bundled"] }
 secrecy = "0.10.3"

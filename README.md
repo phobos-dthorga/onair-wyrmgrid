@@ -1,5 +1,11 @@
 # OnAir WyrmGrid
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/brand/key-art/derivatives/hero-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="assets/brand/key-art/derivatives/hero-light.png">
+  <img alt="OnAir WyrmGrid — See the network. Command the skies." src="assets/brand/key-art/derivatives/hero-dark.png">
+</picture>
+
 **A modular, open-source operations and intelligence platform for OnAir Airline Manager.**
 
 OnAir WyrmGrid is a local-first desktop application for understanding fleets,
@@ -10,9 +16,11 @@ plugin boundary available to third-party developers.
 
 > **Project status:** foundation stage. Session-only OnAir connection, Atlas,
 > Hoard, read-only Jobs-to-Dispatch comparison, and the first supervised Python
-> plugin proof are implemented;
-> persistent credential storage, plugin sandboxing/signing, and broader
-> operational integrations remain ahead.
+> plugin proof are implemented. The versioned Bridge supervisor, read-only MSFS
+> 2024 SimConnect provider, desktop telemetry view, and permission-filtered
+> plugin snapshots are also implemented; live simulator certification, release
+> bundling, persistent credential storage, plugin/provider signing and
+> sandboxing, and broader operational integrations remain ahead.
 
 ## Vision
 
@@ -41,15 +49,22 @@ plugin boundary available to third-party developers.
 | Plugin boundary              | Out-of-process, versioned JSON messages |
 | Native simulator integration | Separate versioned provider sidecars    |
 
-The Rust workspace currently uses seven cohesive libraries:
+The Rust workspace currently uses eight cohesive libraries plus the desktop and
+SimConnect provider executables:
 
 - `wyrmgrid-domain` — stable application-owned types and provenance;
 - `wyrmgrid-onair-api` — credential-safe, read-only OnAir boundary;
 - `wyrmgrid-storage` — SQLite ownership and migrations;
 - `wyrmgrid-application` — interface-independent orchestration;
+- `wyrmgrid-bridge-protocol` — versioned simulator-provider framing and
+  manifests;
 - `wyrmgrid-plugin-protocol` — public manifest and permission contracts;
-- `wyrmgrid-simbrief-api` — bounded private SimBrief response translation.
+- `wyrmgrid-simbrief-api` — bounded private SimBrief response translation;
 - `wyrmgrid-weather-api` — bounded AviationWeather.gov METAR/TAF translation.
+
+`wyrmgrid-simconnect-provider` is the first supervised Bridge sidecar. Other
+providers such as FSUIPC use the same stable boundary rather than linking a
+native simulator ABI into the desktop process.
 
 ## Core promises
 
@@ -76,6 +91,10 @@ The Rust workspace currently uses seven cohesive libraries:
 - Tauri's platform prerequisites;
 - Microsoft Edge WebView2 on Windows.
 
+The MSFS 2024 SDK is optional for ordinary builds. It is needed for local
+SimConnect development and live provider validation; Microsoft SDK binaries are
+not stored in this repository.
+
 Then run:
 
 ```powershell
@@ -98,8 +117,10 @@ become OnAir's primary client, so this is a temporary compatibility rule that
 must be retested when its API credential support reaches parity.
 
 See [Development](docs/development.md), [Architecture](docs/architecture/overview.md),
-[External integrations](docs/integrations/README.md), and
-[Contributing](CONTRIBUTING.md) before making structural changes.
+[External integrations](docs/integrations/README.md),
+[Simulator provider authoring](docs/integrations/simulator-provider-authoring.md),
+the [simulator experience roadmap](docs/integrations/simulator-experience-roadmap.md),
+and [Contributing](CONTRIBUTING.md) before making structural changes.
 
 ## Releases
 

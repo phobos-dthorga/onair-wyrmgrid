@@ -17,6 +17,43 @@ npm run dev
 See the [testing strategy](testing.md) for test placement, required cases, CI
 gates, and the safe scope for automated test-writing agents.
 
+For breakpoint-based investigation, use the checked-in VS Code configurations
+described in the [debugging guide](debugging.md). They support launching or
+attaching to the Tauri backend, focused Rust test debugging, and the WebView
+inspector without placing credentials in project configuration.
+
+## MSFS 2024 SimConnect provider
+
+The desktop and the simulator integration are separate executables. `npm run
+dev` now builds the debug provider and stages its target-suffixed Tauri sidecar
+automatically before the desktop starts:
+
+```powershell
+npm run dev
+```
+
+Run `npm run provider:prepare` to perform that preparation without launching the
+desktop. The command is covered by the Windows CI smoke path. Tauri release
+preparation builds the release provider, stages it under the ignored
+`apps/desktop/src-tauri/binaries` directory, then builds the interface. The
+provider executable is therefore a Windows-only declared Tauri external binary
+rather than a hand-copied release artifact. Non-Windows builds skip the native
+provider.
+
+The desktop discovers the development binary under `target/debug`. Set
+`WYRMGRID_SIMULATOR_PROVIDER_PATH` to an absolute provider executable path only
+when testing another approved build. The provider discovers `SimConnect.dll`
+beside itself, through an absolute `WYRMGRID_SIMCONNECT_DLL`, through an absolute
+`MSFS2024_SDK` root, or in the standard MSFS 2024 SDK installation directory.
+The provider safely reports unavailable if the SDK client or simulator is
+absent; neither is needed for normal non-Windows core builds.
+
+Do not copy Microsoft SDK files into the repository or release artifacts. The
+first release bundle must follow an explicit redistribution review. See
+[simulator provider authoring](integrations/simulator-provider-authoring.md) for
+the protocol, FSUIPC path, live-validation requirements, and community-provider
+release gate.
+
 ## Repository layout
 
 ```text
@@ -24,6 +61,7 @@ apps/desktop/          Tauri and Svelte desktop interface
 crates/                application-owned Rust libraries
 docs/                  durable design and operating documentation
 examples/plugins/      public protocol examples
+providers/             approved simulator provider sidecars
 schemas/               language-neutral public contracts
 locales/               canonical interface message catalogues
 .github/               contribution and automation policy

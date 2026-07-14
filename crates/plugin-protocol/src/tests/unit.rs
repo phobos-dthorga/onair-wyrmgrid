@@ -139,6 +139,20 @@ fn validates_the_protocol_version_one_fixtures() {
         }
         _ => panic!("fixture should contain a map layer"),
     }
+
+    let telemetry: ProtocolEnvelope<HostMessage> = serde_json::from_str(include_str!(
+        "../../../../schemas/fixtures/plugin-simulator-telemetry-v1.json"
+    ))
+    .expect("simulator telemetry fixture should deserialize");
+    telemetry
+        .validate_header()
+        .expect("simulator telemetry header should validate");
+    match telemetry.payload {
+        HostMessage::SimulatorTelemetrySnapshot { snapshot } => snapshot
+            .validate()
+            .expect("simulator telemetry should validate"),
+        _ => panic!("fixture should contain simulator telemetry"),
+    }
 }
 
 #[test]

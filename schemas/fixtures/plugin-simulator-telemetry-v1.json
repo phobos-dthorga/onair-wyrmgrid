@@ -1,0 +1,48 @@
+{
+  "protocol_version": 1,
+  "sequence": 2,
+  "payload": {
+    "type": "simulator_telemetry_snapshot",
+    "snapshot": {
+      "schema_version": 1,
+      "sequence": 1,
+      "provenance": {
+        "kind": "external_fact",
+        "provider": "io.github.phobosdthorga.wyrmgrid-simconnect-msfs2024",
+        "provider_revision": "1.6.9",
+        "generated_at": "2026-07-15T04:00:00Z",
+        "retrieved_at": "2026-07-15T04:00:00Z",
+        "transformation_version": 1,
+        "freshness": "current"
+      },
+      "simulator": {
+        "family": "msfs_2024",
+        "version": "1.6.9"
+      },
+      "aircraft": {
+        "title": "Sanitized test aircraft",
+        "registration": "VH-WRM"
+      },
+      "position": {
+        "latitude": -33.8688,
+        "longitude": 151.2093
+      },
+      "altitude_feet": 4500.0,
+      "pitch_degrees": 2.0,
+      "bank_degrees": -1.0,
+      "true_heading_degrees": 271.0,
+      "indicated_airspeed_knots": 128.0,
+      "true_airspeed_knots": 136.0,
+      "ground_speed_knots": 132.0,
+      "on_ground": false,
+      "simulation_time_utc": "2026-07-15T04:00:00Z",
+      "fuel_total_gallons": 81.0,
+      "fuel_total_weight_pounds": 486.0,
+      "gross_weight_pounds": 4820.0,
+      "engines_running": true,
+      "parking_brake_set": false,
+      "paused": false,
+      "simulation_rate": 1.0
+    }
+  }
+}

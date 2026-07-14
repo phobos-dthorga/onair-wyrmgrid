@@ -21,6 +21,8 @@
   - [VATSIM and IVAO](integrations/online-networks.md)
   - [Navigation data and flight-plan interchange](integrations/navigation-and-interchange.md)
   - [WyrmGrid Bridge and simulator providers](integrations/wyrmgrid-bridge.md)
+  - [Simulator provider authoring and FSUIPC path](integrations/simulator-provider-authoring.md)
+  - [Simulator connection, recording, in-game control, and graphs](integrations/simulator-experience-roadmap.md)
 - [Observability and Sentry plan](operations/observability.md)
 - [Application Terms of Use](legal/terms-of-use.md)
 - [Privacy Notice](legal/privacy-notice.md)

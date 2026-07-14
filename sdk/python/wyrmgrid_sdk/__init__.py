@@ -60,10 +60,18 @@ class Plugin:
     def __init__(
         self,
         plugin_id: str,
-        on_fleet_snapshot: Callable[[dict[str, Any]], dict[str, Any] | None],
+        on_fleet_snapshot: Callable[[dict[str, Any]], dict[str, Any] | None]
+        | None = None,
+        on_simulator_telemetry: Callable[
+            [dict[str, Any]], dict[str, Any] | None
+        ]
+        | None = None,
     ) -> None:
+        if on_fleet_snapshot is None and on_simulator_telemetry is None:
+            raise ValueError("at least one snapshot callback is required")
         self.plugin_id = plugin_id
         self.on_fleet_snapshot = on_fleet_snapshot
+        self.on_simulator_telemetry = on_simulator_telemetry
         self._outgoing_sequence = 1
         self._incoming_sequence = 0
         self._grants: set[str] = set()
@@ -89,16 +97,32 @@ class Plugin:
             message_type = payload.get("type")
             if message_type == "shutdown":
                 return
-            if message_type != "fleet_snapshot":
+            if message_type == "fleet_snapshot":
+                if "on_air_fleet_read" not in self._grants:
+                    raise ProtocolError("fleet snapshot received without permission")
+                if self.on_fleet_snapshot is None:
+                    continue
+                layer = self.on_fleet_snapshot(payload["snapshot"])
+                self._publish_layer(layer)
+                continue
+            if message_type == "simulator_telemetry_snapshot":
+                if "simulator_telemetry_read" not in self._grants:
+                    raise ProtocolError(
+                        "simulator telemetry received without permission"
+                    )
+                if self.on_simulator_telemetry is None:
+                    continue
+                layer = self.on_simulator_telemetry(payload["snapshot"])
+                self._publish_layer(layer)
+                continue
+            else:
                 raise ProtocolError("unsupported host message")
-            if "on_air_fleet_read" not in self._grants:
-                raise ProtocolError("fleet snapshot received without permission")
 
-            layer = self.on_fleet_snapshot(payload["snapshot"])
-            if layer is not None:
-                if "map_layers_publish" not in self._grants:
-                    raise ProtocolError("map layer publication is not granted")
-                self._send({"type": "publish_map_layer", "layer": layer})
+    def _publish_layer(self, layer: dict[str, Any] | None) -> None:
+        if layer is not None:
+            if "map_layers_publish" not in self._grants:
+                raise ProtocolError("map layer publication is not granted")
+            self._send({"type": "publish_map_layer", "layer": layer})
 
     def _receive(self, expected_type: str | None = None) -> dict[str, Any]:
         envelope = _read_frame()

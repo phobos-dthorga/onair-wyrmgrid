@@ -111,7 +111,15 @@ not replace completion of the current vertical slice.
 ### WyrmGrid Bridge
 
 - Versioned, supervised sidecar protocol with explicit capabilities
+  (implemented foundation)
 - MSFS 2024 SimConnect detection and read-only telemetry as the primary provider
+  (implemented; live certification and SimConnect client redistribution remain)
+- Default-off provider auto-start and automatic recording, with explicit
+  session retention and deletion controls
+- WyrmChart telemetry sessions with gap-aware altitude, speed, fuel, attitude,
+  and later planned-versus-actual graphs
+- A thin MSFS in-simulator recording controller after an independent CommBus
+  and package-distribution spike
 - Flight lifecycle and planned-versus-actual summaries
 - Explicit `.pln` export and flight-plan load after read-only telemetry is proven
 - MSFS 2020 and FSUIPC compatibility providers
@@ -128,6 +136,8 @@ not replace completion of the current vertical slice.
 
 The complete sequence and provider constraints live in the
 [external integrations programme](integrations/README.md).
+The simulator UX sequence is detailed in the
+[simulator experience roadmap](integrations/simulator-experience-roadmap.md).
 
 ## Later modules
 
@@ -140,7 +150,8 @@ The complete sequence and provider constraints live in the
 - Maintenance, finance, and flight history
 - Hoard Timeline expansion across company value, geographic FBO coverage,
   routes, utilization, finance, and named milestones
-- WyrmGrid Bridge simulator telemetry, followed by additional simulator and
+- WyrmGrid Bridge flight lifecycle and planned-versus-actual use of the
+  implemented telemetry foundation, followed by additional simulator and
   aircraft-specific providers
 - Signed plugin packages, hardened supervision, and WyrmGrid Aerie discovery
 

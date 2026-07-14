@@ -115,6 +115,12 @@ No authenticated pending-jobs response has been captured or certified, so the
 feature remains a developer preview until an outside-repository authenticated
 test confirms the narrow live shape.
 
+The adapter accepts absent or `null` cargo and charter collections as empty and
+accepts both RFC 3339 timestamps and the timezone-less date-time strings emitted
+by some .NET serializers, interpreting the latter as UTC. Invalid optional
+timestamps become unavailable facts rather than invalidating an otherwise
+usable mission. These compatibility rules do not expose or retain raw JSON.
+
 ## Synchronization policy
 
 OnAir does not currently publish a formal public API rate-limit policy in the

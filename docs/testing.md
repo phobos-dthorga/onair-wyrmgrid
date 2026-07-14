@@ -42,7 +42,13 @@ Every pull request runs Rust formatting, compilation, Clippy with warnings
 denied, core tests, frontend formatting, Svelte type checking, frontend tests,
 and a production frontend build. Windows also compiles and tests the Tauri
 backend. Dependency review, Rust dependency policy, and high-severity npm audit
-checks run in the security workflow.
+checks run in the security workflow. Windows also compiles and tests the
+SimConnect provider so its native ABI declarations do not hide behind the
+cross-platform unavailable stub.
+
+Launch-art presentation tests cover dark/light theme selection, malformed
+colour fallback, and bounded minimum display timing. Every production frontend
+build also verifies that both approved hero-image checksums were packaged.
 
 Pull requests produce a downloadable Rust LCOV coverage report. Coverage is a
 map for finding untested decisions, not a score to game. A minimum threshold can
@@ -54,7 +60,11 @@ logic.
 
 1. Simulator telemetry contracts: recorded synthetic frames, disconnects,
    reconnects, out-of-order updates, impossible values, rate limits, and safe
-   degradation when a bridge or simulator is absent.
+   degradation when a bridge or simulator is absent. The version-one fixtures,
+   domain boundaries, handshake, replay rejection, raw-value translation,
+   orderly shutdown, absent-provider paths, development discovery, and Tauri
+   sidecar staging are covered; deterministic reconnect/rate tests and the live
+   matrix remain.
 2. OnAir synchronization: partial provider failures, rate-limit recovery,
    atomic snapshot publication, and no credential leakage across every error
    path.
@@ -77,3 +87,17 @@ Do not delegate interpretation of live provider behaviour, security or privacy
 boundaries, protocol compatibility decisions, or assertions that could
 silently redefine a business rule. Test-only pull requests should not change
 production behaviour merely to make a test pass.
+
+## Live simulator certification
+
+Live tests run outside the repository and CI. Record the WyrmGrid release,
+provider version, simulator build, SimConnect client version, architecture, and
+aircraft class. Exercise cold start with no simulator, connect, aircraft load,
+pause/unpause, on-ground and airborne telemetry, disconnect, simulator exit, and
+reconnect. Compare displayed units and a sanitized sample against simulator
+values. Record only pass/fail and non-identifying summaries: never retain route,
+coordinates, registration, username, local path, raw frame, or provider error.
+
+Passing synthetic tests is not evidence that every aircraft exposes equivalent
+facts. Live certification must name the tested scope and keep unsupported
+third-party-aircraft variables optional.

@@ -34,6 +34,30 @@ plan quota. Set a hard pay-as-you-go budget before enabling any paid overage.
 - Expected input, authentication, rate-limit, offline, and optional-integration
   conditions are not reported.
 - Release CI can upload Svelte source maps using protected GitHub configuration.
+- A separate local diagnostic log retains at most 200 structured English entries
+  in `wyrmgrid-diagnostics.jsonl` under the application-data directory. It is
+  readable and clearable from **Diagnostics** in the desktop header.
+
+## Local diagnostic log
+
+The local log is available whether or not Sentry telemetry is configured or
+enabled. It records stable error codes, controlled English messages, operation
+names, severity, and timestamps. It does not record raw provider responses,
+request URLs, headers, OnAir API keys, company identifiers, domain snapshots,
+plugin output, or user-entered text. Pending-job synchronization failures are
+recorded even when fleet or FBO synchronization succeeds and the combined
+operation returns partial data.
+
+Diagnostic wording is deliberately outside the community localization system.
+Stable English codes and messages make support evidence comparable across
+installations and avoid an untrusted language pack changing the apparent cause
+of a failure. The user-facing workflow may still present localized recovery
+guidance separately.
+
+The file rotates to the most recent 200 entries and can be cleared in the
+interface. WyrmGrid never uploads or attaches this file automatically. A user
+should review entries before sharing them even though the writer accepts only
+bounded application-owned fields.
 
 | Kind     | Name                  |
 | -------- | --------------------- |

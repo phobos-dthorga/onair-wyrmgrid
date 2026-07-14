@@ -14,6 +14,7 @@ fn installs_the_bundled_plugin_with_no_implicit_grants() {
         Some(directory.path().to_path_buf()),
         store.clone(),
         OnAirSession::with_default_store(store),
+        SimulatorBridgeService::new(Vec::new()),
     );
 
     let status = service.status().expect("plugin status should load");
@@ -32,6 +33,7 @@ fn persists_and_revokes_only_the_requested_capabilities() {
         Some(directory.path().to_path_buf()),
         store.clone(),
         OnAirSession::with_default_store(store),
+        SimulatorBridgeService::new(Vec::new()),
     );
 
     let approved = service
@@ -53,6 +55,7 @@ fn completes_the_out_of_process_handshake_when_python_is_available() {
         Some(directory.path().to_path_buf()),
         store.clone(),
         OnAirSession::with_default_store(store),
+        SimulatorBridgeService::new(Vec::new()),
     );
     service
         .approve_requested_permissions(BUNDLED_PLUGIN_ID)
@@ -117,6 +120,7 @@ fn publishes_a_host_validated_layer_from_a_sanitized_fleet_snapshot() {
         Some(directory.path().to_path_buf()),
         store.clone(),
         OnAirSession::with_default_store(store),
+        SimulatorBridgeService::new(Vec::new()),
     );
     service
         .approve_requested_permissions(BUNDLED_PLUGIN_ID)

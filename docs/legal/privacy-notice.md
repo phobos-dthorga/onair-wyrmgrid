@@ -1,6 +1,6 @@
 # OnAir WyrmGrid Privacy Notice
 
-**Version and effective date:** 2026-07-14.4
+**Version and effective date:** 2026-07-15
 
 This preliminary notice describes information handled by official builds of
 OnAir WyrmGrid distributed by Phobos A. D'thorga. It does not describe an
@@ -122,6 +122,14 @@ notices and policies.
 
 ### Optional Sentry diagnostics
 
+WyrmGrid also keeps a separate local diagnostic log whether or not optional
+Sentry telemetry is enabled. It contains timestamps, severity, stable error
+codes, operation names, and controlled English messages. It is designed not to
+contain OnAir credentials, company identifiers, raw provider responses, local
+paths, plugin output, or user-entered text. The log retains at most 200 entries,
+can be reviewed and cleared from **Diagnostics**, and is never uploaded or
+attached automatically.
+
 If the user opts in and the build has been deliberately configured for public
 telemetry, WyrmGrid may send unexpected Rust failures and unhandled interface
 errors to separate Sentry projects in Sentry's United States data region.
@@ -162,7 +170,8 @@ the session.
 Local preferences and imported customisation manifests remain until changed,
 removed by a future management function, or deleted with the application's
 local data. Version 1 does not yet provide an individual language-pack deletion
-control. Optional diagnostic events follow
+control. The local diagnostic log rotates at 200 entries and can be cleared
+from the application. Optional Sentry diagnostic events follow
 the Sentry retention configuration disclosed when public telemetry is enabled.
 Uninstallers and operating systems may not remove every application-data file;
 users can request instructions for locating it.

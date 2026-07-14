@@ -13,6 +13,7 @@
 - plugin trust decisions and signatures;
 - diagnostic events, telemetry preferences, and Sentry report identifiers;
 - release source maps, native debug information, and telemetry upload credentials;
+- live debugger state, watch expressions, memory views, and debug screenshots;
 - legal-document versions, acknowledgement records, and privacy preferences;
 - selected language, imported community language-pack content, translator
   metadata, and the integrity of security-sensitive interface wording;
@@ -21,7 +22,8 @@
 ## Primary threats
 
 - credential disclosure through logs, errors, telemetry, storage, or plugins;
-- malicious plugin manifests, executables, dependencies, and messages;
+- malicious plugin or simulator-provider manifests, executables, dependencies,
+  and messages;
 - path traversal and unsafe process arguments;
 - unbounded messages, event storms, hangs, and resource exhaustion;
 - hostile API payloads, imported files, map styles, and URLs;
@@ -91,13 +93,21 @@
   validation, state verification, and system-browser authentication;
 - public online-network adapters discard names, member IDs, remarks, and other
   fields not required by the implemented view before persistence or display;
-- Bridge sidecars use versioned handshakes, explicit capabilities, bounded
-  framing, supervised lifecycle, and local-only provider connections;
+- Bridge sidecars use a 64 KiB length-prefixed JSON ceiling, independent
+  monotonic sequences, a three-second identity/version handshake, explicit
+  capabilities, validated provider and simulator provenance, supervised
+  lifecycle, and local-only provider connections;
+- provider executable paths are host-owned, entry-point names are manifest
+  validated, child environments are scrubbed, and only absolute approved
+  SimConnect SDK/client paths cross into the first-party provider;
+- only one selected telemetry provider is active in protocol version 1; the host
+  neither merges values nor silently falls back from SimConnect to FSUIPC;
 - simulator plan loading and every other external mutation require a distinct
   negotiated capability and explicit user action;
 - deny-by-default plugin capabilities persisted separately from manifests; the
   current runtime starts only after every requested capability is approved and
-  implements only sanitized fleet reads and data-only Atlas publication;
+  implements only sanitized fleet and simulator reads plus data-only Atlas
+  publication;
 - plugin directories, manifests, and entry points are bounded and canonicalized;
   symlinked folders/files, path escape, malformed metadata, and unsupported
   runtimes or capabilities are rejected;
@@ -127,6 +137,13 @@
 - diagnostic payloads use an allowlist and redaction tests; OnAir keys, raw
   payloads, database rows, local paths, plugin traffic, and simulator data are
   excluded;
+- the local diagnostic log accepts only timestamps, severity, stable codes,
+  operation names, and bounded application-owned English messages; it rotates
+  at 200 entries, is user-clearable, stays outside language packs, and is never
+  uploaded or attached automatically;
+- checked-in debugger configuration contains no credentials, credential files,
+  verbose provider logging, or automatic memory capture; debugger watches,
+  consoles, dumps, and screenshots are treated as sensitive local artifacts;
 - telemetry is off by default; first-run onboarding prevents Atlas from mounting
   before the current Terms and Privacy Notice are acknowledged, and stale
   document versions suppress both Rust and interface diagnostics until review;
@@ -306,6 +323,11 @@ excluded from plugins and Sentry.
 - A localhost API is not inherently trustworthy. Another local process or a
   compromised host may impersonate a sidecar or simulator, observe traffic, or
   alter data where the provider has no authentication mechanism.
+- A provider is a native executable with the ambient rights of the user's
+  account. Process separation and protocol validation contain malformed output
+  but do not make an unreviewed provider safe. Community provider loading stays
+  disabled until publisher identity, signing, tamper checks, install-root
+  controls, resource limits, and safe update/rollback exist.
 - Licensed navigation data may remain accessible in local caches to a user or
   process with filesystem access. Entitlement checks and application controls do
   not replace operating-system security or provider licence compliance.

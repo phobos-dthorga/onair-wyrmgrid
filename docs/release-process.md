@@ -59,6 +59,10 @@ When a release includes WyrmGrid Bridge or another provider adapter:
 - build each platform sidecar in CI from the same tagged commit, sign it under
   the platform policy when signing is enabled, record its checksum, and package
   it through Tauri rather than copying a local executable into an installer;
+- run the checked-in provider preparation command so Tauri receives the
+  target-triple-suffixed release executable declared in
+  `tauri.windows.conf.json`; never reuse the ignored local staging file as a
+  release input. Non-Windows bundles do not declare this provider;
 - include only sidecars supported on that target platform and verify that the
   desktop starts, reports a clear unavailable state, and exits cleanly when no
   simulator is installed;

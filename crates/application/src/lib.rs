@@ -3,10 +3,12 @@
 mod dispatch;
 mod localization;
 mod plugins;
+mod simulator;
 
 pub use dispatch::*;
 pub use localization::*;
 pub use plugins::*;
+pub use simulator::*;
 
 use chrono::{DateTime, SecondsFormat, Utc};
 use secrecy::SecretString;
@@ -50,7 +52,7 @@ pub fn platform_status() -> PlatformStatus {
 }
 
 pub const TERMS_VERSION: &str = "2026-07-14";
-pub const PRIVACY_NOTICE_VERSION: &str = "2026-07-14.4";
+pub const PRIVACY_NOTICE_VERSION: &str = "2026-07-15";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PersistedLegalPreferences {
@@ -710,6 +712,7 @@ pub enum CompanyDataResource {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct DataSyncFailure {
     pub resource: CompanyDataResource,
+    pub code: &'static str,
     pub message: String,
 }
 
@@ -973,6 +976,40 @@ impl From<PluginError> for OperationError {
             PluginError::HandshakeFailed => ("plugin.handshake_failed", true, false),
             PluginError::ProtocolViolation => ("plugin.protocol_violation", false, false),
             PluginError::StateUnavailable => ("plugin.state_unavailable", true, true),
+        };
+        Self {
+            code,
+            message: error.to_string(),
+            retryable,
+            reportable,
+            report_id: None,
+        }
+    }
+}
+
+impl From<SimulatorBridgeError> for OperationError {
+    fn from(error: SimulatorBridgeError) -> Self {
+        let (code, retryable, reportable) = match error {
+            SimulatorBridgeError::UnknownProvider => ("simulator.unknown_provider", false, false),
+            SimulatorBridgeError::InvalidProvider => ("simulator.invalid_provider", false, false),
+            SimulatorBridgeError::ProviderUnavailable => {
+                ("simulator.provider_unavailable", true, false)
+            }
+            SimulatorBridgeError::AnotherProviderRunning => {
+                ("simulator.another_provider_running", false, false)
+            }
+            SimulatorBridgeError::AlreadyRunning => {
+                ("simulator.provider_already_running", false, false)
+            }
+            SimulatorBridgeError::NotRunning => ("simulator.provider_not_running", false, false),
+            SimulatorBridgeError::LaunchFailed => ("simulator.provider_launch_failed", true, true),
+            SimulatorBridgeError::HandshakeFailed => {
+                ("simulator.provider_handshake_failed", true, false)
+            }
+            SimulatorBridgeError::ProtocolViolation => {
+                ("simulator.provider_protocol_violation", false, false)
+            }
+            SimulatorBridgeError::StateUnavailable => ("simulator.state_unavailable", true, true),
         };
         Self {
             code,
@@ -1317,6 +1354,7 @@ impl OnAirSession {
                 self.mark_fleet_cached(&company.id)?;
                 failures.push(DataSyncFailure {
                     resource: CompanyDataResource::Fleet,
+                    code: error.diagnostic_code(),
                     message: classify_resource_error(error, CompanyDataResource::Fleet).to_string(),
                 });
                 self.fleet_snapshot()?
@@ -1328,6 +1366,7 @@ impl OnAirSession {
             self.mark_fbos_cached(&company.id)?;
             failures.push(DataSyncFailure {
                 resource: CompanyDataResource::Fbos,
+                code: "onair.request_skipped",
                 message: "FBO synchronization was skipped to avoid another rejected request."
                     .to_owned(),
             });
@@ -1343,6 +1382,7 @@ impl OnAirSession {
                     self.mark_fbos_cached(&company.id)?;
                     failures.push(DataSyncFailure {
                         resource: CompanyDataResource::Fbos,
+                        code: error.diagnostic_code(),
                         message: classify_resource_error(error, CompanyDataResource::Fbos)
                             .to_string(),
                     });
@@ -1355,6 +1395,7 @@ impl OnAirSession {
             self.mark_jobs_cached(&company.id)?;
             failures.push(DataSyncFailure {
                 resource: CompanyDataResource::Jobs,
+                code: "onair.request_skipped",
                 message:
                     "Pending-job synchronization was skipped to avoid another rejected request."
                         .to_owned(),
@@ -1367,6 +1408,7 @@ impl OnAirSession {
                     self.mark_jobs_cached(&company.id)?;
                     failures.push(DataSyncFailure {
                         resource: CompanyDataResource::Jobs,
+                        code: error.diagnostic_code(),
                         message: classify_resource_error(error, CompanyDataResource::Jobs)
                             .to_string(),
                     });

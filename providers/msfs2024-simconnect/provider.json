@@ -1,0 +1,13 @@
+{
+  "$schema": "../../schemas/simulator-provider-manifest-v1.schema.json",
+  "schema_version": 1,
+  "id": "io.github.phobosdthorga.wyrmgrid-simconnect-msfs2024",
+  "name": "MSFS 2024 SimConnect",
+  "version": "0.1.0",
+  "bridge_protocol_version": 1,
+  "author": "Phobos A. D'thorga",
+  "entry_point": "wyrmgrid-simconnect-provider.exe",
+  "platforms": ["windows_x86_64"],
+  "simulators": ["msfs_2024"],
+  "capabilities": ["telemetry_read"]
+}

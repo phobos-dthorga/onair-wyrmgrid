@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::io::{Read, Write};
 use thiserror::Error;
-use wyrmgrid_domain::{AircraftSummary, Coordinates, Provenance};
+use wyrmgrid_domain::{AircraftSummary, Coordinates, Provenance, SimulatorTelemetrySnapshot};
 
 pub const PLUGIN_API_VERSION: u32 = 1;
 pub const PLUGIN_PROTOCOL_VERSION: u32 = 1;
@@ -118,6 +118,9 @@ pub enum HostMessage {
     },
     FleetSnapshot {
         snapshot: PluginFleetSnapshot,
+    },
+    SimulatorTelemetrySnapshot {
+        snapshot: Box<SimulatorTelemetrySnapshot>,
     },
     Shutdown,
 }
