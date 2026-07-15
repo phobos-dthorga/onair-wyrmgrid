@@ -21,6 +21,24 @@ Run Rust compilation from a Visual Studio developer terminal, or initialise
 the matching Developer PowerShell before invoking Cargo. The short target path
 is local build output only and must never be committed.
 
+The repository includes a Windows launcher that performs those steps, verifies
+Visual Studio and Strawberry Perl, and then starts the Tauri development app:
+
+```powershell
+.\scripts\dev-windows.ps1
+```
+
+If the local PowerShell execution policy prevents direct script invocation,
+use a process-scoped bypass without changing the machine policy:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev-windows.ps1
+```
+
+The script accepts `-PerlPath` and `-CargoTargetDir` overrides when a developer
+uses non-standard locations. Run it with `-ValidateOnly` to verify the toolchain
+and environment without launching WyrmGrid.
+
 ```powershell
 npm ci
 cargo test --workspace
