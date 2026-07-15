@@ -126,6 +126,13 @@ and the [backup and recovery guide](user-guide/backups-and-recovery.md). The
 first full build of vendored OpenSSL is intentionally slower; subsequent builds
 reuse the Cargo cache.
 
+User-requested OnAir persistence uses a different versioned Windows Credential
+Manager entry from the database key. Never combine them or introduce a CI key.
+Only non-secret Company ID and startup metadata belongs in SQLCipher; SimBrief's
+Pilot ID or username is also encrypted metadata, not an authentication secret.
+See [ADR-0014](architecture/decisions/0014-optional-os-protected-provider-accounts.md)
+and the [account guide](user-guide/accounts-and-credentials.md).
+
 Repository tooling tests, including release-version policy regression tests, run
 with:
 

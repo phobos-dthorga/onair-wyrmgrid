@@ -6,7 +6,7 @@ fn initializes_the_database_schema() {
     let store = Store::open_in_memory().expect("in-memory database should open");
     assert_eq!(
         store.schema_version().expect("version should be readable"),
-        10
+        11
     );
 }
 
@@ -115,6 +115,48 @@ fn persists_independent_display_preferences() {
             .load_display_preferences_record()
             .expect("display preferences should be readable"),
         Some(preferences)
+    );
+}
+
+#[test]
+fn stores_and_forgets_provider_account_preferences_without_a_secret_column() {
+    let store = Store::open_in_memory().expect("in-memory database should open");
+    let onair = OnAirAccountPreferencesRecord {
+        company_id: "75a2c304-3f5c-49c8-974d-23c10ad14cc2".to_owned(),
+        connect_on_start: true,
+    };
+    let simbrief = SimBriefAccountPreferencesRecord {
+        reference_kind: "pilot_id".to_owned(),
+        reference: "1234567".to_owned(),
+    };
+
+    store
+        .save_onair_account_preferences_record(&onair)
+        .expect("OnAir account preferences should save");
+    store
+        .save_simbrief_account_preferences_record(&simbrief)
+        .expect("SimBrief account preferences should save");
+
+    assert_eq!(
+        store.load_onair_account_preferences_record().unwrap(),
+        Some(onair)
+    );
+    assert_eq!(
+        store.load_simbrief_account_preferences_record().unwrap(),
+        Some(simbrief)
+    );
+
+    store
+        .delete_onair_account_preferences_record()
+        .expect("OnAir account preferences should be removed");
+    store
+        .delete_simbrief_account_preferences_record()
+        .expect("SimBrief account preferences should be removed");
+
+    assert_eq!(store.load_onair_account_preferences_record().unwrap(), None);
+    assert_eq!(
+        store.load_simbrief_account_preferences_record().unwrap(),
+        None
     );
 }
 

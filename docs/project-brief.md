@@ -38,8 +38,9 @@ non-blocking refresh path. The second proves the external plugin system with a
 small Fleet Locations map layer built only from known location facts.
 
 The operational track now includes canonical `FlightPlanSnapshot` version 1 and
-a session-only, read-only SimBrief latest-OFP developer preview rendered in
-Dispatch. Dispatch also produces explainable aircraft identity, model, and
+a read-only SimBrief latest-OFP developer preview rendered in Dispatch. A Pilot
+ID or username can be remembered independently while the imported plan remains
+session-only. Dispatch also produces explainable aircraft identity, model, and
 position findings against the observed OnAir fleet and explicitly identifies
 payload and deadline facts that the current OnAir slice cannot compare. A
 bounded AviationWeather.gov adapter supplies explicitly requested, session-

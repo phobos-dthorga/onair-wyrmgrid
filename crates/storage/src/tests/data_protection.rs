@@ -3,7 +3,9 @@ use std::fs;
 use tempfile::tempdir;
 
 use super::*;
-use crate::DisplayPreferencesRecord;
+use crate::{
+    DisplayPreferencesRecord, OnAirAccountPreferencesRecord, SimBriefAccountPreferencesRecord,
+};
 
 const BACKUP_PASSWORD: &str = "a deliberate migration password";
 
@@ -56,6 +58,20 @@ fn portable_backup_round_trip_replaces_data_only_after_reopen() {
     store
         .save_display_preferences_record(&original)
         .expect("original preferences should save");
+    let onair_account = OnAirAccountPreferencesRecord {
+        company_id: "75a2c304-3f5c-49c8-974d-23c10ad14cc2".to_owned(),
+        connect_on_start: true,
+    };
+    let simbrief_account = SimBriefAccountPreferencesRecord {
+        reference_kind: "pilot_id".to_owned(),
+        reference: "1234567".to_owned(),
+    };
+    store
+        .save_onair_account_preferences_record(&onair_account)
+        .expect("OnAir metadata should save");
+    store
+        .save_simbrief_account_preferences_record(&simbrief_account)
+        .expect("SimBrief metadata should save");
 
     let exported = store
         .export_portable_backup(
@@ -72,6 +88,12 @@ fn portable_backup_round_trip_replaces_data_only_after_reopen() {
     store
         .save_display_preferences_record(&changed)
         .expect("changed preferences should save");
+    store
+        .delete_onair_account_preferences_record()
+        .expect("OnAir metadata should change after backup");
+    store
+        .delete_simbrief_account_preferences_record()
+        .expect("SimBrief metadata should change after backup");
     let restore = store
         .prepare_portable_restore(&backup_path, BACKUP_PASSWORD, &key)
         .expect("restore should prepare");
@@ -86,6 +108,14 @@ fn portable_backup_round_trip_replaces_data_only_after_reopen() {
     assert_eq!(
         restored.load_display_preferences_record().unwrap(),
         Some(original)
+    );
+    assert_eq!(
+        restored.load_onair_account_preferences_record().unwrap(),
+        Some(onair_account)
+    );
+    assert_eq!(
+        restored.load_simbrief_account_preferences_record().unwrap(),
+        Some(simbrief_account)
     );
     assert!(!pending_path(&database_path).exists());
     assert!(!rollback_path(&database_path).exists());

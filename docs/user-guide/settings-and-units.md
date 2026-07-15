@@ -1,5 +1,18 @@
 # Settings and measurement units
 
+## Moving through dialogs
+
+WyrmGrid remembers the path through nested dialogs. Closing a child returns to
+the dialog that opened it—for example, **Settings → Encrypted data & backups →
+Open-source licences** returns first to Encrypted data & backups, then to
+Settings. Escape, the close button, and the dialog's ordinary Cancel or Done
+action follow the same rule.
+
+Independent dialogs opened from the main workspace start a fresh path, so an
+older Settings history cannot unexpectedly reappear. The shared navigation
+stack also applies to future nested children opened from Simulator, Hoard,
+Forge, Diagnostics, or provider dialogs.
+
 Open **Settings** from WyrmGrid's top navigation to manage measurement units,
 themes, language packs, and privacy choices from one place.
 

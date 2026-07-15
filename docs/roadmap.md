@@ -34,7 +34,10 @@ The implementation sequence and operating thresholds live in the
 ## Vertical slice 1: company and fleet
 
 - Session-only connection probe with sanitized diagnostics (implemented)
-- Optional operating-system credential store
+- Optional Windows credential-vault persistence for the OnAir API key,
+  encrypted Company ID metadata, explicit Forget, and separately default-off
+  connection at startup (implemented; other platform backends need release
+  certification)
 - Company connection plus initial fleet, aircraft, airport, and FBO translation
   (implemented)
 - Timestamped company-data refresh, compacted SQLite history, restart-time offline
@@ -84,9 +87,10 @@ not replace completion of the current vertical slice.
 
 ### SimBrief and weather
 
-- Latest SimBrief OFP import by an explicitly supplied Pilot ID or username,
-  session-only Dispatch interface, and explicit clear action (developer preview
-  implemented; authenticated compatibility certification remains)
+- Latest SimBrief OFP import by an explicitly supplied or optionally remembered
+  Pilot ID or username, session-only plan interface, and explicit clear action
+  (developer preview implemented; authenticated compatibility certification
+  remains)
 - OnAir aircraft identity, exact model-label, current-airport, selected-job
   route, reported cargo, and expiry comparison with unavailable evidence exposed
   instead of inferred (implemented for the current read-only contracts)

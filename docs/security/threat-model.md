@@ -75,8 +75,9 @@
 ## Initial controls
 
 - secrets wrapped and redacted at the adapter boundary;
-- API keys move from the password field into a Rust `SecretString`, remain only
-  for the active process, and are dropped on Disconnect or application exit;
+- API keys move from the password field into a Rust `SecretString`. Session-only
+  keys are dropped on Disconnect or application exit; explicitly remembered
+  OnAir keys are stored only in a versioned operating-system credential entry;
 - connection errors are mapped to bounded user-facing categories instead of
   relaying remote response bodies;
 - current credential guidance directs users to OnAir Client and warns against
@@ -91,7 +92,9 @@
   and Bridge messages have strict size, count, nesting, numeric, path, and
   decompression limits;
 - user tokens belong in the operating-system credential store; shared
-  application secrets are never embedded in desktop binaries or public sites;
+  application secrets are never embedded in desktop binaries or public sites.
+  The encrypted database stores only non-secret account metadata and startup
+  choices, and plugins never receive credential-profile data;
 - SayIntentions `flight.json` is read only after opt-in, parsed through a strict
   allowlist, and never persisted raw; its API key becomes an in-memory secret
   immediately and its documented HTTPS origin is pinned independently of any
@@ -220,6 +223,14 @@
   secrets. CI uses only disposable test keys; future code-signing, updater, and
   notarisation credentials are distinct release-authentication secrets confined
   to protected signing jobs;
+- remembered OnAir persistence is validate-first. The host writes the OS secret
+  before metadata and attempts rollback if metadata fails; missing entries and
+  unavailable credential stores fail closed without SQLite, browser-storage, or
+  logging fallback. Disconnect and Forget remain distinct operations;
+- automatic OnAir connection is a separate default-off preference evaluated
+  only after current legal acknowledgement. SimBrief Pilot IDs and usernames
+  are stored only as explicitly selected encrypted metadata and never treated
+  as passwords or authorization tokens;
 - portable backup version 1 is a complete SQLCipher export under a distinct
   user password. The host refuses overwrite, validates the encrypted manifest,
   schema and cipher integrity, re-encrypts restored data with the destination
@@ -284,10 +295,18 @@ the meaning of a poor translation.
 
 Session-only handling prevents normal disk persistence, but it cannot promise
 that a secret is absent from process memory, operating-system crash dumps, or a
-compromised host. The frontend necessarily holds the entered value briefly
+compromised host. The frontend necessarily holds a newly entered value briefly
 before invoking Rust and clears it after success, disconnect, or dialog close.
-WyrmGrid therefore makes no claim of hardened secret storage until a reviewed
-operating-system credential-store implementation is introduced.
+Remembered storage protects against casual database-file disclosure, not a
+malicious process or logged-in account able to use Windows Credential Manager.
+
+The SQLCipher database and Windows credential store are not one transactional
+system. WyrmGrid rolls back a new secret when metadata saving fails, but a host
+crash or OS-store failure can leave metadata without a key or an orphaned
+versioned entry. Metadata without a key is shown as unusable and requires
+replacement or an explicit Forget; it never causes plaintext fallback. A
+portable restore intentionally recreates metadata without transferring the
+OnAir key, so cross-device recovery requires re-entry.
 
 Credentials copied from the wrong OnAir product are an availability and support
 risk rather than a confidentiality control failure. For now, the interface

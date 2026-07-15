@@ -42,6 +42,7 @@
     clearDispatchPlan,
     importLatestSimBriefPlan,
     loadDispatchStatus,
+    loadSimBriefAccountPreference,
     refreshDispatchWeather,
     selectDispatchJob,
   } from "$lib/dispatch/client";
@@ -52,6 +53,7 @@
   } from "$lib/dispatch/sample";
   import type {
     DispatchStatus,
+    SimBriefAccountPreference,
     SimBriefReferenceKind,
   } from "$lib/dispatch/types";
   import JobsWorkspace from "$lib/jobs/JobsWorkspace.svelte";
@@ -120,6 +122,7 @@
   import type { LanguageStatus } from "$lib/i18n/types";
   import { configureClientTelemetry } from "$lib/observability/client";
   import ConnectionDialog from "$lib/onair/ConnectionDialog.svelte";
+  import { autoConnectOnAirIfEnabled } from "$lib/onair/client";
   import {
     disconnectedStatus,
     type OnAirConnectionStatus,
@@ -164,6 +167,14 @@
     aviationDisplayPreferences,
     type DisplayPreferences,
   } from "$lib/settings/types";
+  import {
+    closedDialogNavigation,
+    enterDialogSurface,
+    isDialogSurface,
+    leaveDialogSurface,
+    openDialogNavigation,
+    type DialogNavigation,
+  } from "$lib/navigation/dialogStack";
   import SecurityCentreDialog from "$lib/security/SecurityCentreDialog.svelte";
   import { loadSecurityCentre } from "$lib/security/client";
   import {
@@ -192,6 +203,19 @@
   type FleetLoadState = "idle" | "loading" | "ready" | "error";
   type LegalLoadState = "loading" | "ready" | "error";
   type Workspace = "atlas" | "jobs" | "dispatch";
+  type AppDialogSurface =
+    | "connection"
+    | "diagnostics"
+    | "simulator"
+    | "settings"
+    | "theme"
+    | "language"
+    | "privacy"
+    | "security"
+    | "data_protection"
+    | "licenses"
+    | "hoard"
+    | "forge";
 
   const AUTOMATIC_SYNC_STORAGE_KEY = "wyrmgrid.atlas.automatic-sync-minutes";
   const AUTOMATIC_SYNC_OPTIONS = [0, 15, 30, 60, 120] as const;
@@ -211,7 +235,7 @@
   let dispatchStatus = $state<DispatchStatus>(dispatchPreviewEmpty);
   let dispatchBusy = $state(false);
   let dispatchError = $state("");
-  let showConnectionDialog = $state(false);
+  let simbriefAccountPreference = $state<SimBriefAccountPreference>();
   let fleetView = $state<FleetSnapshotView | null>(null);
   let fboView = $state<FboSnapshotView | null>(null);
   let jobView = $state<JobSnapshotView | null>(null);
@@ -234,19 +258,15 @@
   let legalTelemetryDraft = $state(false);
   let showLegalDialog = $state(false);
   let themeStatus = $state<ThemeStatus>(browserThemeStatus);
-  let showThemeDialog = $state(false);
   let themeBusy = $state(false);
   let themeError = $state("");
   let languageStatus = $state<LanguageStatus>(browserLanguageStatus);
-  let showLanguageDialog = $state(false);
   let languageBusy = $state(false);
   let languageError = $state("");
   let diagnosticLog = $state<DiagnosticLogView>(emptyDiagnosticLog);
-  let showDiagnosticsDialog = $state(false);
   let diagnosticsBusy = $state(false);
   let diagnosticsError = $state("");
   let simulatorBridge = $state<SimulatorBridgeView>(emptySimulatorBridge);
-  let showSimulatorDialog = $state(false);
   let simulatorBusy = $state(false);
   let simulatorError = $state("");
   let simulatorPreferences = $state<SimulatorPreferences>(
@@ -260,21 +280,20 @@
   let displayPreferences = $state<DisplayPreferences>(
     aviationDisplayPreferences,
   );
-  let showSettingsDialog = $state(false);
+  let dialogNavigation = $state<DialogNavigation<AppDialogSurface>>(
+    closedDialogNavigation<AppDialogSurface>(),
+  );
   let settingsBusy = $state(false);
   let settingsError = $state("");
   let dataProtectionStatus = $state<DataProtectionStatus>(
     browserDataProtectionStatus,
   );
   let dataProtectionLoaded = $state(false);
-  let showDataProtection = $state(false);
   let dataProtectionBusy = $state(false);
   let dataProtectionError = $state("");
   let dataProtectionSuccess = $state("");
-  let showOpenSourceLicences = $state(false);
   let securityCentre = $state<SecurityCentreStatus>(securityPreviewEmpty);
   let securityCentreLoaded = $state(false);
-  let showSecurityCentre = $state(false);
   let securityBusy = $state(false);
   let securityError = $state("");
   let timeline = $state<HoardTimelineIndex>({
@@ -289,13 +308,48 @@
   let timelineCursor = $state(0);
   let timelineBusy = $state(false);
   let timelineError = $state("");
-  let showTimelineDialog = $state(false);
   let pluginHost = $state<PluginHostView>(forgePreviewStopped);
   let pluginLayersVisible = $state(true);
-  let showForgeDialog = $state(false);
   let pluginBusy = $state(false);
   let pluginError = $state("");
   let workspaceInitialized = false;
+
+  const showSettingsDialog = $derived(
+    isDialogSurface(dialogNavigation, "settings"),
+  );
+  const showThemeDialog = $derived(
+    isDialogSurface(dialogNavigation, "theme"),
+  );
+  const showLanguageDialog = $derived(
+    isDialogSurface(dialogNavigation, "language"),
+  );
+  const showDataProtection = $derived(
+    isDialogSurface(dialogNavigation, "data_protection"),
+  );
+  const showOpenSourceLicences = $derived(
+    isDialogSurface(dialogNavigation, "licenses"),
+  );
+  const showSecurityCentre = $derived(
+    isDialogSurface(dialogNavigation, "security"),
+  );
+  const showSettingsPrivacy = $derived(
+    isDialogSurface(dialogNavigation, "privacy"),
+  );
+  const showConnectionDialog = $derived(
+    isDialogSurface(dialogNavigation, "connection"),
+  );
+  const showDiagnosticsDialog = $derived(
+    isDialogSurface(dialogNavigation, "diagnostics"),
+  );
+  const showSimulatorDialog = $derived(
+    isDialogSurface(dialogNavigation, "simulator"),
+  );
+  const showTimelineDialog = $derived(
+    isDialogSurface(dialogNavigation, "hoard"),
+  );
+  const showForgeDialog = $derived(
+    isDialogSurface(dialogNavigation, "forge"),
+  );
 
   const activeFleetView = $derived(
     timelineMode === "historical" ? (historicalData?.fleet ?? null) : fleetView,
@@ -574,7 +628,7 @@
   function openHoardTimeline(): void {
     timelineError = "";
     simulatorError = "";
-    showTimelineDialog = true;
+    openRootDialog("hoard");
     void Promise.all([refreshTimeline(), refreshSimulatorRecording()]);
   }
 
@@ -596,7 +650,7 @@
 
   function openDiagnostics(): void {
     diagnosticsError = "";
-    showDiagnosticsDialog = true;
+    openRootDialog("diagnostics");
     void refreshDiagnostics();
   }
 
@@ -665,7 +719,7 @@
 
   function openSimulator(): void {
     simulatorError = "";
-    showSimulatorDialog = true;
+    openRootDialog("simulator");
     void Promise.all([refreshSimulatorBridge(), refreshSimulatorRecording()]);
   }
 
@@ -923,7 +977,7 @@
     returnToPresent();
     connection = value;
     if (value.connected) {
-      showConnectionDialog = false;
+      dialogNavigation = closedDialogNavigation<AppDialogSurface>();
       void restoreCompanySnapshots(true);
     } else {
       fleetError = "";
@@ -1077,14 +1131,20 @@
   async function importDispatchPlan(
     kind: SimBriefReferenceKind,
     reference: string,
+    rememberReference: boolean,
   ): Promise<void> {
     if (dispatchBusy) return;
     dispatchBusy = true;
     dispatchError = "";
     try {
       dispatchStatus = isDesktopRuntime()
-        ? await importLatestSimBriefPlan(kind, reference)
+        ? await importLatestSimBriefPlan(kind, reference, rememberReference)
         : dispatchPreviewReady;
+      simbriefAccountPreference = isDesktopRuntime()
+        ? ((await loadSimBriefAccountPreference()) ?? undefined)
+        : rememberReference
+          ? { reference_kind: kind, reference }
+          : undefined;
     } catch (error) {
       dispatchError = operationErrorMessage(
         error,
@@ -1152,7 +1212,7 @@
 
   function openForge(): void {
     pluginError = "";
-    showForgeDialog = true;
+    openRootDialog("forge");
     void refreshPluginHost();
   }
 
@@ -1222,6 +1282,14 @@
     void refreshPluginHost();
     void refreshSimulatorBridge();
     void refreshDispatchStatus();
+    void loadSimBriefAccountPreference()
+      .then((preference) => (simbriefAccountPreference = preference ?? undefined))
+      .catch((error) => {
+        dispatchError = operationErrorMessage(
+          error,
+          "WyrmGrid could not read the remembered SimBrief Pilot ID.",
+        );
+      });
 
     invokeDesktop<PlatformStatus>("platform_status")
       .then((value) => (status = value))
@@ -1233,18 +1301,33 @@
         );
       });
 
-    invokeDesktop<OnAirConnectionStatus>("onair_connection_status")
-      .then((value) => {
-        connection = value;
-        void restoreCompanySnapshots(value.connected);
-      })
-      .catch((error) => {
-        fleetLoadState = "error";
-        fleetError = operationErrorMessage(
-          error,
-          "WyrmGrid could not read connection state.",
-        );
-      });
+    void initializeOnAirConnection();
+  }
+
+  async function initializeOnAirConnection(): Promise<void> {
+    try {
+      connection = await invokeDesktop<OnAirConnectionStatus>(
+        "onair_connection_status",
+      );
+      if (!connection.connected) {
+        try {
+          const automatic = await autoConnectOnAirIfEnabled();
+          if (automatic) connection = automatic.connection;
+        } catch (error) {
+          fleetError = operationErrorMessage(
+            error,
+            "The optional automatic OnAir connection was not completed. You can connect manually.",
+          );
+        }
+      }
+      await restoreCompanySnapshots(connection.connected);
+    } catch (error) {
+      fleetLoadState = "error";
+      fleetError = operationErrorMessage(
+        error,
+        "WyrmGrid could not read connection state.",
+      );
+    }
   }
 
   async function initializeLegal(): Promise<void> {
@@ -1429,7 +1512,7 @@
         ...simulatorRecording,
         preferences: savedRecording,
       };
-      showSettingsDialog = false;
+      dialogNavigation = closedDialogNavigation<AppDialogSurface>();
     } catch (error) {
       settingsError = operationErrorMessage(
         error,
@@ -1442,8 +1525,20 @@
 
   function openSettings(): void {
     settingsError = "";
-    showSettingsDialog = true;
+    openRootDialog("settings");
     void refreshSimulatorBridge();
+  }
+
+  function openRootDialog(surface: AppDialogSurface): void {
+    dialogNavigation = openDialogNavigation(surface);
+  }
+
+  function enterDialog(surface: AppDialogSurface): void {
+    dialogNavigation = enterDialogSurface(dialogNavigation, surface);
+  }
+
+  function leaveDialog(): void {
+    dialogNavigation = leaveDialogSurface(dialogNavigation);
   }
 
   function openSecurityCentre(): void {
@@ -1455,7 +1550,6 @@
         legal: legalStatus,
       };
     }
-    showSecurityCentre = true;
     void refreshSecurityCentre();
   }
 
@@ -1464,7 +1558,6 @@
     dataProtectionSuccess = "";
     dataProtectionLoaded = !isDesktopRuntime();
     dataProtectionStatus = browserDataProtectionStatus;
-    showDataProtection = true;
     void refreshDataProtection();
   }
 
@@ -1483,6 +1576,7 @@
         : await acknowledgeLegal(legalTelemetryDraft);
       await configureClientTelemetry(legalStatus.telemetry_enabled);
       showLegalDialog = false;
+      if (showSettingsPrivacy) leaveDialog();
       if (legalStatus.acknowledged) initializeWorkspace();
     } catch (error) {
       legalError = operationErrorMessage(
@@ -1689,7 +1783,7 @@
         class:connected={connection.connected}
         class="connection-pill"
         type="button"
-        onclick={() => (showConnectionDialog = true)}
+        onclick={() => openRootDialog("connection")}
       >
         <span></span>
         {connection.connected && connection.company
@@ -2017,9 +2111,11 @@
 
       <DispatchWorkspace
         status={dispatchStatus}
+        accountPreference={simbriefAccountPreference}
         busy={dispatchBusy}
         errorMessage={dispatchError}
-        onimport={(kind, reference) => void importDispatchPlan(kind, reference)}
+        onimport={(kind, reference, rememberReference) =>
+          void importDispatchPlan(kind, reference, rememberReference)}
         onweather={() => void refreshCurrentDispatchWeather()}
         onclear={() => void clearCurrentDispatchPlan()}
       />
@@ -2039,7 +2135,7 @@
   <ConnectionDialog
     open={showConnectionDialog}
     status={connection}
-    onclose={() => (showConnectionDialog = false)}
+    onclose={leaveDialog}
     onstatuschange={handleConnectionStatus}
   />
 
@@ -2050,7 +2146,7 @@
     errorMessage={diagnosticsError}
     onrefresh={() => void refreshDiagnostics()}
     onclear={() => void clearDiagnostics()}
-    onclose={() => (showDiagnosticsDialog = false)}
+    onclose={leaveDialog}
   />
 
   <SimulatorDialog
@@ -2073,7 +2169,7 @@
     onpin={(sessionId, pinned) => void setRecordingPinned(sessionId, pinned)}
     onpage={(sessionId, sampleOffset) => void pageRecordingSession(sessionId, sampleOffset)}
     onexport={(sessionId, format) => void exportRecording(sessionId, format)}
-    onclose={() => (showSimulatorDialog = false)}
+    onclose={leaveDialog}
   />
 
   <SettingsDialog
@@ -2091,32 +2187,29 @@
         nextRecordingPreferences,
       )}
     onappearance={() => {
-      showSettingsDialog = false;
       themeError = "";
-      showThemeDialog = true;
+      enterDialog("theme");
     }}
     onlanguage={() => {
-      showSettingsDialog = false;
       languageError = "";
-      showLanguageDialog = true;
+      enterDialog("language");
     }}
     onprivacy={() => {
-      showSettingsDialog = false;
+      enterDialog("privacy");
       openLegalSettings();
     }}
     onsecurity={() => {
-      showSettingsDialog = false;
+      enterDialog("security");
       openSecurityCentre();
     }}
     ondataprotection={() => {
-      showSettingsDialog = false;
+      enterDialog("data_protection");
       openDataProtection();
     }}
     onlicenses={() => {
-      showSettingsDialog = false;
-      showOpenSourceLicences = true;
+      enterDialog("licenses");
     }}
-    onclose={() => (showSettingsDialog = false)}
+    onclose={leaveDialog}
   />
 
   <DataProtectionDialog
@@ -2135,15 +2228,14 @@
     onrestore={(source, password, confirmed) =>
       void runPortableRestore(source, password, confirmed)}
     onlicenses={() => {
-      showDataProtection = false;
-      showOpenSourceLicences = true;
+      enterDialog("licenses");
     }}
-    onclose={() => (showDataProtection = false)}
+    onclose={leaveDialog}
   />
 
   <OpenSourceLicencesDialog
     open={showOpenSourceLicences}
-    onclose={() => (showOpenSourceLicences = false)}
+    onclose={leaveDialog}
   />
 
   <SecurityCentreDialog
@@ -2155,10 +2247,10 @@
     onrefresh={() => void refreshSecurityCentre()}
     onrevoke={(subjectId) => void runPluginAction("revoke", subjectId)}
     onprivacy={() => {
-      showSecurityCentre = false;
+      enterDialog("privacy");
       openLegalSettings();
     }}
-    onclose={() => (showSecurityCentre = false)}
+    onclose={leaveDialog}
   />
 
   <ThemeDialog
@@ -2169,7 +2261,7 @@
     errorMessage={themeError}
     onselect={(themeId) => void chooseTheme(themeId)}
     onimport={(manifestJson) => void addTheme(manifestJson)}
-    onclose={() => (showThemeDialog = false)}
+    onclose={leaveDialog}
   />
 
   <LanguageDialog
@@ -2180,7 +2272,7 @@
     errorMessage={languageError}
     onselect={(packId) => void chooseLanguage(packId)}
     onimport={(manifestJson) => void addLanguagePack(manifestJson)}
-    onclose={() => (showLanguageDialog = false)}
+    onclose={leaveDialog}
   />
 
   <HoardTimelineDialog
@@ -2208,7 +2300,7 @@
     onrecordingpin={(sessionId, pinned) => void setRecordingPinned(sessionId, pinned)}
     onrecordingpage={(sessionId, sampleOffset) => void pageRecordingSession(sessionId, sampleOffset)}
     onrecordingexport={(sessionId, format) => void exportRecording(sessionId, format)}
-    onclose={() => (showTimelineDialog = false)}
+    onclose={leaveDialog}
   />
 
   <ForgeDialog
@@ -2221,13 +2313,13 @@
     onrevoke={(pluginId) => void runPluginAction("revoke", pluginId)}
     onstart={(pluginId) => void runPluginAction("start", pluginId)}
     onstop={(pluginId) => void runPluginAction("stop", pluginId)}
-    onclose={() => (showForgeDialog = false)}
+    onclose={leaveDialog}
   />
 {/if}
 
 <LegalDialog
   open={legalLoadState === "ready" &&
-    (!legalStatus.acknowledged || showLegalDialog)}
+    (!legalStatus.acknowledged || showLegalDialog || showSettingsPrivacy)}
   required={!legalStatus.acknowledged}
   status={legalStatus}
   telemetryEnabled={legalTelemetryDraft}
@@ -2235,5 +2327,8 @@
   errorMessage={legalError}
   ontelemetrychange={(enabled) => (legalTelemetryDraft = enabled)}
   onsubmit={() => void saveLegalChoice()}
-  onclose={() => (showLegalDialog = false)}
+  onclose={() => {
+    showLegalDialog = false;
+    if (showSettingsPrivacy) leaveDialog();
+  }}
 />

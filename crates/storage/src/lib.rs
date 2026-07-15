@@ -25,7 +25,8 @@ const SIMULATOR_RECORDINGS_SCHEMA: &str =
     include_str!("../migrations/0008_simulator_recordings.sql");
 const AUTHORIZATION_SCHEMA: &str = include_str!("../migrations/0009_authorization.sql");
 const SIMULATOR_EVIDENCE_SCHEMA: &str = include_str!("../migrations/0010_simulator_evidence.sql");
-pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 10;
+const PROVIDER_ACCOUNTS_SCHEMA: &str = include_str!("../migrations/0011_provider_accounts.sql");
+pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 11;
 
 #[derive(Debug, Error)]
 pub enum StorageError {
@@ -118,6 +119,18 @@ pub struct SimulatorRecordingPreferencesRecord {
     pub automatic_start: bool,
     pub automatic_stop: bool,
     pub landing_settle_seconds: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OnAirAccountPreferencesRecord {
+    pub company_id: String,
+    pub connect_on_start: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SimBriefAccountPreferencesRecord {
+    pub reference_kind: String,
+    pub reference: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -217,6 +230,7 @@ impl Store {
         connection.execute_batch(SIMULATOR_RECORDINGS_SCHEMA)?;
         connection.execute_batch(AUTHORIZATION_SCHEMA)?;
         connection.execute_batch(SIMULATOR_EVIDENCE_SCHEMA)?;
+        connection.execute_batch(PROVIDER_ACCOUNTS_SCHEMA)?;
         if path.is_some() {
             data_protection::mark_wyrmgrid_database(&connection)?;
         }
@@ -229,6 +243,126 @@ impl Store {
 
     pub fn is_persistent(&self) -> bool {
         self.persistent
+    }
+
+    pub fn load_onair_account_preferences_record(
+        &self,
+    ) -> Result<Option<OnAirAccountPreferencesRecord>, StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection
+            .query_row(
+                "SELECT company_id, connect_on_start
+                 FROM onair_account_preferences WHERE singleton_id = 1",
+                [],
+                |row| {
+                    Ok(OnAirAccountPreferencesRecord {
+                        company_id: row.get(0)?,
+                        connect_on_start: row.get(1)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(StorageError::from)
+    }
+
+    pub fn save_onair_account_preferences_record(
+        &self,
+        preferences: &OnAirAccountPreferencesRecord,
+    ) -> Result<(), StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection
+            .execute(
+                "INSERT INTO onair_account_preferences (
+                    singleton_id, company_id, connect_on_start
+                 ) VALUES (1, ?1, ?2)
+                 ON CONFLICT(singleton_id) DO UPDATE SET
+                    company_id = excluded.company_id,
+                    connect_on_start = excluded.connect_on_start,
+                    updated_at = CURRENT_TIMESTAMP",
+                params![preferences.company_id, preferences.connect_on_start],
+            )
+            .map(|_| ())
+            .map_err(StorageError::from)
+    }
+
+    pub fn delete_onair_account_preferences_record(&self) -> Result<(), StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection
+            .execute(
+                "DELETE FROM onair_account_preferences WHERE singleton_id = 1",
+                [],
+            )
+            .map(|_| ())
+            .map_err(StorageError::from)
+    }
+
+    pub fn load_simbrief_account_preferences_record(
+        &self,
+    ) -> Result<Option<SimBriefAccountPreferencesRecord>, StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection
+            .query_row(
+                "SELECT reference_kind, reference
+                 FROM simbrief_account_preferences WHERE singleton_id = 1",
+                [],
+                |row| {
+                    Ok(SimBriefAccountPreferencesRecord {
+                        reference_kind: row.get(0)?,
+                        reference: row.get(1)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(StorageError::from)
+    }
+
+    pub fn save_simbrief_account_preferences_record(
+        &self,
+        preferences: &SimBriefAccountPreferencesRecord,
+    ) -> Result<(), StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection
+            .execute(
+                "INSERT INTO simbrief_account_preferences (
+                    singleton_id, reference_kind, reference
+                 ) VALUES (1, ?1, ?2)
+                 ON CONFLICT(singleton_id) DO UPDATE SET
+                    reference_kind = excluded.reference_kind,
+                    reference = excluded.reference,
+                    updated_at = CURRENT_TIMESTAMP",
+                params![preferences.reference_kind, preferences.reference],
+            )
+            .map(|_| ())
+            .map_err(StorageError::from)
+    }
+
+    pub fn delete_simbrief_account_preferences_record(&self) -> Result<(), StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection
+            .execute(
+                "DELETE FROM simbrief_account_preferences WHERE singleton_id = 1",
+                [],
+            )
+            .map(|_| ())
+            .map_err(StorageError::from)
     }
 
     pub fn load_display_preferences_record(

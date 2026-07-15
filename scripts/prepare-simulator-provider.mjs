@@ -3,6 +3,8 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
+import { cargoTargetDirectory } from "./cargo-target-directory.mjs";
+
 const repositoryRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
@@ -39,13 +41,12 @@ if (targetTriple.includes("windows")) {
   if (release) cargoArguments.push("--release");
   run("cargo", cargoArguments);
 
-  const executableName = "wyrmgrid-simconnect-provider.exe";
-  const builtProvider = path.join(
-    repositoryRoot,
-    "target",
-    profile,
-    executableName,
+  const targetDirectory = cargoTargetDirectory(
+    run("cargo", ["metadata", "--format-version", "1", "--no-deps"], true),
   );
+
+  const executableName = "wyrmgrid-simconnect-provider.exe";
+  const builtProvider = path.join(targetDirectory, profile, executableName);
   const bundleDirectory = path.join(
     repositoryRoot,
     "apps",

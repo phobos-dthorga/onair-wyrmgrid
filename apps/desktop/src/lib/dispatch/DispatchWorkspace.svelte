@@ -4,6 +4,7 @@
   import type {
     DispatchStatus,
     Mass,
+    SimBriefAccountPreference,
     SimBriefReferenceKind,
   } from "$lib/dispatch/types";
 
@@ -11,6 +12,7 @@
     status,
     busy = false,
     errorMessage = "",
+    accountPreference,
     onimport,
     onweather,
     onclear,
@@ -18,13 +20,27 @@
     status: DispatchStatus;
     busy?: boolean;
     errorMessage?: string;
-    onimport: (kind: SimBriefReferenceKind, reference: string) => void;
+    accountPreference?: SimBriefAccountPreference;
+    onimport: (
+      kind: SimBriefReferenceKind,
+      reference: string,
+      rememberReference: boolean,
+    ) => void;
     onweather: () => void;
     onclear: () => void;
   } = $props();
 
   let referenceKind = $state<SimBriefReferenceKind>("pilot_id");
   let reference = $state("");
+  let rememberReference = $state(false);
+
+  $effect(() => {
+    if (accountPreference) {
+      referenceKind = accountPreference.reference_kind;
+      reference = accountPreference.reference;
+      rememberReference = true;
+    }
+  });
 
   const plan = $derived(status.snapshot);
   const selectedJob = $derived(status.selected_job?.job);
@@ -101,7 +117,7 @@
       class="dispatch-import-form"
       onsubmit={(event) => {
         event.preventDefault();
-        onimport(referenceKind, reference.trim());
+        onimport(referenceKind, reference.trim(), rememberReference);
       }}
     >
       <label>
@@ -110,6 +126,16 @@
           <option value="pilot_id">Pilot ID</option>
           <option value="username">Username</option>
         </select>
+      </label>
+      <label class="dispatch-remember-reference">
+        <input type="checkbox" bind:checked={rememberReference} disabled={busy} />
+        <span>
+          <strong>Remember this account reference</strong>
+          <small>
+            Saves only the Pilot ID or username in WyrmGrid's encrypted local
+            database—never a SimBrief or Navigraph password.
+          </small>
+        </span>
       </label>
       <label>
         <span>{referenceKind === "pilot_id" ? "Pilot ID" : "Username"}</span>
@@ -139,10 +165,11 @@
       </div>
     {:else}
       <div class="dispatch-notice">
-        <strong>Session-only by design</strong>
+        <strong>{rememberReference ? "Account reference remembered" : "Session-only by choice"}</strong>
         <span>
-          Your account reference and imported plan are not written to Hoard in
-          this preview. Closing WyrmGrid clears them.
+          {rememberReference
+            ? "The reference is retained locally; imported plans remain session-only in this preview."
+            : "The account reference and imported plan are cleared when WyrmGrid closes."}
         </span>
       </div>
     {/if}
