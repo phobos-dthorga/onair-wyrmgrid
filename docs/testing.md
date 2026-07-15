@@ -1,7 +1,9 @@
 # Testing strategy
 
 Tests are part of a feature, not follow-up work. A change is complete only when
-the relevant automated checks describe its intended behaviour and pass in CI.
+the relevant automated checks describe its intended behaviour and pass on the
+maintainer's local development machine. Release candidates repeat the complete
+suite in hosted CI against the exact approved release tag.
 
 ## Physical separation
 
@@ -37,15 +39,29 @@ test code from normal application builds.
 A bug fix starts with a failing regression test at the lowest meaningful layer.
 Avoid tests that merely repeat a type definition or lock in incidental markup.
 
-## Automated gates
+## Validation execution policy
 
-Every pull request runs Rust formatting, compilation, Clippy with warnings
-denied, core tests, frontend formatting, Svelte type checking, frontend tests,
-and a production frontend build. Windows also compiles and tests the Tauri
-backend. Dependency review, Rust dependency policy, and high-severity npm audit
-checks run in the security workflow. Windows also compiles and tests the
-SimConnect provider so its native ABI declarations do not hide behind the
-cross-platform unavailable stub.
+Routine development validation runs locally. Before a change is considered
+ready, use the maintainer's development machine for Rust formatting,
+compilation, Clippy with warnings denied, core tests, frontend formatting,
+Svelte type checking, frontend tests, the production frontend build, dependency
+policy, high-severity npm auditing, the Tauri backend, and the Windows
+SimConnect provider. Local compilation and test volume are not constrained by
+the project's hosted-runner budget.
+
+Hosted GitHub Actions are reserved for intentional releases and for an
+exception explicitly authorised by the maintainer. An approved semantic-version
+release tag repeats the complete local suite on clean hosted runners before any
+installer is assembled. This gives release artifacts independent evidence while
+avoiding slow or redundant hosted work during ordinary commits and pull
+requests.
+
+The repository's existing workflow triggers may continue to launch checks for
+some pull-request pushes until those triggers receive a dedicated update. That
+transitional behaviour is not the desired development policy and does not
+authorise avoidable reruns, manual dispatches, version changes, tags, or
+installer builds. Prefer one well-validated push and do not wait on an
+automatically started development run unless the maintainer asks for its result.
 
 Launch-art presentation tests cover dark/light theme selection, malformed
 colour fallback, and bounded minimum display timing. Every production frontend
@@ -82,7 +98,7 @@ logic.
 A smaller local agent is well suited to adding table-driven boundary cases,
 fixture variants, regression tests for an already-understood defect, and test
 documentation. Give it one named behaviour and the command that proves success.
-Its changes still require human review and the same CI gates.
+Its changes still require human review and the same locally executed gates.
 
 Do not delegate interpretation of live provider behaviour, security or privacy
 boundaries, protocol compatibility decisions, or assertions that could

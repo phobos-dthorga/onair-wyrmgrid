@@ -6,7 +6,7 @@
 2. Run `npm run test:tooling`,
    `node scripts/verify-release-version.mjs <version>`, and
    `node scripts/verify-installer-contract.mjs`, then complete the normal local
-   checks and confirm CI on `main`.
+   checks on the maintainer's development machine.
 3. Create and push an annotated `vX.Y.Z` tag from a commit on `main`. Supported
    prerelease suffixes such as `v0.2.0-rc.1` are also accepted; build metadata is
    deliberately excluded from installer versions.
@@ -47,12 +47,21 @@ break that continuity and therefore requires a separately designed data and
 installer migration. The installer-contract tooling intentionally rejects such
 drift. A portable backup is still recommended before prerelease upgrades.
 
-## Installer build policy
+## Installer and hosted-runner policy
 
-Routine commits and pull requests compile-check and test the desktop but do not
-assemble installers. Every intentional semantic-version release tag produces
-packages, including patch releases. This keeps normal CI economical while making
-the tag an unambiguous request for a complete release candidate.
+Routine commits and pull requests compile-check and test the desktop locally;
+hosted CI/CD is reserved for releases unless the maintainer explicitly approves
+an exception. Every intentional semantic-version release tag repeats the full
+validation suite on clean hosted runners and produces packages, including patch
+releases. This makes the tag both an unambiguous request for a complete release
+candidate and the point where independent hosted verification has material
+value.
+
+Existing pull-request workflow triggers may still run during the transition to
+this policy. Avoid unnecessary pushes and reruns, and do not manually dispatch
+hosted validation for routine development. A separate workflow-maintenance
+change should remove or narrow those triggers without weakening the tag-gated
+release suite.
 
 The release policy rejects malformed versions, tags outside `main`, and any tag
 whose version differs from the four checked-in application version sources. A
