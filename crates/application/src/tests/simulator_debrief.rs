@@ -53,6 +53,10 @@ fn short_debriefs_retain_exact_samples() {
         SimulatorDownsamplingMethod::Exact
     );
     assert_eq!(debrief.traces.altitude.samples, samples);
+    assert_eq!(
+        debrief.route.schema_version,
+        SIMULATOR_ROUTE_VIEW_SCHEMA_VERSION
+    );
     assert_eq!(debrief.route.recorded.points.len(), 12);
 }
 
@@ -131,6 +135,22 @@ fn unresolved_plan_legs_remain_unplotted_and_break_the_plan_line() {
     let samples = (0..4).map(sample).collect::<Vec<_>>();
     let debrief = build_simulator_debrief(session(4), &samples, Some(&plan), None);
     let planned = debrief.route.planned.unwrap();
-    assert_eq!(planned.unresolved_legs.len(), expected_unresolved);
-    assert!(planned.points.iter().skip(1).any(|point| point.gap_before));
+    assert_eq!(
+        planned
+            .points
+            .iter()
+            .filter(|point| {
+                point.kind == crate::FlightPlanMapPointKind::RouteLeg && point.location.is_none()
+            })
+            .count(),
+        expected_unresolved
+    );
+    assert!(
+        planned
+            .points
+            .iter()
+            .filter(|point| point.location.is_some())
+            .skip(1)
+            .any(|point| point.gap_before)
+    );
 }

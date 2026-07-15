@@ -63,8 +63,13 @@
   const recordingActive = $derived(Boolean(status.active_session_id));
   const comparison = $derived(debrief?.comparison ?? session?.comparison);
   const routePointCount = $derived(
-    (debrief?.route.recorded.points.length ?? 0) +
+    (debrief?.route.recorded?.points.length ?? 0) +
       (debrief?.route.planned?.points.length ?? 0),
+  );
+  const unresolvedPlanPoints = $derived(
+    debrief?.route.planned?.points.filter(
+      (point) => point.on_route && !point.location,
+    ) ?? [],
   );
   let search = $state("");
   const visibleSessions = $derived(
@@ -336,12 +341,12 @@
         {/if}
       </div>
 
-      {#if debrief.route.planned?.unresolved_legs.length}
+      {#if unresolvedPlanPoints.length}
         <p class="debrief-notice">
           {$translation("simulator-debrief-unresolved-route", {
-            count: debrief.route.planned.unresolved_legs.length,
+            count: unresolvedPlanPoints.length,
           })}
-          {debrief.route.planned.unresolved_legs.join(" · ")}
+          {unresolvedPlanPoints.map((point) => point.label).join(" · ")}
         </p>
       {/if}
 

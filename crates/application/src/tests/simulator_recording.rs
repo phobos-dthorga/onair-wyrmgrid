@@ -264,7 +264,13 @@ fn simbrief_plan_is_snapshotted_and_compared_only_with_available_recorded_facts(
             .planned
             .as_ref()
             .expect("stored plan should project")
-            .unresolved_legs,
+            .points
+            .iter()
+            .filter(|point| {
+                point.kind == crate::FlightPlanMapPointKind::RouteLeg && point.location.is_none()
+            })
+            .map(|point| point.label.as_str())
+            .collect::<Vec<_>>(),
         ["TESAT", "LIZZI", "LUNBI"]
     );
 

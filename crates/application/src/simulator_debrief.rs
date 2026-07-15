@@ -3,10 +3,13 @@ use std::collections::BTreeSet;
 use serde::Serialize;
 use wyrmgrid_domain::{Coordinates, FlightPlanSnapshot};
 
-use crate::{PlannedActualComparison, SimulatorRecordedSample, SimulatorSessionSummary};
+use crate::{
+    FlightPlanMapView, PlannedActualComparison, SimulatorRecordedSample, SimulatorSessionSummary,
+    build_flight_plan_map_view,
+};
 
 pub const SIMULATOR_DEBRIEF_SCHEMA_VERSION: u32 = 1;
-pub const SIMULATOR_ROUTE_VIEW_SCHEMA_VERSION: u32 = 1;
+pub const SIMULATOR_ROUTE_VIEW_SCHEMA_VERSION: u32 = 2;
 pub const MAX_DEBRIEF_TRACE_POINTS: usize = 1_200;
 
 type SampleValue = fn(&SimulatorRecordedSample) -> Option<f64>;
@@ -49,18 +52,6 @@ pub struct SimulatorRoutePoint {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
-pub struct SimulatorPlannedRouteView {
-    pub plan_id: String,
-    pub origin_icao: String,
-    pub destination_icao: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub airac: Option<String>,
-    pub provider: String,
-    pub points: Vec<SimulatorRoutePoint>,
-    pub unresolved_legs: Vec<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct SimulatorRecordedRouteView {
     pub source_sample_count: u64,
     pub represented_point_count: u64,
@@ -73,7 +64,7 @@ pub struct SimulatorRouteComparisonView {
     pub schema_version: u32,
     pub session_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub planned: Option<SimulatorPlannedRouteView>,
+    pub planned: Option<FlightPlanMapView>,
     pub recorded: SimulatorRecordedRouteView,
 }
 
@@ -231,74 +222,13 @@ fn route_comparison(
     SimulatorRouteComparisonView {
         schema_version: SIMULATOR_ROUTE_VIEW_SCHEMA_VERSION,
         session_id: session_id.to_owned(),
-        planned: plan.map(planned_route),
+        planned: plan.map(build_flight_plan_map_view),
         recorded: SimulatorRecordedRouteView {
             source_sample_count: positioned_samples.len() as u64,
             represented_point_count: recorded_points.len() as u64,
             method: route_trace.method,
             points: recorded_points,
         },
-    }
-}
-
-fn planned_route(plan: &FlightPlanSnapshot) -> SimulatorPlannedRouteView {
-    let airports = &plan.airports.value;
-    let mut points = Vec::new();
-    let mut unresolved_legs = Vec::new();
-    let mut gap_pending = false;
-
-    if let Some(location) = airports.origin.location {
-        points.push(planned_point(location, airports.origin.icao.clone(), false));
-    } else {
-        gap_pending = true;
-    }
-
-    let route = plan.route.as_ref();
-    if let Some(route) = route {
-        for leg in &route.value.legs {
-            if let Some(location) = leg.location {
-                points.push(planned_point(location, leg.ident.clone(), gap_pending));
-                gap_pending = false;
-            } else {
-                unresolved_legs.push(leg.ident.clone());
-                gap_pending = true;
-            }
-        }
-        if route.value.legs.is_empty() {
-            gap_pending = true;
-        }
-    } else {
-        gap_pending = true;
-    }
-
-    if let Some(location) = airports.destination.location {
-        points.push(planned_point(
-            location,
-            airports.destination.icao.clone(),
-            gap_pending,
-        ));
-    }
-
-    SimulatorPlannedRouteView {
-        plan_id: plan.id.0.to_string(),
-        origin_icao: airports.origin.icao.clone(),
-        destination_icao: airports.destination.icao.clone(),
-        airac: plan.identity.value.airac.clone(),
-        provider: route
-            .map(|route| route.provenance.provider.clone())
-            .unwrap_or_else(|| plan.airports.provenance.provider.clone()),
-        points,
-        unresolved_legs,
-    }
-}
-
-fn planned_point(location: Coordinates, label: String, gap_before: bool) -> SimulatorRoutePoint {
-    SimulatorRoutePoint {
-        location,
-        label: Some(label),
-        source_sequence: None,
-        observed_at: None,
-        gap_before,
     }
 }
 

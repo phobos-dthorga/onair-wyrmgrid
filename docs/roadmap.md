@@ -100,7 +100,8 @@ not replace completion of the current vertical slice.
   implemented; route hazard products remain)
 - Dispatch-to-Atlas route projection with full-route framing and linked
   airports/fixes, followed by clickable SID/STAR geometry only after navigation
-  and AIRAC resolution are implemented
+  and AIRAC resolution are implemented (airport/fix projection, selection,
+  provenance, and honest gaps implemented; procedure resolution remains)
 - Live and Hoard-historical Atlas weather with a default Compatibility renderer,
   opt-in GPU-enhanced effects, and identical facts across rendering profiles
 - SimBrief generation only after Navigraph approves the desktop flow and any

@@ -9,6 +9,7 @@
     routeFitCoordinates,
     routeLineFeatures,
     routeMarkerFeatures,
+    routePointCoordinates,
   } from "./flightRoute";
   import type { AircraftSummary, AtlasFlightRoute, FboSummary } from "./types";
 
@@ -20,10 +21,12 @@
     pluginLayers,
     pluginLayersVisible,
     flightRoute,
+    selectedRoutePointId,
     selectedAircraftId,
     selectedFboId,
     onselectaircraft,
     onselectfbo,
+    onselectroutepoint,
   }: {
     aircraft: AircraftSummary[];
     fbos: FboSummary[];
@@ -32,10 +35,12 @@
     pluginLayers: PublishedPluginLayer[];
     pluginLayersVisible: boolean;
     flightRoute?: AtlasFlightRoute;
+    selectedRoutePointId?: string;
     selectedAircraftId: string | null;
     selectedFboId: string | null;
     onselectaircraft: (aircraftId: string) => void;
     onselectfbo: (fboId: string) => void;
+    onselectroutepoint: (pointId: string) => void;
   } = $props();
 
   const FLEET_SOURCE_ID = "wyrmgrid-fleet";
@@ -283,11 +288,12 @@
       "line-color",
       $activeTheme.colors.accent,
     );
-    map.setPaintProperty(
-      ROUTE_MARKER_LAYER_ID,
-      "circle-color",
+    map.setPaintProperty(ROUTE_MARKER_LAYER_ID, "circle-color", [
+      "case",
+      ["==", ["get", "id"], selectedRoutePointId ?? ""],
+      $activeTheme.colors.accent,
       $activeTheme.colors.highlight,
-    );
+    ]);
     map.setPaintProperty(
       ROUTE_MARKER_LAYER_ID,
       "circle-stroke-color",
@@ -305,9 +311,23 @@
     );
 
     const routeSignature = flightRouteSignature(flightRoute);
-    if (routeSignature && routeSignature !== fittedAtlasSignature) {
+    const routeViewportSignature = routeSignature
+      ? `${routeSignature}|focus:${selectedRoutePointId ?? "all"}`
+      : "";
+    if (
+      routeViewportSignature &&
+      routeViewportSignature !== fittedAtlasSignature
+    ) {
+      const focusedPoint = routePointCoordinates(
+        flightRoute,
+        selectedRoutePointId,
+      );
+      fittedAtlasSignature = routeViewportSignature;
+      if (focusedPoint) {
+        map.easeTo({ center: focusedPoint, zoom: 8, duration: 700 });
+        return;
+      }
       const coordinates = routeFitCoordinates(flightRoute);
-      fittedAtlasSignature = routeSignature;
       if (coordinates.length === 1) {
         map.easeTo({ center: coordinates[0], zoom: 8, duration: 700 });
       } else if (coordinates.length > 1) {
@@ -356,6 +376,7 @@
     pluginLayers;
     pluginLayersVisible;
     flightRoute;
+    selectedRoutePointId;
     selectedAircraftId;
     selectedFboId;
     $activeTheme;
@@ -563,6 +584,10 @@
           const fboId = event.features?.[0]?.properties?.id;
           if (typeof fboId === "string") onselectfbo(fboId);
         });
+        atlasMap.on("click", ROUTE_MARKER_LAYER_ID, (event) => {
+          const pointId = event.features?.[0]?.properties?.id;
+          if (typeof pointId === "string") onselectroutepoint(pointId);
+        });
         atlasMap.on("mouseenter", FLEET_LAYER_ID, () => {
           atlasMap.getCanvas().style.cursor = "pointer";
         });
@@ -573,6 +598,12 @@
           atlasMap.getCanvas().style.cursor = "pointer";
         });
         atlasMap.on("mouseleave", FBO_LAYER_ID, () => {
+          atlasMap.getCanvas().style.cursor = "";
+        });
+        atlasMap.on("mouseenter", ROUTE_MARKER_LAYER_ID, () => {
+          atlasMap.getCanvas().style.cursor = "pointer";
+        });
+        atlasMap.on("mouseleave", ROUTE_MARKER_LAYER_ID, () => {
           atlasMap.getCanvas().style.cursor = "";
         });
         mapReady = true;

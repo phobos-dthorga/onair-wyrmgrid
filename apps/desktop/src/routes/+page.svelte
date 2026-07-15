@@ -282,6 +282,7 @@
   let simulatorRecordingSession = $state<SimulatorSessionView>();
   let simulatorRecordingDebrief = $state<SimulatorSessionDebrief>();
   let atlasFlightRoute = $state<AtlasFlightRoute>();
+  let selectedRoutePointId = $state<string>();
   let simulatorRecordingBusy = $state(false);
   let displayPreferences = $state<DisplayPreferences>(
     aviationDisplayPreferences,
@@ -376,6 +377,11 @@
   );
   const selectedFbo = $derived(
     fbos.find((item) => item.id === selectedFboId) ?? null,
+  );
+  const selectedRoutePoint = $derived(
+    atlasFlightRoute?.planned?.points.find(
+      (point) => point.id === selectedRoutePointId,
+    ),
   );
   const atlasAvailability = $derived(
     activeFleetView?.availability ?? activeFboView?.availability,
@@ -536,6 +542,14 @@
     return Number.isNaN(observed.getTime())
       ? "Observation time unavailable"
       : `Observed ${observed.toLocaleString()}`;
+  }
+
+  function formatTimestamp(value: string | undefined): string {
+    if (!value) return "Time unavailable";
+    const timestamp = new Date(value);
+    return Number.isNaN(timestamp.getTime())
+      ? "Time unavailable"
+      : timestamp.toLocaleString();
   }
 
   function countedLabel(
@@ -854,11 +868,33 @@
   }
 
   function openRecordingRouteInAtlas(route: AtlasFlightRoute): void {
-    atlasFlightRoute = route;
+    atlasFlightRoute = { ...route, context: "recording" };
+    selectedRoutePointId = undefined;
     selectedAircraftId = null;
     selectedFboId = null;
     activeWorkspace = "atlas";
     dialogNavigation = closedDialogNavigation<AppDialogSurface>();
+  }
+
+  function openDispatchPlanInAtlas(pointId?: string): void {
+    const plan = dispatchStatus.atlas_plan;
+    if (!plan) return;
+    atlasFlightRoute = {
+      schema_version: plan.schema_version,
+      session_id: `dispatch:${plan.plan_id}`,
+      context: "dispatch_plan",
+      planned: plan,
+    };
+    selectedRoutePointId = pointId;
+    selectedAircraftId = null;
+    selectedFboId = null;
+    activeWorkspace = "atlas";
+    dialogNavigation = closedDialogNavigation<AppDialogSurface>();
+  }
+
+  function clearAtlasRoute(): void {
+    atlasFlightRoute = undefined;
+    selectedRoutePointId = undefined;
   }
 
   async function runSimulatorAction(
@@ -1919,17 +1955,20 @@
             <div class="sidebar-note route-note">
               <span class="note-icon">↝</span>
               <p>
-                <strong>Historical flight route</strong><br />
+                <strong
+                  >{atlasFlightRoute.context === "dispatch_plan"
+                    ? "Current Dispatch plan"
+                    : "Historical flight route"}</strong
+                ><br />
                 {atlasFlightRoute.planned
                   ? `${atlasFlightRoute.planned.origin_icao} → ${atlasFlightRoute.planned.destination_icao}`
                   : "Recorded route without an associated plan"}
-                · {atlasFlightRoute.recorded.represented_point_count.toLocaleString()}
-                recorded points
+                {#if atlasFlightRoute.recorded}
+                  · {atlasFlightRoute.recorded.represented_point_count.toLocaleString()}
+                  recorded points
+                {/if}
               </p>
-              <button
-                type="button"
-                onclick={() => (atlasFlightRoute = undefined)}>Clear</button
-              >
+              <button type="button" onclick={clearAtlasRoute}>Clear</button>
             </div>
           {/if}
 
@@ -1982,15 +2021,23 @@
             pluginLayers={pluginHost.layers}
             {pluginLayersVisible}
             flightRoute={atlasFlightRoute}
+            {selectedRoutePointId}
             {selectedAircraftId}
             {selectedFboId}
             onselectaircraft={(aircraftId) => {
               selectedAircraftId = aircraftId;
               selectedFboId = null;
+              selectedRoutePointId = undefined;
             }}
             onselectfbo={(fboId) => {
               selectedFboId = fboId;
               selectedAircraftId = null;
+              selectedRoutePointId = undefined;
+            }}
+            onselectroutepoint={(pointId) => {
+              selectedRoutePointId = pointId;
+              selectedAircraftId = null;
+              selectedFboId = null;
             }}
           />
           <div class="map-wash"></div>
@@ -2092,6 +2139,48 @@
                 >
               </article>
             </div>
+          {:else if selectedRoutePoint && atlasFlightRoute?.planned}
+            <h2>{selectedRoutePoint.label}</h2>
+            <p>
+              {selectedRoutePoint.kind.replaceAll("_", " ")} from the current attributed
+              flight plan.
+            </p>
+
+            <div class="selection-details">
+              <article>
+                <span>Location</span>
+                <strong
+                  >{selectedRoutePoint.location
+                    ? `${selectedRoutePoint.location.latitude.toFixed(4)}, ${selectedRoutePoint.location.longitude.toFixed(4)}`
+                    : "Unavailable"}</strong
+                >
+                <small
+                  >{selectedRoutePoint.location
+                    ? "Source coordinates; select another fix to move the map."
+                    : "No coordinates were supplied, so Atlas does not plot or infer this fix."}</small
+                >
+              </article>
+              <article>
+                <span>Route context</span>
+                <strong
+                  >{selectedRoutePoint.airway ?? "Direct / airport"}</strong
+                >
+                <small
+                  >{selectedRoutePoint.on_route
+                    ? "Part of the filed route spine"
+                    : "Alternate airport; not joined to the filed route"}</small
+                >
+              </article>
+              <article>
+                <span>Provenance</span>
+                <strong>{atlasFlightRoute.planned.provenance.provider}</strong>
+                <small
+                  >Retrieved {formatTimestamp(
+                    atlasFlightRoute.planned.provenance.retrieved_at,
+                  )}</small
+                >
+              </article>
+            </div>
           {:else if atlasFlightRoute}
             <h2>
               {atlasFlightRoute.planned
@@ -2099,40 +2188,45 @@
                 : "Recorded flight"}
             </h2>
             <p>
-              Planned and recorded paths remain separate, including every known
-              gap.
+              {atlasFlightRoute.context === "dispatch_plan"
+                ? "The current sourced plan, with unresolved coordinates kept visible but unplotted."
+                : "Planned and recorded paths remain separate, including every known gap."}
             </p>
 
             <div class="selection-details">
-              <article>
-                <span>Recorded path</span>
-                <strong
-                  >{atlasFlightRoute.recorded.represented_point_count.toLocaleString()}
-                  points</strong
-                >
-                <small
-                  >{atlasFlightRoute.recorded.method.replaceAll(
-                    "_",
-                    " ",
-                  )}</small
-                >
-              </article>
+              {#if atlasFlightRoute.recorded}
+                <article>
+                  <span>Recorded path</span>
+                  <strong
+                    >{atlasFlightRoute.recorded.represented_point_count.toLocaleString()}
+                    points</strong
+                  >
+                  <small
+                    >{atlasFlightRoute.recorded.method.replaceAll(
+                      "_",
+                      " ",
+                    )}</small
+                  >
+                </article>
+              {/if}
               <article>
                 <span>Planned path</span>
                 <strong
-                  >{atlasFlightRoute.planned?.points.length.toLocaleString() ??
-                    "Unavailable"}</strong
+                  >{atlasFlightRoute.planned?.points
+                    .filter((point) => point.location)
+                    .length.toLocaleString() ?? "Unavailable"}</strong
                 >
                 <small
-                  >Attributed to {atlasFlightRoute.planned?.provider ??
-                    "no plan provider"}</small
+                  >Attributed to {atlasFlightRoute.planned?.provenance
+                    .provider ?? "no plan provider"}</small
                 >
               </article>
               <article>
                 <span>Unresolved plan legs</span>
                 <strong
-                  >{atlasFlightRoute.planned?.unresolved_legs.length.toLocaleString() ??
-                    "0"}</strong
+                  >{atlasFlightRoute.planned?.points
+                    .filter((point) => point.on_route && !point.location)
+                    .length.toLocaleString() ?? "0"}</strong
                 >
                 <small>Unresolved coordinates are not plotted.</small>
               </article>
@@ -2212,6 +2306,7 @@
           void importDispatchPlan(kind, reference, rememberReference)}
         onweather={() => void refreshCurrentDispatchWeather()}
         onclear={() => void clearCurrentDispatchPlan()}
+        onviewatlas={openDispatchPlanInAtlas}
       />
     {/if}
 

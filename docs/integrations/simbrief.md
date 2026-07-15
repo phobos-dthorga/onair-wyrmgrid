@@ -40,10 +40,13 @@ The first read-only vertical slice is implemented behind WyrmGrid Dispatch:
   transformation version, freshness, and `external_calculation` provenance;
 - the current Dispatch plan is session-only and can be cleared explicitly; and
 - the interface renders origin, destination, alternates, aircraft, schedule,
-  route, weights, fuel, AIRAC, and provenance only when supplied.
+  route, weights, fuel, AIRAC, and provenance only when supplied; and
+- Dispatch can open the same host-built plan in Atlas, frame every sourced
+  coordinate, or focus a selected airport/fix without resolving route data in
+  the web interface.
 
-Atlas will project this same validated snapshot rather than fetching or parsing
-the OFP again. Full-route framing, linked fixes and procedures, unresolved-leg
+Atlas projects this same validated snapshot rather than fetching or parsing the
+OFP again. Full-route framing, linked airports/fixes, honest unresolved-location
 behaviour, and the requirement for navigation/AIRAC evidence before claiming a
 clickable STAR are defined in the
 [Atlas flight-plan and weather contract](../atlas/flight-plan-and-weather.md).

@@ -11,14 +11,39 @@ export type AtlasRoutePoint = {
   gap_before: boolean;
 };
 
+export type AtlasPlannedPoint = {
+  id: string;
+  kind: "origin" | "route_leg" | "destination" | "alternate";
+  label: string;
+  sequence?: number;
+  airway?: string;
+  location?: Coordinates;
+  on_route: boolean;
+  gap_before: boolean;
+};
+
 export type AtlasPlannedRoute = {
+  schema_version: number;
   plan_id: string;
   origin_icao: string;
   destination_icao: string;
   airac?: string;
-  provider: string;
-  points: AtlasRoutePoint[];
-  unresolved_legs: string[];
+  source_text?: string;
+  provenance: {
+    kind:
+      | "on_air_fact"
+      | "external_fact"
+      | "external_calculation"
+      | "calculated"
+      | "recommendation";
+    provider: string;
+    provider_revision?: string;
+    generated_at?: string;
+    retrieved_at: string;
+    transformation_version: number;
+    freshness: "current" | "stale" | "unknown";
+  };
+  points: AtlasPlannedPoint[];
 };
 
 export type AtlasRecordedRoute = {
@@ -31,8 +56,9 @@ export type AtlasRecordedRoute = {
 export type AtlasFlightRoute = {
   schema_version: number;
   session_id: string;
+  context?: "recording" | "dispatch_plan";
   planned?: AtlasPlannedRoute;
-  recorded: AtlasRecordedRoute;
+  recorded?: AtlasRecordedRoute;
 };
 
 export type AirportSummary = {

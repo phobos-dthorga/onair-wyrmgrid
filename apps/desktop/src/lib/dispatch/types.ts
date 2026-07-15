@@ -152,6 +152,7 @@ export type DispatchStatus = {
   persistence: "session_only";
   importing: boolean;
   snapshot?: FlightPlanSnapshot;
+  atlas_plan?: import("$lib/atlas/types").AtlasPlannedRoute;
   comparison?: DispatchComparison;
   selected_job?: {
     job: import("$lib/atlas/types").JobSummary;

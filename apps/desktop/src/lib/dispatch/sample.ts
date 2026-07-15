@@ -2,6 +2,7 @@ import type {
   DispatchStatus,
   OperationalProvenance,
 } from "$lib/dispatch/types";
+import type { AtlasPlannedRoute } from "$lib/atlas/types";
 
 const provenance: OperationalProvenance = {
   kind: "external_calculation",
@@ -11,6 +12,73 @@ const provenance: OperationalProvenance = {
   retrieved_at: "2026-07-05T01:00:00Z",
   transformation_version: 1,
   freshness: "current",
+};
+
+const previewAtlasPlan: AtlasPlannedRoute = {
+  schema_version: 1,
+  plan_id: "129cc5ca-94de-46db-a10e-502bd39c7e98",
+  origin_icao: "YSSY",
+  destination_icao: "NZAA",
+  airac: "2607",
+  source_text: "TESAT Q29 LIZZI DCT MARLN A579 LUNBI",
+  provenance,
+  points: [
+    {
+      id: "origin:yssy",
+      kind: "origin",
+      label: "YSSY",
+      location: { latitude: -33.9461, longitude: 151.1772 },
+      on_route: true,
+      gap_before: false,
+    },
+    {
+      id: "route:0000:tesat",
+      kind: "route_leg",
+      label: "TESAT",
+      sequence: 0,
+      airway: "DCT",
+      location: { latitude: -34.045, longitude: 151.03 },
+      on_route: true,
+      gap_before: false,
+    },
+    {
+      id: "route:0001:lizzi",
+      kind: "route_leg",
+      label: "LIZZI",
+      sequence: 1,
+      airway: "Q29",
+      location: { latitude: -35.661, longitude: 154.5 },
+      on_route: true,
+      gap_before: false,
+    },
+    {
+      id: "route:0002:lunbi",
+      kind: "route_leg",
+      label: "LUNBI",
+      sequence: 2,
+      airway: "A579",
+      location: { latitude: -36.52, longitude: 170.9 },
+      on_route: true,
+      gap_before: false,
+    },
+    {
+      id: "destination:nzaa",
+      kind: "destination",
+      label: "NZAA",
+      location: { latitude: -37.0081, longitude: 174.7917 },
+      on_route: true,
+      gap_before: false,
+    },
+    {
+      id: "alternate:0000:nzwn",
+      kind: "alternate",
+      label: "NZWN",
+      sequence: 0,
+      location: { latitude: -41.3272, longitude: 174.8053 },
+      on_route: false,
+      gap_before: false,
+    },
+  ],
 };
 
 export const dispatchPreviewEmpty: DispatchStatus = {
@@ -31,6 +99,7 @@ export const dispatchPreviewReady: DispatchStatus = {
   availability: "ready",
   persistence: "session_only",
   importing: false,
+  atlas_plan: previewAtlasPlan,
   snapshot: {
     schema_version: 1,
     id: "129cc5ca-94de-46db-a10e-502bd39c7e98",
@@ -46,14 +115,22 @@ export const dispatchPreviewReady: DispatchStatus = {
         origin: {
           icao: "YSSY",
           name: "Sydney Kingsford Smith",
+          location: { latitude: -33.9461, longitude: 151.1772 },
           planned_runway: "34L",
         },
         destination: {
           icao: "NZAA",
           name: "Auckland",
+          location: { latitude: -37.0081, longitude: 174.7917 },
           planned_runway: "23L",
         },
-        alternates: [{ icao: "NZWN", name: "Wellington" }],
+        alternates: [
+          {
+            icao: "NZWN",
+            name: "Wellington",
+            location: { latitude: -41.3272, longitude: 174.8053 },
+          },
+        ],
       },
       provenance,
     },
@@ -102,9 +179,24 @@ export const dispatchPreviewReady: DispatchStatus = {
         initial_altitude_ft: 36000,
         distance_nm: 1184.6,
         legs: [
-          { sequence: 0, ident: "TESAT", airway: "DCT" },
-          { sequence: 1, ident: "LIZZI", airway: "Q29" },
-          { sequence: 2, ident: "LUNBI", airway: "A579" },
+          {
+            sequence: 0,
+            ident: "TESAT",
+            airway: "DCT",
+            location: { latitude: -34.045, longitude: 151.03 },
+          },
+          {
+            sequence: 1,
+            ident: "LIZZI",
+            airway: "Q29",
+            location: { latitude: -35.661, longitude: 154.5 },
+          },
+          {
+            sequence: 2,
+            ident: "LUNBI",
+            airway: "A579",
+            location: { latitude: -36.52, longitude: 170.9 },
+          },
         ],
       },
       provenance,

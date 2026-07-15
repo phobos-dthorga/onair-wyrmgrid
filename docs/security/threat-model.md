@@ -137,6 +137,12 @@
   250,000 source samples and reduce each graph to at most 1,200 points. Omitted
   source gaps propagate to represented points, and missing plan/position facts
   split route geometry;
+- the current Dispatch-to-Atlas projection is built in the Rust application
+  from the same validated session-only plan. Stable point IDs contain only
+  bounded point kind, sequence, and normalized labels. Missing coordinates
+  remain inspectable but unplotted, alternates are not joined to the route, and
+  the projection is not exposed through existing plugin capabilities,
+  diagnostics, Sentry, or public tile requests;
 - simulator plan loading and every other external mutation require a distinct
   negotiated capability and explicit user action;
 - deny-by-default plugin capabilities persisted separately from manifests; the

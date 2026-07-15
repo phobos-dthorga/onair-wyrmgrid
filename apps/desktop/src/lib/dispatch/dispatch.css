@@ -207,6 +207,22 @@
   display: grid;
   gap: 4px;
 }
+.dispatch-map-link {
+  width: 100%;
+  border: 1px solid transparent;
+  padding: 8px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.dispatch-map-link:hover,
+.dispatch-map-link:focus-visible {
+  border-color: var(--color-highlight-border);
+  background: var(--color-highlight-soft);
+  outline: none;
+}
 .dispatch-airport > span {
   color: var(--color-highlight);
   font-size: 9px;
@@ -321,6 +337,27 @@
   color: var(--color-highlight);
   font-size: 9px;
 }
+.dispatch-route-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dispatch-route-actions strong {
+  border: 1px solid var(--color-highlight-border);
+  padding: 5px 7px;
+  color: var(--color-highlight);
+  font-size: 9px;
+}
+.dispatch-route-actions button,
+.dispatch-alternate-links button {
+  border: 1px solid var(--color-accent-border);
+  padding: 5px 7px;
+  color: var(--color-accent);
+  background: transparent;
+  font: inherit;
+  font-size: 9px;
+  cursor: pointer;
+}
 .dispatch-route-text {
   margin: 20px 0;
   color: var(--color-text);
@@ -338,13 +375,28 @@
   list-style: none;
 }
 .dispatch-fix-list li {
+  border-top: 1px solid var(--color-line-faint);
+}
+.dispatch-fix-list li button {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 2px 8px;
-  border-top: 1px solid var(--color-line-faint);
-  padding-top: 7px;
+  width: 100%;
+  border: 0;
+  padding: 7px 4px 4px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
-.dispatch-fix-list li > span {
+.dispatch-fix-list li button:hover,
+.dispatch-fix-list li button:focus-visible {
+  color: var(--color-highlight);
+  background: var(--color-highlight-soft);
+  outline: 1px solid var(--color-highlight-border);
+}
+.dispatch-fix-list li button > span {
   grid-row: span 2;
   color: var(--color-line);
   font-size: 9px;
@@ -355,6 +407,20 @@
 .dispatch-fix-list small {
   color: var(--color-text-muted);
   font-size: 9px;
+}
+.dispatch-fix-list i {
+  grid-column: 2;
+  color: var(--color-danger);
+  font-size: 8px;
+  font-style: normal;
+}
+.dispatch-map-unavailable {
+  opacity: 0.72;
+}
+.dispatch-alternate-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 .dispatch-metric-list {
   display: grid;

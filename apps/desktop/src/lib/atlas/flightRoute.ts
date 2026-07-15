@@ -1,4 +1,4 @@
-import type { AtlasFlightRoute, AtlasRoutePoint, Coordinates } from "./types";
+import type { AtlasFlightRoute, AtlasPlannedPoint, Coordinates } from "./types";
 
 export type RouteLineFeatureCollection = {
   type: "FeatureCollection";
@@ -14,23 +14,30 @@ export type RouteMarkerFeatureCollection = {
   features: Array<{
     type: "Feature";
     geometry: { type: "Point"; coordinates: [number, number] };
-    properties: { label: string; kind: "planned" };
+    properties: { id: string; label: string; kind: "planned" };
   }>;
 };
 
-function coordinate(point: AtlasRoutePoint): [number, number] {
-  return [point.location.longitude, point.location.latitude];
+function coordinate(location: Coordinates): [number, number] {
+  return [location.longitude, location.latitude];
 }
 
-export function routeSegments(points: AtlasRoutePoint[]): [number, number][][] {
+export function routeSegments(
+  points: Array<{ location?: Coordinates; gap_before: boolean }>,
+): [number, number][][] {
   const segments: [number, number][][] = [];
   let current: [number, number][] = [];
   for (const point of points) {
+    if (!point.location) {
+      if (current.length > 1) segments.push(current);
+      current = [];
+      continue;
+    }
     if (point.gap_before && current.length > 0) {
       if (current.length > 1) segments.push(current);
       current = [];
     }
-    current.push(coordinate(point));
+    current.push(coordinate(point.location));
   }
   if (current.length > 1) segments.push(current);
   return segments;
@@ -41,7 +48,9 @@ export function routeLineFeatures(
 ): RouteLineFeatureCollection {
   if (!route) return { type: "FeatureCollection", features: [] };
   const features: RouteLineFeatureCollection["features"] = [];
-  const plannedSegments = routeSegments(route.planned?.points ?? []);
+  const plannedSegments = routeSegments(
+    (route.planned?.points ?? []).filter((point) => point.on_route),
+  );
   if (plannedSegments.length > 0) {
     features.push({
       type: "Feature",
@@ -49,7 +58,7 @@ export function routeLineFeatures(
       properties: { kind: "planned" },
     });
   }
-  const recordedSegments = routeSegments(route.recorded.points);
+  const recordedSegments = routeSegments(route.recorded?.points ?? []);
   if (recordedSegments.length > 0) {
     features.push({
       type: "Feature",
@@ -66,15 +75,19 @@ export function routeMarkerFeatures(
   return {
     type: "FeatureCollection",
     features: (route?.planned?.points ?? []).flatMap((point) =>
-      point.label
+      point.location
         ? [
             {
               type: "Feature" as const,
               geometry: {
                 type: "Point" as const,
-                coordinates: coordinate(point),
+                coordinates: coordinate(point.location),
               },
-              properties: { label: point.label, kind: "planned" as const },
+              properties: {
+                id: point.id,
+                label: point.label,
+                kind: "planned" as const,
+              },
             },
           ]
         : [],
@@ -86,8 +99,10 @@ export function routeFitCoordinates(
   route: AtlasFlightRoute | undefined,
 ): [number, number][] {
   const locations = [
-    ...(route?.planned?.points ?? []).map((point) => point.location),
-    ...(route?.recorded.points ?? []).map((point) => point.location),
+    ...(route?.planned?.points ?? []).flatMap((point) =>
+      point.location ? [point.location] : [],
+    ),
+    ...(route?.recorded?.points ?? []).map((point) => point.location),
   ];
   if (locations.length < 2)
     return locations.map(({ longitude, latitude }) => [longitude, latitude]);
@@ -125,13 +140,25 @@ export function flightRouteSignature(
   if (!route) return "";
   return [
     route.session_id,
-    ...route.recorded.points.map(
+    ...(route.recorded?.points ?? []).map(
       (point) =>
         `r:${point.source_sequence ?? "?"}:${point.location.longitude}:${point.location.latitude}:${point.gap_before}`,
     ),
     ...(route.planned?.points ?? []).map(
       (point) =>
-        `p:${point.label ?? "?"}:${point.location.longitude}:${point.location.latitude}:${point.gap_before}`,
+        `p:${point.id}:${point.location?.longitude ?? "?"}:${point.location?.latitude ?? "?"}:${point.gap_before}`,
     ),
   ].join("|");
+}
+
+export function routePointCoordinates(
+  route: AtlasFlightRoute | undefined,
+  pointId: string | undefined,
+): [number, number] | undefined {
+  const point = route?.planned?.points.find(
+    (candidate: AtlasPlannedPoint) => candidate.id === pointId,
+  );
+  return point?.location
+    ? [point.location.longitude, point.location.latitude]
+    : undefined;
 }

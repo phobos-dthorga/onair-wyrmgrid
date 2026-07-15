@@ -156,6 +156,14 @@ async fn replaces_plan_without_retaining_reference_and_explains_fleet_match() {
         .await
         .unwrap();
     let status = session.briefing(Some(&fleet())).unwrap();
+    let atlas_plan = status.atlas_plan.as_ref().unwrap();
+    assert_eq!(atlas_plan.origin_icao, "YSSY");
+    assert!(
+        atlas_plan
+            .points
+            .iter()
+            .any(|point| point.kind == crate::FlightPlanMapPointKind::Destination)
+    );
     assert_eq!(
         status
             .comparison

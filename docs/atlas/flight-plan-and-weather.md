@@ -2,9 +2,10 @@
 
 This document defines how Dispatch, SimBrief, weather, Hoard, and Atlas should
 join without creating a second interpretation of the same operational facts.
-It is a design contract for staged increments. Atlas now draws a bounded
-planned-versus-recorded route for a selected historical simulator recording;
-current Dispatch route interaction and animated weather remain later work.
+It is a design contract for staged increments. Atlas now draws the current
+Dispatch plan and a bounded planned-versus-recorded route for a selected
+historical simulator recording. Animated weather and sourced procedure
+geometry remain later work.
 
 ## One plan, two projections
 
@@ -21,12 +22,13 @@ private SimBrief response
   -> shared selection and provenance
 ```
 
-The first route layer should provide:
+The route layer provides:
 
 - origin, destination, and alternate airport markers;
 - an ordered geodesic route line through every resolved leg;
-- distinct direct, airway, procedure, and unresolved-leg presentation only
-  after those classifications enter the stable navigation contract;
+- distinct airport, alternate, route-fix, and unresolved-location
+  presentation, while direct and procedure classifications remain gated on a
+  future stable navigation contract;
 - a **View full route** action that fits origin, resolved legs, destination,
   and relevant alternates, including antimeridian-safe bounds; and
 - a route inspector that retains SimBrief provenance, generation/retrieval
@@ -58,17 +60,51 @@ provenance. It must never be silently dropped or plotted at a plausible
 location. AIRAC disagreement between the plan and navigation source remains
 visible and may prevent procedure geometry from being joined.
 
+### Current Dispatch plan explorer
+
+`DispatchStatus.atlas_plan` is an additive application view using
+`FlightPlanMapView` schema 1. Rust constructs it from the already validated
+snapshot; Dispatch and Atlas never independently parse or resolve route text.
+Every origin, destination, alternate, and route leg receives a stable point ID
+for the lifetime of that plan. Dispatch sends only that ID when the user opens
+the complete route or a particular point.
+
+Atlas plots only points with supplied valid coordinates. Missing points remain
+in the inspector as **Location unavailable** and break the line before the next
+resolved point. Alternates are selectable markers but are not joined to the
+filed route. Full-route framing includes all sourced plan locations and handles
+the antimeridian. A point selection focuses its sourced position; selecting an
+unresolved point opens the same plan and provenance without inventing a camera
+target.
+
+The inspector shows point kind, airway where supplied, provider, retrieval
+time, and whether the point belongs to the filed route. The complete plan view
+also reports resolved and unresolved counts. Current plan state remains
+session-only and clearing Dispatch removes its source snapshot; the Atlas
+projection contains no independent persistent copy.
+
 ### Historical recording route slice
 
-Hoard Flight Debrief route-view schema 1 is the first shipped route layer. It
+Hoard Flight Debrief route-view schema 2 is the first shared-projection route
+layer. It
 contains only coordinates already present in the recording's sanitized
 `FlightPlanSnapshot` and its bounded recorded position trace. Plan and recording
 are separate MapLibre line features. A gap splits its source line; a missing plan
-coordinate is named in `unresolved_legs` and also splits the plan. Planned fix
-markers retain their identifiers, and an antimeridian-safe fit frames both
-sources together. The host builds this view; Svelte does not resolve or infer
-geometry. The route remains local and is not published to community plugins or
-sent to the public basemap service as feature data.
+coordinate remains a selectable `FlightPlanMapPoint` and also splits the plan.
+Planned fix markers retain their identifiers, and an antimeridian-safe fit
+frames both sources together. Dispatch and Hoard now reuse the same host-built
+`FlightPlanMapView`, so missing-coordinate and provenance rules cannot drift.
+Svelte does not resolve or infer geometry. The route remains local and is not
+published to community plugins or sent to the public basemap service as
+feature data.
+
+`FlightPlanMapView` schema 1 changes only the internal application/read-model
+contract. It adds `atlas_plan` to Dispatch status. Debrief route-view schema 2
+replaces its schema-1 planned-route fields with the same projection; route
+views are regenerated from retained source facts rather than persisted, so no
+database migration or legacy reader is required before public release. This
+does not change the plugin protocol, simulator sidecar protocol, SQLite schema,
+or canonical `FlightPlanSnapshot` version.
 
 The selection contract belongs in Rust application/domain types. Svelte may
 request `focus route`, `focus airport`, or `focus feature`, while Atlas alone

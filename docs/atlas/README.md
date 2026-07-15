@@ -58,11 +58,24 @@ The first Atlas slice provides:
 The committed fixtures and browser-preview data are synthetic. They contain
 no user company, aircraft, airport, or credential data.
 
+## Dispatch plan explorer
+
+The first linked route slice projects the current validated SimBrief snapshot
+from Dispatch into Atlas. Origin, destination, alternates, and route fixes use
+stable host-issued selection IDs. Full-route framing and focused navigation use
+only provider-supplied coordinates; missing locations remain selectable and
+visible in the inspector but are not plotted or bridged by a line. Alternates
+remain separate markers rather than becoming invented route legs.
+
+Historical simulator debriefs reuse the same planned-route projection beside a
+separate bounded recorded trace. This keeps provenance and missing-evidence
+rules identical between the live plan and Hoard history.
+
 ## Deliberate limits
 
 This slice does not yet provide FBO capacity, fuel, workshop, pricing, or
-construction details, nor clustering, routes, jobs, range rings, maintenance,
-or plugin-published layers. Those should be added only when the
+construction details, nor route procedures, range rings, maintenance, or
+weather animation. Those should be added only when the
 preceding layer establishes the smallest shared contract they require.
 
 Atlas layers should remain declarative. A future plugin may publish bounded

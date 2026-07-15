@@ -145,6 +145,8 @@ pub struct DispatchStatus {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub snapshot: Option<FlightPlanSnapshot>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub atlas_plan: Option<crate::FlightPlanMapView>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub comparison: Option<DispatchComparison>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub selected_job: Option<DispatchJobSelection>,
@@ -290,6 +292,7 @@ impl DispatchSession {
         let comparison = snapshot
             .as_ref()
             .map(|snapshot| compare_plan_to_fleet(snapshot, fleet, selected_job.as_ref()));
+        let atlas_plan = snapshot.as_ref().map(crate::build_flight_plan_map_view);
         Ok(DispatchStatus {
             provider_available: self.inner.provider.is_some(),
             availability: if snapshot.is_some() {
@@ -300,6 +303,7 @@ impl DispatchSession {
             persistence: DispatchPersistence::SessionOnly,
             importing: self.inner.importing.load(Ordering::Acquire),
             snapshot,
+            atlas_plan,
             comparison,
             selected_job,
             weather: self.weather_status()?,
