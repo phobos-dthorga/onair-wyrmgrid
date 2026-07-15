@@ -22,3 +22,7 @@ test("generates checksums before adding the checksum list to release assets", ()
   );
   assert.doesNotMatch(releaseWorkflow, /> SHA256SUMS\.txt/);
 });
+
+test("normalizes package names before checksumming and GitHub upload", () => {
+  assert.match(releaseWorkflow, /name="\$\{name\/\/ \/\.\}"/);
+});
