@@ -62,6 +62,7 @@ jobs:
 
           RELEASE_VERSION="${RELEASE_TAG#v}"
           node scripts/verify-release-version.mjs "$RELEASE_VERSION"
+          node scripts/verify-installer-contract.mjs
 
           git fetch --no-tags origin main
           RELEASE_COMMIT="$(git rev-parse "${RELEASE_TAG}^{commit}")"
@@ -142,15 +143,52 @@ jobs:
         with:
           projectPath: apps/desktop
           args: ${{ matrix.args }}
-      - name: Smoke-test the NSIS installation
+      - name: Find the nearest previous published NSIS release
+        if: matrix.platform == 'windows-latest'
+        id: previous
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.policy.outputs.release_version }}
+        run: |
+          $releaseJson = gh release list --exclude-drafts --limit 100 --json tagName
+          $selection = $releaseJson | node scripts/select-previous-release.mjs $env:RELEASE_VERSION
+          $previousTag = "$selection".Trim()
+
+          if (-not $previousTag) {
+            Write-Host 'No prior published release exists; running a clean-install smoke test.'
+            exit 0
+          }
+
+          $directory = Join-Path $env:RUNNER_TEMP 'previous-wyrmgrid-release'
+          New-Item -ItemType Directory -Path $directory | Out-Null
+          gh release download $previousTag --pattern '*-setup.exe' --dir $directory
+          $installers = @(Get-ChildItem -LiteralPath $directory -Filter '*-setup.exe' -File)
+          if ($installers.Count -ne 1) {
+            throw "Expected one NSIS setup from $previousTag; found $($installers.Count)."
+          }
+
+          "previous_installer=$($installers[0].FullName)" |
+            Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          Write-Host "Selected $previousTag for in-place upgrade verification."
+      - name: Smoke-test a clean install or in-place NSIS upgrade
         if: matrix.platform == 'windows-latest'
         shell: pwsh
+        env:
+          PREVIOUS_INSTALLER: ${{ steps.previous.outputs.previous_installer }}
         run: |
           $installer = Get-ChildItem -Path 'target/release/bundle/nsis/*-setup.exe' | Select-Object -First 1
           if (-not $installer) { throw 'The NSIS build did not produce an installer.' }
-          ./scripts/test-nsis-installer.ps1 `
-            -InstallerPath $installer.FullName `
-            -InstallDirectory (Join-Path $env:RUNNER_TEMP 'WyrmGridNsisSmoke')
+
+          $arguments = @{
+            InstallerPath = $installer.FullName
+            InstallDirectory = Join-Path $env:RUNNER_TEMP 'WyrmGridNsisSmoke'
+          }
+          if ($env:PREVIOUS_INSTALLER) {
+            $arguments.PreviousInstallerPath = $env:PREVIOUS_INSTALLER
+          }
+
+          ./scripts/test-nsis-installer.ps1 @arguments
       - name: Stage platform packages
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:

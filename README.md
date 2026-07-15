@@ -131,6 +131,9 @@ installers. Every intentional semantic-version tag (`vX.Y.Z`, including
 supported prereleases) runs the complete CI and security gates before GitHub
 builds platform packages and an NSIS setup executable. CI publishes checksums
 and build provenance into a draft prerelease for manual installation review.
+Newer NSIS setups install over the existing per-user application and preserve
+its encrypted data; release CI verifies that path against the closest older
+published setup.
 Early releases remain drafts and prereleases until signing, updating, and live
 OnAir integration are deliberately enabled.
 

@@ -137,6 +137,7 @@ Before creating a release tag, confirm that every application version agrees:
 
 ```powershell
 node scripts/verify-release-version.mjs 0.1.0
+node scripts/verify-installer-contract.mjs
 ```
 
 ### Local cache and data locations on Windows

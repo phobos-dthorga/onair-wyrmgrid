@@ -47,6 +47,20 @@ recovery after losing the device credential. Create the portable backup before
 removing the old installation; WyrmGrid cannot recover an encrypted database
 after both its device key and every usable portable backup are lost.
 
+## Install a newer version on this device
+
+1. Close WyrmGrid and stop any running simulator provider.
+2. Optionally create a portable backup, especially before installing a
+   prerelease.
+3. Run the newer WyrmGrid setup. Do not uninstall the existing version first.
+4. Let setup replace the application in its existing per-user location.
+5. Launch WyrmGrid normally. It reuses the encrypted database in application
+   data and the device-local key held by the operating-system credential store.
+
+A normal setup upgrade does not remove application data. Do not delete the
+WyrmGrid application-data directory as part of an update. Older installers are
+blocked from replacing a newer installed version.
+
 ## Where Windows keeps local data
 
 The persistent application-data directory is:

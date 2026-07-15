@@ -155,6 +155,9 @@
   checksums and GitHub build-provenance attestations before creating a draft;
 - the Windows release runner silently installs the NSIS output and verifies that
   the desktop application and expected SimConnect sidecar were packaged;
+- the Windows installer identity and per-user scope are regression-tested,
+  downgrades are disabled, and releases after the first must install over the
+  closest older published setup without altering application data;
 - Dependency Review allows one documented low-severity SvelteKit `cookie`
   advisory only while WyrmGrid remains a static desktop client with no HTTP
   cookie-writing surface; the exception must be removed when a compatible fix

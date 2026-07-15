@@ -5,7 +5,9 @@ import { join } from "node:path";
 import test from "node:test";
 
 import {
+  compareSupportedReleaseVersions,
   isSupportedReleaseVersion,
+  selectPreviousReleaseTag,
   verifyReleaseVersion,
 } from "./verify-release-version.mjs";
 
@@ -37,6 +39,24 @@ test("accepts stable and prerelease semantic versions", () => {
   assert.equal(isSupportedReleaseVersion("01.1.0"), false);
   assert.equal(isSupportedReleaseVersion("1.0.0-rc.02"), false);
   assert.equal(isSupportedReleaseVersion("1.0.0+local"), false);
+});
+
+test("orders semantic prereleases and selects the nearest prior release", () => {
+  assert.equal(compareSupportedReleaseVersions("0.2.0-rc.2", "0.2.0"), -1);
+  assert.equal(compareSupportedReleaseVersions("0.10.0", "0.9.9"), 1);
+  assert.equal(
+    selectPreviousReleaseTag("0.2.0", [
+      "v0.1.0",
+      "v0.2.0-rc.1",
+      "v0.3.0",
+      "documentation",
+    ]),
+    "v0.2.0-rc.1",
+  );
+  assert.equal(
+    selectPreviousReleaseTag("0.1.0", ["v0.1.0", "v0.2.0"]),
+    undefined,
+  );
 });
 
 test("accepts a release only when every application version matches", async (context) => {
