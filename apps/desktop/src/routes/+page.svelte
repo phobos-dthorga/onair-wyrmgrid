@@ -57,6 +57,7 @@
     SimBriefAccountPreference,
     SimBriefReferenceKind,
   } from "$lib/dispatch/types";
+  import type { FlightWeatherMapView } from "$lib/weather/types";
   import JobsWorkspace from "$lib/jobs/JobsWorkspace.svelte";
   import LaunchScreen from "$lib/launch/LaunchScreen.svelte";
   import {
@@ -282,7 +283,10 @@
   let simulatorRecordingSession = $state<SimulatorSessionView>();
   let simulatorRecordingDebrief = $state<SimulatorSessionDebrief>();
   let atlasFlightRoute = $state<AtlasFlightRoute>();
+  let atlasWeather = $state<FlightWeatherMapView>();
+  let weatherVisible = $state(true);
   let selectedRoutePointId = $state<string>();
+  let selectedWeatherStationId = $state<string>();
   let simulatorRecordingBusy = $state(false);
   let displayPreferences = $state<DisplayPreferences>(
     aviationDisplayPreferences,
@@ -382,6 +386,14 @@
     atlasFlightRoute?.planned?.points.find(
       (point) => point.id === selectedRoutePointId,
     ),
+  );
+  const selectedWeatherStation = $derived(
+    atlasWeather?.stations.find(
+      (station) => station.id === selectedWeatherStationId,
+    ),
+  );
+  const plottedWeatherStationCount = $derived(
+    atlasWeather?.stations.filter((station) => station.location).length ?? 0,
   );
   const atlasAvailability = $derived(
     activeFleetView?.availability ?? activeFboView?.availability,
@@ -505,6 +517,13 @@
       count: plottedFboCount,
       active: fboVisible,
       available: true,
+    },
+    {
+      id: "weather",
+      name: "Airport weather",
+      count: plottedWeatherStationCount,
+      active: weatherVisible && plottedWeatherStationCount > 0,
+      available: plottedWeatherStationCount > 0,
     },
     {
       id: "jobs",
@@ -869,7 +888,9 @@
 
   function openRecordingRouteInAtlas(route: AtlasFlightRoute): void {
     atlasFlightRoute = { ...route, context: "recording" };
+    atlasWeather = undefined;
     selectedRoutePointId = undefined;
+    selectedWeatherStationId = undefined;
     selectedAircraftId = null;
     selectedFboId = null;
     activeWorkspace = "atlas";
@@ -885,7 +906,32 @@
       context: "dispatch_plan",
       planned: plan,
     };
+    atlasWeather = dispatchStatus.atlas_weather;
+    weatherVisible = true;
     selectedRoutePointId = pointId;
+    selectedWeatherStationId = undefined;
+    selectedAircraftId = null;
+    selectedFboId = null;
+    activeWorkspace = "atlas";
+    dialogNavigation = closedDialogNavigation<AppDialogSurface>();
+  }
+
+  function openDispatchWeatherInAtlas(stationId?: string): void {
+    const weather = dispatchStatus.atlas_weather;
+    if (!weather) return;
+    const plan = dispatchStatus.atlas_plan;
+    atlasWeather = weather;
+    weatherVisible = true;
+    atlasFlightRoute = plan
+      ? {
+          schema_version: plan.schema_version,
+          session_id: `dispatch:${plan.plan_id}`,
+          context: "dispatch_plan",
+          planned: plan,
+        }
+      : undefined;
+    selectedWeatherStationId = stationId;
+    selectedRoutePointId = undefined;
     selectedAircraftId = null;
     selectedFboId = null;
     activeWorkspace = "atlas";
@@ -894,7 +940,9 @@
 
   function clearAtlasRoute(): void {
     atlasFlightRoute = undefined;
+    atlasWeather = undefined;
     selectedRoutePointId = undefined;
+    selectedWeatherStationId = undefined;
   }
 
   async function runSimulatorAction(
@@ -1202,6 +1250,7 @@
       dispatchStatus = isDesktopRuntime()
         ? await importLatestSimBriefPlan(kind, reference, rememberReference)
         : dispatchPreviewReady;
+      if (atlasFlightRoute?.context === "dispatch_plan") clearAtlasRoute();
       simbriefAccountPreference = isDesktopRuntime()
         ? ((await loadSimBriefAccountPreference()) ?? undefined)
         : rememberReference
@@ -1226,6 +1275,7 @@
       dispatchStatus = isDesktopRuntime()
         ? await clearDispatchPlan()
         : dispatchPreviewEmpty;
+      if (atlasFlightRoute?.context === "dispatch_plan") clearAtlasRoute();
     } catch (error) {
       dispatchError = operationErrorMessage(
         error,
@@ -1261,6 +1311,20 @@
       dispatchStatus = isDesktopRuntime()
         ? await refreshDispatchWeather()
         : dispatchPreviewReady;
+      if (
+        atlasFlightRoute?.context === "dispatch_plan" &&
+        atlasFlightRoute.planned?.plan_id === dispatchStatus.atlas_plan?.plan_id
+      ) {
+        atlasWeather = dispatchStatus.atlas_weather;
+        if (
+          selectedWeatherStationId &&
+          !atlasWeather?.stations.some(
+            (station) => station.id === selectedWeatherStationId,
+          )
+        ) {
+          selectedWeatherStationId = undefined;
+        }
+      }
     } catch (error) {
       dispatchError = operationErrorMessage(
         error,
@@ -1939,6 +2003,7 @@
                 onclick={() => {
                   if (layer.id === "fleet") fleetVisible = !fleetVisible;
                   if (layer.id === "fbos") fboVisible = !fboVisible;
+                  if (layer.id === "weather") weatherVisible = !weatherVisible;
                   if (layer.id === "jobs") activeWorkspace = "jobs";
                   if (layer.id === "plugins")
                     pluginLayersVisible = !pluginLayersVisible;
@@ -1966,6 +2031,9 @@
                 {#if atlasFlightRoute.recorded}
                   · {atlasFlightRoute.recorded.represented_point_count.toLocaleString()}
                   recorded points
+                {/if}
+                {#if atlasWeather}
+                  · {plottedWeatherStationCount.toLocaleString()} weather stations
                 {/if}
               </p>
               <button type="button" onclick={clearAtlasRoute}>Clear</button>
@@ -2021,21 +2089,33 @@
             pluginLayers={pluginHost.layers}
             {pluginLayersVisible}
             flightRoute={atlasFlightRoute}
+            weather={atlasWeather}
+            {weatherVisible}
             {selectedRoutePointId}
+            {selectedWeatherStationId}
             {selectedAircraftId}
             {selectedFboId}
             onselectaircraft={(aircraftId) => {
               selectedAircraftId = aircraftId;
               selectedFboId = null;
               selectedRoutePointId = undefined;
+              selectedWeatherStationId = undefined;
             }}
             onselectfbo={(fboId) => {
               selectedFboId = fboId;
               selectedAircraftId = null;
               selectedRoutePointId = undefined;
+              selectedWeatherStationId = undefined;
             }}
             onselectroutepoint={(pointId) => {
               selectedRoutePointId = pointId;
+              selectedAircraftId = null;
+              selectedFboId = null;
+              selectedWeatherStationId = undefined;
+            }}
+            onselectweatherstation={(stationId) => {
+              selectedWeatherStationId = stationId;
+              selectedRoutePointId = undefined;
               selectedAircraftId = null;
               selectedFboId = null;
             }}
@@ -2137,6 +2217,91 @@
                     activeFboView?.snapshot.provenance.observed_at,
                   )}</small
                 >
+              </article>
+            </div>
+          {:else if selectedWeatherStation}
+            <h2>{selectedWeatherStation.station_icao}</h2>
+            <p>
+              {selectedWeatherStation.role} airport weather from the current external
+              report snapshot.
+            </p>
+
+            <div class="selection-details">
+              <article>
+                <span>Flight category</span>
+                <strong
+                  >{selectedWeatherStation.metar?.value.flight_category?.toUpperCase() ??
+                    "Unknown"}</strong
+                >
+                <small
+                  >{selectedWeatherStation.metar
+                    ? `Observed ${formatTimestamp(selectedWeatherStation.metar.value.observed_at)}`
+                    : "No METAR was returned; WyrmGrid does not infer clear conditions."}</small
+                >
+              </article>
+              <article>
+                <span>Wind and visibility</span>
+                <strong>
+                  {selectedWeatherStation.metar?.value.wind_direction?.kind ===
+                  "degrees"
+                    ? `${selectedWeatherStation.metar.value.wind_direction.value.toString().padStart(3, "0")}°`
+                    : selectedWeatherStation.metar?.value.wind_direction
+                          ?.kind === "variable"
+                      ? "VRB"
+                      : "—"}
+                  / {selectedWeatherStation.metar?.value.wind_speed_kt ?? "—"}
+                  kt · {selectedWeatherStation.metar?.value.visibility_sm ??
+                    "—"}
+                  sm
+                </strong>
+                <small
+                  >Present weather:
+                  {selectedWeatherStation.metar?.value.present_weather ??
+                    "not reported"}</small
+                >
+              </article>
+              <article>
+                <span>Station location</span>
+                <strong
+                  >{selectedWeatherStation.location
+                    ? `${selectedWeatherStation.location.latitude.toFixed(4)}, ${selectedWeatherStation.location.longitude.toFixed(4)}`
+                    : "Unavailable"}</strong
+                >
+                <small
+                  >{selectedWeatherStation.location
+                    ? "Coordinates supplied by the attributed flight plan."
+                    : "The report remains visible as evidence but is not plotted."}</small
+                >
+              </article>
+              <article>
+                <span>METAR source</span>
+                <strong
+                  >{selectedWeatherStation.metar?.provenance.provider ??
+                    "No report"}</strong
+                >
+                <small
+                  >{selectedWeatherStation.metar
+                    ? `Retrieved ${formatTimestamp(selectedWeatherStation.metar.provenance.retrieved_at)}`
+                    : "Unavailable in this snapshot"}</small
+                >
+              </article>
+              <article>
+                <span>Raw METAR</span>
+                <strong
+                  >{selectedWeatherStation.metar?.value.raw_text ??
+                    "No METAR returned"}</strong
+                >
+              </article>
+              <article>
+                <span>TAF</span>
+                <strong
+                  >{selectedWeatherStation.taf
+                    ? `Valid to ${formatTimestamp(selectedWeatherStation.taf.value.valid_to)}`
+                    : "No TAF returned"}</strong
+                >
+                {#if selectedWeatherStation.taf}<small
+                    >{selectedWeatherStation.taf.value.raw_text}</small
+                  >{/if}
               </article>
             </div>
           {:else if selectedRoutePoint && atlasFlightRoute?.planned}
@@ -2307,6 +2472,7 @@
         onweather={() => void refreshCurrentDispatchWeather()}
         onclear={() => void clearCurrentDispatchPlan()}
         onviewatlas={openDispatchPlanInAtlas}
+        onviewweatheratlas={openDispatchWeatherInAtlas}
       />
     {/if}
 

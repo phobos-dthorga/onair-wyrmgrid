@@ -147,6 +147,9 @@ pub struct DispatchStatus {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub atlas_plan: Option<crate::FlightPlanMapView>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub atlas_weather: Option<crate::FlightWeatherMapView>,
+    pub journey: crate::FlightOperationJourneyView,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub comparison: Option<DispatchComparison>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub selected_job: Option<DispatchJobSelection>,
@@ -293,6 +296,20 @@ impl DispatchSession {
             .as_ref()
             .map(|snapshot| compare_plan_to_fleet(snapshot, fleet, selected_job.as_ref()));
         let atlas_plan = snapshot.as_ref().map(crate::build_flight_plan_map_view);
+        let weather = self.weather_status()?;
+        let atlas_weather = snapshot
+            .as_ref()
+            .zip(weather.snapshot.as_ref())
+            .map(|(plan, weather)| crate::build_flight_weather_map_view(plan, weather));
+        let journey =
+            crate::build_initial_flight_operation_journey(crate::InitialJourneyEvidence {
+                plan_provider_available: self.inner.provider.is_some(),
+                plan_available: snapshot.is_some(),
+                weather_provider_available: weather.provider_available,
+                weather_available: weather.snapshot.is_some(),
+                weather_stale: weather.cache == DispatchWeatherCacheState::Expired,
+                atlas_available: atlas_plan.is_some(),
+            });
         Ok(DispatchStatus {
             provider_available: self.inner.provider.is_some(),
             availability: if snapshot.is_some() {
@@ -304,9 +321,11 @@ impl DispatchSession {
             importing: self.inner.importing.load(Ordering::Acquire),
             snapshot,
             atlas_plan,
+            atlas_weather,
+            journey,
             comparison,
             selected_job,
-            weather: self.weather_status()?,
+            weather,
         })
     }
 

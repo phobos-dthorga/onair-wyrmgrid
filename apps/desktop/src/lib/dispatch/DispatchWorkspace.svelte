@@ -1,5 +1,6 @@
 <script lang="ts">
   import "./dispatch.css";
+  import FlightOperationJourney from "$lib/flightOperation/FlightOperationJourney.svelte";
   import { translation } from "$lib/i18n/runtime";
   import type {
     DispatchStatus,
@@ -17,6 +18,7 @@
     onweather,
     onclear,
     onviewatlas,
+    onviewweatheratlas,
   }: {
     status: DispatchStatus;
     busy?: boolean;
@@ -30,6 +32,7 @@
     onweather: () => void;
     onclear: () => void;
     onviewatlas: (pointId?: string) => void;
+    onviewweatheratlas: (stationId?: string) => void;
   } = $props();
 
   let referenceKind = $state<SimBriefReferenceKind>("pilot_id");
@@ -55,12 +58,25 @@
   const comparison = $derived(status.comparison);
   const weather = $derived(status.weather.snapshot);
   const atlasPlan = $derived(status.atlas_plan);
+  const atlasWeather = $derived(status.atlas_weather);
   const routeMapPoints = $derived(
     atlasPlan?.points.filter((point) => point.kind === "route_leg") ?? [],
   );
 
   function atlasPointId(kind: "origin" | "destination"): string | undefined {
     return atlasPlan?.points.find((point) => point.kind === kind)?.id;
+  }
+
+  function atlasWeatherStationId(stationIcao: string): string | undefined {
+    return atlasWeather?.stations.find(
+      (station) => station.station_icao === stationIcao,
+    )?.id;
+  }
+
+  function scrollWeatherIntoView(): void {
+    document
+      .getElementById("dispatch-weather")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   function formatDate(value: string | undefined): string {
@@ -264,6 +280,12 @@
         </article>
       </div>
 
+      <FlightOperationJourney
+        journey={status.journey}
+        onweather={scrollWeatherIntoView}
+        onatlas={() => onviewatlas()}
+      />
+
       <div class="dispatch-plan-grid">
         <article class="dispatch-card dispatch-route-card">
           <div class="dispatch-card-heading">
@@ -419,6 +441,7 @@
         </article>
 
         <article
+          id="dispatch-weather"
           class="dispatch-card dispatch-intelligence-card dispatch-weather-card"
         >
           <div class="dispatch-card-heading">
@@ -433,18 +456,29 @@
             alternates. Raw coded text remains visible; no hidden safety score
             is applied.
           </p>
-          <button
-            class="dispatch-inline-action"
-            type="button"
-            disabled={busy || !status.weather.provider_available}
-            onclick={onweather}
-          >
-            {busy
-              ? "Working…"
-              : weather
-                ? "Refresh when due"
-                : "Fetch airport weather"}
-          </button>
+          <div class="dispatch-weather-actions">
+            <button
+              class="dispatch-inline-action"
+              type="button"
+              disabled={busy || !status.weather.provider_available}
+              onclick={onweather}
+            >
+              {busy
+                ? "Working…"
+                : weather
+                  ? "Refresh when due"
+                  : "Fetch airport weather"}
+            </button>
+            {#if atlasWeather}
+              <button
+                class="dispatch-inline-action"
+                type="button"
+                onclick={() => onviewweatheratlas()}
+              >
+                View weather in Atlas
+              </button>
+            {/if}
+          </div>
 
           {#if weather}
             <div class="dispatch-weather-grid">
@@ -452,12 +486,24 @@
                 <section class="dispatch-weather-station">
                   <header>
                     <strong>{airport.station_icao}</strong>
-                    <span
-                      class={`dispatch-flight-category dispatch-flight-category-${airport.metar?.value.flight_category ?? "unknown"}`}
-                    >
-                      {airport.metar?.value.flight_category?.toUpperCase() ??
-                        "NO METAR"}
-                    </span>
+                    <div class="dispatch-weather-station-actions">
+                      <button
+                        type="button"
+                        disabled={!atlasWeatherStationId(airport.station_icao)}
+                        onclick={() =>
+                          onviewweatheratlas(
+                            atlasWeatherStationId(airport.station_icao),
+                          )}
+                      >
+                        Atlas
+                      </button>
+                      <span
+                        class={`dispatch-flight-category dispatch-flight-category-${airport.metar?.value.flight_category ?? "unknown"}`}
+                      >
+                        {airport.metar?.value.flight_category?.toUpperCase() ??
+                          "NO METAR"}
+                      </span>
+                    </div>
                   </header>
                   {#if airport.metar}
                     <div class="dispatch-weather-metrics">

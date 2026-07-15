@@ -333,15 +333,21 @@ async fn caches_weather_and_clears_it_with_the_session_plan() {
     session.refresh_weather().await.unwrap();
     session.refresh_weather().await.unwrap();
     assert_eq!(weather_provider.calls.load(Ordering::Acquire), 1);
+    let status = session.status().unwrap();
+    assert_eq!(status.weather.cache, DispatchWeatherCacheState::Fresh);
+    assert!(status.atlas_weather.is_some());
     assert_eq!(
-        session.status().unwrap().weather.cache,
-        DispatchWeatherCacheState::Fresh
+        status.journey.stages[1].state,
+        crate::FlightOperationStageState::Ready
     );
 
     session.clear().unwrap();
+    let status = session.status().unwrap();
+    assert_eq!(status.weather.cache, DispatchWeatherCacheState::None);
+    assert!(status.atlas_weather.is_none());
     assert_eq!(
-        session.status().unwrap().weather.cache,
-        DispatchWeatherCacheState::None
+        status.journey.stages[1].state,
+        crate::FlightOperationStageState::Unavailable
     );
 }
 

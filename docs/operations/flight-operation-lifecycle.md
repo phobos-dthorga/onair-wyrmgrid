@@ -1,6 +1,7 @@
 # Flight operation lifecycle
 
-Status: forward architecture contract; staged implementation.
+Status: staged implementation; schema-1 journey summary implemented for Plan,
+Weather, and Atlas.
 
 This document defines the long-term WyrmGrid journey from an attributed flight
 plan to a recorded and reviewed operation. It joins plan, weather, OnAir work,
@@ -38,10 +39,11 @@ flowchart LR
 
 ## Core ownership
 
-The Rust application layer should eventually own a versioned
-`FlightOperation` aggregate. The name is conceptual until its first schema is
-implemented; this document does not reserve a public protocol or database
-version.
+The Rust application layer now owns a versioned
+`FlightOperationJourneyView` schema 1 for host-derived stage summaries. The
+larger persistent `FlightOperation` aggregate remains conceptual until its
+first storage schema is implemented; the journey view does not reserve a
+public plugin, simulator, or database version.
 
 A flight operation references attributed source snapshots and explicit user
 selections. It should contain, when available:
@@ -208,11 +210,12 @@ report one of a small set of host-derived states:
 - stale; or
 - unavailable.
 
-The exact enum and compatibility policy belong to the first implementation
-slice. Svelte displays the state and delegates actions; it does not calculate
-readiness. Experienced users may jump directly to any available workspace, and
-returning from a nested view should preserve the operation and navigation
-context.
+Schema 1 implements exactly those six states. Rust currently derives Plan,
+Weather, and Atlas from provider, snapshot, freshness, and map-view evidence;
+future stages remain `not_started`. Svelte displays the state and delegates
+actions; it does not calculate readiness. Experienced users may jump directly
+to any available workspace, and returning from a nested view should preserve
+the operation and navigation context.
 
 ## Revision and invalidation rules
 
@@ -288,9 +291,9 @@ not alter that boundary:
 
 ## Staged implementation
 
-1. **Core contract and journey rail** — introduce a minimal host-owned operation
-   identity, stage summaries, revision semantics, and Plan/Weather/Atlas links
-   using current facts.
+1. **Core contract and journey rail** — host-owned schema-1 stage summaries and
+   Plan/Weather/Atlas links are implemented from current facts. A persistent
+   operation identity and revision semantics remain for the next storage slice.
 2. **Jobs and manifest** — attach read-only job evidence and model passengers,
    company travellers, avatar presence, freight, per-leg roles, and unknowns.
 3. **Fleet reconciliation** — compare the manifest and route with observed

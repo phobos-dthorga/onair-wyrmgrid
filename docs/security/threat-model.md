@@ -408,6 +408,17 @@ successful data is reused for ten minutes, failed attempts have a one-minute
 retry floor, response bodies and URLs never cross safe errors, and weather is
 excluded from plugins and Sentry.
 
+Atlas receives a host-built airport-weather projection rather than raw weather
+payloads or arbitrary provider map resources. Missing reports remain unknown,
+and missing coordinates remain unplotted. Future external radar frames,
+simulator-selected weather mode, and ambient simulator observations are three
+distinct evidence classes: none may impersonate or silently overwrite another.
+Radar adoption requires approved access/licensing, bounded decoded dimensions,
+projection and geometry validation, no-data masks, cache/retention limits, and
+GPU resource-loss fallbacks. Simulator weather recording requires a versioned
+Bridge compatibility decision and must not infer Live Weather from resemblance
+to an external report.
+
 - A translated snapshot can still be wrong because the provider, captured
   fixture, mapping, unit conversion, identifier correlation, or local clock is
   wrong. WyrmGrid exposes source and age and does not market these integrations

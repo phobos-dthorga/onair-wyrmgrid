@@ -1,7 +1,9 @@
-export type Coordinates = {
-  latitude: number;
-  longitude: number;
-};
+import type {
+  Coordinates,
+  OperationalProvenance,
+} from "$lib/operational/types";
+
+export type { Coordinates } from "$lib/operational/types";
 
 export type AtlasRoutePoint = {
   location: Coordinates;
@@ -29,20 +31,7 @@ export type AtlasPlannedRoute = {
   destination_icao: string;
   airac?: string;
   source_text?: string;
-  provenance: {
-    kind:
-      | "on_air_fact"
-      | "external_fact"
-      | "external_calculation"
-      | "calculated"
-      | "recommendation";
-    provider: string;
-    provider_revision?: string;
-    generated_at?: string;
-    retrieved_at: string;
-    transformation_version: number;
-    freshness: "current" | "stale" | "unknown";
-  };
+  provenance: OperationalProvenance;
   points: AtlasPlannedPoint[];
 };
 

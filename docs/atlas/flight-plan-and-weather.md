@@ -3,9 +3,9 @@
 This document defines how Dispatch, SimBrief, weather, Hoard, and Atlas should
 join without creating a second interpretation of the same operational facts.
 It is a design contract for staged increments. Atlas now draws the current
-Dispatch plan and a bounded planned-versus-recorded route for a selected
-historical simulator recording. Animated weather and sourced procedure
-geometry remain later work.
+Dispatch plan, its current airport-weather observations, and a bounded
+planned-versus-recorded route for a selected historical simulator recording.
+Animated radar/weather and sourced procedure geometry remain later work.
 
 ## One plan, two projections
 
@@ -116,6 +116,23 @@ Atlas weather layers consume translated immutable weather products, not raw
 provider JSON, images, or arbitrary remote map styles. Each feature carries at
 least source, product kind, issue/observation time, validity interval, retrieval
 time, freshness, coverage, and geometry provenance.
+
+### Current airport-weather projection
+
+`DispatchStatus.atlas_weather` is an additive `FlightWeatherMapView` schema-1
+projection built in Rust by joining the validated plan airports with the
+current `WeatherSnapshot`. It gives origin, destination, and alternates stable
+selection IDs and carries only source coordinates and translated METAR/TAF
+observations. Dispatch can open the complete weather layer or one station in
+Atlas; Atlas displays category, wind, visibility, raw reports, timestamps, and
+provenance in its inspector.
+
+A station with coordinates but no report is plotted as **Unknown**, never
+clear. A report whose plan airport lacks coordinates remains part of the
+evidence view and inspector contract but is not plotted. The weather view is
+session-only, disappears when its source plan is cleared, and does not change
+the canonical plan, weather snapshot, plugin protocol, simulator protocol, or
+database schema.
 
 The intended layers are incremental:
 
@@ -236,6 +253,8 @@ warning effects may flash, while the runtime control prevents or reduces them.
 3. Introduce navigation resolution with procedure/AIRAC provenance before
    clickable SID/STAR geometry.
 4. Project current airport weather, followed by validated advisory geometries.
+   The airport projection and linked inspector are implemented; route hazards
+   remain later work.
 5. Add append-only bounded weather persistence and Hoard historical playback.
 6. Add Compatibility/Enhanced settings, GPU capability reporting, budgets, and
    device-loss fallback before high-detail effects.
@@ -250,3 +269,7 @@ Open decisions include the approved navigation geometry source, MapLibre custom
 layer versus a separately composited renderer, WebGL2/WebGPU support policy,
 weather imagery licensing, historical retention limits, and the measurable
 frame-time/VRAM thresholds for each profile.
+
+Radar source evaluation, immutable frame requirements, rendering profiles, and
+historical gates are defined in the
+[weather radar integration contract](../integrations/radar.md).

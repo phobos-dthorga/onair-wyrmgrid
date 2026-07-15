@@ -96,6 +96,9 @@ not replace completion of the current vertical slice.
   instead of inferred (implemented for the current read-only contracts)
 - Explicitly requested, ten-minute session-cached AviationWeather.gov METAR and
   TAF airport context with raw coded text and provenance (implemented)
+- Host-owned plan-airport weather projection, linked Dispatch/Atlas station
+  selection, explicit unknown/no-report rendering, and an initial
+  Plan-to-Atlas journey rail (implemented)
 - Route advisories and explainable weather findings (airport observation context
   implemented; route hazard products remain)
 - Dispatch-to-Atlas route projection with full-route framing and linked
@@ -104,6 +107,8 @@ not replace completion of the current vertical slice.
   provenance, and honest gaps implemented; procedure resolution remains)
 - Live and Hoard-historical Atlas weather with a default Compatibility renderer,
   opt-in GPU-enhanced effects, and identical facts across rendering profiles
+- Approved regional/global radar adapters with visible coverage and no-data
+  masks; bounded live animation precedes any licensed historical retention
 - SimBrief generation only after Navigraph approves the desktop flow and any
   required hosted-secret boundary receives a separate decision
 
@@ -138,6 +143,8 @@ not replace completion of the current vertical slice.
 - A thin MSFS in-simulator recording controller after an independent CommBus
   and package-distribution spike
 - Additional lifecycle policies, phase analysis, and weather-along-track overlays
+- Simulator weather-mode transitions and ambient conditions recorded separately
+  from external real-world weather after an MSFS SDK and protocol spike
 - Explicit `.pln` export and flight-plan load after read-only telemetry is proven
 - MSFS 2020 and FSUIPC compatibility providers
 - X-Plane 12 Web API provider after the MSFS 2024 slice
@@ -155,7 +162,8 @@ not replace completion of the current vertical slice.
 
 - Host-owned flight-operation identity, revision semantics, and a non-blocking
   Plan -> Weather -> Jobs -> Manifest -> Fleet -> Staff -> Review -> Atlas
-  journey rail
+  journey rail (schema-1 host-derived Plan/Weather/Atlas summaries implemented;
+  persistent identity and revisions remain)
 - A per-leg manifest that distinguishes passengers, company personnel,
   positioning staff, the player avatar, and freight without double-counting
   people who operate one leg and travel on another

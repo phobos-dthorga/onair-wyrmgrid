@@ -15,6 +15,34 @@ opt-in evidence-led automatic lifecycle. It displays the latest fresh connected
 snapshot, persists the selected provider, and keeps provider auto-start and
 recording automation as separate default-off choices.
 
+## Simulator weather evidence
+
+A recording must not equate the simulated atmosphere with external real-world
+weather. Future Bridge telemetry should preserve three independent facts:
+
+1. the simulator-reported weather mode or scenario (`live`,
+   `preset_or_custom`, or `unknown` after SDK verification);
+2. bounded ambient conditions observed at the aircraft, with simulator and
+   observation time; and
+3. any separately retrieved external weather snapshot used for planning or
+   later comparison.
+
+MSFS 2024 documents a weather-mode event and readable ambient variables such as
+precipitation, visibility, pressure, temperature, wind, and cloud density. A
+dedicated SDK spike must prove which values and transitions are reliable in
+free flight, presets, custom weather, replay, pause, menu transitions, and
+reconnection before the sidecar protocol changes. Ambient similarity must
+never be used to infer that Live Weather was active.
+
+When implemented, Hoard records mode transitions as symbolic events and
+ambient values as simulator observations alongside the normal gap rules. It
+keeps external METAR/TAF/radar products separately attributed so a debrief can
+compare the weather the user chose, what the aircraft experienced, and what an
+external provider reported without calling any stream the other. This requires
+a protocol revision, sanitized fixtures, old/new compatibility decision,
+recording schema review, and threat-model update; no fields are added to the
+current protocol spec merely on assumption.
+
 ## Launch and automation settings
 
 Connection and recording require separate, explicit settings:
@@ -188,6 +216,9 @@ user-selected sessions, and exclude raw high-frequency data by default.
    schemas 1.
 5. Prove the MSFS in-simulator CommBus control surface, then package it only
    after compatibility, signing, installation, and removal are documented.
+6. Prove simulator weather-mode and ambient-condition observability, then add a
+   versioned, gap-preserving recording contract that remains distinct from
+   external weather.
 
 ## Questions and suggestions
 
@@ -210,4 +241,6 @@ user-selected sessions, and exclude raw high-frequency data by default.
 - [MSFS 2024 SimConnect SDK](https://docs.flightsimulator.com/msfs2024/html/6_Programming_APIs/SimConnect/SimConnect_SDK.htm)
 - [MSFS 2024 Communication API](https://docs.flightsimulator.com/msfs2024/flighting/html/6_Programming_APIs/SimConnect/API_Reference/Communication/Communication_API.htm)
 - [MSFS 2024 flow events](https://docs.flightsimulator.com/msfs2024/html/6_Programming_APIs/SimConnect/API_Reference/Structures_And_Enumerations/SIMCONNECT_FLOW_EVENT.htm)
+- [MSFS 2024 receive IDs, including weather-mode events](https://docs.flightsimulator.com/msfs2024/html/6_Programming_APIs/SimConnect/API_Reference/Structures_And_Enumerations/SIMCONNECT_RECV_ID.htm)
+- [MSFS 2024 ambient variables](https://docs.flightsimulator.com/msfs2024/html/6_Programming_APIs/SimVars/Miscellaneous_Variables.htm)
 - [MSFS 2024 JavaScript instruments](https://docs.flightsimulator.com/msfs2024/html/6_Programming_APIs/JavaScript/JavaScript.htm)

@@ -86,6 +86,19 @@ export const dispatchPreviewEmpty: DispatchStatus = {
   availability: "empty",
   persistence: "session_only",
   importing: false,
+  journey: {
+    schema_version: 1,
+    stages: [
+      { stage: "plan", state: "available" },
+      { stage: "weather", state: "unavailable" },
+      { stage: "jobs", state: "not_started" },
+      { stage: "manifest", state: "not_started" },
+      { stage: "fleet", state: "not_started" },
+      { stage: "staff", state: "not_started" },
+      { stage: "review", state: "not_started" },
+      { stage: "atlas", state: "unavailable" },
+    ],
+  },
   weather: {
     provider_available: true,
     availability: "not_requested",
@@ -100,6 +113,19 @@ export const dispatchPreviewReady: DispatchStatus = {
   persistence: "session_only",
   importing: false,
   atlas_plan: previewAtlasPlan,
+  journey: {
+    schema_version: 1,
+    stages: [
+      { stage: "plan", state: "ready" },
+      { stage: "weather", state: "ready" },
+      { stage: "jobs", state: "not_started" },
+      { stage: "manifest", state: "not_started" },
+      { stage: "fleet", state: "not_started" },
+      { stage: "staff", state: "not_started" },
+      { stage: "review", state: "not_started" },
+      { stage: "atlas", state: "ready" },
+    ],
+  },
   snapshot: {
     schema_version: 1,
     id: "129cc5ca-94de-46db-a10e-502bd39c7e98",
@@ -299,6 +325,7 @@ export const dispatchPreviewReady: DispatchStatus = {
               kind: "external_fact",
               provider: "aviationweather.gov",
               provider_revision: "data-api-v4",
+              retrieved_at: "2026-07-14T01:03:00Z",
               generated_at: "2026-07-14T01:00:00Z",
             },
           },
@@ -315,6 +342,7 @@ export const dispatchPreviewReady: DispatchStatus = {
               kind: "external_fact",
               provider: "aviationweather.gov",
               provider_revision: "data-api-v4",
+              retrieved_at: "2026-07-14T01:03:00Z",
               generated_at: "2026-07-13T23:24:00Z",
             },
           },
@@ -339,6 +367,7 @@ export const dispatchPreviewReady: DispatchStatus = {
               kind: "external_fact",
               provider: "aviationweather.gov",
               provider_revision: "data-api-v4",
+              retrieved_at: "2026-07-14T01:33:00Z",
               generated_at: "2026-07-14T01:30:00Z",
             },
           },
@@ -355,6 +384,7 @@ export const dispatchPreviewReady: DispatchStatus = {
               kind: "external_fact",
               provider: "aviationweather.gov",
               provider_revision: "data-api-v4",
+              retrieved_at: "2026-07-14T01:33:00Z",
               generated_at: "2026-07-13T23:08:00Z",
             },
           },
@@ -381,6 +411,7 @@ export const dispatchPreviewReady: DispatchStatus = {
               kind: "external_fact",
               provider: "aviationweather.gov",
               provider_revision: "data-api-v4",
+              retrieved_at: "2026-07-14T01:33:00Z",
               generated_at: "2026-07-14T01:30:00Z",
             },
           },
@@ -396,6 +427,7 @@ export const dispatchPreviewReady: DispatchStatus = {
               kind: "external_fact",
               provider: "aviationweather.gov",
               provider_revision: "data-api-v4",
+              retrieved_at: "2026-07-14T01:33:00Z",
               generated_at: "2026-07-13T23:08:00Z",
             },
           },
@@ -404,3 +436,32 @@ export const dispatchPreviewReady: DispatchStatus = {
     },
   },
 };
+
+const previewWeather = dispatchPreviewReady.weather.snapshot;
+if (previewWeather) {
+  dispatchPreviewReady.atlas_weather = {
+    schema_version: 1,
+    plan_id: dispatchPreviewReady.snapshot?.id ?? "preview-plan",
+    weather_snapshot_id: previewWeather.id,
+    stations: [
+      {
+        id: "weather:origin:yssy",
+        role: "origin",
+        location: { latitude: -33.9461, longitude: 151.1772 },
+        ...previewWeather.airports[0],
+      },
+      {
+        id: "weather:destination:nzaa",
+        role: "destination",
+        location: { latitude: -37.0081, longitude: 174.7917 },
+        ...previewWeather.airports[1],
+      },
+      {
+        id: "weather:alternate:0000:nzwn",
+        role: "alternate",
+        location: { latitude: -41.3272, longitude: 174.8053 },
+        ...previewWeather.airports[2],
+      },
+    ],
+  };
+}

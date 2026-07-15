@@ -5,6 +5,13 @@
   import type { PublishedPluginLayer } from "$lib/forge/types";
   import { activeTheme } from "$lib/theme/runtime";
   import {
+    weatherFitCoordinates,
+    weatherMapSignature,
+    weatherPointCoordinates,
+    weatherStationFeatures,
+  } from "$lib/weather/atlasWeather";
+  import type { FlightWeatherMapView } from "$lib/weather/types";
+  import {
     flightRouteSignature,
     routeFitCoordinates,
     routeLineFeatures,
@@ -21,12 +28,16 @@
     pluginLayers,
     pluginLayersVisible,
     flightRoute,
+    weather,
+    weatherVisible,
     selectedRoutePointId,
+    selectedWeatherStationId,
     selectedAircraftId,
     selectedFboId,
     onselectaircraft,
     onselectfbo,
     onselectroutepoint,
+    onselectweatherstation,
   }: {
     aircraft: AircraftSummary[];
     fbos: FboSummary[];
@@ -35,12 +46,16 @@
     pluginLayers: PublishedPluginLayer[];
     pluginLayersVisible: boolean;
     flightRoute?: AtlasFlightRoute;
+    weather?: FlightWeatherMapView;
+    weatherVisible: boolean;
     selectedRoutePointId?: string;
+    selectedWeatherStationId?: string;
     selectedAircraftId: string | null;
     selectedFboId: string | null;
     onselectaircraft: (aircraftId: string) => void;
     onselectfbo: (fboId: string) => void;
     onselectroutepoint: (pointId: string) => void;
+    onselectweatherstation: (stationId: string) => void;
   } = $props();
 
   const FLEET_SOURCE_ID = "wyrmgrid-fleet";
@@ -58,6 +73,9 @@
   const RECORDED_ROUTE_LAYER_ID = "wyrmgrid-recorded-flight-route";
   const ROUTE_MARKER_LAYER_ID = "wyrmgrid-flight-route-markers";
   const ROUTE_LABEL_LAYER_ID = "wyrmgrid-flight-route-labels";
+  const WEATHER_SOURCE_ID = "wyrmgrid-flight-weather";
+  const WEATHER_LAYER_ID = "wyrmgrid-flight-weather-stations";
+  const WEATHER_LABEL_LAYER_ID = "wyrmgrid-flight-weather-labels";
 
   let mapContainer: HTMLDivElement;
   let map: Map | undefined;
@@ -186,6 +204,7 @@
     const pluginData = pluginFeatures();
     const routes = routeLineFeatures(flightRoute);
     const routeMarkers = routeMarkerFeatures(flightRoute);
+    const weatherStations = weatherStationFeatures(weather);
     (map.getSource(FLEET_SOURCE_ID) as GeoJSONSource | undefined)?.setData(
       fleet,
     );
@@ -201,6 +220,9 @@
     (
       map.getSource(ROUTE_MARKER_SOURCE_ID) as GeoJSONSource | undefined
     )?.setData(routeMarkers);
+    (map.getSource(WEATHER_SOURCE_ID) as GeoJSONSource | undefined)?.setData(
+      weatherStations,
+    );
 
     const visibility = fleetVisible ? "visible" : "none";
     map.setLayoutProperty(FLEET_LAYER_ID, "visibility", visibility);
@@ -214,6 +236,13 @@
       PLUGIN_LABEL_LAYER_ID,
       "visibility",
       pluginVisibility,
+    );
+    const weatherVisibility = weatherVisible ? "visible" : "none";
+    map.setLayoutProperty(WEATHER_LAYER_ID, "visibility", weatherVisibility);
+    map.setLayoutProperty(
+      WEATHER_LABEL_LAYER_ID,
+      "visibility",
+      weatherVisibility,
     );
     map.setPaintProperty(FLEET_LAYER_ID, "circle-color", [
       "case",
@@ -310,24 +339,57 @@
       $activeTheme.colors.map_halo,
     );
 
+    map.setPaintProperty(WEATHER_LAYER_ID, "circle-color", [
+      "case",
+      ["==", ["get", "id"], selectedWeatherStationId ?? ""],
+      $activeTheme.colors.text,
+      ["==", ["get", "category"], "vfr"],
+      $activeTheme.colors.success,
+      ["==", ["get", "category"], "mvfr"],
+      $activeTheme.colors.highlight,
+      ["==", ["get", "category"], "ifr"],
+      $activeTheme.colors.accent,
+      ["==", ["get", "category"], "lifr"],
+      $activeTheme.colors.danger,
+      $activeTheme.colors.text_muted,
+    ]);
+    map.setPaintProperty(
+      WEATHER_LAYER_ID,
+      "circle-stroke-color",
+      $activeTheme.colors.map_halo,
+    );
+    map.setPaintProperty(
+      WEATHER_LABEL_LAYER_ID,
+      "text-color",
+      $activeTheme.colors.map_label,
+    );
+    map.setPaintProperty(
+      WEATHER_LABEL_LAYER_ID,
+      "text-halo-color",
+      $activeTheme.colors.map_halo,
+    );
+
     const routeSignature = flightRouteSignature(flightRoute);
-    const routeViewportSignature = routeSignature
-      ? `${routeSignature}|focus:${selectedRoutePointId ?? "all"}`
-      : "";
+    const weatherSignature = weatherVisible ? weatherMapSignature(weather) : "";
+    const routeViewportSignature =
+      routeSignature || weatherSignature
+        ? `${routeSignature}|${weatherSignature}|route-focus:${selectedRoutePointId ?? "all"}|weather-focus:${selectedWeatherStationId ?? "all"}`
+        : "";
     if (
       routeViewportSignature &&
       routeViewportSignature !== fittedAtlasSignature
     ) {
-      const focusedPoint = routePointCoordinates(
-        flightRoute,
-        selectedRoutePointId,
-      );
+      const focusedPoint =
+        weatherPointCoordinates(weather, selectedWeatherStationId) ??
+        routePointCoordinates(flightRoute, selectedRoutePointId);
       fittedAtlasSignature = routeViewportSignature;
       if (focusedPoint) {
         map.easeTo({ center: focusedPoint, zoom: 8, duration: 700 });
         return;
       }
-      const coordinates = routeFitCoordinates(flightRoute);
+      const coordinates = routeSignature
+        ? routeFitCoordinates(flightRoute)
+        : weatherFitCoordinates(weather);
       if (coordinates.length === 1) {
         map.easeTo({ center: coordinates[0], zoom: 8, duration: 700 });
       } else if (coordinates.length > 1) {
@@ -339,7 +401,7 @@
       }
       return;
     }
-    if (routeSignature) return;
+    if (routeSignature || weatherSignature) return;
 
     const visibleFeatures = [
       ...(fleetVisible ? fleet.features : []),
@@ -376,7 +438,10 @@
     pluginLayers;
     pluginLayersVisible;
     flightRoute;
+    weather;
+    weatherVisible;
     selectedRoutePointId;
+    selectedWeatherStationId;
     selectedAircraftId;
     selectedFboId;
     $activeTheme;
@@ -428,6 +493,48 @@
         atlasMap.addSource(ROUTE_MARKER_SOURCE_ID, {
           type: "geojson",
           data: routeMarkerFeatures(flightRoute),
+        });
+        atlasMap.addSource(WEATHER_SOURCE_ID, {
+          type: "geojson",
+          data: weatherStationFeatures(weather),
+        });
+        atlasMap.addLayer({
+          id: WEATHER_LAYER_ID,
+          type: "circle",
+          source: WEATHER_SOURCE_ID,
+          layout: { visibility: weatherVisible ? "visible" : "none" },
+          paint: {
+            "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, 8, 8, 16],
+            "circle-color": $activeTheme.colors.text_muted,
+            "circle-opacity": 0.32,
+            "circle-stroke-color": $activeTheme.colors.map_halo,
+            "circle-stroke-width": 2,
+            "circle-stroke-opacity": 0.9,
+          },
+        });
+        atlasMap.addLayer({
+          id: WEATHER_LABEL_LAYER_ID,
+          type: "symbol",
+          source: WEATHER_SOURCE_ID,
+          minzoom: 3,
+          layout: {
+            visibility: weatherVisible ? "visible" : "none",
+            "text-field": [
+              "concat",
+              ["get", "station_icao"],
+              " · ",
+              ["upcase", ["get", "category"]],
+            ],
+            "text-size": 10,
+            "text-offset": [0, -1.8],
+            "text-anchor": "bottom",
+            "text-allow-overlap": false,
+          },
+          paint: {
+            "text-color": $activeTheme.colors.map_label,
+            "text-halo-color": $activeTheme.colors.map_halo,
+            "text-halo-width": 1.5,
+          },
         });
         atlasMap.addLayer({
           id: PLANNED_ROUTE_LAYER_ID,
@@ -588,6 +695,10 @@
           const pointId = event.features?.[0]?.properties?.id;
           if (typeof pointId === "string") onselectroutepoint(pointId);
         });
+        atlasMap.on("click", WEATHER_LAYER_ID, (event) => {
+          const stationId = event.features?.[0]?.properties?.id;
+          if (typeof stationId === "string") onselectweatherstation(stationId);
+        });
         atlasMap.on("mouseenter", FLEET_LAYER_ID, () => {
           atlasMap.getCanvas().style.cursor = "pointer";
         });
@@ -604,6 +715,12 @@
           atlasMap.getCanvas().style.cursor = "pointer";
         });
         atlasMap.on("mouseleave", ROUTE_MARKER_LAYER_ID, () => {
+          atlasMap.getCanvas().style.cursor = "";
+        });
+        atlasMap.on("mouseenter", WEATHER_LAYER_ID, () => {
+          atlasMap.getCanvas().style.cursor = "pointer";
+        });
+        atlasMap.on("mouseleave", WEATHER_LAYER_ID, () => {
           atlasMap.getCanvas().style.cursor = "";
         });
         mapReady = true;
