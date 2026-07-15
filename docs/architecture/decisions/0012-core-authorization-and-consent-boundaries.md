@@ -33,12 +33,18 @@ The policy vocabulary distinguishes four decisions:
 4. **Momentary confirmation** authorizes one destructive or sensitive action
    and is not retained as a reusable grant.
 
-Durable capability grants are deny-by-default and keyed by subject kind,
+Capability grants are deny-by-default and keyed by subject kind,
 subject identifier, capability, and scope revision. Grant and revoke decisions
 produce local audit entries bounded to the newest 4,096 decisions. A changed
 plugin version or requested permission set has a new scope revision and
 therefore requires review again. Revocation stops an active plugin before its
 grants are removed.
+
+Capability lifetime is part of the decision. `Once` is consumed by one
+privileged launch, `Session` lives only in a shared in-memory authority runtime,
+and `Standing` is the only lifetime persisted to encrypted storage. Security
+Centre reads both the persisted and current-process views from the same Rust
+authority; neither Tauri nor Svelte synthesizes a grant.
 
 The user-facing Security Centre receives a validated, bounded read model from
 this core. It shows current actors and symbolic decisions but receives no raw
@@ -72,7 +78,8 @@ not authorize feature data sharing.
 
 - Whether future capabilities may be optional in plugin manifests rather than
   all requested capabilities being required for launch.
-- Whether grants may be session-only, time-limited, or always persistent.
+- Whether a future actor has a justified need for wall-clock expiry in addition
+  to the implemented once, process-session, and standing lifetimes.
 - Whether signed publisher identity can safely allow grants to survive a plugin
   version update with an unchanged permission set.
 - Whether the Security Centre should later expose filters, explanatory decision

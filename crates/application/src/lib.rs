@@ -10,10 +10,11 @@ mod simulator;
 mod simulator_recording;
 
 pub use authorization::{
-    AUTHORIZATION_DECISION_RETENTION_LIMIT, LegalPreferencesRepository, LegalSettingsError,
-    LegalSettingsService, LegalStatus, PRIVACY_NOTICE_VERSION, PersistedLegalPreferences,
-    SecurityCentreError, SecurityCentreRepository, SecurityCentreService, SecurityCentreStatus,
-    SecurityDecision, SecurityDecisionView, SecurityGrantView, SecuritySubjectKind, TERMS_VERSION,
+    AUTHORIZATION_DECISION_RETENTION_LIMIT, AuthorizationGrantLifetime, AuthorizationRuntime,
+    LegalPreferencesRepository, LegalSettingsError, LegalSettingsService, LegalStatus,
+    PRIVACY_NOTICE_VERSION, PersistedLegalPreferences, SecurityCentreError,
+    SecurityCentreRepository, SecurityCentreService, SecurityCentreStatus, SecurityDecision,
+    SecurityDecisionView, SecurityGrantView, SecuritySubjectKind, TERMS_VERSION,
 };
 pub use data_protection::*;
 pub use dispatch::*;
@@ -1001,6 +1002,12 @@ impl From<SimulatorRecordingError> for OperationError {
             }
             SimulatorRecordingError::UnknownSession => {
                 ("simulator.recording_unknown_session", false, false)
+            }
+            SimulatorRecordingError::ExportTooLarge => {
+                ("simulator.recording_export_too_large", false, false)
+            }
+            SimulatorRecordingError::InvalidPlan => {
+                ("simulator.recording_invalid_plan", false, false)
             }
             SimulatorRecordingError::ActiveSession => {
                 ("simulator.recording_active_session", false, false)

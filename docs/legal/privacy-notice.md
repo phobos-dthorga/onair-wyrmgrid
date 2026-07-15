@@ -1,6 +1,6 @@
 # OnAir WyrmGrid Privacy Notice
 
-**Version and effective date:** 2026-07-15.2 (storage-protection revision)
+**Version and effective date:** 2026-07-15.3 (flight-recording revision)
 
 This preliminary notice describes information handled by official builds of
 OnAir WyrmGrid distributed by Phobos A. D'thorga. It does not describe an
@@ -24,9 +24,10 @@ professionally reviewed before a stable or commercial release.
 - If you choose to fetch airport weather, the plan's origin, destination, and
   alternate ICAO identifiers are sent to AviationWeather.gov for current METAR
   and TAF products.
-- Simulator telemetry is stored only after you explicitly start a recording.
-  These local sessions can contain precise flight times and measurements and
-  can be deleted from WyrmGrid.
+- Simulator telemetry is stored only after you explicitly start a recording or
+  opt into automatic recording. These local sessions can contain precise
+  routes, flight times, measurements, lifecycle events, and an associated
+  sanitized SimBrief plan, and can be deleted from WyrmGrid.
 - Atlas downloads its current map style and tiles from MapLibre's public demo
   service after legal onboarding is complete.
 - Privacy-filtered error diagnostics are optional, off by default, and only
@@ -54,11 +55,15 @@ WyrmGrid currently keeps the following information on the user's device:
 - successful translated fleet, FBO, and pending-job observations in WyrmGrid's
   local Hoard database. These records contain stable WyrmGrid fields and
   provenance, not the raw OnAir response or API key;
-- after the user explicitly starts recording, translated simulator session
-  identity and one-hertz altitude, speed, fuel, weight, attitude,
-  simulator-time, and observation-time samples in the local WyrmGrid database.
-  Raw SimConnect messages and geographic coordinates are not persisted in the
-  initial recording schema;
+- after the user explicitly starts recording or enables automatic recording,
+  translated simulator session identity and one-hertz position, on-ground,
+  engine, parking-brake, pause, altitude, speed, fuel, weight, attitude,
+  simulator-time, and observation-time facts in the local WyrmGrid database.
+  Raw SimConnect messages are not persisted;
+- when a current imported plan is associated with a recording, its sanitized
+  validated `FlightPlanSnapshot`, plan/recording correlation version, and
+  calculated comparisons. The entered SimBrief Pilot ID or username and raw
+  OFP response are not written to the database;
 - symbolic authorization grant and revoke decisions, including actor ID,
   capability scope revision, capability count, and decision time. These records
   are limited to the newest 4,096 decisions and never contain API keys, raw
@@ -68,8 +73,9 @@ WyrmGrid currently keeps the following information on the user's device:
   is not stored in the database or portable backups; and
 - while the application is running, a user-supplied SimBrief Pilot ID or
   username for the duration of one import request and the translated latest OFP
-  in process memory. The identifier and plan are not currently written to the
-  WyrmGrid database; and
+  in process memory. The identifier is never written to the WyrmGrid database;
+  the translated plan is written only when associated with a local recording;
+  and
 - after an explicit weather request, translated METAR and TAF observations for
   at most ten plan airports in process memory. The current cache is tied to the
   session plan, reused for ten minutes, and not written to the WyrmGrid database.
@@ -120,12 +126,15 @@ other normal connection metadata. A successful response may contain private
 operational information including airports, route, times, aircraft identity,
 weights, fuel, alternates, coordinates, plan identifiers, and AIRAC details.
 
-WyrmGrid translates allowlisted fields into a local `FlightPlanSnapshot`, keeps
-the result only for the running session, and does not send the identifier, raw
-response, or translated plan to Sentry or plugins. Clearing the plan or closing
-WyrmGrid removes the application's in-memory reference, subject to the same
-operating-system memory limitations described above. SimBrief operates
-independently under its own terms and privacy practices.
+WyrmGrid translates allowlisted fields into a local `FlightPlanSnapshot` and
+does not send the identifier, raw response, or translated plan to Sentry or
+plugins. Clearing the plan or closing WyrmGrid removes the application's
+in-memory reference, subject to the same operating-system memory limitations.
+If a simulator recording is active, or starts while that plan remains current,
+WyrmGrid retains the sanitized snapshot with the encrypted recording so its
+planned and recorded facts can be reviewed later. Clearing Dispatch does not
+rewrite an already associated recording. SimBrief operates independently under
+its own terms and privacy practices.
 
 ### AviationWeather.gov
 
@@ -190,10 +199,11 @@ unrelated user profiling.
 
 ## Retention and deletion
 
-Session-only credentials, account references, fleet state, and imported
-SimBrief plans and weather snapshots are discarded when the process exits. A
-Dispatch user can also clear the imported plan and its associated weather during
-the session.
+Session-only credentials, account references, fleet state, unassociated
+SimBrief plans, and weather snapshots are discarded when the process exits. A
+Dispatch user can also clear the current plan and its associated weather during
+the session. A plan already associated with a recording follows that recording's
+retention and deletion instead.
 Local preferences and imported customisation manifests remain until changed,
 removed by a future management function, or deleted with the application's
 local data. Version 1 does not yet provide an individual language-pack deletion
@@ -201,9 +211,12 @@ control. The local diagnostic log rotates at 200 entries and can be cleared
 from the application. Optional Sentry diagnostic events follow
 the Sentry retention configuration disclosed when public telemetry is enabled.
 Completed and interrupted simulator recordings use the retention period chosen
-in Settings (30 days by default). They can be deleted individually or together;
-active recordings must first be stopped. Retention pruning is local and does
-not send session content to WyrmGrid, Sentry, simulator providers, or plugins.
+in Settings (30 days by default). A user can pin a recording against automatic
+pruning, or delete recordings individually or together; active recordings must
+first be stopped. Retention pruning is local and does not send session content
+to WyrmGrid, Sentry, simulator providers, or plugins. JSON and CSV exports are
+plaintext copies created only on request and are no longer protected by the
+database once saved elsewhere.
 Uninstallers and operating systems may not remove every application-data file;
 users can request instructions for locating it.
 

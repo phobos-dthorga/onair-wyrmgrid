@@ -6,7 +6,7 @@ fn initializes_the_database_schema() {
     let store = Store::open_in_memory().expect("in-memory database should open");
     assert_eq!(
         store.schema_version().expect("version should be readable"),
-        9
+        10
     );
 }
 
@@ -149,8 +149,18 @@ fn persists_and_deletes_bounded_simulator_recordings() {
     store
         .save_simulator_recording_preferences_record(&SimulatorRecordingPreferencesRecord {
             retention_days: 30,
+            automatic_start: true,
+            automatic_stop: true,
+            landing_settle_seconds: 45,
         })
         .unwrap();
+    let preferences = store
+        .load_simulator_recording_preferences_record()
+        .unwrap()
+        .unwrap();
+    assert!(preferences.automatic_start);
+    assert!(preferences.automatic_stop);
+    assert_eq!(preferences.landing_settle_seconds, 45);
 
     let session = SimulatorSessionRecord {
         id: "session-1".into(),
@@ -164,6 +174,8 @@ fn persists_and_deletes_bounded_simulator_recordings() {
         origin: "manual".into(),
         status: "active".into(),
         sample_count: 0,
+        pinned: false,
+        plan_snapshot_json: None,
     };
     store.create_simulator_session_record(&session).unwrap();
     let sample = SimulatorSampleRecord {
@@ -179,6 +191,12 @@ fn persists_and_deletes_bounded_simulator_recordings() {
         pitch_degrees: 2.0,
         bank_degrees: -1.0,
         gap_before: false,
+        latitude: Some(-33.8688),
+        longitude: Some(151.2093),
+        on_ground: Some(false),
+        engines_running: Some(true),
+        parking_brake_set: Some(false),
+        paused: Some(false),
     };
     assert!(
         store
@@ -194,15 +212,50 @@ fn persists_and_deletes_bounded_simulator_recordings() {
     let sessions = store.list_simulator_session_records(10).unwrap();
     assert_eq!(sessions.len(), 1);
     assert_eq!(sessions[0].sample_count, 1);
+    assert!(!sessions[0].pinned);
     assert_eq!(
         store
             .list_simulator_sample_records(&session.id, 600)
             .unwrap(),
         vec![sample]
     );
+    store
+        .append_simulator_session_event_record(
+            &session.id,
+            &SimulatorSessionEventRecord {
+                id: 0,
+                event_kind: "takeoff_confirmed".into(),
+                observed_at: "2026-07-15T00:00:01Z".into(),
+                source_sequence: Some(1),
+                evidence_json: "{\"on_ground\":false}".into(),
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        store
+            .list_simulator_session_event_records(&session.id)
+            .unwrap()[0]
+            .event_kind,
+        "takeoff_confirmed"
+    );
 
     store
         .finish_simulator_session_record(&session.id, "2026-07-15T00:10:00Z", "completed")
+        .unwrap();
+    assert!(
+        store
+            .set_simulator_session_pinned(&session.id, true)
+            .unwrap()
+    );
+    assert_eq!(
+        store
+            .prune_simulator_session_records("2026-07-16T00:00:00Z")
+            .unwrap(),
+        0
+    );
+    assert!(store.list_simulator_session_records(10).unwrap()[0].pinned);
+    store
+        .set_simulator_session_pinned(&session.id, false)
         .unwrap();
     assert_eq!(
         store
@@ -229,6 +282,8 @@ fn opening_storage_marks_abandoned_recordings_interrupted() {
             origin: "manual".into(),
             status: "active".into(),
             sample_count: 0,
+            pinned: false,
+            plan_snapshot_json: None,
         })
         .unwrap();
     store

@@ -121,15 +121,17 @@ not replace completion of the current vertical slice.
   (implemented foundation)
 - MSFS 2024 SimConnect detection and read-only telemetry as the primary provider
   (implemented; live certification and SimConnect client redistribution remain)
-- Default-off provider auto-start and automatic recording, with explicit
-  session retention and deletion controls
-- Hoard flight-recording history with shared unit-aware altitude and speed
-  graphs (implemented)
-- WyrmChart telemetry sessions with gap-aware altitude, speed, fuel, attitude,
-  and later planned-versus-actual graphs
+- Default-off provider auto-start and evidence-led automatic recording, with
+  explicit session retention, pinning, export, and deletion controls
+- Hoard flight-recording search, exact older/newer windows, lifecycle evidence,
+  pinning, export, and shared unit-aware altitude/speed graphs (implemented)
+- Versioned SimBrief planned-versus-recorded facts for duration, track distance,
+  altitude, fuel, airport proximity, and registration (implemented first slice)
+- WyrmChart telemetry sessions with gap-aware fuel and attitude graphs plus
+  whole-trace downsampling
 - A thin MSFS in-simulator recording controller after an independent CommBus
   and package-distribution spike
-- Flight lifecycle and planned-versus-actual summaries
+- Additional lifecycle policies and richer planned-versus-recorded graph overlays
 - Explicit `.pln` export and flight-plan load after read-only telemetry is proven
 - MSFS 2020 and FSUIPC compatibility providers
 - X-Plane 12 Web API provider after the MSFS 2024 slice
@@ -159,9 +161,8 @@ The simulator UX sequence is detailed in the
 - Maintenance, finance, and flight history
 - Hoard Timeline expansion across company value, geographic FBO coverage,
   routes, utilization, finance, and named milestones
-- WyrmGrid Bridge flight lifecycle and planned-versus-actual use of the
-  implemented telemetry foundation, followed by additional simulator and
-  aircraft-specific providers
+- WyrmGrid Bridge lifecycle and SimBrief correlation refinement, followed by
+  additional simulator and aircraft-specific providers
 - Signed plugin packages, hardened supervision, and WyrmGrid Aerie discovery
 
 Stable plugin APIs, automatic updates, signing, and a public plugin catalogue

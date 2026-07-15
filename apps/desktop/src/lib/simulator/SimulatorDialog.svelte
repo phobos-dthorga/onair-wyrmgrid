@@ -35,6 +35,9 @@
     onsessionselect,
     onsessiondelete,
     ondeleteall,
+    onpin,
+    onpage,
+    onexport,
     onclose,
   }: {
     open: boolean;
@@ -53,6 +56,9 @@
     onsessionselect: (sessionId: string) => void;
     onsessiondelete: (sessionId: string) => void;
     ondeleteall: () => void;
+    onpin: (sessionId: string, pinned: boolean) => void;
+    onpage: (sessionId: string, sampleOffset: number) => void;
+    onexport: (sessionId: string, format: "json" | "csv") => void;
     onclose: () => void;
   } = $props();
 
@@ -399,6 +405,9 @@
         {onsessionselect}
         {onsessiondelete}
         {ondeleteall}
+        {onpin}
+        {onpage}
+        {onexport}
       />
 
       <footer class="simulator-footer">

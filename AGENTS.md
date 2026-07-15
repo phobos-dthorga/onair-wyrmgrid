@@ -55,6 +55,10 @@
   record a concrete reason.
 - Keep early releases marked as prereleases until update signing and platform
   signing policies are complete.
+- Do not change the application semantic version or create or push a release
+  tag without explicit maintainer authorization. Internal schema, protocol,
+  migration, legal-document, and catalogue compatibility markers still advance
+  with the change that requires them and do not trigger an installer build.
 - Preserve the Windows installer's product name, application identifier, and
   per-user scope. Any intentional identity change requires an explicit migration
   design; routine setup upgrades must preserve application data and its

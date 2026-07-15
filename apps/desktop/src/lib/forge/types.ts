@@ -15,6 +15,8 @@ export type PluginPermission =
 export type PluginProcessState =
   "stopped" | "starting" | "running" | "stopping" | "failed";
 
+export type AuthorizationGrantLifetime = "once" | "session" | "standing";
+
 export type PluginView = {
   id: string;
   name: string;
@@ -23,6 +25,7 @@ export type PluginView = {
   runtime: "python" | null;
   requested_permissions: PluginPermission[];
   granted_permissions: PluginPermission[];
+  grant_lifetime?: AuthorizationGrantLifetime;
   state: PluginProcessState;
   published_layer_count: number;
   last_error?: string;

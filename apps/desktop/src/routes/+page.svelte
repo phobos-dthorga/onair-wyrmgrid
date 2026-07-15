@@ -80,7 +80,10 @@
     forgePreviewRunning,
     forgePreviewStopped,
   } from "$lib/forge/sample";
-  import type { PluginHostView } from "$lib/forge/types";
+  import type {
+    AuthorizationGrantLifetime,
+    PluginHostView,
+  } from "$lib/forge/types";
   import LegalDialog from "$lib/legal/LegalDialog.svelte";
   import OpenSourceLicencesDialog from "$lib/legal/OpenSourceLicencesDialog.svelte";
   import {
@@ -134,6 +137,8 @@
     stopSimulatorRecording,
     deleteSimulatorRecording,
     deleteAllSimulatorRecordings,
+    exportSimulatorRecording,
+    pinSimulatorRecording,
   } from "$lib/simulator/client";
   import SimulatorDialog from "$lib/simulator/SimulatorDialog.svelte";
   import {
@@ -707,6 +712,75 @@
     }
   }
 
+  async function pageRecordingSession(
+    sessionId: string,
+    sampleOffset: number,
+  ): Promise<void> {
+    if (!isDesktopRuntime() || simulatorRecordingBusy) return;
+    simulatorRecordingBusy = true;
+    simulatorError = "";
+    try {
+      simulatorRecordingSession = await loadSimulatorRecordingSession(
+        sessionId,
+        sampleOffset,
+      );
+    } catch (error) {
+      simulatorError = operationErrorMessage(
+        error,
+        "WyrmGrid could not open that recording window.",
+      );
+    } finally {
+      simulatorRecordingBusy = false;
+    }
+  }
+
+  async function setRecordingPinned(
+    sessionId: string,
+    pinned: boolean,
+  ): Promise<void> {
+    if (!isDesktopRuntime() || simulatorRecordingBusy) return;
+    simulatorRecordingBusy = true;
+    simulatorError = "";
+    try {
+      simulatorRecording = await pinSimulatorRecording(sessionId, pinned);
+      simulatorRecordingSession = await loadSimulatorRecordingSession(sessionId);
+    } catch (error) {
+      simulatorError = operationErrorMessage(
+        error,
+        "WyrmGrid could not update that recording.",
+      );
+    } finally {
+      simulatorRecordingBusy = false;
+    }
+  }
+
+  async function exportRecording(
+    sessionId: string,
+    format: "json" | "csv",
+  ): Promise<void> {
+    if (!isDesktopRuntime() || simulatorRecordingBusy) return;
+    simulatorRecordingBusy = true;
+    simulatorError = "";
+    try {
+      const exported = await exportSimulatorRecording(sessionId, format);
+      const url = URL.createObjectURL(
+        new Blob([exported.content], { type: exported.media_type }),
+      );
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = exported.filename;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      simulatorError = operationErrorMessage(
+        error,
+        "WyrmGrid could not export that recording.",
+      );
+    } finally {
+      simulatorRecordingBusy = false;
+    }
+  }
+
   async function runSimulatorAction(
     action: "start" | "stop",
     providerId: string,
@@ -1085,6 +1159,7 @@
   async function runPluginAction(
     action: "approve" | "revoke" | "start" | "stop",
     pluginId: string,
+    lifetime: AuthorizationGrantLifetime = "standing",
   ): Promise<void> {
     if (pluginBusy) return;
     pluginBusy = true;
@@ -1106,7 +1181,7 @@
       }
       pluginHost =
         action === "approve"
-          ? await approvePluginPermissions(pluginId)
+          ? await approvePluginPermissions(pluginId, lifetime)
           : action === "revoke"
             ? await revokePluginPermissions(pluginId)
             : action === "start"
@@ -1995,6 +2070,9 @@
     onsessionselect={(sessionId) => void selectRecordingSession(sessionId)}
     onsessiondelete={(sessionId) => void runRecordingAction("delete", sessionId)}
     ondeleteall={() => void runRecordingAction("delete_all")}
+    onpin={(sessionId, pinned) => void setRecordingPinned(sessionId, pinned)}
+    onpage={(sessionId, sampleOffset) => void pageRecordingSession(sessionId, sampleOffset)}
+    onexport={(sessionId, format) => void exportRecording(sessionId, format)}
     onclose={() => (showSimulatorDialog = false)}
   />
 
@@ -2127,6 +2205,9 @@
     onrecordingdelete={(sessionId) =>
       void runRecordingAction("delete", sessionId)}
     onrecordingdeleteall={() => void runRecordingAction("delete_all")}
+    onrecordingpin={(sessionId, pinned) => void setRecordingPinned(sessionId, pinned)}
+    onrecordingpage={(sessionId, sampleOffset) => void pageRecordingSession(sessionId, sampleOffset)}
+    onrecordingexport={(sessionId, format) => void exportRecording(sessionId, format)}
     onclose={() => (showTimelineDialog = false)}
   />
 
@@ -2135,7 +2216,8 @@
     status={pluginHost}
     busy={pluginBusy}
     errorMessage={pluginError}
-    onapprove={(pluginId) => void runPluginAction("approve", pluginId)}
+    onapprove={(pluginId, lifetime) =>
+      void runPluginAction("approve", pluginId, lifetime)}
     onrevoke={(pluginId) => void runPluginAction("revoke", pluginId)}
     onstart={(pluginId) => void runPluginAction("start", pluginId)}
     onstop={(pluginId) => void runPluginAction("stop", pluginId)}

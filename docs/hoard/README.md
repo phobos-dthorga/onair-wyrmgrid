@@ -109,7 +109,8 @@ required for the initial timeline, so no database migration was added.
 
 ## Simulator recording history
 
-Hoard also presents the bounded local simulator sessions owned by migration 8.
+Hoard also presents the bounded local simulator sessions owned by migrations 8
+and 10.
 The **Flight recordings** section lists active, completed, and interrupted
 sessions and opens the same altitude and speed graphs used by the Simulator
 bridge. This shared presentation component prevents the two surfaces from
@@ -121,10 +122,18 @@ identity, sample timestamps, retention preference, and lifecycle. Selecting a
 recording never changes Atlas into HISTORICAL mode, and selecting an OnAir
 observation never implies a simulator flight at the same time.
 
-Recording history remains local, excludes geographic coordinates in its first
-schema, and is not exposed to community plugins. Hoard supports selecting and
-deleting completed recordings; starting and stopping capture remains in the
-Simulator bridge so browsing history cannot accidentally begin collection.
+Recording history remains local and is not exposed to community plugins. It can
+contain precise coordinates, direct lifecycle facts, operational measurements,
+recording events, and a sanitized SimBrief plan snapshot when one was associated
+at capture time. Hoard supports searching and selecting sessions, exact
+600-sample window navigation, pinning against automatic retention, explicit
+deletion, full JSON or CSV export, and planned-versus-recorded comparisons.
+Exports are plaintext and leave Hoard's encrypted boundary.
+
+Starting and stopping capture remains in the Simulator bridge so browsing
+history cannot accidentally begin collection. The default-off automatic
+recording preference is configured in Settings and relies on direct simulator
+airborne/on-ground evidence; Hoard itself never synthesizes lifecycle events.
 
 ## Failure mode
 
@@ -144,7 +153,10 @@ not reinterpret them as current domain data.
 ## Privacy boundary
 
 The database contains company identifiers, company names, fleet records,
-locations, and observation history. It does not currently encrypt those facts
-at rest and relies on the user's operating-system account and file permissions.
-Users should treat `wyrmgrid.db` as private operational data and sanitize it
-before attaching it to an issue. API keys are never written to this database.
+locations, observation history, and optionally precise simulator recordings.
+SQLCipher encrypts the database at rest with a random key held by the operating
+system credential service. That protection does not apply while WyrmGrid is
+open, to portable backups while they are unlocked, or to plaintext recording
+exports. Users should treat `wyrmgrid.db`, backups, and exports as private
+operational data and sanitize them before attaching them to an issue. API keys
+are never written to this database.

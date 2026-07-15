@@ -119,6 +119,14 @@
             </p>
             <div class="summary-grid">
               <article>
+                <strong>Flight recordings</strong>
+                <span
+                  >Manual recording or an optional default-off automatic setting
+                  stores local telemetry. A current sanitized SimBrief plan may
+                  be retained with that recording for later comparison.</span
+                >
+              </article>
+              <article>
                 <strong>OnAir credentials</strong>
                 <span
                   >Held for the active session and not written to WyrmGrid's

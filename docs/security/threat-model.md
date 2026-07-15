@@ -115,19 +115,29 @@
   SimConnect SDK/client paths cross into the first-party provider;
 - only one selected telemetry provider is active in protocol version 1; the host
   neither merges values nor silently falls back from SimConnect to FSUIPC;
-- simulator recording is explicit and local; only validated translated fields
-  are persisted, active sessions resist deletion, completed sessions have a
-  user-visible bounded retention period, and recorded history is not covered by
-  the live `simulator_telemetry_read` plugin permission;
+- simulator recording is explicit and local; automation is separately opt-in
+  and off by default, only validated translated fields are persisted, active
+  sessions resist deletion, completed sessions have a user-visible bounded
+  retention period, and recorded history is not covered by the live
+  `simulator_telemetry_read` plugin permission;
 - provider sequence or observation-time discontinuities become graph gaps, an
   aircraft identity change interrupts the session, and abandoned active rows
   are marked interrupted on the next application start;
+- automatic take-off requires two direct increasing airborne facts; landing
+  settlement requires continuous direct on-ground facts and is reset by pause
+  or telemetry gaps. Automatic stop applies only to an automatically created
+  session, so lifecycle evidence cannot stop a manual recording;
+- a recording may retain only the validated sanitized SimBrief domain snapshot
+  in force, never the entered account reference or raw OFP. Planned and recorded
+  values stay separately labelled, missing comparisons stay unavailable, and
+  analysis above the exact-sample bound is withheld rather than partial;
 - simulator plan loading and every other external mutation require a distinct
   negotiated capability and explicit user action;
 - deny-by-default plugin capabilities persisted separately from manifests; the
   current runtime starts only after every requested capability is approved and
   implements only sanitized fleet and simulator reads plus data-only Atlas
-  publication;
+  publication. Once grants are consumed by one privileged launch, session
+  grants remain only in process memory, and standing grants alone persist;
 - plugin directories, manifests, and entry points are bounded and canonicalized;
   symlinked folders/files, path escape, malformed metadata, and unsupported
   runtimes or capabilities are rejected;
@@ -354,8 +364,12 @@ The SimBrief preview follows no redirects, bounds streamed JSON to 2 MiB, uses a
 15-second timeout, validates the account-reference shape, normalizes only
 allowlisted fields, validates the canonical snapshot again in the application
 service, serializes concurrent imports, and returns stable errors without URLs,
-response bodies, identifiers, or plan content. Imported plans and identifiers
-are session-only, excluded from plugins and Sentry, and removable from Dispatch.
+response bodies, identifiers, or plan content. The entered account reference is
+session-only and excluded from plugins, persistence, and Sentry. A sanitized
+plan snapshot may be retained only when associated with a local recording; it
+is encrypted, deleted with that recording, and remains excluded from plugins
+and Sentry. Clearing Dispatch prevents future association without rewriting an
+existing recording's historical context.
 
 The AviationWeather.gov adapter accepts at most ten normalized four-character
 station identifiers, follows no redirects, bounds each streamed JSON product to
@@ -405,6 +419,9 @@ excluded from plugins and Sentry.
   exposes only the latest 600 exact samples rather than claiming a whole-session
   downsample. Users must omit databases and backups from support bundles unless
   they intend to share recordings.
+- JSON and CSV recording exports are deliberate plaintext disclosures outside
+  SQLCipher. Pinning protects against automatic pruning only; explicit deletion
+  and copies made by the user remain outside WyrmGrid's recovery control.
 - Licensed navigation data may remain accessible in local caches to a user or
   process with filesystem access. Entitlement checks and application controls do
   not replace operating-system security or provider licence compliance.
@@ -417,14 +434,19 @@ excluded from plugins and Sentry.
 
 - Legal acknowledgement, feature preferences, capability grants, and momentary
   confirmations are distinct policy decisions and cannot authorize one another.
-- Durable grants are denied by default and bound to actor kind, actor ID, exact
-  capabilities, and a scope revision. Plugin version or permission-set changes
-  require a fresh review.
+- Grants are denied by default and bound to actor kind, actor ID, exact
+  capabilities, a scope revision, and an explicit lifetime. Plugin version or
+  permission-set changes require a fresh review.
+- `Once` is consumed at the privileged launch boundary, `Session` exists only
+  in the shared in-memory authorization runtime, and only `Standing` is written
+  to encrypted storage. A new process therefore starts without temporary
+  authority.
 - Feature services enforce decisions through the Rust authorization module;
   Tauri commands and Svelte controls are not trusted enforcement boundaries.
-- Grant and revoke events append bounded symbolic metadata to the local
-  authorization audit trail. They contain no API key, raw provider payload, or
-  plugin output.
+- Standing grant and revoke events append bounded symbolic metadata to the
+  encrypted local authorization audit trail. Temporary decisions are visible
+  only in the current session's bounded in-memory trail. Neither contains API
+  keys, raw provider payloads, or plugin output.
 - Revocation stops an active plugin before its capabilities are removed.
 - The Security Centre reads its grouped, validated status through the Rust
   service, shows at most 100 recent decisions, and routes plugin revocation

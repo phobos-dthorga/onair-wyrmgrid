@@ -189,7 +189,12 @@ async fn import_simbrief_latest(
         .import_latest(reference_kind, &reference)
         .await
         .map_err(operation_error)?;
-    dispatch_status(state)
+    let status = dispatch_status(state.clone())?;
+    state
+        .simulator_recording
+        .set_plan_context(status.snapshot.clone())
+        .map_err(operation_error)?;
+    Ok(status)
 }
 
 #[tauri::command]
@@ -209,6 +214,10 @@ fn clear_dispatch_plan(
     state: tauri::State<'_, DesktopState>,
 ) -> Result<wyrmgrid_application::DispatchStatus, wyrmgrid_application::OperationError> {
     state.dispatch.clear().map_err(operation_error)?;
+    state
+        .simulator_recording
+        .set_plan_context(None)
+        .map_err(operation_error)?;
     dispatch_status(state)
 }
 
@@ -390,10 +399,11 @@ fn plugin_host_status(
 fn approve_plugin_permissions(
     state: tauri::State<'_, DesktopState>,
     plugin_id: String,
+    lifetime: wyrmgrid_application::AuthorizationGrantLifetime,
 ) -> Result<wyrmgrid_application::PluginHostView, wyrmgrid_application::OperationError> {
     state
         .plugins
-        .approve_requested_permissions(&plugin_id)
+        .approve_requested_permissions_with_lifetime(&plugin_id, lifetime)
         .map_err(operation_error)
 }
 
@@ -530,10 +540,35 @@ fn stop_simulator_recording(
 fn simulator_recording_session(
     state: tauri::State<'_, DesktopState>,
     session_id: String,
+    sample_offset: Option<u32>,
 ) -> Result<wyrmgrid_application::SimulatorSessionView, wyrmgrid_application::OperationError> {
     state
         .simulator_recording
-        .session(&session_id)
+        .session_window(&session_id, sample_offset.unwrap_or(0))
+        .map_err(operation_error)
+}
+
+#[tauri::command]
+fn pin_simulator_recording(
+    state: tauri::State<'_, DesktopState>,
+    session_id: String,
+    pinned: bool,
+) -> Result<wyrmgrid_application::SimulatorRecordingView, wyrmgrid_application::OperationError> {
+    state
+        .simulator_recording
+        .set_pinned(&session_id, pinned)
+        .map_err(operation_error)
+}
+
+#[tauri::command]
+fn export_simulator_recording(
+    state: tauri::State<'_, DesktopState>,
+    session_id: String,
+    format: wyrmgrid_application::SimulatorExportFormat,
+) -> Result<wyrmgrid_application::SimulatorRecordingExport, wyrmgrid_application::OperationError> {
+    state
+        .simulator_recording
+        .export_session(&session_id, format)
         .map_err(operation_error)
 }
 
@@ -603,7 +638,11 @@ pub fn run() {
             let themes = wyrmgrid_application::ThemeSettingsService::new(store.clone());
             let languages = wyrmgrid_application::LanguageSettingsService::new(store.clone());
             let display = wyrmgrid_application::DisplaySettingsService::new(store.clone());
-            let security = wyrmgrid_application::SecurityCentreService::new(store.clone());
+            let authorization_runtime = wyrmgrid_application::AuthorizationRuntime::default();
+            let security = wyrmgrid_application::SecurityCentreService::with_runtime(
+                store.clone(),
+                authorization_runtime.clone(),
+            );
             let data_protection = wyrmgrid_application::DataProtectionService::new(store.clone());
             let onair = wyrmgrid_application::OnAirSession::with_default_store(store.clone());
             let dispatch = wyrmgrid_application::DispatchSession::with_default_provider();
@@ -624,11 +663,12 @@ pub fn run() {
                 simulator.provider_ids(),
             );
             let automatic_provider = simulator_settings.startup_provider_id().ok().flatten();
-            let plugins = wyrmgrid_application::PluginService::new(
+            let plugins = wyrmgrid_application::PluginService::with_authorization_runtime(
                 Some(app_data_directory.join("plugins")),
                 store,
                 onair.clone(),
                 simulator.clone(),
+                authorization_runtime,
             );
 
             app.manage(DesktopState {
@@ -713,6 +753,8 @@ pub fn run() {
             start_simulator_recording,
             stop_simulator_recording,
             simulator_recording_session,
+            pin_simulator_recording,
+            export_simulator_recording,
             delete_simulator_recording,
             delete_all_simulator_recordings
         ])

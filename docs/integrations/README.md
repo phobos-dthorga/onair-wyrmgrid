@@ -50,8 +50,9 @@ Online networks --------------------------+--> Atlas overlays     |
 2. Introduce the first canonical `FlightPlanSnapshot` with fixtures and
    provenance validation. (Implemented.)
 3. Import a user's latest SimBrief OFP without storing a password or shared
-   application secret. (Implemented as a session-only developer preview;
-   authenticated live-field certification remains.)
+   application secret. (Implemented as a Dispatch-session developer preview;
+   a sanitized snapshot may also be retained with an explicitly created local
+   flight recording. Authenticated live-field certification remains.)
 4. Add cached airport weather and route-weather summaries. (Initial explicitly
    requested, session-cached METAR/TAF airport context implemented; route
    advisories remain.)
@@ -64,7 +65,10 @@ Online networks --------------------------+--> Atlas overlays     |
    route export, live certification, and release bundling remain.)
 7. Add read-only SayIntentions `flight.json` correlation and selected SAPI reads,
    followed by explicit user-initiated ACARS, crew, or gate actions.
-8. Reconcile plan versus actual time, route, payload, fuel, and AI ATC context.
+8. Reconcile plan versus recorded time, track distance, altitude, fuel, airport
+   proximity, and registration without inventing unavailable facts. (Version 1
+   SimBrief/telemetry correlation implemented; payload, route adherence, phase
+   detail, and AI ATC context remain.)
 9. Add VATSIM and IVAO Atlas layers, followed by X-Plane and approved Navigraph
    features.
 
@@ -101,6 +105,7 @@ require a sanitized captured response or an outside-repository integration test.
 - [WyrmGrid Bridge and simulator providers](wyrmgrid-bridge.md)
 - [Simulator provider authoring and FSUIPC path](simulator-provider-authoring.md)
 - [Simulator connection, recording, in-game control, and graphs](simulator-experience-roadmap.md)
+- [Telemetry lifecycle and SimBrief correlation](telemetry-plan-correlation.md)
 
 ## Local automation and community handoff
 
