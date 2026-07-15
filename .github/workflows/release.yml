@@ -224,6 +224,7 @@ jobs:
           mkdir release-assets
           for package in "${packages[@]}"; do
             name="$(basename "$package")"
+            name="${name// /.}"
             if [[ -e "release-assets/$name" ]]; then
               echo "Duplicate release asset name: $name" >&2
               exit 1
