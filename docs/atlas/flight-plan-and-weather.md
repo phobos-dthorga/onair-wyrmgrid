@@ -2,8 +2,9 @@
 
 This document defines how Dispatch, SimBrief, weather, Hoard, and Atlas should
 join without creating a second interpretation of the same operational facts.
-It is a design contract for future increments; the present Atlas does not yet
-draw flight plans or animated weather.
+It is a design contract for staged increments. Atlas now draws a bounded
+planned-versus-recorded route for a selected historical simulator recording;
+current Dispatch route interaction and animated weather remain later work.
 
 ## One plan, two projections
 
@@ -56,6 +57,18 @@ An unresolved item remains clickable in Dispatch but produces an honest
 provenance. It must never be silently dropped or plotted at a plausible
 location. AIRAC disagreement between the plan and navigation source remains
 visible and may prevent procedure geometry from being joined.
+
+### Historical recording route slice
+
+Hoard Flight Debrief route-view schema 1 is the first shipped route layer. It
+contains only coordinates already present in the recording's sanitized
+`FlightPlanSnapshot` and its bounded recorded position trace. Plan and recording
+are separate MapLibre line features. A gap splits its source line; a missing plan
+coordinate is named in `unresolved_legs` and also splits the plan. Planned fix
+markers retain their identifiers, and an antimeridian-safe fit frames both
+sources together. The host builds this view; Svelte does not resolve or infer
+geometry. The route remains local and is not published to community plugins or
+sent to the public basemap service as feature data.
 
 The selection contract belongs in Rust application/domain types. Svelte may
 request `focus route`, `focus airport`, or `focus feature`, while Atlas alone
@@ -181,7 +194,8 @@ warning effects may flash, while the runtime control prevents or reduces them.
 ## Delivery sequence and validation
 
 1. Add a stable Atlas route-view model and full-route framing using only
-   coordinates already present in the snapshot.
+   coordinates already present in the snapshot. Implemented for historical
+   Hoard recording comparisons; current Dispatch projection remains.
 2. Add shared Dispatch/Atlas selection IDs and explicit unresolved-leg results.
 3. Introduce navigation resolution with procedure/AIRAC provenance before
    clickable SID/STAR geometry.

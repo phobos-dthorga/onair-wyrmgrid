@@ -128,14 +128,15 @@ not replace completion of the current vertical slice.
 - Default-off provider auto-start and evidence-led automatic recording, with
   explicit session retention, pinning, export, and deletion controls
 - Hoard flight-recording search, exact older/newer windows, lifecycle evidence,
-  pinning, export, and shared unit-aware altitude/speed graphs (implemented)
-- Versioned SimBrief planned-versus-recorded facts for duration, track distance,
-  altitude, fuel, airport proximity, and registration (implemented first slice)
-- WyrmChart telemetry sessions with gap-aware fuel and attitude graphs plus
-  whole-trace downsampling
+  pinning, export, and shared unit-aware whole-flight altitude, speed,
+  fuel-weight, and attitude graphs with bounded gap-safe downsampling
+  (implemented)
+- Versioned SimBrief planned-versus-recorded facts and labelled overlays for
+  duration, track distance, altitude, fuel, airport proximity, and registration,
+  plus historical planned/recorded Atlas route overlay (implemented v2)
 - A thin MSFS in-simulator recording controller after an independent CommBus
   and package-distribution spike
-- Additional lifecycle policies and richer planned-versus-recorded graph overlays
+- Additional lifecycle policies, phase analysis, and weather-along-track overlays
 - Explicit `.pln` export and flight-plan load after read-only telemetry is proven
 - MSFS 2020 and FSUIPC compatibility providers
 - X-Plane 12 Web API provider after the MSFS 2024 slice

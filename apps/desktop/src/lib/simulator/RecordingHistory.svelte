@@ -1,18 +1,31 @@
 <script lang="ts">
   import WyrmChart from "$lib/charts/WyrmChart.svelte";
+  import type { AtlasFlightRoute } from "$lib/atlas/types";
   import { translation } from "$lib/i18n/runtime";
   import type { DisplayPreferences } from "$lib/settings/types";
   import {
     presentAltitude,
-    presentFuel,
+    presentWeight,
     type PresentedMeasurement,
   } from "$lib/settings/units";
-  import { altitudeRecordingChart, speedRecordingChart } from "./recordingCharts";
-  import type { SimulatorRecordingView, SimulatorSessionView } from "./types";
+  import {
+    altitudeDebriefChart,
+    altitudeRecordingChart,
+    attitudeDebriefChart,
+    fuelWeightDebriefChart,
+    speedDebriefChart,
+    speedRecordingChart,
+  } from "./recordingCharts";
+  import type {
+    SimulatorRecordingView,
+    SimulatorSessionDebrief,
+    SimulatorSessionView,
+  } from "./types";
 
   let {
     status,
     session,
+    debrief,
     displayPreferences,
     busy = false,
     errorMessage = "",
@@ -26,9 +39,11 @@
     onpin = () => {},
     onpage = () => {},
     onexport = () => {},
+    onviewatlas = () => {},
   }: {
     status: SimulatorRecordingView;
     session?: SimulatorSessionView;
+    debrief?: SimulatorSessionDebrief;
     displayPreferences: DisplayPreferences;
     busy?: boolean;
     errorMessage?: string;
@@ -42,9 +57,15 @@
     onpin?: (sessionId: string, pinned: boolean) => void;
     onpage?: (sessionId: string, sampleOffset: number) => void;
     onexport?: (sessionId: string, format: "json" | "csv") => void;
+    onviewatlas?: (route: AtlasFlightRoute) => void;
   } = $props();
 
   const recordingActive = $derived(Boolean(status.active_session_id));
+  const comparison = $derived(debrief?.comparison ?? session?.comparison);
+  const routePointCount = $derived(
+    (debrief?.route.recorded.points.length ?? 0) +
+      (debrief?.route.planned?.points.length ?? 0),
+  );
   let search = $state("");
   const visibleSessions = $derived(
     status.sessions.filter((recording) => {
@@ -75,7 +96,9 @@
   }
 
   function confirmDeleteAll(): void {
-    if (window.confirm($translation("simulator-recording-delete-all-confirm"))) {
+    if (
+      window.confirm($translation("simulator-recording-delete-all-confirm"))
+    ) {
       ondeleteall();
     }
   }
@@ -84,6 +107,12 @@
     return value === undefined
       ? $translation("simulator-value-unavailable")
       : `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })}${suffix}`;
+  }
+
+  function comparisonDelta(value: number | undefined, suffix: string): string {
+    if (value === undefined) return $translation("simulator-value-unavailable");
+    const sign = value > 0 ? "+" : "";
+    return `${sign}${value.toLocaleString(undefined, { maximumFractionDigits: 1 })}${suffix}`;
   }
 
   function presentedValue(measurement: PresentedMeasurement): string {
@@ -98,10 +127,8 @@
     );
   }
 
-  function fuelValue(value: number | undefined): string {
-    return presentedValue(
-      presentFuel(value, undefined, displayPreferences.fuel_unit),
-    );
+  function fuelWeightValue(value: number | undefined): string {
+    return presentedValue(presentWeight(value, displayPreferences.weight_unit));
   }
 
   function matchValue(value: boolean | undefined): string {
@@ -129,22 +156,32 @@
   }
 </script>
 
-<section class:hoard={!captureControls} class="recording-panel" aria-live="polite">
+<section
+  class:hoard={!captureControls}
+  class="recording-panel"
+  aria-live="polite"
+>
   <div class="recording-heading">
     <div>
       <span class="eyebrow">
         {$translation(
-          captureControls ? "simulator-recording-eyebrow" : "hoard-recording-eyebrow",
+          captureControls
+            ? "simulator-recording-eyebrow"
+            : "hoard-recording-eyebrow",
         )}
       </span>
       <h3>
         {$translation(
-          captureControls ? "simulator-recording-title" : "hoard-recording-title",
+          captureControls
+            ? "simulator-recording-title"
+            : "hoard-recording-title",
         )}
       </h3>
       <p>
         {$translation(
-          captureControls ? "simulator-recording-detail" : "hoard-recording-detail",
+          captureControls
+            ? "simulator-recording-detail"
+            : "hoard-recording-detail",
           { days: status.preferences.retention_days },
         )}
       </p>
@@ -155,8 +192,8 @@
           class="recording-stop"
           type="button"
           disabled={busy}
-          onclick={onstop}
-        >{$translation("simulator-recording-stop")}</button>
+          onclick={onstop}>{$translation("simulator-recording-stop")}</button
+        >
       {:else}
         <button type="button" disabled={busy || !canStart} onclick={onstart}
           >{$translation("simulator-recording-start")}</button
@@ -186,7 +223,8 @@
         type="button"
         disabled={busy || recordingActive}
         onclick={confirmDeleteAll}
-      >{$translation("simulator-recording-delete-all")}</button>
+        >{$translation("simulator-recording-delete-all")}</button
+      >
     {/if}
   </div>
 
@@ -218,12 +256,19 @@
             aria-pressed={session?.session.id === recording.id}
             onclick={() => onsessionselect(recording.id)}
           >
-            <strong>{recording.aircraft_registration ?? recording.aircraft_title}</strong>
+            <strong
+              >{recording.aircraft_registration ??
+                recording.aircraft_title}</strong
+            >
             <span>
               {formatTime(recording.started_at)} · {recording.sample_count.toLocaleString()}
               {$translation("simulator-recording-samples")}
             </span>
-            <small>{$translation(`simulator-recording-status-${recording.status}`)}</small>
+            <small
+              >{$translation(
+                `simulator-recording-status-${recording.status}`,
+              )}</small
+            >
             <small>
               {$translation(
                 recording.capture_mode === "automatic"
@@ -247,91 +292,254 @@
               )}
               disabled={busy}
               onclick={() => onpin(recording.id, !recording.pinned)}
-            >{$translation(
+              >{$translation(
                 recording.pinned
                   ? "simulator-recording-pinned"
                   : "simulator-recording-pin",
-              )}</button>
+              )}</button
+            >
             <button
               class="recording-delete"
               type="button"
               aria-label={$translation("simulator-recording-delete")}
               disabled={busy || recording.id === status.active_session_id}
-              onclick={() => confirmDelete(recording.id)}
-            >×</button>
+              onclick={() => confirmDelete(recording.id)}>×</button
+            >
           </div>
         </article>
       {/each}
     </div>
   {/if}
 
-  {#if session && session.samples.length > 0}
-    <div class="recording-window-actions">
-      <button
-        type="button"
-        disabled={busy || !session.has_older_samples}
-        onclick={() => onpage(session.session.id, session.sample_window_offset + session.sample_window_limit)}
-      >{$translation("simulator-recording-older-samples")}</button>
-      <span>
-        {$translation("simulator-recording-window", {
-          first: (session.sample_window_offset + 1).toLocaleString(),
-          last: (
-            session.sample_window_offset + session.samples.length
-          ).toLocaleString(),
-        })}
-      </span>
-      <button
-        type="button"
-        disabled={busy || !session.has_newer_samples}
-        onclick={() => onpage(session.session.id, Math.max(0, session.sample_window_offset - session.sample_window_limit))}
-      >{$translation("simulator-recording-newer-samples")}</button>
-    </div>
-    <div class="recording-charts">
-      <WyrmChart
-        spec={altitudeRecordingChart(session, displayPreferences)}
-        eyebrow="WyrmChart telemetry"
-        height="210px"
-      />
-      <WyrmChart
-        spec={speedRecordingChart(session, displayPreferences)}
-        eyebrow="WyrmChart telemetry"
-        height="210px"
-      />
-    </div>
-
-    {#if session.comparison}
-      <section class="plan-comparison">
-        <div class="comparison-heading">
-          <div>
-            <span class="eyebrow">{$translation("simulator-recording-comparison-version", { version: session.comparison.association.correlation_version })}</span>
-            <h4>{session.comparison.association.origin_icao} → {session.comparison.association.destination_icao}</h4>
-          </div>
-          <small>{$translation("simulator-recording-comparison-boundary")}</small>
+  {#if debrief}
+    <section class="whole-flight-debrief">
+      <div class="debrief-heading">
+        <div>
+          <span class="eyebrow"
+            >{$translation("simulator-debrief-eyebrow")}</span
+          >
+          <h4>{$translation("simulator-debrief-title")}</h4>
+          <p>
+            {$translation("simulator-debrief-summary", {
+              samples: debrief.source_sample_count.toLocaleString(),
+            })}
+          </p>
         </div>
-        <div class="comparison-grid">
-          <article><span>{$translation("simulator-recording-comparison-time")}</span><strong>{comparisonValue(session.comparison.planned_enroute_seconds, " s")} / {comparisonValue(session.comparison.recorded_seconds, " s")}</strong></article>
-          <article><span>{$translation("simulator-recording-comparison-distance")}</span><strong>{comparisonValue(session.comparison.planned_distance_nm, " nm")} / {comparisonValue(session.comparison.recorded_track_distance_nm, " nm")}</strong></article>
-          <article><span>{$translation("simulator-recording-comparison-altitude")}</span><strong>{altitudeValue(session.comparison.planned_initial_altitude_ft)} / {altitudeValue(session.comparison.recorded_peak_altitude_ft)}</strong></article>
-          <article><span>{$translation("simulator-recording-comparison-fuel")}</span><strong>{fuelValue(session.comparison.planned_takeoff_fuel_pounds)} / {fuelValue(session.comparison.recorded_fuel_used_pounds)}</strong></article>
-          <article><span>{$translation("simulator-recording-comparison-origin")}</span><strong>{comparisonValue(session.comparison.origin_proximity_nm, " nm")}</strong></article>
-          <article><span>{$translation("simulator-recording-comparison-destination")}</span><strong>{comparisonValue(session.comparison.destination_proximity_nm, " nm")}</strong></article>
-          <article><span>{$translation("simulator-recording-comparison-registration")}</span><strong>{matchValue(session.comparison.registration_matches)}</strong></article>
-        </div>
-        {#if !session.comparison.analysis_complete}
-          <p>{$translation("simulator-recording-analysis-withheld")}</p>
+        {#if routePointCount > 0}
+          <button
+            class="atlas-route-button"
+            type="button"
+            disabled={busy}
+            onclick={() => onviewatlas(debrief.route)}
+            >{$translation("simulator-debrief-open-atlas")}</button
+          >
         {/if}
-      </section>
-    {/if}
+      </div>
+
+      {#if debrief.route.planned?.unresolved_legs.length}
+        <p class="debrief-notice">
+          {$translation("simulator-debrief-unresolved-route", {
+            count: debrief.route.planned.unresolved_legs.length,
+          })}
+          {debrief.route.planned.unresolved_legs.join(" · ")}
+        </p>
+      {/if}
+
+      <div class="debrief-charts">
+        <WyrmChart
+          spec={altitudeDebriefChart(debrief, displayPreferences)}
+          eyebrow="WyrmChart flight debrief"
+          height="230px"
+        />
+        <WyrmChart
+          spec={speedDebriefChart(debrief, displayPreferences)}
+          eyebrow="WyrmChart flight debrief"
+          height="230px"
+        />
+        <WyrmChart
+          spec={fuelWeightDebriefChart(debrief, displayPreferences)}
+          eyebrow="WyrmChart flight debrief"
+          height="230px"
+        />
+        <WyrmChart
+          spec={attitudeDebriefChart(debrief)}
+          eyebrow="WyrmChart flight debrief"
+          height="230px"
+        />
+      </div>
+    </section>
+  {/if}
+
+  {#if comparison}
+    <section class="plan-comparison">
+      <div class="comparison-heading">
+        <div>
+          <span class="eyebrow"
+            >{$translation("simulator-recording-comparison-version", {
+              version: comparison.association.correlation_version,
+            })}</span
+          >
+          <h4>
+            {comparison.association.origin_icao} → {comparison.association
+              .destination_icao}
+          </h4>
+        </div>
+        <small>{$translation("simulator-recording-comparison-boundary")}</small>
+      </div>
+      <div class="comparison-grid">
+        <article>
+          <span>{$translation("simulator-recording-comparison-time")}</span
+          ><strong
+            >{comparisonValue(comparison.planned_enroute_seconds, " s")} / {comparisonValue(
+              comparison.recorded_seconds,
+              " s",
+            )}</strong
+          ><small
+            >{comparisonDelta(comparison.duration_delta_seconds, " s")}</small
+          >
+        </article>
+        <article>
+          <span>{$translation("simulator-recording-comparison-distance")}</span
+          ><strong
+            >{comparisonValue(comparison.planned_distance_nm, " nm")} / {comparisonValue(
+              comparison.recorded_track_distance_nm,
+              " nm",
+            )}</strong
+          ><small>{comparisonDelta(comparison.distance_delta_nm, " nm")}</small>
+        </article>
+        <article>
+          <span>{$translation("simulator-recording-comparison-altitude")}</span
+          ><strong
+            >{altitudeValue(comparison.planned_initial_altitude_ft)} / {altitudeValue(
+              comparison.recorded_peak_altitude_ft,
+            )}</strong
+          ><small>{altitudeValue(comparison.altitude_delta_ft)}</small>
+        </article>
+        <article>
+          <span
+            >{$translation("simulator-recording-comparison-takeoff-fuel")}</span
+          ><strong
+            >{fuelWeightValue(comparison.planned_takeoff_fuel_pounds)} / {fuelWeightValue(
+              comparison.recorded_start_fuel_pounds,
+            )}</strong
+          ><small>{fuelWeightValue(comparison.takeoff_fuel_delta_pounds)}</small
+          >
+        </article>
+        <article>
+          <span
+            >{$translation("simulator-recording-comparison-landing-fuel")}</span
+          ><strong
+            >{fuelWeightValue(comparison.planned_landing_fuel_pounds)} / {fuelWeightValue(
+              comparison.recorded_end_fuel_pounds,
+            )}</strong
+          ><small>{fuelWeightValue(comparison.landing_fuel_delta_pounds)}</small
+          >
+        </article>
+        <article>
+          <span>{$translation("simulator-recording-comparison-fuel-used")}</span
+          ><strong
+            >{fuelWeightValue(comparison.recorded_fuel_used_pounds)}</strong
+          >
+        </article>
+        <article>
+          <span>{$translation("simulator-recording-comparison-origin")}</span
+          ><strong
+            >{comparisonValue(comparison.origin_proximity_nm, " nm")}</strong
+          >
+        </article>
+        <article>
+          <span
+            >{$translation("simulator-recording-comparison-destination")}</span
+          ><strong
+            >{comparisonValue(
+              comparison.destination_proximity_nm,
+              " nm",
+            )}</strong
+          >
+        </article>
+        <article>
+          <span
+            >{$translation("simulator-recording-comparison-registration")}</span
+          ><strong>{matchValue(comparison.registration_matches)}</strong>
+        </article>
+      </div>
+      {#if !comparison.analysis_complete}
+        <p>{$translation("simulator-recording-analysis-withheld")}</p>
+      {/if}
+    </section>
+  {/if}
+
+  {#if session && session.samples.length > 0}
+    <details class="exact-window">
+      <summary>{$translation("simulator-recording-exact-window-title")}</summary
+      >
+      <p>{$translation("simulator-recording-exact-window-detail")}</p>
+      <div class="recording-window-actions">
+        <button
+          type="button"
+          disabled={busy || !session.has_older_samples}
+          onclick={() =>
+            onpage(
+              session.session.id,
+              session.sample_window_offset + session.sample_window_limit,
+            )}>{$translation("simulator-recording-older-samples")}</button
+        >
+        <span>
+          {$translation("simulator-recording-window", {
+            first: (session.sample_window_offset + 1).toLocaleString(),
+            last: (
+              session.sample_window_offset + session.samples.length
+            ).toLocaleString(),
+          })}
+        </span>
+        <button
+          type="button"
+          disabled={busy || !session.has_newer_samples}
+          onclick={() =>
+            onpage(
+              session.session.id,
+              Math.max(
+                0,
+                session.sample_window_offset - session.sample_window_limit,
+              ),
+            )}>{$translation("simulator-recording-newer-samples")}</button
+        >
+      </div>
+      <div class="recording-charts">
+        <WyrmChart
+          spec={altitudeRecordingChart(session, displayPreferences)}
+          eyebrow="WyrmChart telemetry"
+          height="210px"
+        />
+        <WyrmChart
+          spec={speedRecordingChart(session, displayPreferences)}
+          eyebrow="WyrmChart telemetry"
+          height="210px"
+        />
+      </div>
+    </details>
 
     <section class="recording-evidence">
       <div class="comparison-heading">
         <div>
-          <span class="eyebrow">{$translation("simulator-recording-evidence-eyebrow")}</span>
+          <span class="eyebrow"
+            >{$translation("simulator-recording-evidence-eyebrow")}</span
+          >
           <h4>{$translation("simulator-recording-events-title")}</h4>
         </div>
         <div class="export-actions">
-          <button type="button" disabled={busy} onclick={() => onexport(session.session.id, "json")}>{$translation("simulator-recording-export-json")}</button>
-          <button type="button" disabled={busy} onclick={() => onexport(session.session.id, "csv")}>{$translation("simulator-recording-export-csv")}</button>
+          <button
+            type="button"
+            disabled={busy}
+            onclick={() => onexport(session.session.id, "json")}
+            >{$translation("simulator-recording-export-json")}</button
+          >
+          <button
+            type="button"
+            disabled={busy}
+            onclick={() => onexport(session.session.id, "csv")}
+            >{$translation("simulator-recording-export-csv")}</button
+          >
         </div>
       </div>
       {#if session.events.length === 0}
@@ -339,7 +547,11 @@
       {:else}
         <ol>
           {#each session.events as event}
-            <li><strong>{eventLabel(event.event_kind)}</strong><time>{formatTime(event.observed_at)}</time></li>
+            <li>
+              <strong>{eventLabel(event.event_kind)}</strong><time
+                >{formatTime(event.observed_at)}</time
+              >
+            </li>
           {/each}
         </ol>
       {/if}
@@ -500,6 +712,53 @@
     color: var(--color-text-muted);
     font-size: 9px;
   }
+  .whole-flight-debrief,
+  .exact-window {
+    margin-top: 16px;
+    padding: 14px;
+    border: 1px solid var(--color-line-faint);
+    background: var(--color-surface);
+  }
+  .debrief-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  .debrief-heading h4 {
+    margin: 4px 0 0;
+  }
+  .debrief-heading p,
+  .debrief-notice,
+  .exact-window > p {
+    margin: 5px 0 0;
+    color: var(--color-text-muted);
+    font-size: 9px;
+    line-height: 1.5;
+  }
+  .debrief-notice {
+    padding: 8px 10px;
+    border-left: 2px solid var(--color-highlight);
+    background: var(--color-highlight-soft);
+  }
+  button.atlas-route-button {
+    border-color: var(--color-highlight-border);
+    color: var(--color-highlight);
+    background: var(--color-highlight-soft);
+  }
+  .debrief-charts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+  }
+  .exact-window summary {
+    color: var(--color-highlight);
+    cursor: pointer;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
   .recording-charts {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -535,6 +794,7 @@
     background: var(--color-surface-soft);
   }
   .comparison-grid span,
+  .comparison-grid small,
   .recording-evidence time {
     color: var(--color-text-muted);
     font-size: 9px;
@@ -557,8 +817,12 @@
   }
   @media (max-width: 760px) {
     .recording-sessions,
-    .recording-charts {
+    .recording-charts,
+    .debrief-charts {
       grid-template-columns: 1fr;
+    }
+    .debrief-heading {
+      display: grid;
     }
   }
 </style>

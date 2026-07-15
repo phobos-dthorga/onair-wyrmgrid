@@ -355,6 +355,24 @@ nav {
   color: var(--color-danger);
   background: var(--color-danger-soft);
 }
+.sidebar-note.route-note {
+  margin-top: 14px;
+  border-color: var(--color-highlight-border);
+  background: var(--color-highlight-soft);
+}
+.route-note p {
+  flex: 1;
+  margin: 0;
+}
+.route-note button {
+  align-self: flex-start;
+  border: 1px solid var(--color-highlight-border);
+  border-radius: 3px;
+  padding: 5px 7px;
+  color: var(--color-highlight);
+  background: transparent;
+  cursor: pointer;
+}
 
 .map-stage {
   position: relative;

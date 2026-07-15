@@ -6,6 +6,7 @@ import type {
   SimulatorRecordingView,
   SimulatorRecordingExport,
   SimulatorSessionView,
+  SimulatorSessionDebrief,
 } from "./types";
 
 export function loadSimulatorBridge(): Promise<SimulatorBridgeView> {
@@ -62,6 +63,12 @@ export function loadSimulatorRecordingSession(
     sessionId,
     sampleOffset,
   });
+}
+
+export function loadSimulatorRecordingDebrief(
+  sessionId: string,
+): Promise<SimulatorSessionDebrief> {
+  return invokeDesktop("simulator_recording_debrief", { sessionId });
 }
 
 export function pinSimulatorRecording(

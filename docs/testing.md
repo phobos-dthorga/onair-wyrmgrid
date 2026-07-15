@@ -81,7 +81,12 @@ logic.
    domain boundaries, handshake, replay rejection, raw-value translation,
    orderly shutdown, absent-provider paths, development discovery, and Tauri
    sidecar staging are covered; deterministic reconnect/rate tests and the live
-   matrix remain.
+   matrix remain. Hoard debrief tests additionally prove that short traces
+   remain exact, long traces are capped at 1,200 points, per-series extrema
+   survive, gaps propagate through omitted samples, unavailable fuel creates no
+   trace, and missing positions or unresolved plan legs split route geometry.
+   Frontend tests cover unit conversion, labelled references, missing-fuel
+   honesty, attitude series, route segmentation, and antimeridian-safe fitting.
 2. OnAir synchronization: partial provider failures, rate-limit recovery,
    atomic snapshot publication, and no credential leakage across every error
    path.

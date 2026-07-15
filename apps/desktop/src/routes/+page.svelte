@@ -4,6 +4,7 @@
   import { atlasPreviewFbos, atlasPreviewFleet } from "$lib/atlas/sample";
   import type {
     AircraftSummary,
+    AtlasFlightRoute,
     CompanyDataSyncResult,
     DataSyncTrigger,
     FboSnapshotView,
@@ -131,6 +132,7 @@
     loadSimulatorBridge,
     loadSimulatorPreferences,
     loadSimulatorRecording,
+    loadSimulatorRecordingDebrief,
     loadSimulatorRecordingSession,
     saveSimulatorPreferences,
     saveSimulatorRecordingPreferences,
@@ -152,10 +154,12 @@
     type SimulatorPreferences,
     type SimulatorRecordingPreferences,
     type SimulatorRecordingView,
+    type SimulatorSessionDebrief,
     type SimulatorSessionView,
   } from "$lib/simulator/types";
   import {
     simulatorRecordingPreview,
+    simulatorRecordingDebriefPreview,
     simulatorRecordingSessionPreview,
   } from "$lib/simulator/sample";
   import {
@@ -276,6 +280,8 @@
     emptySimulatorRecording,
   );
   let simulatorRecordingSession = $state<SimulatorSessionView>();
+  let simulatorRecordingDebrief = $state<SimulatorSessionDebrief>();
+  let atlasFlightRoute = $state<AtlasFlightRoute>();
   let simulatorRecordingBusy = $state(false);
   let displayPreferences = $state<DisplayPreferences>(
     aviationDisplayPreferences,
@@ -317,9 +323,7 @@
   const showSettingsDialog = $derived(
     isDialogSurface(dialogNavigation, "settings"),
   );
-  const showThemeDialog = $derived(
-    isDialogSurface(dialogNavigation, "theme"),
-  );
+  const showThemeDialog = $derived(isDialogSurface(dialogNavigation, "theme"));
   const showLanguageDialog = $derived(
     isDialogSurface(dialogNavigation, "language"),
   );
@@ -347,9 +351,7 @@
   const showTimelineDialog = $derived(
     isDialogSurface(dialogNavigation, "hoard"),
   );
-  const showForgeDialog = $derived(
-    isDialogSurface(dialogNavigation, "forge"),
-  );
+  const showForgeDialog = $derived(isDialogSurface(dialogNavigation, "forge"));
 
   const activeFleetView = $derived(
     timelineMode === "historical" ? (historicalData?.fleet ?? null) : fleetView,
@@ -689,6 +691,7 @@
     if (!isDesktopRuntime()) {
       simulatorRecording = simulatorRecordingPreview;
       simulatorRecordingSession = simulatorRecordingSessionPreview;
+      simulatorRecordingDebrief = simulatorRecordingDebriefPreview;
       return;
     }
     try {
@@ -704,10 +707,14 @@
           : undefined) ??
         simulatorRecording.sessions[0]?.id;
       if (selectedId) {
-        simulatorRecordingSession =
-          await loadSimulatorRecordingSession(selectedId);
+        [simulatorRecordingSession, simulatorRecordingDebrief] =
+          await Promise.all([
+            loadSimulatorRecordingSession(selectedId),
+            loadSimulatorRecordingDebrief(selectedId),
+          ]);
       } else {
         simulatorRecordingSession = undefined;
+        simulatorRecordingDebrief = undefined;
       }
     } catch (error) {
       simulatorError = operationErrorMessage(
@@ -731,13 +738,16 @@
     simulatorRecordingBusy = true;
     simulatorError = "";
     try {
-      if (action === "start") simulatorRecording = await startSimulatorRecording();
-      if (action === "stop") simulatorRecording = await stopSimulatorRecording();
+      if (action === "start")
+        simulatorRecording = await startSimulatorRecording();
+      if (action === "stop")
+        simulatorRecording = await stopSimulatorRecording();
       if (action === "delete" && sessionId)
         simulatorRecording = await deleteSimulatorRecording(sessionId);
       if (action === "delete_all")
         simulatorRecording = await deleteAllSimulatorRecordings();
       simulatorRecordingSession = undefined;
+      simulatorRecordingDebrief = undefined;
       await refreshSimulatorRecording();
     } catch (error) {
       simulatorError = operationErrorMessage(
@@ -755,7 +765,11 @@
     simulatorRecordingBusy = true;
     simulatorError = "";
     try {
-      simulatorRecordingSession = await loadSimulatorRecordingSession(sessionId);
+      [simulatorRecordingSession, simulatorRecordingDebrief] =
+        await Promise.all([
+          loadSimulatorRecordingSession(sessionId),
+          loadSimulatorRecordingDebrief(sessionId),
+        ]);
     } catch (error) {
       simulatorError = operationErrorMessage(
         error,
@@ -797,7 +811,11 @@
     simulatorError = "";
     try {
       simulatorRecording = await pinSimulatorRecording(sessionId, pinned);
-      simulatorRecordingSession = await loadSimulatorRecordingSession(sessionId);
+      [simulatorRecordingSession, simulatorRecordingDebrief] =
+        await Promise.all([
+          loadSimulatorRecordingSession(sessionId),
+          loadSimulatorRecordingDebrief(sessionId),
+        ]);
     } catch (error) {
       simulatorError = operationErrorMessage(
         error,
@@ -833,6 +851,14 @@
     } finally {
       simulatorRecordingBusy = false;
     }
+  }
+
+  function openRecordingRouteInAtlas(route: AtlasFlightRoute): void {
+    atlasFlightRoute = route;
+    selectedAircraftId = null;
+    selectedFboId = null;
+    activeWorkspace = "atlas";
+    dialogNavigation = closedDialogNavigation<AppDialogSurface>();
   }
 
   async function runSimulatorAction(
@@ -1257,7 +1283,8 @@
       await refreshPluginHost();
     } finally {
       pluginBusy = false;
-      if (showSecurityCentre && isDesktopRuntime()) void refreshSecurityCentre();
+      if (showSecurityCentre && isDesktopRuntime())
+        void refreshSecurityCentre();
     }
   }
 
@@ -1283,7 +1310,9 @@
     void refreshSimulatorBridge();
     void refreshDispatchStatus();
     void loadSimBriefAccountPreference()
-      .then((preference) => (simbriefAccountPreference = preference ?? undefined))
+      .then(
+        (preference) => (simbriefAccountPreference = preference ?? undefined),
+      )
       .catch((error) => {
         dispatchError = operationErrorMessage(
           error,
@@ -1480,11 +1509,12 @@
   async function initializeSimulatorPreferences(): Promise<void> {
     if (!isDesktopRuntime()) return;
     try {
-      [simulatorPreferences, simulatorBridge, simulatorRecording] = await Promise.all([
-        loadSimulatorPreferences(),
-        loadSimulatorBridge(),
-        loadSimulatorRecording(),
-      ]);
+      [simulatorPreferences, simulatorBridge, simulatorRecording] =
+        await Promise.all([
+          loadSimulatorPreferences(),
+          loadSimulatorBridge(),
+          loadSimulatorRecording(),
+        ]);
     } catch (error) {
       settingsError = operationErrorMessage(
         error,
@@ -1885,6 +1915,24 @@
             {/each}
           </div>
 
+          {#if atlasFlightRoute}
+            <div class="sidebar-note route-note">
+              <span class="note-icon">↝</span>
+              <p>
+                <strong>Historical flight route</strong><br />
+                {atlasFlightRoute.planned
+                  ? `${atlasFlightRoute.planned.origin_icao} → ${atlasFlightRoute.planned.destination_icao}`
+                  : "Recorded route without an associated plan"}
+                · {atlasFlightRoute.recorded.represented_point_count.toLocaleString()}
+                recorded points
+              </p>
+              <button
+                type="button"
+                onclick={() => (atlasFlightRoute = undefined)}>Clear</button
+              >
+            </div>
+          {/if}
+
           <div
             class="sidebar-note"
             class:error-note={fleetLoadState === "error"}
@@ -1933,6 +1981,7 @@
             {fboVisible}
             pluginLayers={pluginHost.layers}
             {pluginLayersVisible}
+            flightRoute={atlasFlightRoute}
             {selectedAircraftId}
             {selectedFboId}
             onselectaircraft={(aircraftId) => {
@@ -2041,6 +2090,51 @@
                     activeFboView?.snapshot.provenance.observed_at,
                   )}</small
                 >
+              </article>
+            </div>
+          {:else if atlasFlightRoute}
+            <h2>
+              {atlasFlightRoute.planned
+                ? `${atlasFlightRoute.planned.origin_icao} → ${atlasFlightRoute.planned.destination_icao}`
+                : "Recorded flight"}
+            </h2>
+            <p>
+              Planned and recorded paths remain separate, including every known
+              gap.
+            </p>
+
+            <div class="selection-details">
+              <article>
+                <span>Recorded path</span>
+                <strong
+                  >{atlasFlightRoute.recorded.represented_point_count.toLocaleString()}
+                  points</strong
+                >
+                <small
+                  >{atlasFlightRoute.recorded.method.replaceAll(
+                    "_",
+                    " ",
+                  )}</small
+                >
+              </article>
+              <article>
+                <span>Planned path</span>
+                <strong
+                  >{atlasFlightRoute.planned?.points.length.toLocaleString() ??
+                    "Unavailable"}</strong
+                >
+                <small
+                  >Attributed to {atlasFlightRoute.planned?.provider ??
+                    "no plan provider"}</small
+                >
+              </article>
+              <article>
+                <span>Unresolved plan legs</span>
+                <strong
+                  >{atlasFlightRoute.planned?.unresolved_legs.length.toLocaleString() ??
+                    "0"}</strong
+                >
+                <small>Unresolved coordinates are not plotted.</small>
               </article>
             </div>
           {:else}
@@ -2157,6 +2251,7 @@
     {displayPreferences}
     recordingStatus={simulatorRecording}
     recordingSession={simulatorRecordingSession}
+    recordingDebrief={simulatorRecordingDebrief}
     recordingBusy={simulatorRecordingBusy}
     onrefresh={() => void refreshSimulatorBridge()}
     onstart={(providerId) => void runSimulatorAction("start", providerId)}
@@ -2164,11 +2259,14 @@
     onrecordstart={() => void runRecordingAction("start")}
     onrecordstop={() => void runRecordingAction("stop")}
     onsessionselect={(sessionId) => void selectRecordingSession(sessionId)}
-    onsessiondelete={(sessionId) => void runRecordingAction("delete", sessionId)}
+    onsessiondelete={(sessionId) =>
+      void runRecordingAction("delete", sessionId)}
     ondeleteall={() => void runRecordingAction("delete_all")}
     onpin={(sessionId, pinned) => void setRecordingPinned(sessionId, pinned)}
-    onpage={(sessionId, sampleOffset) => void pageRecordingSession(sessionId, sampleOffset)}
+    onpage={(sessionId, sampleOffset) =>
+      void pageRecordingSession(sessionId, sampleOffset)}
     onexport={(sessionId, format) => void exportRecording(sessionId, format)}
+    onviewatlas={openRecordingRouteInAtlas}
     onclose={leaveDialog}
   />
 
@@ -2286,6 +2384,7 @@
     {displayPreferences}
     recordingStatus={simulatorRecording}
     recordingSession={simulatorRecordingSession}
+    recordingDebrief={simulatorRecordingDebrief}
     recordingBusy={simulatorRecordingBusy}
     recordingError={simulatorError}
     busy={timelineBusy}
@@ -2297,9 +2396,13 @@
     onrecordingdelete={(sessionId) =>
       void runRecordingAction("delete", sessionId)}
     onrecordingdeleteall={() => void runRecordingAction("delete_all")}
-    onrecordingpin={(sessionId, pinned) => void setRecordingPinned(sessionId, pinned)}
-    onrecordingpage={(sessionId, sampleOffset) => void pageRecordingSession(sessionId, sampleOffset)}
-    onrecordingexport={(sessionId, format) => void exportRecording(sessionId, format)}
+    onrecordingpin={(sessionId, pinned) =>
+      void setRecordingPinned(sessionId, pinned)}
+    onrecordingpage={(sessionId, sampleOffset) =>
+      void pageRecordingSession(sessionId, sampleOffset)}
+    onrecordingexport={(sessionId, format) =>
+      void exportRecording(sessionId, format)}
+    onrecordingviewatlas={openRecordingRouteInAtlas}
     onclose={leaveDialog}
   />
 

@@ -3,6 +3,38 @@ export type Coordinates = {
   longitude: number;
 };
 
+export type AtlasRoutePoint = {
+  location: Coordinates;
+  label?: string;
+  source_sequence?: number;
+  observed_at?: string;
+  gap_before: boolean;
+};
+
+export type AtlasPlannedRoute = {
+  plan_id: string;
+  origin_icao: string;
+  destination_icao: string;
+  airac?: string;
+  provider: string;
+  points: AtlasRoutePoint[];
+  unresolved_legs: string[];
+};
+
+export type AtlasRecordedRoute = {
+  source_sample_count: number;
+  represented_point_count: number;
+  method: "exact" | "min_max_envelope";
+  points: AtlasRoutePoint[];
+};
+
+export type AtlasFlightRoute = {
+  schema_version: number;
+  session_id: string;
+  planned?: AtlasPlannedRoute;
+  recorded: AtlasRecordedRoute;
+};
+
 export type AirportSummary = {
   id: string;
   icao: string | null;

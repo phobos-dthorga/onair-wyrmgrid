@@ -617,6 +617,17 @@ fn simulator_recording_session(
 }
 
 #[tauri::command]
+fn simulator_recording_debrief(
+    state: tauri::State<'_, DesktopState>,
+    session_id: String,
+) -> Result<wyrmgrid_application::SimulatorSessionDebrief, wyrmgrid_application::OperationError> {
+    state
+        .simulator_recording
+        .debrief(&session_id)
+        .map_err(operation_error)
+}
+
+#[tauri::command]
 fn pin_simulator_recording(
     state: tauri::State<'_, DesktopState>,
     session_id: String,
@@ -832,6 +843,7 @@ pub fn run() {
             start_simulator_recording,
             stop_simulator_recording,
             simulator_recording_session,
+            simulator_recording_debrief,
             pin_simulator_recording,
             export_simulator_recording,
             delete_simulator_recording,

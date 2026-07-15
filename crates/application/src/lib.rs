@@ -8,6 +8,7 @@ mod display;
 mod localization;
 mod plugins;
 mod simulator;
+mod simulator_debrief;
 mod simulator_recording;
 
 pub use authorization::{
@@ -24,6 +25,7 @@ pub use display::*;
 pub use localization::*;
 pub use plugins::*;
 pub use simulator::*;
+pub use simulator_debrief::*;
 pub use simulator_recording::*;
 
 use chrono::{DateTime, SecondsFormat, Utc};
@@ -1041,6 +1043,9 @@ impl From<SimulatorRecordingError> for OperationError {
             }
             SimulatorRecordingError::ExportTooLarge => {
                 ("simulator.recording_export_too_large", false, false)
+            }
+            SimulatorRecordingError::DebriefTooLarge => {
+                ("simulator.recording_debrief_too_large", false, false)
             }
             SimulatorRecordingError::InvalidPlan => {
                 ("simulator.recording_invalid_plan", false, false)

@@ -133,7 +133,10 @@
 - a recording may retain only the validated sanitized SimBrief domain snapshot
   in force, never the entered account reference or raw OFP. Planned and recorded
   values stay separately labelled, missing comparisons stay unavailable, and
-  analysis above the exact-sample bound is withheld rather than partial;
+  no climb, fuel, or route values are inferred. Debrief reads reject more than
+  250,000 source samples and reduce each graph to at most 1,200 points. Omitted
+  source gaps propagate to represented points, and missing plan/position facts
+  split route geometry;
 - simulator plan loading and every other external mutation require a distinct
   negotiated capability and explicit user action;
 - deny-by-default plugin capabilities persisted separately from manifests; the
@@ -434,10 +437,13 @@ excluded from plugins and Sentry.
   bounded freshness window so stale aircraft state is not presented as live.
 - Local simulator recordings reveal operational timing and aircraft behaviour.
   SQLCipher protects a database copied while closed, but deletion may remain
-  recoverable in filesystem or portable backups, and the first graph view
-  exposes only the latest 600 exact samples rather than claiming a whole-session
-  downsample. Users must omit databases and backups from support bundles unless
-  they intend to share recordings.
+  recoverable in filesystem or portable backups. A whole-flight debrief and
+  Atlas overlay can expose precise routes, altitude, fuel weight, and attitude
+  while WyrmGrid is open. The host bounds the interface projection, preserves
+  gaps, and excludes it from plugins, Sentry, and public tile requests, but
+  screenshots and deliberate exports remain disclosures. Users must omit
+  databases and backups from support bundles unless they intend to share
+  recordings.
 - JSON and CSV recording exports are deliberate plaintext disclosures outside
   SQLCipher. Pinning protects against automatic pruning only; explicit deletion
   and copies made by the user remain outside WyrmGrid's recovery control.

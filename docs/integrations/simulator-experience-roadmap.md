@@ -152,11 +152,19 @@ disconnect. Long sessions should use a tested min/max-envelope or equivalent
 downsampling service while retaining exact values for a bounded inspection
 window.
 
-The WyrmChart view renders altitude plus indicated, true, and ground speed for a
-selected 600-sample exact window. Gap markers insert a visible break and the
-renderer does not connect across it. Hoard can page toward older or newer exact
-windows. Min/max-envelope downsampling remains required before an entire long
-session can be graphed honestly.
+Hoard Flight Debrief schema 1 renders whole-flight altitude; indicated, true,
+and ground speed; fuel weight; and pitch/bank. Traces up to 1,200 points remain
+exact. Longer traces use a deterministic, tested min/max envelope capped at
+1,200 display points per graph while preserving endpoints, each graph series'
+extrema, and every source or missing-value gap. Source reads are capped at
+250,000 samples. The selected 600-sample exact window remains available for
+forensic inspection and exact JSON/CSV exports are unchanged.
+
+Correlation version 2 adds labelled SimBrief reference lines for initial
+altitude, duration, and take-off/landing fuel weight. It does not generate a
+planned climb profile or fuel-burn curve. A historical flight can pass its
+bounded plan-and-recording route view to Atlas, where unresolved plan legs and
+recording gaps split the geometry rather than being joined.
 
 Plugins do not automatically receive recorded sessions. Any future history or
 aggregate permission must be separate from `simulator_telemetry_read`, scoped to
@@ -174,9 +182,10 @@ user-selected sessions, and exclude raw high-frequency data by default.
 3. Add tested lifecycle evidence, the default-off automatic recording setting,
    and reviewable take-off, gap, plan-association, and landing events.
    Implemented.
-4. Correlate sanitized SimBrief plans with exact session facts and browse older
-   windows. Implemented for correlation version 1; whole-trace min/max-envelope
-   downsampling remains.
+4. Correlate sanitized SimBrief plans with exact session facts, browse older
+   windows, review tested whole-flight debriefs, and open planned/recorded route
+   overlays in Atlas. Implemented for correlation version 2 and debrief/route
+   schemas 1.
 5. Prove the MSFS in-simulator CommBus control surface, then package it only
    after compatibility, signing, installation, and removal are documented.
 

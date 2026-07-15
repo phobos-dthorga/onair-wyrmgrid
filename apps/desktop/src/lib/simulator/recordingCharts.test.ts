@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { DisplayPreferences } from "$lib/settings/types";
-import type { SimulatorSessionView } from "./types";
-import { altitudeRecordingChart, speedRecordingChart } from "./recordingCharts";
+import type { SimulatorSessionDebrief, SimulatorSessionView } from "./types";
+import {
+  altitudeDebriefChart,
+  altitudeRecordingChart,
+  attitudeDebriefChart,
+  fuelWeightDebriefChart,
+  speedRecordingChart,
+} from "./recordingCharts";
 
 const preferences: DisplayPreferences = {
   altitude_unit: "metres",
@@ -54,6 +60,56 @@ const session: SimulatorSessionView = {
   ],
 };
 
+const debrief: SimulatorSessionDebrief = {
+  schema_version: 1,
+  session: session.session,
+  source_sample_count: 2,
+  traces: {
+    altitude: {
+      source_sample_count: 2,
+      represented_sample_count: 2,
+      gap_count: 1,
+      method: "exact",
+      samples: session.samples,
+    },
+    speed: {
+      source_sample_count: 2,
+      represented_sample_count: 2,
+      gap_count: 1,
+      method: "exact",
+      samples: session.samples,
+    },
+    attitude: {
+      source_sample_count: 2,
+      represented_sample_count: 2,
+      gap_count: 1,
+      method: "exact",
+      samples: session.samples,
+    },
+  },
+  route: {
+    schema_version: 1,
+    session_id: "session-1",
+    recorded: {
+      source_sample_count: 0,
+      represented_point_count: 0,
+      method: "exact",
+      points: [],
+    },
+  },
+  comparison: {
+    association: {
+      correlation_version: 2,
+      plan_id: "plan-1",
+      origin_icao: "YSSY",
+      destination_icao: "NZAA",
+    },
+    analysis_complete: true,
+    planned_initial_altitude_ft: 10_000,
+    planned_takeoff_fuel_pounds: 2_000,
+  },
+};
+
 describe("simulator recording charts", () => {
   it("converts canonical altitude and preserves gap markers", () => {
     const chart = altitudeRecordingChart(session, preferences);
@@ -74,5 +130,32 @@ describe("simulator recording charts", () => {
       true,
     );
     expect(chart.series[2].points[0].value).toBeCloseTo(175.94);
+  });
+
+  it("adds attributed plan references to the whole-flight altitude chart", () => {
+    const chart = altitudeDebriefChart(debrief, preferences);
+    expect(chart.description).toContain("2 exact samples");
+    expect(chart.reference_lines).toContainEqual({
+      id: "planned-altitude",
+      label: "SimBrief initial altitude",
+      axis: "value",
+      value: 3_048,
+    });
+    expect(chart.series[0].points[1].gap_before).toBe(true);
+  });
+
+  it("does not invent fuel values or liquid volume when weight is missing", () => {
+    const chart = fuelWeightDebriefChart(debrief, preferences);
+    expect(chart.series).toEqual([]);
+    expect(chart.unit).toBe("kg");
+    expect(chart.description).toContain(
+      "No liquid volume or density is inferred",
+    );
+  });
+
+  it("builds separate pitch and bank attitude traces", () => {
+    const chart = attitudeDebriefChart(debrief);
+    expect(chart.series.map((series) => series.id)).toEqual(["pitch", "bank"]);
+    expect(chart.reference_lines?.[0].value).toBe(0);
   });
 });

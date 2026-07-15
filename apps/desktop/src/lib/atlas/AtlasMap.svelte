@@ -4,7 +4,13 @@
   import { onMount } from "svelte";
   import type { PublishedPluginLayer } from "$lib/forge/types";
   import { activeTheme } from "$lib/theme/runtime";
-  import type { AircraftSummary, FboSummary } from "./types";
+  import {
+    flightRouteSignature,
+    routeFitCoordinates,
+    routeLineFeatures,
+    routeMarkerFeatures,
+  } from "./flightRoute";
+  import type { AircraftSummary, AtlasFlightRoute, FboSummary } from "./types";
 
   let {
     aircraft,
@@ -13,6 +19,7 @@
     fboVisible,
     pluginLayers,
     pluginLayersVisible,
+    flightRoute,
     selectedAircraftId,
     selectedFboId,
     onselectaircraft,
@@ -24,6 +31,7 @@
     fboVisible: boolean;
     pluginLayers: PublishedPluginLayer[];
     pluginLayersVisible: boolean;
+    flightRoute?: AtlasFlightRoute;
     selectedAircraftId: string | null;
     selectedFboId: string | null;
     onselectaircraft: (aircraftId: string) => void;
@@ -39,6 +47,12 @@
   const PLUGIN_SOURCE_ID = "wyrmgrid-plugin-layers";
   const PLUGIN_LAYER_ID = "wyrmgrid-plugin-points";
   const PLUGIN_LABEL_LAYER_ID = "wyrmgrid-plugin-labels";
+  const ROUTE_SOURCE_ID = "wyrmgrid-flight-routes";
+  const ROUTE_MARKER_SOURCE_ID = "wyrmgrid-flight-route-markers";
+  const PLANNED_ROUTE_LAYER_ID = "wyrmgrid-planned-flight-route";
+  const RECORDED_ROUTE_LAYER_ID = "wyrmgrid-recorded-flight-route";
+  const ROUTE_MARKER_LAYER_ID = "wyrmgrid-flight-route-markers";
+  const ROUTE_LABEL_LAYER_ID = "wyrmgrid-flight-route-labels";
 
   let mapContainer: HTMLDivElement;
   let map: Map | undefined;
@@ -165,6 +179,8 @@
     const fleet = fleetFeatures();
     const fboNetwork = fboFeatures();
     const pluginData = pluginFeatures();
+    const routes = routeLineFeatures(flightRoute);
+    const routeMarkers = routeMarkerFeatures(flightRoute);
     (map.getSource(FLEET_SOURCE_ID) as GeoJSONSource | undefined)?.setData(
       fleet,
     );
@@ -174,6 +190,12 @@
     (map.getSource(PLUGIN_SOURCE_ID) as GeoJSONSource | undefined)?.setData(
       pluginData,
     );
+    (map.getSource(ROUTE_SOURCE_ID) as GeoJSONSource | undefined)?.setData(
+      routes,
+    );
+    (
+      map.getSource(ROUTE_MARKER_SOURCE_ID) as GeoJSONSource | undefined
+    )?.setData(routeMarkers);
 
     const visibility = fleetVisible ? "visible" : "none";
     map.setLayoutProperty(FLEET_LAYER_ID, "visibility", visibility);
@@ -251,6 +273,54 @@
       $activeTheme.colors.map_halo,
     );
 
+    map.setPaintProperty(
+      PLANNED_ROUTE_LAYER_ID,
+      "line-color",
+      $activeTheme.colors.highlight,
+    );
+    map.setPaintProperty(
+      RECORDED_ROUTE_LAYER_ID,
+      "line-color",
+      $activeTheme.colors.accent,
+    );
+    map.setPaintProperty(
+      ROUTE_MARKER_LAYER_ID,
+      "circle-color",
+      $activeTheme.colors.highlight,
+    );
+    map.setPaintProperty(
+      ROUTE_MARKER_LAYER_ID,
+      "circle-stroke-color",
+      $activeTheme.colors.map_halo,
+    );
+    map.setPaintProperty(
+      ROUTE_LABEL_LAYER_ID,
+      "text-color",
+      $activeTheme.colors.highlight,
+    );
+    map.setPaintProperty(
+      ROUTE_LABEL_LAYER_ID,
+      "text-halo-color",
+      $activeTheme.colors.map_halo,
+    );
+
+    const routeSignature = flightRouteSignature(flightRoute);
+    if (routeSignature && routeSignature !== fittedAtlasSignature) {
+      const coordinates = routeFitCoordinates(flightRoute);
+      fittedAtlasSignature = routeSignature;
+      if (coordinates.length === 1) {
+        map.easeTo({ center: coordinates[0], zoom: 8, duration: 700 });
+      } else if (coordinates.length > 1) {
+        const routeBounds = coordinates.reduce(
+          (current, coordinate) => current.extend(coordinate),
+          new maplibregl.LngLatBounds(coordinates[0], coordinates[0]),
+        );
+        map.fitBounds(routeBounds, { padding: 90, maxZoom: 8, duration: 700 });
+      }
+      return;
+    }
+    if (routeSignature) return;
+
     const visibleFeatures = [
       ...(fleetVisible ? fleet.features : []),
       ...(fboVisible ? fboNetwork.features : []),
@@ -285,6 +355,7 @@
     fboVisible;
     pluginLayers;
     pluginLayersVisible;
+    flightRoute;
     selectedAircraftId;
     selectedFboId;
     $activeTheme;
@@ -328,6 +399,66 @@
         atlasMap.addSource(PLUGIN_SOURCE_ID, {
           type: "geojson",
           data: pluginFeatures(),
+        });
+        atlasMap.addSource(ROUTE_SOURCE_ID, {
+          type: "geojson",
+          data: routeLineFeatures(flightRoute),
+        });
+        atlasMap.addSource(ROUTE_MARKER_SOURCE_ID, {
+          type: "geojson",
+          data: routeMarkerFeatures(flightRoute),
+        });
+        atlasMap.addLayer({
+          id: PLANNED_ROUTE_LAYER_ID,
+          type: "line",
+          source: ROUTE_SOURCE_ID,
+          filter: ["==", ["get", "kind"], "planned"],
+          paint: {
+            "line-color": $activeTheme.colors.highlight,
+            "line-width": ["interpolate", ["linear"], ["zoom"], 1, 2, 8, 5],
+            "line-dasharray": [2, 2],
+            "line-opacity": 0.9,
+          },
+        });
+        atlasMap.addLayer({
+          id: RECORDED_ROUTE_LAYER_ID,
+          type: "line",
+          source: ROUTE_SOURCE_ID,
+          filter: ["==", ["get", "kind"], "recorded"],
+          paint: {
+            "line-color": $activeTheme.colors.accent,
+            "line-width": ["interpolate", ["linear"], ["zoom"], 1, 2.5, 8, 6],
+            "line-opacity": 0.92,
+          },
+        });
+        atlasMap.addLayer({
+          id: ROUTE_MARKER_LAYER_ID,
+          type: "circle",
+          source: ROUTE_MARKER_SOURCE_ID,
+          paint: {
+            "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, 3, 8, 6],
+            "circle-color": $activeTheme.colors.highlight,
+            "circle-stroke-color": $activeTheme.colors.map_halo,
+            "circle-stroke-width": 2,
+          },
+        });
+        atlasMap.addLayer({
+          id: ROUTE_LABEL_LAYER_ID,
+          type: "symbol",
+          source: ROUTE_MARKER_SOURCE_ID,
+          minzoom: 3,
+          layout: {
+            "text-field": ["get", "label"],
+            "text-size": 10,
+            "text-offset": [0, 1.25],
+            "text-anchor": "top",
+            "text-allow-overlap": false,
+          },
+          paint: {
+            "text-color": $activeTheme.colors.highlight,
+            "text-halo-color": $activeTheme.colors.map_halo,
+            "text-halo-width": 1.5,
+          },
         });
         atlasMap.addLayer({
           id: FBO_LAYER_ID,

@@ -112,9 +112,9 @@ required for the initial timeline, so no database migration was added.
 Hoard also presents the bounded local simulator sessions owned by migrations 8
 and 10.
 The **Flight recordings** section lists active, completed, and interrupted
-sessions and opens the same altitude and speed graphs used by the Simulator
-bridge. This shared presentation component prevents the two surfaces from
-disagreeing about selected units, telemetry gaps, retention, or deletion.
+sessions and opens the same debrief used by the Simulator bridge. This shared
+presentation component prevents the two surfaces from disagreeing about
+selected units, telemetry gaps, retention, or deletion.
 
 Simulator sessions remain a distinct resource family rather than being forced
 into the OnAir company as-of timeline. They have their own provider and aircraft
@@ -129,6 +129,23 @@ at capture time. Hoard supports searching and selecting sessions, exact
 600-sample window navigation, pinning against automatic retention, explicit
 deletion, full JSON or CSV export, and planned-versus-recorded comparisons.
 Exports are plaintext and leave Hoard's encrypted boundary.
+
+Hoard Flight Debrief schema 1 covers the whole session with altitude, indicated/
+true/ground speed, fuel-weight, and pitch/bank graphs. Up to 1,200 display
+points are produced per graph by a tested min/max envelope for long recordings;
+the exact first/last samples, per-series extremes, and every observed or
+missing-value gap remain represented. The exact 600-sample pager is retained as
+a collapsible forensic view and exports remain exact.
+
+When a sanitized SimBrief snapshot exists, correlation version 2 shows planned
+and recorded duration, distance, altitude, start/end fuel weight, fuel used,
+and signed differences only where both facts exist. Labelled graph references
+never become an inferred climb or burn profile. **Open plan and flight in Atlas**
+passes a bounded host-owned route view: sourced plan coordinates and recorded
+coordinates render as separate paths, unresolved plan legs are named but not
+plotted, and gaps split the geometry. This flight-route view is independent of
+the company LIVE/HISTORICAL time mode and remains local and unavailable to
+community plugins.
 
 Starting and stopping capture remains in the Simulator bridge so browsing
 history cannot accidentally begin collection. The default-off automatic
