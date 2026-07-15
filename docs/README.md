@@ -30,6 +30,7 @@
   - [Simulator provider authoring and FSUIPC path](integrations/simulator-provider-authoring.md)
   - [Simulator connection, recording, in-game control, and graphs](integrations/simulator-experience-roadmap.md)
 - [Observability and Sentry plan](operations/observability.md)
+- [Flight operation lifecycle](operations/flight-operation-lifecycle.md)
 - [Application Terms of Use](legal/terms-of-use.md)
 - [Privacy Notice](legal/privacy-notice.md)
 - [Third-party service register](legal/third-party-services.md)

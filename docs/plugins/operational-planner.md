@@ -68,6 +68,13 @@ scoring. A linear, constraint, or mixed-integer solver should be introduced only
 after a real planning case demonstrates that simpler methods cannot produce a
 useful result.
 
+The host-owned [flight operation lifecycle](../operations/flight-operation-lifecycle.md)
+defines canonical jobs, per-leg manifests, fleet and staff assignments,
+operation revisions, and later core Industry state. The planner may explore and
+rank scenarios over permission-filtered views of those facts, but it does not
+own or directly mutate a flight operation. A suggestion becomes an explicit
+host-reviewed selection when the user accepts it.
+
 ## Value model
 
 Only monetary return is labelled **profit**. Other benefits are separately
@@ -92,8 +99,9 @@ no non-financial value is silently converted into OnAir credits.
 
 An initial charter plan can combine:
 
-- a user-defined origin, destination, date window, passengers, cargo, and
-  service preference, optionally seeded from an OnAir job;
+- a user-defined origin, destination, date window, complete passenger and
+  freight manifest, and service preference, optionally seeded from an OnAir
+  job;
 - owned, rentable, leased, or purchasable aircraft candidates;
 - empty positioning before and after the charter;
 - payload-range and airport suitability;

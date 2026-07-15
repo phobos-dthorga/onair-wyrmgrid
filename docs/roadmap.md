@@ -151,6 +151,29 @@ not replace completion of the current vertical slice.
 - Local notifications and iCalendar export; community delivery through explicit
   plugin capabilities
 
+### Core flight operation lifecycle
+
+- Host-owned flight-operation identity, revision semantics, and a non-blocking
+  Plan -> Weather -> Jobs -> Manifest -> Fleet -> Staff -> Review -> Atlas
+  journey rail
+- A per-leg manifest that distinguishes passengers, company personnel,
+  positioning staff, the player avatar, and freight without double-counting
+  people who operate one leg and travel on another
+- Explainable reconciliation across jobs, load, seats, payload, aircraft and
+  staff location, sourced qualifications, weather, schedule, and plan evidence
+- Explicit invalidation and user-reviewed revisions instead of silent cascading
+  changes when a plan, manifest, aircraft, staff assignment, or observation
+  changes
+- Atlas, Bridge recording, and Hoard debrief association with the accepted
+  operation revision
+- Future core Industry models for facilities, inventory, production, workforce,
+  and logistics demand; Industry feeds flight operations rather than becoming a
+  linear wizard step
+
+The domain boundaries, staged sequence, privacy requirements, and current
+evidence questions live in the
+[flight operation lifecycle](operations/flight-operation-lifecycle.md).
+
 The complete sequence and provider constraints live in the
 [external integrations programme](integrations/README.md).
 The simulator UX sequence is detailed in the
