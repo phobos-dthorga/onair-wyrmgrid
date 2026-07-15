@@ -7,6 +7,13 @@ on:
   schedule:
     - cron: "23 3 * * 1"
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      checkout_ref:
+        description: Commit or tag to verify instead of the caller commit
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -18,8 +25,10 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/dependency-review-action@v5
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          ref: ${{ inputs.checkout_ref || github.sha }}
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5
         with:
           # SvelteKit's current declared range still resolves cookie 0.6.0.
           # WyrmGrid is a static Tauri client and does not construct HTTP cookies.
@@ -29,19 +38,23 @@ jobs:
   rust-audit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          ref: ${{ inputs.checkout_ref || github.sha }}
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
         with:
           toolchain: 1.97.0
-      - uses: taiki-e/install-action@cargo-deny
+      - uses: taiki-e/install-action@1725d1806acf0cd664ecc8dd0fcff6d896453dcf # cargo-deny
       - name: Check advisories, licenses, bans, and sources
         run: cargo deny check
 
   npm-audit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          ref: ${{ inputs.checkout_ref || github.sha }}
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22
           cache: npm

@@ -127,10 +127,12 @@ and [Contributing](CONTRIBUTING.md) before making structural changes.
 ## Releases
 
 Routine commits and pull requests compile-check the desktop without packaging
-installers. Release installers are produced for `vX.Y.0` tags; a deliberately
-justified manual exception is available when an intermediate patch genuinely
-needs packaging. Early releases remain drafts and prereleases until signing,
-updating, and live OnAir integration are deliberately enabled.
+installers. Every intentional semantic-version tag (`vX.Y.Z`, including
+supported prereleases) runs the complete CI and security gates before GitHub
+builds platform packages and an NSIS setup executable. CI publishes checksums
+and build provenance into a draft prerelease for manual installation review.
+Early releases remain drafts and prereleases until signing, updating, and live
+OnAir integration are deliberately enabled.
 
 ## Licensing and trademarks
 
