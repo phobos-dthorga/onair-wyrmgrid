@@ -12,19 +12,20 @@ use thiserror::Error;
 use wyrmgrid_storage::Store;
 
 pub const LANGUAGE_PACK_SCHEMA_VERSION: u32 = 1;
-pub const SOURCE_CATALOG_VERSION: u32 = 5;
+pub const SOURCE_CATALOG_VERSION: u32 = 6;
 pub const SOURCE_LOCALE: &str = "en-AU";
 pub const DEFAULT_LANGUAGE_PACK_ID: &str = "wyrmgrid-en-au";
 const MAX_LANGUAGE_PACK_BYTES: usize = 256 * 1024;
 const MAX_LANGUAGE_MESSAGES: usize = 2_048;
 const MAX_MESSAGE_PATTERN_BYTES: usize = 2_048;
-const PROTECTED_MESSAGE_PREFIXES: [&str; 8] = [
+const PROTECTED_MESSAGE_PREFIXES: [&str; 9] = [
     "legal-",
     "privacy-",
     "credential-",
     "telemetry-",
     "plugin-permission-",
     "security-",
+    "data-protection-",
     "destructive-",
     "error-",
 ];

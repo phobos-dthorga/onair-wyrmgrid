@@ -1,8 +1,11 @@
+mod database_key;
 mod diagnostics;
 mod observability;
 
 use std::sync::Arc;
 use tauri::Manager;
+use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
+use zeroize::Zeroize;
 
 #[derive(Clone, Debug, Default, serde::Serialize)]
 struct StartupOptions {
@@ -21,6 +24,8 @@ struct DesktopState {
     simulator_recording: wyrmgrid_application::SimulatorRecordingService,
     legal: wyrmgrid_application::LegalSettingsService<wyrmgrid_storage::Store>,
     security: wyrmgrid_application::SecurityCentreService<wyrmgrid_storage::Store>,
+    data_protection: wyrmgrid_application::DataProtectionService<wyrmgrid_storage::Store>,
+    device_keys: database_key::DeviceKeyStore,
     themes: wyrmgrid_application::ThemeSettingsService<wyrmgrid_storage::Store>,
     languages: wyrmgrid_application::LanguageSettingsService<wyrmgrid_storage::Store>,
     display: wyrmgrid_application::DisplaySettingsService<wyrmgrid_storage::Store>,
@@ -219,6 +224,65 @@ fn security_centre_status(
     state: tauri::State<'_, DesktopState>,
 ) -> Result<wyrmgrid_application::SecurityCentreStatus, wyrmgrid_application::OperationError> {
     state.security.status().map_err(operation_error)
+}
+
+#[tauri::command]
+fn data_protection_status(
+    state: tauri::State<'_, DesktopState>,
+) -> Result<wyrmgrid_application::DataProtectionStatus, wyrmgrid_application::OperationError> {
+    state.data_protection.status().map_err(operation_error)
+}
+
+#[tauri::command]
+async fn create_portable_backup(
+    state: tauri::State<'_, DesktopState>,
+    destination: String,
+    mut password: String,
+    mut password_confirmation: String,
+) -> Result<wyrmgrid_application::PortableBackupView, wyrmgrid_application::OperationError> {
+    let data_protection = state.data_protection.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let result = data_protection.create_portable_backup(
+            std::path::Path::new(&destination),
+            &password,
+            &password_confirmation,
+        );
+        password.zeroize();
+        password_confirmation.zeroize();
+        result
+    })
+    .await
+    .map_err(|_| operation_error(wyrmgrid_application::DataProtectionError::StorageUnavailable))?
+    .map_err(operation_error)
+}
+
+#[tauri::command]
+async fn prepare_portable_restore(
+    state: tauri::State<'_, DesktopState>,
+    source: String,
+    mut password: String,
+    replacement_confirmed: bool,
+) -> Result<wyrmgrid_application::PortableRestoreView, wyrmgrid_application::OperationError> {
+    let data_protection = state.data_protection.clone();
+    let device_keys = state.device_keys.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let result = device_keys
+            .load_existing()
+            .map_err(|_| wyrmgrid_application::DataProtectionError::StorageUnavailable)
+            .and_then(|device_key| {
+                data_protection.prepare_portable_restore(
+                    std::path::Path::new(&source),
+                    &password,
+                    replacement_confirmed,
+                    &device_key,
+                )
+            });
+        password.zeroize();
+        result
+    })
+    .await
+    .map_err(|_| operation_error(wyrmgrid_application::DataProtectionError::StorageUnavailable))?
+    .map_err(operation_error)
 }
 
 #[tauri::command]
@@ -516,27 +580,31 @@ fn operation_error<E: Into<wyrmgrid_application::OperationError>>(
 pub fn run() {
     let parsed_startup_options = parse_startup_options(std::env::args_os().skip(1));
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .setup(move |app| {
-            let app_data_directory =
-                app.path().app_data_dir().ok().and_then(|directory| {
-                    std::fs::create_dir_all(&directory).ok().map(|_| directory)
-                });
-            diagnostics::initialize(app_data_directory.as_deref());
-            let store = app_data_directory
-                .as_ref()
-                .and_then(|directory| {
-                    wyrmgrid_storage::Store::open(directory.join("wyrmgrid.db")).ok()
-                })
-                .unwrap_or_else(|| {
-                    wyrmgrid_storage::Store::open_in_memory()
-                        .expect("in-memory Hoard fallback should initialize")
-                });
+            let app_data_directory = app.path().app_data_dir()?;
+            std::fs::create_dir_all(&app_data_directory)?;
+            diagnostics::initialize(Some(&app_data_directory));
+            let database_path = app_data_directory.join("wyrmgrid.db");
+            let device_keys = database_key::DeviceKeyStore;
+            let database_key = device_keys
+                .load_or_create(wyrmgrid_storage::encrypted_database_state_exists(
+                    &database_path,
+                ))
+                .inspect_err(|_| {
+                    show_encrypted_storage_startup_error(app);
+                })?;
+            let store =
+                wyrmgrid_storage::Store::open(&database_path, &database_key).inspect_err(|_| {
+                    show_encrypted_storage_startup_error(app);
+                })?;
             let legal = wyrmgrid_application::LegalSettingsService::new(store.clone());
             let legal_status = legal.status().expect("legal settings should initialize");
             let themes = wyrmgrid_application::ThemeSettingsService::new(store.clone());
             let languages = wyrmgrid_application::LanguageSettingsService::new(store.clone());
             let display = wyrmgrid_application::DisplaySettingsService::new(store.clone());
             let security = wyrmgrid_application::SecurityCentreService::new(store.clone());
+            let data_protection = wyrmgrid_application::DataProtectionService::new(store.clone());
             let onair = wyrmgrid_application::OnAirSession::with_default_store(store.clone());
             let dispatch = wyrmgrid_application::DispatchSession::with_default_provider();
             let simulator_provider =
@@ -557,7 +625,7 @@ pub fn run() {
             );
             let automatic_provider = simulator_settings.startup_provider_id().ok().flatten();
             let plugins = wyrmgrid_application::PluginService::new(
-                app_data_directory.map(|directory| directory.join("plugins")),
+                Some(app_data_directory.join("plugins")),
                 store,
                 onair.clone(),
                 simulator.clone(),
@@ -573,6 +641,8 @@ pub fn run() {
                 simulator_recording,
                 legal,
                 security,
+                data_protection,
+                device_keys,
                 themes,
                 languages,
                 display,
@@ -617,6 +687,9 @@ pub fn run() {
             acknowledge_legal,
             update_telemetry_preference,
             security_centre_status,
+            data_protection_status,
+            create_portable_backup,
+            prepare_portable_restore,
             theme_status,
             display_preferences,
             update_display_preferences,
@@ -645,6 +718,16 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+fn show_encrypted_storage_startup_error(app: &tauri::App) {
+    app.dialog()
+        .message(
+            "WyrmGrid could not unlock its encrypted local data. The operating-system credential may be unavailable, or the database may not match it. WyrmGrid did not replace or open the data as plaintext. Recover the original device credential or restore a portable WyrmGrid backup.",
+        )
+        .title("Encrypted WyrmGrid data unavailable")
+        .kind(MessageDialogKind::Error)
+        .blocking_show();
 }
 
 fn parse_startup_options<I, S>(arguments: I) -> StartupOptions

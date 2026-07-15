@@ -154,6 +154,14 @@
                 >
               </article>
               <article>
+                <strong>Encrypted local data</strong>
+                <span
+                  >SQLCipher protects WyrmGrid's database at rest. Portable
+                  backups are complete encrypted copies protected by a password
+                  you choose and WyrmGrid cannot recover.</span
+                >
+              </article>
+              <article>
                 <strong>Photosensitivity</strong>
                 <span
                   >Future weather and warning effects may include lightning or

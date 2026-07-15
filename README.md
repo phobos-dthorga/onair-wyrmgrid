@@ -19,7 +19,7 @@ plugin boundary available to third-party developers.
 > plugin proof are implemented. The versioned Bridge supervisor, read-only MSFS
 > 2024 SimConnect provider, desktop telemetry view, and permission-filtered
 > plugin snapshots are also implemented; live simulator certification, release
-> bundling, persistent credential storage, plugin/provider signing and
+> bundling, user-token credential storage, plugin/provider signing and
 > sandboxing, and broader operational integrations remain ahead.
 
 ## Vision
@@ -45,7 +45,7 @@ plugin boundary available to third-party developers.
 | Map                          | MapLibre GL JS                          |
 | Charts                       | Apache ECharts behind WyrmChart         |
 | Localization                 | Fluent with canonical `en-AU` fallback  |
-| Local storage                | SQLite                                  |
+| Local storage                | SQLCipher-encrypted SQLite              |
 | Plugin boundary              | Out-of-process, versioned JSON messages |
 | Native simulator integration | Separate versioned provider sidecars    |
 
@@ -54,7 +54,7 @@ SimConnect provider executables:
 
 - `wyrmgrid-domain` — stable application-owned types and provenance;
 - `wyrmgrid-onair-api` — credential-safe, read-only OnAir boundary;
-- `wyrmgrid-storage` — SQLite ownership and migrations;
+- `wyrmgrid-storage` — SQLCipher ownership, migrations, and portable backups;
 - `wyrmgrid-application` — interface-independent orchestration;
 - `wyrmgrid-bridge-protocol` — versioned simulator-provider framing and
   manifests;

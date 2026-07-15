@@ -15,6 +15,8 @@
 - release source maps, native debug information, and telemetry upload credentials;
 - live debugger state, watch expressions, memory views, and debug screenshots;
 - legal-document versions, acknowledgement records, and privacy preferences;
+- the SQLCipher device key, portable-backup passwords and files, pending
+  restores, rollback databases, and backup-format metadata;
 - selected language, imported community language-pack content, translator
   metadata, and the integrity of security-sensitive interface wording;
 - update integrity and release artifacts.
@@ -62,6 +64,9 @@
 - recommendations mistaken for OnAir-provided facts;
 - accidental or automated request storms against OnAir's public API;
 - disclosure of locally cached company, fleet, and location history;
+- offline theft of `wyrmgrid.db`, loss or replacement of its device credential,
+  weak backup passwords, damaged backups, unintended cloud synchronisation, or
+  a malicious restore replacing trusted local history;
 - request storms or costly generated actions against SimBrief, SayIntentions,
   weather, VATSIM, IVAO, or navigation providers;
 
@@ -181,6 +186,20 @@
 - Hoard stores stable domain snapshots rather than raw API payloads, never stores
   credentials, applies bounded retention, and visibly distinguishes live,
   cached, offline, preview, and memory-only data.
+- persistent SQLite storage is encrypted with SQLCipher using a random 256-bit
+  key held separately by the operating-system credential service. Existing
+  encrypted or recovery state without the exact key fails closed; startup does
+  not create a replacement key, retry plaintext, or hide failure behind a new
+  memory-only store;
+- portable backup version 1 is a complete SQLCipher export under a distinct
+  user password. The host refuses overwrite, validates the encrypted manifest,
+  schema and cipher integrity, re-encrypts restored data with the destination
+  device key, activates only on restart, and retains the prior database for
+  rollback until the replacement opens successfully;
+- backup and restore passwords are bounded, cleared from Rust command-owned
+  strings after the operation, never persisted, logged, sent to plugins, or
+  recoverable by WyrmGrid. Restore requires a separate momentary destructive
+  confirmation and runs outside the interface thread;
 - Hoard Timeline remains read-only, persistently identifies mutually exclusive
   LIVE or HISTORICAL workspace mode separately from data availability, shows
   the selected time and each resource's actual observation time, and offers an
@@ -200,12 +219,14 @@
   for schema/source version, metadata, Fluent syntax, variable parity, message
   counts, markup delimiters, and dangerous bidirectional controls. Partial packs
   fall back per message to canonical English. Unreviewed packs cannot replace
-  legal, privacy, credential, telemetry, plugin-permission, destructive-action,
-  or diagnostic namespaces and cannot load resources or execute code.
+  legal, privacy, credential, telemetry, plugin-permission, data-protection,
+  destructive-action, or diagnostic namespaces and cannot load resources or
+  execute code.
 
-Before stable release, the project needs operating-system credential storage,
-signed updates, hardened plugin supervision, abuse-case tests, and a formal
-security review of every external input boundary.
+Before stable release, the project needs a cross-platform review of its
+operating-system credential-store backends and recovery messaging, signed
+updates, hardened plugin supervision, abuse-case tests, and a formal security
+review of every external input boundary.
 
 The current Atlas basemap is downloaded from MapLibre's public demonstration
 infrastructure after onboarding. WyrmGrid does not intentionally include OnAir
@@ -272,13 +293,22 @@ The exact implemented boundary and deferred hardening are recorded in
 
 ## Residual Hoard risks
 
-The local SQLite database contains company identifiers, company names, aircraft
-and FBO details, locations, and observation history. It is not currently encrypted at
-rest and relies on operating-system account and filesystem protections. A user
-must therefore sanitize or omit `wyrmgrid.db` from support reports. Retention
-limits intraday growth but deliberately preserves one daily historical record,
-so sensitive operational history remains until the user deletes the database or
-a future data-management feature removes it.
+The local SQLCipher database contains company identifiers, company names,
+aircraft and FBO details, locations, observation history, and other local state.
+At-rest encryption reduces exposure from a copied file but does not protect
+against a process or logged-in account that can retrieve the device key, memory
+inspection, crash dumps, screenshots, or deliberate export. A user must still
+omit `wyrmgrid.db`, rollback/pending files, and portable backups from support
+reports unless they intentionally mean to disclose their contents.
+
+Retention limits intraday growth but deliberately preserves one daily
+historical record, so sensitive operational history remains inside encrypted
+storage until the user deletes the database or a future data-management feature
+removes it. Portable backups are complete, user-controlled copies: WyrmGrid
+cannot rotate, revoke, erase, or recover their passwords. Filesystem snapshots,
+cloud services, and deleted-file recovery may retain both databases and backups.
+Loss of the operating-system credential entry without a usable portable backup
+makes local data unrecoverable by design.
 
 ## Residual telemetry risks
 
@@ -351,10 +381,11 @@ excluded from plugins and Sentry.
   visible for an explicit restart. Connected snapshots are withheld after the
   bounded freshness window so stale aircraft state is not presented as live.
 - Local simulator recordings reveal operational timing and aircraft behaviour.
-  The SQLite database is not encrypted at rest, deletion may remain recoverable
-  in filesystem backups, and the first graph view exposes only the latest 600
-  exact samples rather than claiming a whole-session downsample. Users must omit
-  `wyrmgrid.db` from support bundles unless they intend to share recordings.
+  SQLCipher protects a database copied while closed, but deletion may remain
+  recoverable in filesystem or portable backups, and the first graph view
+  exposes only the latest 600 exact samples rather than claiming a whole-session
+  downsample. Users must omit databases and backups from support bundles unless
+  they intend to share recordings.
 - Licensed navigation data may remain accessible in local caches to a user or
   process with filesystem access. Entitlement checks and application controls do
   not replace operating-system security or provider licence compliance.
@@ -385,10 +416,11 @@ excluded from plugins and Sentry.
 - The migration-4 preview grant table remains for append-only migration
   integrity but is no longer authoritative after migration 9.
 
-Residual risk: the authorization database is not encrypted at rest, a malicious
-plugin may retain facts it received before revocation, and process separation is
-not a complete operating-system sandbox. Users should revoke unneeded grants,
-review permission changes after updates, and run only trusted code.
+Residual risk: SQLCipher does not protect authorization history from code or a
+logged-in account that can use the device key, a malicious plugin may retain
+facts it received before revocation, and process separation is not a complete
+operating-system sandbox. Users should revoke unneeded grants, review permission
+changes after updates, and run only trusted code.
 
 Provider-specific controls and validation gates are recorded in the
 [external integrations programme](../integrations/README.md).

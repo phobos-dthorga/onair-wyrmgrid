@@ -1,0 +1,269 @@
+.data-protection-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 48;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--color-overlay);
+  backdrop-filter: blur(10px);
+}
+
+.data-protection-dialog {
+  width: min(960px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  border: 1px solid var(--color-line-soft);
+  border-radius: 8px;
+  color: var(--color-text);
+  background: var(--color-surface-elevated);
+  box-shadow: 0 28px 90px var(--color-shadow);
+}
+
+.data-protection-dialog > header,
+.data-protection-dialog > footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 21px 24px;
+}
+
+.data-protection-dialog > header {
+  border-bottom: 1px solid var(--color-line-faint);
+}
+
+.data-protection-dialog h2,
+.data-protection-dialog h3,
+.data-protection-dialog p {
+  margin: 0;
+}
+
+.data-protection-dialog h2,
+.data-protection-dialog h3 {
+  margin-top: 5px;
+  font-family: Georgia, serif;
+  font-weight: 500;
+}
+
+.data-protection-dialog h2 {
+  font-size: 28px;
+}
+
+.data-protection-dialog h3 {
+  font-size: 21px;
+}
+
+.data-protection-dialog header p,
+.protection-workflow p {
+  margin-top: 7px;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+.data-protection-dialog .close-button {
+  border: 0;
+  color: var(--color-text-muted);
+  background: transparent;
+  font-size: 27px;
+  cursor: pointer;
+}
+
+.protection-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 18px 24px;
+}
+
+.protection-summary article {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid var(--color-line-faint);
+  background: var(--color-surface);
+}
+
+.protection-summary span,
+.protection-summary small {
+  color: var(--color-text-muted);
+  font-size: 10px;
+}
+
+.protection-summary strong {
+  color: var(--color-accent);
+  font-family: Georgia, serif;
+  font-size: 21px;
+  font-weight: 500;
+}
+
+.pending-restore {
+  display: grid;
+  gap: 4px;
+  margin: 0 24px 18px;
+  border: 1px solid var(--color-highlight-border);
+  padding: 12px 14px;
+  color: var(--color-text-muted);
+  background: var(--color-highlight-soft);
+  font-size: 11px;
+}
+
+.pending-restore strong {
+  color: var(--color-highlight);
+}
+
+.protection-workflows {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 0 24px 22px;
+}
+
+.protection-workflow {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  border: 1px solid var(--color-line-faint);
+  padding: 18px;
+  background: var(--color-surface);
+}
+
+.restore-workflow {
+  border-color: var(--color-danger-border);
+}
+
+.protection-workflow label {
+  display: grid;
+  gap: 6px;
+  color: var(--color-text-muted);
+  font-size: 10px;
+}
+
+.protection-workflow input[type="password"] {
+  min-width: 0;
+  border: 1px solid var(--color-line-faint);
+  border-radius: 4px;
+  padding: 10px;
+  color: var(--color-text);
+  background: var(--color-surface-soft);
+  font: inherit;
+}
+
+.replacement-confirmation {
+  grid-template-columns: auto 1fr !important;
+  align-items: start;
+  gap: 9px !important;
+  border: 1px solid var(--color-danger-border);
+  padding: 10px;
+  color: var(--color-text) !important;
+  background: var(--color-danger-soft);
+  line-height: 1.45;
+}
+
+.replacement-confirmation input {
+  margin-top: 2px;
+  accent-color: var(--color-danger);
+}
+
+.file-choice,
+.primary-action,
+.restore-action,
+.data-protection-dialog > footer button,
+.data-protection-loading button {
+  border: 1px solid var(--color-line-soft);
+  border-radius: 4px;
+  padding: 9px 11px;
+  color: var(--color-text-muted);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.file-choice {
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.primary-action {
+  border-color: var(--color-accent) !important;
+  color: var(--color-canvas) !important;
+  background: var(--color-accent) !important;
+  font-weight: 700 !important;
+}
+
+.restore-action {
+  border-color: var(--color-danger-border) !important;
+  color: var(--color-danger) !important;
+  background: var(--color-danger-soft) !important;
+}
+
+.password-warning {
+  border-left: 2px solid var(--color-highlight);
+  padding: 8px 10px;
+  background: var(--color-highlight-soft);
+  font-size: 10px;
+}
+
+.success-message,
+.error-message {
+  margin: 0 24px 18px !important;
+  padding: 10px 12px;
+  font-size: 11px;
+}
+
+.success-message {
+  border: 1px solid var(--color-accent-border);
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
+}
+
+.error-message {
+  border: 1px solid var(--color-danger-border);
+  color: var(--color-danger);
+  background: var(--color-danger-soft);
+}
+
+.data-protection-loading {
+  display: grid;
+  place-items: center;
+  gap: 12px;
+  min-height: 220px;
+  margin: 18px 24px;
+  border: 1px dashed var(--color-line-soft);
+  color: var(--color-text-muted);
+}
+
+.data-protection-dialog > footer {
+  justify-content: flex-end;
+  border-top: 1px solid var(--color-line-faint);
+}
+
+.data-protection-dialog > footer button:last-child {
+  border-color: var(--color-accent);
+  color: var(--color-canvas);
+  background: var(--color-accent);
+}
+
+.data-protection-dialog button:disabled,
+.data-protection-dialog input:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+@media (max-width: 700px) {
+  .data-protection-backdrop {
+    padding: 12px;
+  }
+
+  .data-protection-dialog {
+    width: calc(100vw - 24px);
+    max-height: calc(100vh - 24px);
+  }
+
+  .protection-summary,
+  .protection-workflows {
+    grid-template-columns: 1fr;
+  }
+}

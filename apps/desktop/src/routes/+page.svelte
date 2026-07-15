@@ -29,6 +29,16 @@
     type DiagnosticLogView,
   } from "$lib/diagnostics/types";
   import {
+    choosePortableBackupDestination,
+    choosePortableBackupSource,
+    createPortableBackup,
+    loadDataProtectionStatus,
+    preparePortableRestore,
+  } from "$lib/data-protection/client";
+  import DataProtectionDialog from "$lib/data-protection/DataProtectionDialog.svelte";
+  import { browserDataProtectionStatus } from "$lib/data-protection/sample";
+  import type { DataProtectionStatus } from "$lib/data-protection/types";
+  import {
     clearDispatchPlan,
     importLatestSimBriefPlan,
     loadDispatchStatus,
@@ -72,6 +82,7 @@
   } from "$lib/forge/sample";
   import type { PluginHostView } from "$lib/forge/types";
   import LegalDialog from "$lib/legal/LegalDialog.svelte";
+  import OpenSourceLicencesDialog from "$lib/legal/OpenSourceLicencesDialog.svelte";
   import {
     CURRENT_PRIVACY_NOTICE_VERSION,
     CURRENT_TERMS_VERSION,
@@ -102,7 +113,7 @@
     loadLanguageStatus,
     selectLanguagePack,
   } from "$lib/i18n/client";
-  import { applyLanguage, translation } from "$lib/i18n/runtime";
+  import { applyLanguage, translate, translation } from "$lib/i18n/runtime";
   import type { LanguageStatus } from "$lib/i18n/types";
   import { configureClientTelemetry } from "$lib/observability/client";
   import ConnectionDialog from "$lib/onair/ConnectionDialog.svelte";
@@ -247,6 +258,15 @@
   let showSettingsDialog = $state(false);
   let settingsBusy = $state(false);
   let settingsError = $state("");
+  let dataProtectionStatus = $state<DataProtectionStatus>(
+    browserDataProtectionStatus,
+  );
+  let dataProtectionLoaded = $state(false);
+  let showDataProtection = $state(false);
+  let dataProtectionBusy = $state(false);
+  let dataProtectionError = $state("");
+  let dataProtectionSuccess = $state("");
+  let showOpenSourceLicences = $state(false);
   let securityCentre = $state<SecurityCentreStatus>(securityPreviewEmpty);
   let securityCentreLoaded = $state(false);
   let showSecurityCentre = $state(false);
@@ -867,6 +887,107 @@
     }
   }
 
+  async function refreshDataProtection(): Promise<void> {
+    dataProtectionError = "";
+    dataProtectionSuccess = "";
+    if (!isDesktopRuntime()) {
+      dataProtectionStatus = browserDataProtectionStatus;
+      dataProtectionLoaded = true;
+      return;
+    }
+    dataProtectionBusy = true;
+    try {
+      dataProtectionStatus = await loadDataProtectionStatus();
+      dataProtectionLoaded = true;
+    } catch (error) {
+      dataProtectionLoaded = false;
+      dataProtectionError = operationErrorMessage(
+        error,
+        "WyrmGrid could not read its encrypted-storage status.",
+      );
+    } finally {
+      dataProtectionBusy = false;
+    }
+  }
+
+  async function runPortableBackup(
+    destination: string,
+    password: string,
+    passwordConfirmation: string,
+  ): Promise<void> {
+    dataProtectionBusy = true;
+    dataProtectionError = "";
+    dataProtectionSuccess = "";
+    try {
+      const backup = await createPortableBackup(
+        destination,
+        password,
+        passwordConfirmation,
+      );
+      dataProtectionSuccess = translate("data-protection-backup-created", {
+        time: new Date(backup.created_at).toLocaleString(),
+      });
+    } catch (error) {
+      dataProtectionError = operationErrorMessage(
+        error,
+        "WyrmGrid could not create the encrypted portable backup.",
+      );
+    } finally {
+      dataProtectionBusy = false;
+    }
+  }
+
+  async function requestPortableBackupDestination(): Promise<string | null> {
+    dataProtectionError = "";
+    try {
+      return await choosePortableBackupDestination();
+    } catch (error) {
+      dataProtectionError = operationErrorMessage(
+        error,
+        "WyrmGrid could not open the backup destination picker.",
+      );
+      return null;
+    }
+  }
+
+  async function requestPortableBackupSource(): Promise<string | null> {
+    dataProtectionError = "";
+    try {
+      return await choosePortableBackupSource();
+    } catch (error) {
+      dataProtectionError = operationErrorMessage(
+        error,
+        "WyrmGrid could not open the backup file picker.",
+      );
+      return null;
+    }
+  }
+
+  async function runPortableRestore(
+    source: string,
+    password: string,
+    replacementConfirmed: boolean,
+  ): Promise<void> {
+    dataProtectionBusy = true;
+    dataProtectionError = "";
+    dataProtectionSuccess = "";
+    try {
+      await preparePortableRestore(source, password, replacementConfirmed);
+      dataProtectionStatus = {
+        ...dataProtectionStatus,
+        pending_restore: true,
+      };
+      dataProtectionSuccess = translate("data-protection-restore-prepared");
+    } catch (error) {
+      dataProtectionError = operationErrorMessage(
+        error,
+        "WyrmGrid could not prepare that encrypted portable backup.",
+      );
+    } finally {
+      dataProtectionBusy = false;
+    }
+  }
+
   async function refreshDispatchStatus(): Promise<void> {
     if (!isDesktopRuntime()) return;
     try {
@@ -1263,6 +1384,15 @@
     void refreshSecurityCentre();
   }
 
+  function openDataProtection(): void {
+    dataProtectionError = "";
+    dataProtectionSuccess = "";
+    dataProtectionLoaded = !isDesktopRuntime();
+    dataProtectionStatus = browserDataProtectionStatus;
+    showDataProtection = true;
+    void refreshDataProtection();
+  }
+
   function openLegalSettings(): void {
     legalTelemetryDraft = legalStatus.telemetry_enabled;
     legalError = "";
@@ -1409,6 +1539,8 @@
       showLanguageDialog ||
       showDiagnosticsDialog ||
       showSettingsDialog ||
+      showDataProtection ||
+      showOpenSourceLicences ||
       showSecurityCentre ||
       showSimulatorDialog ||
       showTimelineDialog ||
@@ -1898,7 +2030,42 @@
       showSettingsDialog = false;
       openSecurityCentre();
     }}
+    ondataprotection={() => {
+      showSettingsDialog = false;
+      openDataProtection();
+    }}
+    onlicenses={() => {
+      showSettingsDialog = false;
+      showOpenSourceLicences = true;
+    }}
     onclose={() => (showSettingsDialog = false)}
+  />
+
+  <DataProtectionDialog
+    open={showDataProtection}
+    desktopRuntime={isDesktopRuntime()}
+    loaded={dataProtectionLoaded}
+    status={dataProtectionStatus}
+    busy={dataProtectionBusy}
+    errorMessage={dataProtectionError}
+    successMessage={dataProtectionSuccess}
+    onrefresh={() => void refreshDataProtection()}
+    onchoosebackup={requestPortableBackupDestination}
+    onchooserestore={requestPortableBackupSource}
+    onbackup={(destination, password, confirmation) =>
+      void runPortableBackup(destination, password, confirmation)}
+    onrestore={(source, password, confirmed) =>
+      void runPortableRestore(source, password, confirmed)}
+    onlicenses={() => {
+      showDataProtection = false;
+      showOpenSourceLicences = true;
+    }}
+    onclose={() => (showDataProtection = false)}
+  />
+
+  <OpenSourceLicencesDialog
+    open={showOpenSourceLicences}
+    onclose={() => (showOpenSourceLicences = false)}
   />
 
   <SecurityCentreDialog

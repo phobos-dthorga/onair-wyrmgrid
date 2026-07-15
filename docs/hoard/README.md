@@ -1,6 +1,7 @@
 # WyrmGrid Hoard
 
-Hoard is WyrmGrid's local SQLite history and offline-data boundary. It stores
+Hoard is WyrmGrid's local SQLCipher-encrypted SQLite history and offline-data
+boundary. It stores
 stable WyrmGrid observations after raw OnAir responses have been validated and
 translated. Raw OnAir JSON and API credentials never enter Hoard.
 
@@ -128,10 +129,14 @@ Simulator bridge so browsing history cannot accidentally begin collection.
 ## Failure mode
 
 The desktop opens `wyrmgrid.db` in the operating system's application-data
-directory. If that location cannot be created or SQLite cannot be opened,
-WyrmGrid degrades to an in-memory store rather than preventing startup. Atlas
-then labels successful observations **Memory only**, making the loss of restart
-persistence visible.
+directory using a random key held by the operating-system credential service.
+If the directory, credential service, key, SQLCipher runtime, or encrypted
+database is unavailable, startup fails visibly. WyrmGrid does not retry the
+file as plaintext, invent a replacement key, or silently degrade to an
+in-memory store because each response could hide loss of durable history.
+
+Cross-device recovery uses the versioned password-encrypted portable backup
+flow documented in the [backup and recovery guide](../user-guide/backups-and-recovery.md).
 
 Unsupported or malformed stored payload versions are ignored safely. Hoard does
 not reinterpret them as current domain data.

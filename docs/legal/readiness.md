@@ -28,10 +28,14 @@ relevant release issue or architecture decision.
   protected namespaces remain non-overridable by community packs, and record
   whether any bundled translation is reviewed or merely community-supplied.
 - Confirm the in-app document versions match the Rust application constants.
+- Exercise encrypted startup, missing-device-key failure, portable backup,
+  wrong-password rejection, rollback, and cross-version restore fixtures. Check
+  that application-data, pending, rollback, and user-selected backup retention
+  still match the Privacy Notice.
 - Decide whether changes require renewed acknowledgement.
 - Verify that no network request occurs before required notice or consent.
 - Generate and inspect the complete direct and transitive software-licence
-  bundle for packaged artifacts.
+  bundle for packaged artifacts, including SQLCipher and OpenSSL notices.
 - Re-run security, dependency, data-flow, and telemetry-redaction tests.
 
 ## Before any public Sentry telemetry
@@ -64,6 +68,9 @@ relevant release issue or architecture decision.
 - Review OnAir's current API terms, brand/trademark requirements, rate limits,
   and permitted uses without claiming undocumented behaviour.
 - Make local-data deletion discoverable in the application.
+- Test the operating-system credential backend and backup/reinstall recovery
+  instructions on every supported platform. Confirm uninstall and reinstall do
+  not create a misleading promise that old encrypted data is recoverable.
 - Validate installer licence notices, attribution, privacy/terms accessibility,
   and acknowledgement persistence on every supported platform.
 

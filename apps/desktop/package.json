@@ -20,6 +20,7 @@
     "@fluent/bundle": "0.19.1",
     "@sentry/sveltekit": "10.65.0",
     "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-dialog": "2.7.1",
     "echarts": "6.1.0",
     "maplibre-gl": "^5.24.0"
   },

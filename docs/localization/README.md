@@ -8,7 +8,7 @@ grammar, plurals, number and date formatting, and bidirectional text.
 
 ## Implemented foundation
 
-- `locales/en-AU.json` is source catalogue version 5.
+- `locales/en-AU.json` is source catalogue version 6.
 - Language-pack manifest schema version 1 is defined in
   `schemas/language-pack-v1.schema.json`.
 - Rust validates and canonicalizes imported packs before SQLite persistence.
@@ -51,15 +51,17 @@ syntax, markup delimiters, dangerous bidirectional controls, reserved pack IDs,
 and unsupported versions are rejected.
 
 Community packs cannot override keys beginning with `legal-`, `privacy-`,
-`credential-`, `telemetry-`, `plugin-permission-`, `security-`, `destructive-`,
-or `error-`.
+`credential-`, `telemetry-`, `plugin-permission-`, `security-`,
+`data-protection-`, `destructive-`, or `error-`.
 These prompts remain canonical English until a translation is reviewed and
 bundled through a future trusted release path.
 
-Source catalogue version 5 adds the protected `security-` namespace. Version 4
-community packs are rejected rather than being silently reinterpreted; authors
-must review the version 5 catalogue, update `source_catalog_version`, and import
-the pack again. Existing ordinary translated message keys keep their meaning.
+Source catalogue version 6 adds the protected `data-protection-` namespace for
+encryption, backup-password, destructive restore, and licence wording. Version
+5 community packs are rejected rather than being silently reinterpreted;
+authors must review the version 6 catalogue, update `source_catalog_version`,
+and import the pack again. Existing ordinary translated message keys keep their
+meaning. Version 5 previously introduced the protected `security-` namespace.
 
 The desktop **Diagnostics** surface and its local structured log are also
 English-only and do not resolve message keys through language packs. This is an

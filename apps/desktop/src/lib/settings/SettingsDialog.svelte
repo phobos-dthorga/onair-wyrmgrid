@@ -21,6 +21,8 @@
     onlanguage,
     onprivacy,
     onsecurity,
+    ondataprotection,
+    onlicenses,
     onclose,
   }: {
     open: boolean;
@@ -39,6 +41,8 @@
     onlanguage: () => void;
     onprivacy: () => void;
     onsecurity: () => void;
+    ondataprotection: () => void;
+    onlicenses: () => void;
     onclose: () => void;
   } = $props();
 
@@ -259,6 +263,14 @@
           <button type="button" disabled={busy} onclick={onsecurity}>
             <strong>{$translation("security-settings-link-title")}</strong>
             <span>{$translation("security-settings-link-detail")}</span>
+          </button>
+          <button type="button" disabled={busy} onclick={ondataprotection}>
+            <strong>{$translation("data-protection-settings-link-title")}</strong>
+            <span>{$translation("data-protection-settings-link-detail")}</span>
+          </button>
+          <button type="button" disabled={busy} onclick={onlicenses}>
+            <strong>{$translation("data-protection-licences-settings-title")}</strong>
+            <span>{$translation("data-protection-licences-settings-detail")}</span>
           </button>
         </div>
       </section>
