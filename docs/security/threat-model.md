@@ -52,6 +52,8 @@
   local `flight.json` parsing, support bundles, or automatic retries;
 - external writes or simulator commands occurring without explicit user intent;
 - dependency or release-pipeline compromise;
+- a release tag packaging untested code, a commit outside `main`, or application
+  metadata whose version does not match the advertised release;
 - sensitive data escaping through diagnostic payloads, attachments, replay,
   logs, traces, or crash dumps;
 - network collection beginning before disclosure or continuing after the user
@@ -144,6 +146,18 @@
   terminated after the deadline or when the host exits;
 - content security policy for the desktop webview;
 - locked dependencies, dependency updates, audit jobs, and CI-built releases;
+- immutable commit pins for workflow dependencies; reusable CI and security
+  gates run against the exact release tag before packaging, release tags must
+  identify a commit on `main`, and every checked-in application version must
+  equal the tag version;
+- platform build jobs are read-only and stage packages internally; one final job
+  with narrowly scoped write and identity-token permissions generates SHA-256
+  checksums and GitHub build-provenance attestations before creating a draft;
+- the Windows release runner silently installs the NSIS output and verifies that
+  the desktop application and expected SimConnect sidecar were packaged;
+- the Windows installer identity and per-user scope are regression-tested,
+  downgrades are disabled, and releases after the first must install over the
+  closest older published setup without altering application data;
 - Dependency Review allows one documented low-severity SvelteKit `cookie`
   advisory only while WyrmGrid remains a static desktop client with no HTTP
   cookie-writing surface; the exception must be removed when a compatible fix
@@ -191,6 +205,11 @@
   encrypted or recovery state without the exact key fails closed; startup does
   not create a replacement key, retry plaintext, or hide failure behind a new
   memory-only store;
+- SQLCipher device keys, portable-backup passwords, and remembered user
+  credentials are generated or entered per installation and never become CI
+  secrets. CI uses only disposable test keys; future code-signing, updater, and
+  notarisation credentials are distinct release-authentication secrets confined
+  to protected signing jobs;
 - portable backup version 1 is a complete SQLCipher export under a distinct
   user password. The host refuses overwrite, validates the encrypted manifest,
   schema and cipher integrity, re-encrypts restored data with the destination

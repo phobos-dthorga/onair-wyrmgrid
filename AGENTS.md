@@ -49,8 +49,13 @@
   protocol, schema, and database migrations.
 - CI produces release artifacts. Do not hand-assemble published binaries.
 - Routine commits and pull requests compile-check the desktop application but
-  do not assemble installers. Build installers automatically for semantic minor
-  releases and above (`vX.Y.0`), not patch releases. A manual exceptional build
-  must record a concrete reason.
+  do not assemble installers. Every intentional semantic-version release tag
+  (`vX.Y.Z` or a supported prerelease) builds installers after the reusable CI
+  and security gates pass. A manual rebuild must target an existing tag and
+  record a concrete reason.
 - Keep early releases marked as prereleases until update signing and platform
   signing policies are complete.
+- Preserve the Windows installer's product name, application identifier, and
+  per-user scope. Any intentional identity change requires an explicit migration
+  design; routine setup upgrades must preserve application data and its
+  device-local encryption key.

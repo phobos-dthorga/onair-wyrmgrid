@@ -2,20 +2,24 @@ name: Release
 
 on:
   push:
-    tags: ["v*.*.0"]
+    tags: ["v*.*.*"]
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Version tag to build, such as v0.2.1
+        description: Existing version tag to rebuild, such as v0.2.1
         required: true
         type: string
       exception_reason:
-        description: Why this non-routine installer build is worth the resources
+        description: Why rebuilding this tagged release is necessary
         required: true
         type: string
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.release_tag || github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   policy:
@@ -24,9 +28,14 @@ jobs:
     outputs:
       release_tag: ${{ steps.policy.outputs.release_tag }}
       release_version: ${{ steps.policy.outputs.release_version }}
+      release_commit: ${{ steps.policy.outputs.release_commit }}
     steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.release_tag || github.ref }}
       - id: policy
-        name: Enforce installer build policy
+        name: Validate release tag, commit, and versions
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -34,58 +43,97 @@ jobs:
           MANUAL_TAG: ${{ inputs.release_tag }}
           EXCEPTION_REASON: ${{ inputs.exception_reason }}
         run: |
+          set -euo pipefail
+
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-            if [[ ! "$MANUAL_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
-              echo "Manual release_tag must be a semantic version beginning with v." >&2
-              exit 1
-            fi
             if (( ${#EXCEPTION_REASON} < 20 )); then
-              echo "Document a meaningful exception reason of at least 20 characters." >&2
+              echo "Document a meaningful rebuild reason of at least 20 characters." >&2
               exit 1
             fi
-            echo "release_tag=$MANUAL_TAG" >> "$GITHUB_OUTPUT"
+            RELEASE_TAG="$MANUAL_TAG"
           else
-            echo "release_tag=$PUSH_TAG" >> "$GITHUB_OUTPUT"
+            RELEASE_TAG="$PUSH_TAG"
           fi
-          RELEASE_TAG="${MANUAL_TAG:-$PUSH_TAG}"
-          echo "release_version=${RELEASE_TAG#v}" >> "$GITHUB_OUTPUT"
+
+          if [[ "$RELEASE_TAG" != v* ]]; then
+            echo "Release tags must begin with v." >&2
+            exit 1
+          fi
+
+          RELEASE_VERSION="${RELEASE_TAG#v}"
+          node scripts/verify-release-version.mjs "$RELEASE_VERSION"
+          node scripts/verify-installer-contract.mjs
+
+          git fetch --no-tags origin main
+          RELEASE_COMMIT="$(git rev-parse "${RELEASE_TAG}^{commit}")"
+          if ! git merge-base --is-ancestor "$RELEASE_COMMIT" origin/main; then
+            echo "Release tag $RELEASE_TAG does not identify a commit on origin/main." >&2
+            exit 1
+          fi
+
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "release_version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "release_commit=$RELEASE_COMMIT" >> "$GITHUB_OUTPUT"
+
+  verify:
+    name: Required tests
+    needs: policy
+    uses: ./.github/workflows/ci.yml
+    with:
+      checkout_ref: ${{ needs.policy.outputs.release_tag }}
+
+  security:
+    name: Required security checks
+    needs: policy
+    uses: ./.github/workflows/security.yml
+    with:
+      checkout_ref: ${{ needs.policy.outputs.release_tag }}
 
   build:
     name: Build ${{ matrix.platform }}
-    needs: policy
+    needs: [policy, verify, security]
     strategy:
       fail-fast: false
       matrix:
         include:
           - platform: windows-latest
             args: --bundles nsis
+            artifact_name: windows-nsis
+            artifact_paths: target/release/bundle/nsis/*-setup.exe
             upload_sentry_source_maps: true
           - platform: ubuntu-22.04
             args: --bundles appimage,deb
+            artifact_name: linux-packages
+            artifact_paths: |
+              target/release/bundle/appimage/*.AppImage
+              target/release/bundle/deb/*.deb
             upload_sentry_source_maps: false
           - platform: macos-latest
             args: --bundles app,dmg
+            artifact_name: macos-dmg
+            artifact_paths: target/release/bundle/dmg/*.dmg
             upload_sentry_source_maps: false
     runs-on: ${{ matrix.platform }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          ref: ${{ needs.policy.outputs.release_tag }}
       - name: Install Linux dependencies
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
         with:
           toolchain: 1.97.0
-      - uses: Swatinem/rust-cache@v2
-      - uses: actions/setup-node@v6
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22
           cache: npm
       - run: npm ci
-      - uses: tauri-apps/tauri-action@v1
+      - uses: tauri-apps/tauri-action@944946e3e4cac6603d1fe8f514171e9ecd3c78aa # v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SENTRY_AUTH_TOKEN: ${{ matrix.upload_sentry_source_maps && secrets.SENTRY_AUTH_TOKEN || '' }}
           SENTRY_ORG: ${{ vars.SENTRY_ORG }}
           SENTRY_UI_PROJECT: ${{ vars.SENTRY_UI_PROJECT }}
@@ -94,9 +142,118 @@ jobs:
           VITE_SENTRY_RELEASE: onair-wyrmgrid@${{ needs.policy.outputs.release_version }}
         with:
           projectPath: apps/desktop
-          tagName: ${{ needs.policy.outputs.release_tag }}
-          releaseName: OnAir WyrmGrid ${{ needs.policy.outputs.release_tag }}
-          releaseBody: See the changelog and attached platform packages.
-          releaseDraft: true
-          prerelease: true
           args: ${{ matrix.args }}
+      - name: Find the nearest previous published NSIS release
+        if: matrix.platform == 'windows-latest'
+        id: previous
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.policy.outputs.release_version }}
+        run: |
+          $releaseJson = gh release list --exclude-drafts --limit 100 --json tagName
+          $selection = $releaseJson | node scripts/select-previous-release.mjs $env:RELEASE_VERSION
+          $previousTag = "$selection".Trim()
+
+          if (-not $previousTag) {
+            Write-Host 'No prior published release exists; running a clean-install smoke test.'
+            exit 0
+          }
+
+          $directory = Join-Path $env:RUNNER_TEMP 'previous-wyrmgrid-release'
+          New-Item -ItemType Directory -Path $directory | Out-Null
+          gh release download $previousTag --pattern '*-setup.exe' --dir $directory
+          $installers = @(Get-ChildItem -LiteralPath $directory -Filter '*-setup.exe' -File)
+          if ($installers.Count -ne 1) {
+            throw "Expected one NSIS setup from $previousTag; found $($installers.Count)."
+          }
+
+          "previous_installer=$($installers[0].FullName)" |
+            Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          Write-Host "Selected $previousTag for in-place upgrade verification."
+      - name: Smoke-test a clean install or in-place NSIS upgrade
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        env:
+          PREVIOUS_INSTALLER: ${{ steps.previous.outputs.previous_installer }}
+        run: |
+          $installer = Get-ChildItem -Path 'target/release/bundle/nsis/*-setup.exe' | Select-Object -First 1
+          if (-not $installer) { throw 'The NSIS build did not produce an installer.' }
+
+          $arguments = @{
+            InstallerPath = $installer.FullName
+            InstallDirectory = Join-Path $env:RUNNER_TEMP 'WyrmGridNsisSmoke'
+          }
+          if ($env:PREVIOUS_INSTALLER) {
+            $arguments.PreviousInstallerPath = $env:PREVIOUS_INSTALLER
+          }
+
+          ./scripts/test-nsis-installer.ps1 @arguments
+      - name: Stage platform packages
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_paths }}
+          if-no-files-found: error
+          retention-days: 14
+
+  publish-draft:
+    name: Attest and create draft release
+    needs: [policy, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Download platform packages
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          path: downloaded-assets
+          merge-multiple: true
+      - name: Flatten packages and generate SHA-256 checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -d '' packages < <(find downloaded-assets -type f -print0)
+          if (( ${#packages[@]} == 0 )); then
+            echo "No release packages were downloaded." >&2
+            exit 1
+          fi
+
+          mkdir release-assets
+          for package in "${packages[@]}"; do
+            name="$(basename "$package")"
+            if [[ -e "release-assets/$name" ]]; then
+              echo "Duplicate release asset name: $name" >&2
+              exit 1
+            fi
+            cp "$package" "release-assets/$name"
+          done
+
+          (
+            cd release-assets
+            find . -maxdepth 1 -type f -print0 | sort -z | xargs -0 sha256sum | sed 's#  \./#  #' > SHA256SUMS.txt
+          )
+      - name: Attest release packages and checksums
+        uses: actions/attest@f6bf1532d7d6793fce74eac584813a8eee607999 # v4
+        with:
+          subject-path: release-assets/*
+      - name: Create or update the draft prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.policy.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          mapfile -d '' assets < <(find release-assets -type f -print0)
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
+          else
+            gh release create "$RELEASE_TAG" "${assets[@]}" \
+              --draft \
+              --prerelease \
+              --title "OnAir WyrmGrid $RELEASE_TAG" \
+              --notes "CI-built platform packages, SHA-256 checksums, and GitHub build provenance. Verify installation and startup on every supported platform before publishing."
+          fi

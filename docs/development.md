@@ -126,6 +126,20 @@ and the [backup and recovery guide](user-guide/backups-and-recovery.md). The
 first full build of vendored OpenSSL is intentionally slower; subsequent builds
 reuse the Cargo cache.
 
+Repository tooling tests, including release-version policy regression tests, run
+with:
+
+```powershell
+npm run test:tooling
+```
+
+Before creating a release tag, confirm that every application version agrees:
+
+```powershell
+node scripts/verify-release-version.mjs 0.1.0
+node scripts/verify-installer-contract.mjs
+```
+
 ### Local cache and data locations on Windows
 
 Do not confuse disposable compiler output with persistent WyrmGrid data:

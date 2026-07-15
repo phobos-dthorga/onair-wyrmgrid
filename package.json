@@ -14,6 +14,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "provider:prepare": "node scripts/prepare-simulator-provider.mjs",
+    "test:tooling": "node --test scripts/*.test.mjs",
     "tauri": "npm run tauri --workspace @wyrmgrid/desktop --"
   },
   "devDependencies": {
