@@ -8,6 +8,9 @@ bound to the original operating-system credential entry.
 Use **Settings → Encrypted data & backups** when you need to move or preserve
 WyrmGrid data.
 
+See [Remembered accounts and credentials](accounts-and-credentials.md) for the
+separate Windows credential and provider-metadata boundary.
+
 ## Create a portable backup
 
 1. Choose **Create portable backup**, then select a new `.wyrmbackup` file.
@@ -22,9 +25,13 @@ WyrmGrid database: Hoard observations, retained simulator recordings, local
 authorisation history, legal choices, display preferences, and imported theme
 and language manifests. Treat it as sensitive operational history.
 
-The OnAir API key is not included because WyrmGrid keeps it only for the active
-session. Browser-webview local storage and command-line launch options are also
-outside backup format version 1.
+The OnAir API key is not included because an optionally remembered key belongs
+to the operating-system credential store, outside the database. The encrypted
+backup does include the saved OnAir Company ID, automatic-connect choice, and
+remembered SimBrief Pilot ID or username. After moving systems or reinstalling
+Windows, enter the OnAir API key again before reconnecting. Browser-webview
+local storage and command-line launch options are also outside backup format
+version 1.
 
 ## Restore or move to another system
 

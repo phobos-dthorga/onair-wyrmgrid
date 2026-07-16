@@ -97,14 +97,21 @@ export const emptySimulatorBridge: SimulatorBridgeView = {
 
 export type SimulatorRecordingPreferences = {
   retention_days: number;
+  automatic_start: boolean;
+  automatic_stop: boolean;
+  landing_settle_seconds: number;
 };
 
 export const defaultSimulatorRecordingPreferences: SimulatorRecordingPreferences =
   {
     retention_days: 30,
+    automatic_start: false,
+    automatic_stop: true,
+    landing_settle_seconds: 30,
   };
 
 export type SimulatorRecordingStatus = "active" | "completed" | "interrupted";
+export type SimulatorCaptureMode = "manual" | "automatic";
 
 export type SimulatorSessionSummary = {
   id: string;
@@ -117,6 +124,9 @@ export type SimulatorSessionSummary = {
   ended_at?: string;
   status: SimulatorRecordingStatus;
   sample_count: number;
+  capture_mode: SimulatorCaptureMode;
+  pinned: boolean;
+  plan_associated: boolean;
 };
 
 export type SimulatorRecordedSample = {
@@ -132,6 +142,41 @@ export type SimulatorRecordedSample = {
   pitch_degrees: number;
   bank_degrees: number;
   gap_before: boolean;
+  position?: { latitude: number; longitude: number };
+  on_ground?: boolean;
+  engines_running?: boolean;
+  parking_brake_set?: boolean;
+  paused?: boolean;
+};
+
+export type SimulatorSessionEvent = {
+  id: number;
+  event_kind: string;
+  observed_at: string;
+  source_sequence?: number;
+  evidence: Record<string, unknown>;
+};
+
+export type PlannedActualComparison = {
+  association: {
+    correlation_version: number;
+    plan_id: string;
+    origin_icao: string;
+    destination_icao: string;
+    provider_plan_reference?: string;
+  };
+  analysis_complete: boolean;
+  planned_enroute_seconds?: number;
+  recorded_seconds?: number;
+  planned_distance_nm?: number;
+  recorded_track_distance_nm?: number;
+  planned_initial_altitude_ft?: number;
+  recorded_peak_altitude_ft?: number;
+  planned_takeoff_fuel_pounds?: number;
+  recorded_fuel_used_pounds?: number;
+  origin_proximity_nm?: number;
+  destination_proximity_nm?: number;
+  registration_matches?: boolean;
 };
 
 export type SimulatorRecordingView = {
@@ -145,6 +190,17 @@ export type SimulatorSessionView = {
   session: SimulatorSessionSummary;
   samples: SimulatorRecordedSample[];
   sample_window_limit: number;
+  sample_window_offset: number;
+  has_older_samples: boolean;
+  has_newer_samples: boolean;
+  events: SimulatorSessionEvent[];
+  comparison?: PlannedActualComparison;
+};
+
+export type SimulatorRecordingExport = {
+  filename: string;
+  media_type: string;
+  content: string;
 };
 
 export const emptySimulatorRecording: SimulatorRecordingView = {

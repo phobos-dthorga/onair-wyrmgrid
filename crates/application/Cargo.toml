@@ -15,6 +15,7 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
+zeroize.workspace = true
 wyrmgrid-domain = { path = "../domain" }
 wyrmgrid-bridge-protocol = { path = "../bridge-protocol" }
 wyrmgrid-onair-api = { path = "../onair-api" }

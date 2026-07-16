@@ -75,8 +75,9 @@
 ## Initial controls
 
 - secrets wrapped and redacted at the adapter boundary;
-- API keys move from the password field into a Rust `SecretString`, remain only
-  for the active process, and are dropped on Disconnect or application exit;
+- API keys move from the password field into a Rust `SecretString`. Session-only
+  keys are dropped on Disconnect or application exit; explicitly remembered
+  OnAir keys are stored only in a versioned operating-system credential entry;
 - connection errors are mapped to bounded user-facing categories instead of
   relaying remote response bodies;
 - current credential guidance directs users to OnAir Client and warns against
@@ -91,7 +92,9 @@
   and Bridge messages have strict size, count, nesting, numeric, path, and
   decompression limits;
 - user tokens belong in the operating-system credential store; shared
-  application secrets are never embedded in desktop binaries or public sites;
+  application secrets are never embedded in desktop binaries or public sites.
+  The encrypted database stores only non-secret account metadata and startup
+  choices, and plugins never receive credential-profile data;
 - SayIntentions `flight.json` is read only after opt-in, parsed through a strict
   allowlist, and never persisted raw; its API key becomes an in-memory secret
   immediately and its documented HTTPS origin is pinned independently of any
@@ -115,19 +118,29 @@
   SimConnect SDK/client paths cross into the first-party provider;
 - only one selected telemetry provider is active in protocol version 1; the host
   neither merges values nor silently falls back from SimConnect to FSUIPC;
-- simulator recording is explicit and local; only validated translated fields
-  are persisted, active sessions resist deletion, completed sessions have a
-  user-visible bounded retention period, and recorded history is not covered by
-  the live `simulator_telemetry_read` plugin permission;
+- simulator recording is explicit and local; automation is separately opt-in
+  and off by default, only validated translated fields are persisted, active
+  sessions resist deletion, completed sessions have a user-visible bounded
+  retention period, and recorded history is not covered by the live
+  `simulator_telemetry_read` plugin permission;
 - provider sequence or observation-time discontinuities become graph gaps, an
   aircraft identity change interrupts the session, and abandoned active rows
   are marked interrupted on the next application start;
+- automatic take-off requires two direct increasing airborne facts; landing
+  settlement requires continuous direct on-ground facts and is reset by pause
+  or telemetry gaps. Automatic stop applies only to an automatically created
+  session, so lifecycle evidence cannot stop a manual recording;
+- a recording may retain only the validated sanitized SimBrief domain snapshot
+  in force, never the entered account reference or raw OFP. Planned and recorded
+  values stay separately labelled, missing comparisons stay unavailable, and
+  analysis above the exact-sample bound is withheld rather than partial;
 - simulator plan loading and every other external mutation require a distinct
   negotiated capability and explicit user action;
 - deny-by-default plugin capabilities persisted separately from manifests; the
   current runtime starts only after every requested capability is approved and
   implements only sanitized fleet and simulator reads plus data-only Atlas
-  publication;
+  publication. Once grants are consumed by one privileged launch, session
+  grants remain only in process memory, and standing grants alone persist;
 - plugin directories, manifests, and entry points are bounded and canonicalized;
   symlinked folders/files, path escape, malformed metadata, and unsupported
   runtimes or capabilities are rejected;
@@ -210,6 +223,14 @@
   secrets. CI uses only disposable test keys; future code-signing, updater, and
   notarisation credentials are distinct release-authentication secrets confined
   to protected signing jobs;
+- remembered OnAir persistence is validate-first. The host writes the OS secret
+  before metadata and attempts rollback if metadata fails; missing entries and
+  unavailable credential stores fail closed without SQLite, browser-storage, or
+  logging fallback. Disconnect and Forget remain distinct operations;
+- automatic OnAir connection is a separate default-off preference evaluated
+  only after current legal acknowledgement. SimBrief Pilot IDs and usernames
+  are stored only as explicitly selected encrypted metadata and never treated
+  as passwords or authorization tokens;
 - portable backup version 1 is a complete SQLCipher export under a distinct
   user password. The host refuses overwrite, validates the encrypted manifest,
   schema and cipher integrity, re-encrypts restored data with the destination
@@ -274,10 +295,18 @@ the meaning of a poor translation.
 
 Session-only handling prevents normal disk persistence, but it cannot promise
 that a secret is absent from process memory, operating-system crash dumps, or a
-compromised host. The frontend necessarily holds the entered value briefly
+compromised host. The frontend necessarily holds a newly entered value briefly
 before invoking Rust and clears it after success, disconnect, or dialog close.
-WyrmGrid therefore makes no claim of hardened secret storage until a reviewed
-operating-system credential-store implementation is introduced.
+Remembered storage protects against casual database-file disclosure, not a
+malicious process or logged-in account able to use Windows Credential Manager.
+
+The SQLCipher database and Windows credential store are not one transactional
+system. WyrmGrid rolls back a new secret when metadata saving fails, but a host
+crash or OS-store failure can leave metadata without a key or an orphaned
+versioned entry. Metadata without a key is shown as unusable and requires
+replacement or an explicit Forget; it never causes plaintext fallback. A
+portable restore intentionally recreates metadata without transferring the
+OnAir key, so cross-device recovery requires re-entry.
 
 Credentials copied from the wrong OnAir product are an availability and support
 risk rather than a confidentiality control failure. For now, the interface
@@ -354,8 +383,12 @@ The SimBrief preview follows no redirects, bounds streamed JSON to 2 MiB, uses a
 15-second timeout, validates the account-reference shape, normalizes only
 allowlisted fields, validates the canonical snapshot again in the application
 service, serializes concurrent imports, and returns stable errors without URLs,
-response bodies, identifiers, or plan content. Imported plans and identifiers
-are session-only, excluded from plugins and Sentry, and removable from Dispatch.
+response bodies, identifiers, or plan content. The entered account reference is
+session-only and excluded from plugins, persistence, and Sentry. A sanitized
+plan snapshot may be retained only when associated with a local recording; it
+is encrypted, deleted with that recording, and remains excluded from plugins
+and Sentry. Clearing Dispatch prevents future association without rewriting an
+existing recording's historical context.
 
 The AviationWeather.gov adapter accepts at most ten normalized four-character
 station identifiers, follows no redirects, bounds each streamed JSON product to
@@ -405,6 +438,9 @@ excluded from plugins and Sentry.
   exposes only the latest 600 exact samples rather than claiming a whole-session
   downsample. Users must omit databases and backups from support bundles unless
   they intend to share recordings.
+- JSON and CSV recording exports are deliberate plaintext disclosures outside
+  SQLCipher. Pinning protects against automatic pruning only; explicit deletion
+  and copies made by the user remain outside WyrmGrid's recovery control.
 - Licensed navigation data may remain accessible in local caches to a user or
   process with filesystem access. Entitlement checks and application controls do
   not replace operating-system security or provider licence compliance.
@@ -417,14 +453,19 @@ excluded from plugins and Sentry.
 
 - Legal acknowledgement, feature preferences, capability grants, and momentary
   confirmations are distinct policy decisions and cannot authorize one another.
-- Durable grants are denied by default and bound to actor kind, actor ID, exact
-  capabilities, and a scope revision. Plugin version or permission-set changes
-  require a fresh review.
+- Grants are denied by default and bound to actor kind, actor ID, exact
+  capabilities, a scope revision, and an explicit lifetime. Plugin version or
+  permission-set changes require a fresh review.
+- `Once` is consumed at the privileged launch boundary, `Session` exists only
+  in the shared in-memory authorization runtime, and only `Standing` is written
+  to encrypted storage. A new process therefore starts without temporary
+  authority.
 - Feature services enforce decisions through the Rust authorization module;
   Tauri commands and Svelte controls are not trusted enforcement boundaries.
-- Grant and revoke events append bounded symbolic metadata to the local
-  authorization audit trail. They contain no API key, raw provider payload, or
-  plugin output.
+- Standing grant and revoke events append bounded symbolic metadata to the
+  encrypted local authorization audit trail. Temporary decisions are visible
+  only in the current session's bounded in-memory trail. Neither contains API
+  keys, raw provider payloads, or plugin output.
 - Revocation stops an active plugin before its capabilities are removed.
 - The Security Centre reads its grouped, validated status through the Rust
   service, shows at most 100 recent decisions, and routes plugin revocation

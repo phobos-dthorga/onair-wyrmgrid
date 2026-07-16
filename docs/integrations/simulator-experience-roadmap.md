@@ -10,10 +10,10 @@ honestly instead of treating all three as “telemetry”:
 3. **Flight recording active**: the user has chosen to persist a bounded session
    for later graphs and planned-versus-actual analysis.
 
-The current slice implements all three states for explicit manual recording.
-It displays the latest fresh connected snapshot, persists the selected provider,
-offers a default-off provider auto-start preference, and records only after the
-user selects **Start recording**. Automatic flight detection is not implemented.
+The current slice implements all three states for manual recording and for an
+opt-in evidence-led automatic lifecycle. It displays the latest fresh connected
+snapshot, persists the selected provider, and keeps provider auto-start and
+recording automation as separate default-off choices.
 
 ## Launch and automation settings
 
@@ -30,10 +30,12 @@ and how to stop or delete it. Changing the selected provider, losing the
 connection, pausing, teleporting, replaying, or returning to the main menu must
 produce explicit session events rather than silently joining unrelated samples.
 
-The provider can subscribe to documented MSFS lifecycle/flow events, but a
-shared Rust state machine remains authoritative. It combines events with
-bounded telemetry evidence and keeps ambiguous transitions visible for user
-confirmation. Automatic retry must never create duplicate recording sessions.
+The Rust recording service is authoritative. Version 1 confirms take-off from
+two increasing, unpaused direct `on_ground = false` observations and confirms
+landing only after continuous `on_ground = true` evidence for the configured
+settling period. A pause, zero simulation rate, identity change, or telemetry
+gap resets the relevant candidate. Automatic retry cannot create a second
+session while any recording is active.
 
 Provider auto-start is intentionally narrower than recording automation. It
 launches only the selected, manifest-validated sidecar and does not start MSFS,
@@ -115,12 +117,16 @@ still user-owned. WyrmGrid should offer per-session deletion, delete-all,
 export, a visible retention setting, and bounded automatic pruning. Raw native
 SimConnect messages are never persisted.
 
-Migration `0008_simulator_recordings.sql` now supplies sessions, bounded
+Migration `0008_simulator_recordings.sql` supplies sessions, bounded
 translated samples, and a separate retention preference. The initial interface
 offers 7, 30, 90, and 365-day retention, defaults to 30 days, prunes completed
 or interrupted sessions, and provides per-session and delete-all controls.
-Active sessions cannot be deleted. Export, pinning, lifecycle events, summaries,
-and automatic recording remain follow-ups.
+Active sessions cannot be deleted. Append-only migration
+`0010_simulator_evidence.sql` adds automatic preferences, plan association,
+pinning, direct position/lifecycle facts, and symbolic session events without
+rewriting the shipped recording tables. Hoard provides JSON/CSV export and
+exact older/newer windows. Pinned sessions survive automatic retention pruning
+but remain subject to explicit deletion.
 
 An aircraft or registration change interrupts an active session instead of
 joining unrelated samples. A provider sequence discontinuity or observation
@@ -146,11 +152,11 @@ disconnect. Long sessions should use a tested min/max-envelope or equivalent
 downsampling service while retaining exact values for a bounded inspection
 window.
 
-The initial WyrmChart view renders altitude plus indicated, true, and ground
-speed for the latest 600 exact samples. Gap markers insert a visible break and
-the renderer does not connect across it. This bounded window does not yet
-downsample or browse older windows; min/max-envelope downsampling remains
-required before an entire long session can be graphed honestly.
+The WyrmChart view renders altitude plus indicated, true, and ground speed for a
+selected 600-sample exact window. Gap markers insert a visible break and the
+renderer does not connect across it. Hoard can page toward older or newer exact
+windows. Min/max-envelope downsampling remains required before an entire long
+session can be graphed honestly.
 
 Plugins do not automatically receive recorded sessions. Any future history or
 aggregate permission must be separate from `simulator_telemetry_read`, scoped to
@@ -162,21 +168,23 @@ user-selected sessions, and exclude raw high-frequency data by default.
    documented recovery matrix. Provider recovery states, persisted provider
    selection, stale-snapshot suppression, and default-off provider auto-start
    are implemented.
-2. Introduce the recording/session schemas, retention controls, and explicit
-   manual recording. Implemented with local deletion and bounded graph windows;
-   export and pinning remain.
-3. Add tested lifecycle evidence and the default-off automatic recording
-   setting.
-4. Expand the implemented altitude/speed WyrmChart window with gap-aware
-   min/max-envelope downsampling, event markers, and older-window navigation.
+2. Introduce the recording/session schemas, retention controls, explicit manual
+   recording, local deletion, export, pinning, and bounded graph windows.
+   Implemented.
+3. Add tested lifecycle evidence, the default-off automatic recording setting,
+   and reviewable take-off, gap, plan-association, and landing events.
+   Implemented.
+4. Correlate sanitized SimBrief plans with exact session facts and browse older
+   windows. Implemented for correlation version 1; whole-trace min/max-envelope
+   downsampling remains.
 5. Prove the MSFS in-simulator CommBus control surface, then package it only
    after compatibility, signing, installation, and removal are documented.
 
 ## Questions and suggestions
 
-- Should automatic recording begin at flight-start, first engine start, or
-  block-off? Suggestion: store the raw lifecycle candidates, let the user choose
-  a default policy, and never silently rewrite the session boundary.
+- Should later policy choices add engine-start or block-off boundaries alongside
+  the shipped take-off default? Suggestion: retain candidates as named events,
+  require an explicit user policy, and never silently rewrite an old boundary.
 - Should WyrmGrid retain full one-hertz sessions indefinitely? Suggestion: no;
   start with user-visible age/size retention and pinning for named flights.
 - Should the in-game surface ship through a Community-folder package or another

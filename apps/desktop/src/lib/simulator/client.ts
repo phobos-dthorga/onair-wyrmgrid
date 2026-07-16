@@ -4,6 +4,7 @@ import type {
   SimulatorPreferences,
   SimulatorRecordingPreferences,
   SimulatorRecordingView,
+  SimulatorRecordingExport,
   SimulatorSessionView,
 } from "./types";
 
@@ -55,8 +56,26 @@ export function stopSimulatorRecording(): Promise<SimulatorRecordingView> {
 
 export function loadSimulatorRecordingSession(
   sessionId: string,
+  sampleOffset = 0,
 ): Promise<SimulatorSessionView> {
-  return invokeDesktop("simulator_recording_session", { sessionId });
+  return invokeDesktop("simulator_recording_session", {
+    sessionId,
+    sampleOffset,
+  });
+}
+
+export function pinSimulatorRecording(
+  sessionId: string,
+  pinned: boolean,
+): Promise<SimulatorRecordingView> {
+  return invokeDesktop("pin_simulator_recording", { sessionId, pinned });
+}
+
+export function exportSimulatorRecording(
+  sessionId: string,
+  format: "json" | "csv",
+): Promise<SimulatorRecordingExport> {
+  return invokeDesktop("export_simulator_recording", { sessionId, format });
 }
 
 export function deleteSimulatorRecording(

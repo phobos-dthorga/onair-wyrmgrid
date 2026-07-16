@@ -19,7 +19,7 @@ plugin boundary available to third-party developers.
 > plugin proof are implemented. The versioned Bridge supervisor, read-only MSFS
 > 2024 SimConnect provider, desktop telemetry view, and permission-filtered
 > plugin snapshots are also implemented; live simulator certification, release
-> bundling, user-token credential storage, plugin/provider signing and
+> bundling, broader user-token credential support, plugin/provider signing and
 > sandboxing, and broader operational integrations remain ahead.
 
 ## Vision
@@ -119,6 +119,7 @@ must be retested when its API credential support reaches parity.
 See [Development](docs/development.md), [Architecture](docs/architecture/overview.md),
 [display and performance launch options](docs/user-guide/display-and-performance.md),
 [settings and measurement units](docs/user-guide/settings-and-units.md),
+[remembered accounts and credentials](docs/user-guide/accounts-and-credentials.md),
 [External integrations](docs/integrations/README.md),
 [Simulator provider authoring](docs/integrations/simulator-provider-authoring.md),
 the [simulator experience roadmap](docs/integrations/simulator-experience-roadmap.md),

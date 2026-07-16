@@ -33,6 +33,7 @@ export const securityPreviewGranted: SecurityCentreStatus = {
       scope_revision: scopeRevision,
       capabilities: ["map_layers_publish", "on_air_fleet_read"],
       granted_at: "2026-07-15 09:12:00",
+      lifetime: "standing",
     },
   ],
   recent_decisions: [
@@ -44,6 +45,7 @@ export const securityPreviewGranted: SecurityCentreStatus = {
       decision: "grant",
       capability_count: 2,
       decided_at: "2026-07-15 09:12:00",
+      lifetime: "standing",
     },
   ],
 };

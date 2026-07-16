@@ -1,6 +1,6 @@
 import { invokeDesktop, isDesktopRuntime } from "$lib/desktop/client";
 import { forgePreviewStopped } from "./sample";
-import type { PluginHostView } from "./types";
+import type { AuthorizationGrantLifetime, PluginHostView } from "./types";
 
 export async function loadPluginHost(): Promise<PluginHostView> {
   return isDesktopRuntime()
@@ -10,9 +10,11 @@ export async function loadPluginHost(): Promise<PluginHostView> {
 
 export function approvePluginPermissions(
   pluginId: string,
+  lifetime: AuthorizationGrantLifetime,
 ): Promise<PluginHostView> {
   return invokeDesktop<PluginHostView>("approve_plugin_permissions", {
     pluginId,
+    lifetime,
   });
 }
 

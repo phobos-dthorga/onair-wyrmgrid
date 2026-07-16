@@ -30,6 +30,9 @@
     onrecordingselect,
     onrecordingdelete,
     onrecordingdeleteall,
+    onrecordingpin,
+    onrecordingpage,
+    onrecordingexport,
     onclose,
   }: {
     open: boolean;
@@ -52,6 +55,9 @@
     onrecordingselect: (sessionId: string) => void;
     onrecordingdelete: (sessionId: string) => void;
     onrecordingdeleteall: () => void;
+    onrecordingpin: (sessionId: string, pinned: boolean) => void;
+    onrecordingpage: (sessionId: string, sampleOffset: number) => void;
+    onrecordingexport: (sessionId: string, format: "json" | "csv") => void;
     onclose: () => void;
   } = $props();
 
@@ -225,6 +231,9 @@
             onsessionselect={onrecordingselect}
             onsessiondelete={onrecordingdelete}
             ondeleteall={onrecordingdeleteall}
+            onpin={onrecordingpin}
+            onpage={onrecordingpage}
+            onexport={onrecordingexport}
           />
         </div>
       {/if}

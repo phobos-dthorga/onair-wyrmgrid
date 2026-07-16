@@ -12,10 +12,13 @@ outside-repository test; no credential or response capture was committed.
 Rules:
 
 - Base URLs are configurable and must use HTTPS outside tests.
-- API keys are secret values, redacted from debug output, and never persisted in
-  SQLite or sent to plugins.
-- The first connection milestone retains a key only in the running Rust process.
-  Closing WyrmGrid or selecting Disconnect forgets the session.
+- API keys are secret values, redacted from debug output, never persisted in
+  SQLite, and never sent to plugins. Optional persistence uses the
+  operating-system credential store under a versioned WyrmGrid account label.
+- Session-only remains the default. Closing WyrmGrid forgets an unremembered
+  key. Disconnect ends the current session without changing a saved profile;
+  **Forget saved details** removes the OS entry and encrypted Company ID
+  metadata separately.
 - Non-success responses are classified without echoing sensitive request data.
 - Raw response types are private to the adapter.
 - Captured fixtures must remove company IDs, registrations, personal names,
@@ -36,6 +39,13 @@ values copied from OnAir Client worked. WyrmGrid sends the key only in the
 `oa-apikey` header and sends the same company UUID in both the request path and
 the `CompanyUniqueId` header. A successful company envelope is translated into
 WyrmGrid's `CompanySummary` domain type.
+
+If the user selects **Remember this connection**, the validated API key moves
+from the Rust connection service to the Windows credential vault while only the
+Company ID and default-off startup choice enter the SQLCipher database. A saved
+key is loaded directly into Rust and is never returned to the webview. Automatic
+connection is attempted only after the current legal acknowledgement. Missing
+or unavailable credential storage fails closed without plaintext fallback.
 
 On 2026-07-14, the OnAir Discord `#web-apis` channel was inspected through the
 user's authenticated browser session. The newest complete working example

@@ -59,7 +59,7 @@ bundled through a future trusted release path.
 Source catalogue version 6 adds the protected `data-protection-` namespace for
 encryption, backup-password, destructive restore, and licence wording. Version
 5 community packs are rejected rather than being silently reinterpreted;
-authors must review the version 6 catalogue, update `source_catalog_version`,
+authors must review the version 7 catalogue, update `source_catalog_version`,
 and import the pack again. Existing ordinary translated message keys keep their
 meaning. Version 5 previously introduced the protected `security-` namespace.
 

@@ -1,6 +1,7 @@
 //! Application-level orchestration independent of Tauri and other interfaces.
 
 mod authorization;
+mod credentials;
 mod data_protection;
 mod dispatch;
 mod display;
@@ -10,11 +11,13 @@ mod simulator;
 mod simulator_recording;
 
 pub use authorization::{
-    AUTHORIZATION_DECISION_RETENTION_LIMIT, LegalPreferencesRepository, LegalSettingsError,
-    LegalSettingsService, LegalStatus, PRIVACY_NOTICE_VERSION, PersistedLegalPreferences,
-    SecurityCentreError, SecurityCentreRepository, SecurityCentreService, SecurityCentreStatus,
-    SecurityDecision, SecurityDecisionView, SecurityGrantView, SecuritySubjectKind, TERMS_VERSION,
+    AUTHORIZATION_DECISION_RETENTION_LIMIT, AuthorizationGrantLifetime, AuthorizationRuntime,
+    LegalPreferencesRepository, LegalSettingsError, LegalSettingsService, LegalStatus,
+    PRIVACY_NOTICE_VERSION, PersistedLegalPreferences, SecurityCentreError,
+    SecurityCentreRepository, SecurityCentreService, SecurityCentreStatus, SecurityDecision,
+    SecurityDecisionView, SecurityGrantView, SecuritySubjectKind, TERMS_VERSION,
 };
+pub use credentials::*;
 pub use data_protection::*;
 pub use dispatch::*;
 pub use display::*;
@@ -24,7 +27,7 @@ pub use simulator::*;
 pub use simulator_recording::*;
 
 use chrono::{DateTime, SecondsFormat, Utc};
-use secrecy::SecretString;
+use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex, RwLock};
@@ -37,6 +40,7 @@ use wyrmgrid_domain::{
 use wyrmgrid_onair_api::{ClientError, DEFAULT_BASE_URL, OnAirClient};
 use wyrmgrid_plugin_protocol::PLUGIN_API_VERSION;
 use wyrmgrid_storage::{ApiSnapshotRecord, Store};
+use zeroize::Zeroize;
 
 const FLEET_RESOURCE_KIND: &str = "onair_company_fleet";
 const FLEET_SNAPSHOT_SCHEMA_VERSION: u32 = 1;
@@ -665,7 +669,7 @@ struct StoredJobSnapshot {
     snapshot: Observed<JobSnapshot>,
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Clone, Copy, PartialEq, Eq)]
 pub enum ConnectionError {
     #[error("Enter a valid OnAir company ID.")]
     InvalidCompanyId,
@@ -749,6 +753,39 @@ impl From<ConnectionError> for OperationError {
             ConnectionError::JobUnavailable => ("onair.job_unavailable", false, false),
         };
 
+        Self {
+            code,
+            message: error.to_string(),
+            retryable,
+            reportable,
+            report_id: None,
+        }
+    }
+}
+
+impl From<AccountSettingsError> for OperationError {
+    fn from(error: AccountSettingsError) -> Self {
+        if let AccountSettingsError::Connection(error) = error {
+            return error.into();
+        }
+        let (code, retryable, reportable) = match error {
+            AccountSettingsError::StorageUnavailable => {
+                ("accounts.storage_unavailable", true, true)
+            }
+            AccountSettingsError::CredentialStoreUnavailable => {
+                ("accounts.credential_store_unavailable", true, false)
+            }
+            AccountSettingsError::RememberedSecretMissing => {
+                ("accounts.remembered_secret_missing", false, false)
+            }
+            AccountSettingsError::RememberedAccountMissing => {
+                ("accounts.remembered_account_missing", false, false)
+            }
+            AccountSettingsError::InvalidSimBriefReference => {
+                ("simbrief.invalid_user_reference", false, false)
+            }
+            AccountSettingsError::Connection(_) => unreachable!(),
+        };
         Self {
             code,
             message: error.to_string(),
@@ -1002,6 +1039,12 @@ impl From<SimulatorRecordingError> for OperationError {
             SimulatorRecordingError::UnknownSession => {
                 ("simulator.recording_unknown_session", false, false)
             }
+            SimulatorRecordingError::ExportTooLarge => {
+                ("simulator.recording_export_too_large", false, false)
+            }
+            SimulatorRecordingError::InvalidPlan => {
+                ("simulator.recording_invalid_plan", false, false)
+            }
             SimulatorRecordingError::ActiveSession => {
                 ("simulator.recording_active_session", false, false)
             }
@@ -1199,11 +1242,21 @@ impl OnAirSession {
     pub async fn connect(
         &self,
         company_id: String,
-        api_key: String,
+        mut api_key: String,
+    ) -> Result<ConnectionStatus, ConnectionError> {
+        let secret = SecretString::from(api_key.trim().to_owned());
+        api_key.zeroize();
+        self.connect_secret(company_id, &secret).await
+    }
+
+    pub async fn connect_secret(
+        &self,
+        company_id: String,
+        api_key: &SecretString,
     ) -> Result<ConnectionStatus, ConnectionError> {
         let company_id =
             Uuid::parse_str(company_id.trim()).map_err(|_| ConnectionError::InvalidCompanyId)?;
-        let api_key = api_key.trim();
+        let api_key = api_key.expose_secret().trim();
         if api_key.is_empty() {
             return Err(ConnectionError::EmptyApiKey);
         }

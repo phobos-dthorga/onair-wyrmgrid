@@ -54,6 +54,10 @@
     return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
   }
 
+  function lifetimeLabel(lifetime: "once" | "session" | "standing"): string {
+    return $translation(`security-lifetime-${lifetime}`);
+  }
+
   function handleKeydown(event: KeyboardEvent): void {
     if (open && event.key === "Escape" && !busy) onclose();
   }
@@ -159,7 +163,7 @@
                     <small
                       >{$translation("security-granted-at", {
                         time: localTime(grant.granted_at),
-                      })}</small
+                      })} · {lifetimeLabel(grant.lifetime)}</small
                     >
                   </div>
                   <button
@@ -212,7 +216,10 @@
                     {decision.decision === "grant"
                       ? $translation("security-decision-granted", {
                           count: decision.capability_count,
-                        })
+                        }) +
+                        (decision.lifetime
+                          ? ` · ${lifetimeLabel(decision.lifetime)}`
+                          : "")
                       : $translation("security-decision-revoked")}
                   </span>
                 </div>

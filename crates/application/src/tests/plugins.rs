@@ -23,6 +23,10 @@ fn installs_the_bundled_plugin_with_no_implicit_grants() {
     assert_eq!(status.plugins[0].id, BUNDLED_PLUGIN_ID);
     assert!(status.plugins[0].granted_permissions.is_empty());
     assert_eq!(status.plugins[0].state, PluginProcessState::Stopped);
+    assert!(matches!(
+        service.start(BUNDLED_PLUGIN_ID),
+        Err(PluginError::PermissionRequired)
+    ));
 }
 
 #[test]
@@ -106,6 +110,42 @@ fn completes_the_out_of_process_handshake_when_python_is_available() {
 
     let stopped = service.stop(BUNDLED_PLUGIN_ID).expect("plugin should stop");
     assert_eq!(stopped.plugins[0].state, PluginProcessState::Stopped);
+}
+
+#[test]
+fn one_launch_permission_is_not_shown_as_active_after_the_plugin_stops() {
+    let directory = tempfile::tempdir().expect("temporary directory should open");
+    let store = Store::open_in_memory().expect("store should open");
+    let service = PluginService::new(
+        Some(directory.path().to_path_buf()),
+        store.clone(),
+        OnAirSession::with_default_store(store),
+        SimulatorBridgeService::new(Vec::new()),
+    );
+    service
+        .approve_requested_permissions_with_lifetime(
+            BUNDLED_PLUGIN_ID,
+            AuthorizationGrantLifetime::Once,
+        )
+        .expect("one launch should approve");
+
+    let started = match service.start(BUNDLED_PLUGIN_ID) {
+        Ok(status) => status,
+        Err(PluginError::RuntimeUnavailable) => return,
+        Err(error) => panic!("plugin should start once: {error}"),
+    };
+    assert_eq!(
+        started.plugins[0].grant_lifetime,
+        Some(AuthorizationGrantLifetime::Once)
+    );
+
+    let stopped = service.stop(BUNDLED_PLUGIN_ID).expect("plugin should stop");
+    assert!(stopped.plugins[0].granted_permissions.is_empty());
+    assert_eq!(stopped.plugins[0].grant_lifetime, None);
+    assert!(matches!(
+        service.start(BUNDLED_PLUGIN_ID),
+        Err(PluginError::PermissionRequired)
+    ));
 }
 
 #[test]

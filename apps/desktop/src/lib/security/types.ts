@@ -2,6 +2,7 @@ import type { LegalStatus } from "$lib/legal/client";
 
 export type SecuritySubjectKind = "plugin";
 export type SecurityDecision = "grant" | "revoke";
+export type AuthorizationGrantLifetime = "once" | "session" | "standing";
 
 export type SecurityGrantView = {
   subject_kind: SecuritySubjectKind;
@@ -9,6 +10,7 @@ export type SecurityGrantView = {
   scope_revision: string;
   capabilities: string[];
   granted_at: string;
+  lifetime: AuthorizationGrantLifetime;
 };
 
 export type SecurityDecisionView = {
@@ -19,6 +21,7 @@ export type SecurityDecisionView = {
   decision: SecurityDecision;
   capability_count: number;
   decided_at: string;
+  lifetime?: AuthorizationGrantLifetime;
 };
 
 export type SecurityCentreStatus = {

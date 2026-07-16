@@ -30,7 +30,7 @@ export function altitudeRecordingChart(
     schema_version: 1,
     id: `simulator-altitude-${session.session.id}`,
     title: "Altitude trace",
-    description: `Latest ${session.sample_window_limit.toLocaleString()} exact samples at most. Gaps are shown rather than interpolated.`,
+    description: `Selected window of at most ${session.sample_window_limit.toLocaleString()} exact samples. Gaps are shown rather than interpolated.`,
     kind: "area",
     category_axis_label: "Observed time",
     value_axis_label: "Altitude",

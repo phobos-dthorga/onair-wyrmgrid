@@ -1,5 +1,11 @@
 <script lang="ts">
-  import type { PluginHostView, PluginPermission, PluginView } from "./types";
+  import { translation } from "$lib/i18n/runtime";
+  import type {
+    AuthorizationGrantLifetime,
+    PluginHostView,
+    PluginPermission,
+    PluginView,
+  } from "./types";
 
   let {
     open,
@@ -16,25 +22,35 @@
     status: PluginHostView;
     busy: boolean;
     errorMessage: string;
-    onapprove: (pluginId: string) => void;
+    onapprove: (pluginId: string, lifetime: AuthorizationGrantLifetime) => void;
     onrevoke: (pluginId: string) => void;
     onstart: (pluginId: string) => void;
     onstop: (pluginId: string) => void;
     onclose: () => void;
   } = $props();
 
+  let approvalLifetime = $state<AuthorizationGrantLifetime>("session");
+
   const permissionLabels: Record<PluginPermission, string> = {
-    on_air_company_read: "Read company identity",
-    on_air_fleet_read: "Read sanitized fleet facts",
-    on_air_jobs_read: "Read sanitized job facts",
-    on_air_finance_read: "Read sanitized finance facts",
-    map_layers_publish: "Publish Atlas map layers",
-    charts_publish: "Publish host-rendered charts",
-    notifications_create: "Create notifications",
-    plugin_storage: "Use private plugin storage",
-    simulator_telemetry_read: "Read simulator telemetry",
-    external_network: "Request external network access",
+    on_air_company_read: "security-capability-company-read",
+    on_air_fleet_read: "security-capability-fleet-read",
+    on_air_jobs_read: "security-capability-jobs-read",
+    on_air_finance_read: "security-capability-finance-read",
+    map_layers_publish: "security-capability-map-publish",
+    charts_publish: "security-capability-charts-publish",
+    notifications_create: "security-capability-notifications-create",
+    plugin_storage: "security-capability-plugin-storage",
+    simulator_telemetry_read: "security-capability-simulator-read",
+    external_network: "security-capability-external-network",
   };
+
+  function permissionLabel(permission: PluginPermission): string {
+    return $translation(permissionLabels[permission]);
+  }
+
+  function lifetimeLabel(lifetime: AuthorizationGrantLifetime): string {
+    return $translation(`security-lifetime-${lifetime}`);
+  }
 
   function allRequestedGranted(plugin: PluginView): boolean {
     return plugin.requested_permissions.every((permission) =>
@@ -132,10 +148,14 @@
                       )}
                     >
                       <i aria-hidden="true"></i>
-                      <span>{permissionLabels[permission]}</span>
+                      <span>{permissionLabel(permission)}</span>
                       <small>
                         {plugin.granted_permissions.includes(permission)
-                          ? "Approved"
+                          ? $translation("security-approved-lifetime", {
+                              lifetime: lifetimeLabel(
+                                plugin.grant_lifetime ?? "standing",
+                              ),
+                            })
                           : "Denied"}
                       </small>
                     </li>
@@ -164,11 +184,19 @@
                       onclick={() => onrevoke(plugin.id)}>Revoke access</button
                     >
                   {:else}
+                    <label class="lifetime-choice">
+                      <span>{$translation("security-approval-duration")}</span>
+                      <select bind:value={approvalLifetime} disabled={busy}>
+                        <option value="once">{$translation("security-lifetime-once")}</option>
+                        <option value="session">{$translation("security-lifetime-session")}</option>
+                        <option value="standing">{$translation("security-lifetime-standing")}</option>
+                      </select>
+                    </label>
                     <button
                       class="secondary"
                       type="button"
                       disabled={busy || plugin.state !== "stopped"}
-                      onclick={() => onapprove(plugin.id)}
+                      onclick={() => onapprove(plugin.id, approvalLifetime)}
                       >Approve access</button
                     >
                   {/if}
@@ -402,6 +430,20 @@
   article footer div {
     display: flex;
     gap: 8px;
+  }
+  .lifetime-choice {
+    display: grid;
+    gap: 3px;
+    color: var(--color-text-muted);
+    font-size: 8px;
+  }
+  .lifetime-choice select {
+    border: 1px solid var(--color-line-soft);
+    border-radius: 4px;
+    padding: 6px 8px;
+    color: var(--color-text);
+    background: var(--color-surface);
+    font: inherit;
   }
   article footer button {
     min-width: 112px;

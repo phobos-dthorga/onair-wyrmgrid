@@ -19,8 +19,15 @@ const session: SimulatorSessionView = {
     started_at: "2026-07-15T00:00:00Z",
     status: "active",
     sample_count: 2,
+    capture_mode: "manual",
+    pinned: false,
+    plan_associated: false,
   },
   sample_window_limit: 600,
+  sample_window_offset: 0,
+  has_older_samples: false,
+  has_newer_samples: false,
+  events: [],
   samples: [
     {
       source_sequence: 1,

@@ -31,8 +31,10 @@ The first read-only vertical slice is implemented behind WyrmGrid Dispatch:
 - `wyrmgrid-simbrief-api` makes a user-requested HTTPS GET to the documented
   latest-OFP endpoint with `json=1`, follows no redirects, enforces a 15-second
   timeout and 2 MiB streaming limit, and returns only safe error categories;
-- the Pilot ID or username exists only for the request and is never returned,
-  persisted, logged, reported to Sentry, or exposed to plugins;
+- the Pilot ID or username is never returned by the adapter, logged, reported
+  to Sentry, or exposed to plugins. At the user's explicit choice, the account
+  reference—not a password or token—is persisted in WyrmGrid's SQLCipher
+  database and prefilled for a later import;
 - raw JSON remains private to the adapter and is translated into canonical
   `FlightPlanSnapshot` version 1 groups with explicit mass units, timestamps,
   transformation version, freshness, and `external_calculation` provenance;
@@ -54,7 +56,7 @@ authenticated outside-repository capture remains a release gate.
 
 ## Phase 1: latest-OFP import (developer preview implemented)
 
-- Let the user connect a SimBrief Pilot ID or username explicitly.
+- Let the user enter or explicitly remember a SimBrief Pilot ID or username.
 - Fetch JSON in a dedicated Rust adapter such as `wyrmgrid-simbrief-api`.
 - Keep the raw response private and translate only verified fields into a
   `FlightPlanSnapshot`.

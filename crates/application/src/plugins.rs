@@ -17,7 +17,10 @@ use wyrmgrid_plugin_protocol::{
 };
 use wyrmgrid_storage::Store;
 
-use crate::authorization::{AuthorizationError, AuthorizationService, AuthorizationSubject};
+use crate::authorization::{
+    AuthorizationError, AuthorizationGrantLifetime, AuthorizationRuntime, AuthorizationService,
+    AuthorizationSubject,
+};
 
 const MAX_INSTALLED_PLUGINS: usize = 128;
 const MAX_MANIFEST_BYTES: u64 = 64 * 1024;
@@ -90,6 +93,8 @@ pub struct PluginView {
     pub runtime: Option<PluginRuntime>,
     pub requested_permissions: Vec<Permission>,
     pub granted_permissions: Vec<Permission>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub grant_lifetime: Option<AuthorizationGrantLifetime>,
     pub state: PluginProcessState,
     pub published_layer_count: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -136,6 +141,7 @@ struct RunningPlugin {
     last_fleet_observation: Mutex<Option<String>>,
     last_simulator_snapshot: Mutex<Option<(String, u64)>>,
     granted_permissions: BTreeSet<Permission>,
+    grant_lifetime: AuthorizationGrantLifetime,
 }
 
 struct InstalledPlugin {
@@ -150,6 +156,22 @@ impl PluginService {
         store: Store,
         onair: OnAirSession,
         simulator: SimulatorBridgeService,
+    ) -> Self {
+        Self::with_authorization_runtime(
+            root,
+            store,
+            onair,
+            simulator,
+            AuthorizationRuntime::default(),
+        )
+    }
+
+    pub fn with_authorization_runtime(
+        root: Option<PathBuf>,
+        store: Store,
+        onair: OnAirSession,
+        simulator: SimulatorBridgeService,
+        authorization_runtime: AuthorizationRuntime,
     ) -> Self {
         let (root, initialization_error) = match root {
             Some(root) => match initialize_plugin_root(&root) {
@@ -168,7 +190,7 @@ impl PluginService {
             inner: Arc::new(PluginServiceInner {
                 root,
                 initialization_error,
-                authorization: AuthorizationService::new(store),
+                authorization: AuthorizationService::with_runtime(store, authorization_runtime),
                 onair,
                 simulator,
                 runtimes: Mutex::new(BTreeMap::new()),
@@ -195,7 +217,8 @@ impl PluginService {
         let mut plugins = Vec::with_capacity(installed.len());
         let mut published_layers = Vec::new();
         for plugin in installed {
-            let granted_permissions = self.grants_for(&plugin.manifest)?;
+            let stored_granted_permissions = self.grants_for(&plugin.manifest)?;
+            let stored_grant_lifetime = self.grant_lifetime_for(&plugin.manifest)?;
             let runtime = runtimes.get(&plugin.manifest.id);
             let (state, last_error, layer_count) = match runtime {
                 Some(runtime) => (
@@ -216,6 +239,14 @@ impl PluginService {
                 ),
                 None => (PluginProcessState::Stopped, None, 0),
             };
+            let granted_permissions = runtime
+                .filter(|_| state.is_active())
+                .map(|runtime| runtime.granted_permissions.clone())
+                .unwrap_or(stored_granted_permissions);
+            let grant_lifetime = runtime
+                .filter(|_| state.is_active())
+                .map(|runtime| runtime.grant_lifetime)
+                .or(stored_grant_lifetime);
             if let Some(runtime) = runtime {
                 for layer in runtime
                     .layers
@@ -238,6 +269,7 @@ impl PluginService {
                 runtime: plugin.manifest.runtime,
                 requested_permissions: plugin.manifest.permissions,
                 granted_permissions: granted_permissions.iter().copied().collect(),
+                grant_lifetime,
                 state,
                 published_layer_count: layer_count,
                 last_error,
@@ -257,6 +289,17 @@ impl PluginService {
         &self,
         plugin_id: &str,
     ) -> Result<PluginHostView, PluginError> {
+        self.approve_requested_permissions_with_lifetime(
+            plugin_id,
+            AuthorizationGrantLifetime::Standing,
+        )
+    }
+
+    pub fn approve_requested_permissions_with_lifetime(
+        &self,
+        plugin_id: &str,
+        lifetime: AuthorizationGrantLifetime,
+    ) -> Result<PluginHostView, PluginError> {
         let plugin = self.find_plugin(plugin_id)?;
         ensure_supported_permissions(&plugin.manifest.permissions)?;
         let subject = AuthorizationSubject::plugin(plugin_id);
@@ -264,7 +307,7 @@ impl PluginService {
         let permission_names = requested_capability_names(&plugin.manifest);
         self.inner
             .authorization
-            .approve(&subject, &revision, &permission_names)
+            .approve_with_lifetime(&subject, &revision, &permission_names, lifetime)
             .map_err(plugin_authorization_error)?;
         self.status()
     }
@@ -286,7 +329,9 @@ impl PluginService {
     pub fn start(&self, plugin_id: &str) -> Result<PluginHostView, PluginError> {
         let plugin = self.find_plugin(plugin_id)?;
         ensure_supported_permissions(&plugin.manifest.permissions)?;
-        let granted = self.required_grants_for(&plugin.manifest)?;
+        let grant_lifetime = self
+            .grant_lifetime_for(&plugin.manifest)?
+            .ok_or(PluginError::PermissionRequired)?;
         let requested = plugin
             .manifest
             .permissions
@@ -299,6 +344,7 @@ impl PluginService {
         if plugin.manifest.runtime != Some(PluginRuntime::Python) {
             return Err(PluginError::UnsupportedRuntime);
         }
+        let granted = self.required_grants_for(&plugin.manifest)?;
 
         let mut child = spawn_python(&plugin)?;
         let stdin = child.stdin.take().ok_or(PluginError::LaunchFailed)?;
@@ -313,6 +359,7 @@ impl PluginService {
             last_fleet_observation: Mutex::new(None),
             last_simulator_snapshot: Mutex::new(None),
             granted_permissions: granted.clone(),
+            grant_lifetime,
         });
         self.inner
             .runtimes
@@ -407,6 +454,19 @@ impl PluginService {
             .grants(&subject, &revision, &requested)
             .map_err(plugin_authorization_error)
             .map(capability_names_to_permissions)
+    }
+
+    fn grant_lifetime_for(
+        &self,
+        manifest: &PluginManifest,
+    ) -> Result<Option<AuthorizationGrantLifetime>, PluginError> {
+        let requested = requested_capability_names(manifest);
+        let subject = AuthorizationSubject::plugin(&manifest.id);
+        let revision = plugin_scope_revision(manifest);
+        self.inner
+            .authorization
+            .grant_lifetime(&subject, &revision, &requested)
+            .map_err(plugin_authorization_error)
     }
 
     fn required_grants_for(

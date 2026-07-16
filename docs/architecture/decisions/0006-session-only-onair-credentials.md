@@ -1,5 +1,9 @@
 # ADR-0006: Begin with session-only OnAir credentials
 
+> Superseded by [ADR-0014](0014-optional-os-protected-provider-accounts.md)
+> after the operating-system credential and encrypted-preference boundaries
+> were implemented. This record remains the rationale for the initial milestone.
+
 - Status: Accepted
 - Date: 2026-07-14
 

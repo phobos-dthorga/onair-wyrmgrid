@@ -5955,6 +5955,7 @@ dependencies = [
  "wyrmgrid-simbrief-api",
  "wyrmgrid-storage",
  "wyrmgrid-weather-api",
+ "zeroize",
 ]
 
 [[package]]
@@ -5974,6 +5975,7 @@ dependencies = [
  "chrono",
  "getrandom 0.4.3",
  "keyring",
+ "secrecy",
  "sentry",
  "serde",
  "serde_json",

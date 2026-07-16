@@ -52,6 +52,9 @@
   });
   let recordingDraft = $state<SimulatorRecordingPreferences>({
     retention_days: 30,
+    automatic_start: false,
+    automatic_stop: true,
+    landing_settle_seconds: 30,
   });
 
   $effect(() => {
@@ -178,6 +181,40 @@
                 >{$translation("unit-imperial-gallons")}</option
               >
               <option value="litres">{$translation("unit-litres")}</option>
+            </select>
+          </label>
+          <label class="settings-toggle">
+            <input
+              type="checkbox"
+              disabled={busy}
+              bind:checked={recordingDraft.automatic_start}
+            />
+            <span>
+              <strong>{$translation("settings-recording-auto-start")}</strong>
+              <small>{$translation("settings-recording-auto-start-detail")}</small>
+            </span>
+          </label>
+          <label class="settings-toggle">
+            <input
+              type="checkbox"
+              disabled={busy || !recordingDraft.automatic_start}
+              bind:checked={recordingDraft.automatic_stop}
+            />
+            <span>
+              <strong>{$translation("settings-recording-auto-stop")}</strong>
+              <small>{$translation("settings-recording-auto-stop-detail")}</small>
+            </span>
+          </label>
+          <label>
+            <span>{$translation("settings-recording-settle")}</span>
+            <select
+              disabled={busy || !recordingDraft.automatic_start || !recordingDraft.automatic_stop}
+              bind:value={recordingDraft.landing_settle_seconds}
+            >
+              <option value={15}>{$translation("settings-recording-settle-15")}</option>
+              <option value={30}>{$translation("settings-recording-settle-30")}</option>
+              <option value={60}>{$translation("settings-recording-settle-60")}</option>
+              <option value={120}>{$translation("settings-recording-settle-120")}</option>
             </select>
           </label>
         </div>

@@ -110,7 +110,10 @@ impl AuthorizationRepository for UnavailableAuthorizationRepository {
 
 #[test]
 fn grants_are_deny_by_default_and_bound_to_the_exact_revision() {
-    let service = AuthorizationService::new(Store::open_in_memory().expect("store should open"));
+    let service = AuthorizationService::with_runtime(
+        Store::open_in_memory().expect("store should open"),
+        AuthorizationRuntime::default(),
+    );
     let subject = AuthorizationSubject::plugin("org.example.weather");
     let requested = BTreeSet::from(["on_air_company_read".to_owned()]);
     let first_revision = "plugin:1.0.0:on_air_company_read";
@@ -127,7 +130,12 @@ fn grants_are_deny_by_default_and_bound_to_the_exact_revision() {
     );
 
     service
-        .approve(&subject, first_revision, &requested)
+        .approve_with_lifetime(
+            &subject,
+            first_revision,
+            &requested,
+            AuthorizationGrantLifetime::Standing,
+        )
         .expect("grant should approve");
     assert_eq!(
         service
@@ -142,8 +150,97 @@ fn grants_are_deny_by_default_and_bound_to_the_exact_revision() {
 }
 
 #[test]
+fn once_grants_authorize_exactly_one_privileged_operation() {
+    let runtime = AuthorizationRuntime::default();
+    let service = AuthorizationService::with_runtime(
+        Store::open_in_memory().expect("store should open"),
+        runtime,
+    );
+    let subject = AuthorizationSubject::plugin("org.example.weather");
+    let revision = "plugin:1.0.0:external_network";
+    let requested = BTreeSet::from(["external_network".to_owned()]);
+    service
+        .approve_with_lifetime(
+            &subject,
+            revision,
+            &requested,
+            AuthorizationGrantLifetime::Once,
+        )
+        .unwrap();
+
+    assert_eq!(
+        service.require_all(&subject, revision, &requested).unwrap(),
+        requested
+    );
+    assert_eq!(
+        service.require_all(&subject, revision, &requested),
+        Err(AuthorizationError::CapabilityRequired)
+    );
+}
+
+#[test]
+fn session_grants_survive_repeated_checks_but_not_a_new_runtime() {
+    let store = Store::open_in_memory().expect("store should open");
+    let subject = AuthorizationSubject::plugin("org.example.weather");
+    let revision = "plugin:1.0.0:on_air_company_read";
+    let requested = BTreeSet::from(["on_air_company_read".to_owned()]);
+    let service =
+        AuthorizationService::with_runtime(store.clone(), AuthorizationRuntime::default());
+    service
+        .approve_with_lifetime(
+            &subject,
+            revision,
+            &requested,
+            AuthorizationGrantLifetime::Session,
+        )
+        .unwrap();
+    assert!(service.require_all(&subject, revision, &requested).is_ok());
+    assert!(service.require_all(&subject, revision, &requested).is_ok());
+
+    let after_restart = AuthorizationService::with_runtime(store, AuthorizationRuntime::default());
+    assert_eq!(
+        after_restart.require_all(&subject, revision, &requested),
+        Err(AuthorizationError::CapabilityRequired)
+    );
+}
+
+#[test]
+fn security_centre_includes_temporary_grants_and_their_lifetimes() {
+    let store = Store::open_in_memory().expect("store should open");
+    let runtime = AuthorizationRuntime::default();
+    let service = AuthorizationService::with_runtime(store.clone(), runtime.clone());
+    let subject = AuthorizationSubject::plugin("org.example.weather");
+    let revision = "plugin:1.0.0:on_air_company_read";
+    let requested = BTreeSet::from(["on_air_company_read".to_owned()]);
+    service
+        .approve_with_lifetime(
+            &subject,
+            revision,
+            &requested,
+            AuthorizationGrantLifetime::Session,
+        )
+        .unwrap();
+
+    let status = SecurityCentreService::with_runtime(store, runtime)
+        .status()
+        .unwrap();
+    assert_eq!(status.active_grants.len(), 1);
+    assert_eq!(
+        status.active_grants[0].lifetime,
+        AuthorizationGrantLifetime::Session
+    );
+    assert_eq!(
+        status.recent_decisions[0].lifetime,
+        Some(AuthorizationGrantLifetime::Session)
+    );
+}
+
+#[test]
 fn revocation_removes_every_capability_for_the_subject() {
-    let service = AuthorizationService::new(Store::open_in_memory().expect("store should open"));
+    let service = AuthorizationService::with_runtime(
+        Store::open_in_memory().expect("store should open"),
+        AuthorizationRuntime::default(),
+    );
     let subject = AuthorizationSubject::plugin("org.example.weather");
     let revision = "plugin:1.0.0:external_network|on_air_company_read";
     let requested = BTreeSet::from([
@@ -151,7 +248,12 @@ fn revocation_removes_every_capability_for_the_subject() {
         "on_air_company_read".to_owned(),
     ]);
     service
-        .approve(&subject, revision, &requested)
+        .approve_with_lifetime(
+            &subject,
+            revision,
+            &requested,
+            AuthorizationGrantLifetime::Standing,
+        )
         .expect("grant should approve");
 
     service
@@ -165,29 +267,35 @@ fn revocation_removes_every_capability_for_the_subject() {
 
 #[test]
 fn malformed_subjects_capabilities_and_revisions_are_rejected() {
-    let service = AuthorizationService::new(Store::open_in_memory().expect("store should open"));
+    let service = AuthorizationService::with_runtime(
+        Store::open_in_memory().expect("store should open"),
+        AuthorizationRuntime::default(),
+    );
     let requested = BTreeSet::from(["on_air_company_read".to_owned()]);
     assert_eq!(
-        service.approve(
+        service.approve_with_lifetime(
             &AuthorizationSubject::plugin("../weather"),
             "plugin:1.0.0:on_air_company_read",
             &requested,
+            AuthorizationGrantLifetime::Standing,
         ),
         Err(AuthorizationError::InvalidSubject)
     );
     assert_eq!(
-        service.approve(
+        service.approve_with_lifetime(
             &AuthorizationSubject::plugin("org.example.weather"),
             "bad revision with spaces",
             &requested,
+            AuthorizationGrantLifetime::Standing,
         ),
         Err(AuthorizationError::InvalidScopeRevision)
     );
     assert_eq!(
-        service.approve(
+        service.approve_with_lifetime(
             &AuthorizationSubject::plugin("org.example.weather"),
             "plugin:1.0.0:unsafe",
             &BTreeSet::from(["Unsafe Capability".to_owned()]),
+            AuthorizationGrantLifetime::Standing,
         ),
         Err(AuthorizationError::InvalidCapability)
     );
@@ -195,7 +303,10 @@ fn malformed_subjects_capabilities_and_revisions_are_rejected() {
 
 #[test]
 fn unavailable_storage_fails_closed() {
-    let service = AuthorizationService::new(UnavailableAuthorizationRepository);
+    let service = AuthorizationService::with_runtime(
+        UnavailableAuthorizationRepository,
+        AuthorizationRuntime::default(),
+    );
     let subject = AuthorizationSubject::plugin("org.example.weather");
     let requested = BTreeSet::from(["on_air_company_read".to_owned()]);
     assert_eq!(
@@ -203,7 +314,12 @@ fn unavailable_storage_fails_closed() {
         Err(AuthorizationError::StorageUnavailable)
     );
     assert_eq!(
-        service.approve(&subject, "plugin:1.0.0:on_air_company_read", &requested,),
+        service.approve_with_lifetime(
+            &subject,
+            "plugin:1.0.0:on_air_company_read",
+            &requested,
+            AuthorizationGrantLifetime::Standing,
+        ),
         Err(AuthorizationError::StorageUnavailable)
     );
 }
@@ -214,17 +330,19 @@ fn security_centre_groups_active_grants_and_reports_recent_decisions() {
     LegalSettingsService::new(store.clone())
         .acknowledge(true)
         .expect("legal acknowledgement should save");
-    let authorization = AuthorizationService::new(store.clone());
+    let authorization =
+        AuthorizationService::with_runtime(store.clone(), AuthorizationRuntime::default());
     let subject = AuthorizationSubject::plugin("org.example.weather");
     let revision = "plugin:1.0.0:external_network|on_air_company_read";
     authorization
-        .approve(
+        .approve_with_lifetime(
             &subject,
             revision,
             &BTreeSet::from([
                 "external_network".to_owned(),
                 "on_air_company_read".to_owned(),
             ]),
+            AuthorizationGrantLifetime::Standing,
         )
         .expect("grant should approve");
 

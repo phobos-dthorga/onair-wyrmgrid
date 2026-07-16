@@ -1,3 +1,4 @@
+mod credential_store;
 mod database_key;
 mod diagnostics;
 mod observability;
@@ -17,6 +18,10 @@ struct StartupOptions {
 struct DesktopState {
     startup_options: StartupOptions,
     onair: wyrmgrid_application::OnAirSession,
+    accounts: wyrmgrid_application::AccountSettingsService<
+        wyrmgrid_storage::Store,
+        credential_store::PlatformOnAirSecretStore,
+    >,
     dispatch: wyrmgrid_application::DispatchSession,
     plugins: wyrmgrid_application::PluginService,
     simulator: wyrmgrid_application::SimulatorBridgeService,
@@ -53,13 +58,61 @@ fn onair_connection_status(
 async fn connect_onair(
     state: tauri::State<'_, DesktopState>,
     company_id: String,
-    api_key: String,
-) -> Result<wyrmgrid_application::ConnectionStatus, wyrmgrid_application::OperationError> {
+    mut api_key: String,
+    remember: bool,
+    connect_on_start: bool,
+) -> Result<wyrmgrid_application::OnAirConnectionResult, wyrmgrid_application::OperationError> {
+    let result = state
+        .accounts
+        .connect(
+            company_id,
+            std::mem::take(&mut api_key),
+            remember,
+            connect_on_start,
+        )
+        .await
+        .map_err(operation_error);
+    api_key.zeroize();
+    result
+}
+
+#[tauri::command]
+fn onair_credential_profile_status(
+    state: tauri::State<'_, DesktopState>,
+) -> Result<wyrmgrid_application::OnAirCredentialProfileStatus, wyrmgrid_application::OperationError>
+{
+    state.accounts.onair_status().map_err(operation_error)
+}
+
+#[tauri::command]
+async fn connect_remembered_onair(
+    state: tauri::State<'_, DesktopState>,
+) -> Result<wyrmgrid_application::OnAirConnectionResult, wyrmgrid_application::OperationError> {
     state
-        .onair
-        .connect(company_id, api_key)
+        .accounts
+        .connect_remembered()
         .await
         .map_err(operation_error)
+}
+
+#[tauri::command]
+async fn auto_connect_onair_if_enabled(
+    state: tauri::State<'_, DesktopState>,
+) -> Result<Option<wyrmgrid_application::OnAirConnectionResult>, wyrmgrid_application::OperationError>
+{
+    state
+        .accounts
+        .connect_on_start_if_enabled()
+        .await
+        .map_err(operation_error)
+}
+
+#[tauri::command]
+fn forget_onair_credentials(
+    state: tauri::State<'_, DesktopState>,
+) -> Result<wyrmgrid_application::OnAirCredentialProfileStatus, wyrmgrid_application::OperationError>
+{
+    state.accounts.forget_onair().map_err(operation_error)
 }
 
 #[tauri::command]
@@ -183,13 +236,33 @@ async fn import_simbrief_latest(
     state: tauri::State<'_, DesktopState>,
     reference_kind: wyrmgrid_application::SimBriefReferenceKind,
     reference: String,
+    remember_reference: bool,
 ) -> Result<wyrmgrid_application::DispatchStatus, wyrmgrid_application::OperationError> {
     state
         .dispatch
         .import_latest(reference_kind, &reference)
         .await
         .map_err(operation_error)?;
-    dispatch_status(state)
+    state
+        .accounts
+        .remember_simbrief(reference_kind, &reference, remember_reference)
+        .map_err(operation_error)?;
+    let status = dispatch_status(state.clone())?;
+    state
+        .simulator_recording
+        .set_plan_context(status.snapshot.clone())
+        .map_err(operation_error)?;
+    Ok(status)
+}
+
+#[tauri::command]
+fn simbrief_account_preference(
+    state: tauri::State<'_, DesktopState>,
+) -> Result<
+    Option<wyrmgrid_application::SimBriefAccountPreference>,
+    wyrmgrid_application::OperationError,
+> {
+    state.accounts.simbrief_status().map_err(operation_error)
 }
 
 #[tauri::command]
@@ -209,6 +282,10 @@ fn clear_dispatch_plan(
     state: tauri::State<'_, DesktopState>,
 ) -> Result<wyrmgrid_application::DispatchStatus, wyrmgrid_application::OperationError> {
     state.dispatch.clear().map_err(operation_error)?;
+    state
+        .simulator_recording
+        .set_plan_context(None)
+        .map_err(operation_error)?;
     dispatch_status(state)
 }
 
@@ -390,10 +467,11 @@ fn plugin_host_status(
 fn approve_plugin_permissions(
     state: tauri::State<'_, DesktopState>,
     plugin_id: String,
+    lifetime: wyrmgrid_application::AuthorizationGrantLifetime,
 ) -> Result<wyrmgrid_application::PluginHostView, wyrmgrid_application::OperationError> {
     state
         .plugins
-        .approve_requested_permissions(&plugin_id)
+        .approve_requested_permissions_with_lifetime(&plugin_id, lifetime)
         .map_err(operation_error)
 }
 
@@ -530,10 +608,35 @@ fn stop_simulator_recording(
 fn simulator_recording_session(
     state: tauri::State<'_, DesktopState>,
     session_id: String,
+    sample_offset: Option<u32>,
 ) -> Result<wyrmgrid_application::SimulatorSessionView, wyrmgrid_application::OperationError> {
     state
         .simulator_recording
-        .session(&session_id)
+        .session_window(&session_id, sample_offset.unwrap_or(0))
+        .map_err(operation_error)
+}
+
+#[tauri::command]
+fn pin_simulator_recording(
+    state: tauri::State<'_, DesktopState>,
+    session_id: String,
+    pinned: bool,
+) -> Result<wyrmgrid_application::SimulatorRecordingView, wyrmgrid_application::OperationError> {
+    state
+        .simulator_recording
+        .set_pinned(&session_id, pinned)
+        .map_err(operation_error)
+}
+
+#[tauri::command]
+fn export_simulator_recording(
+    state: tauri::State<'_, DesktopState>,
+    session_id: String,
+    format: wyrmgrid_application::SimulatorExportFormat,
+) -> Result<wyrmgrid_application::SimulatorRecordingExport, wyrmgrid_application::OperationError> {
+    state
+        .simulator_recording
+        .export_session(&session_id, format)
         .map_err(operation_error)
 }
 
@@ -603,9 +706,18 @@ pub fn run() {
             let themes = wyrmgrid_application::ThemeSettingsService::new(store.clone());
             let languages = wyrmgrid_application::LanguageSettingsService::new(store.clone());
             let display = wyrmgrid_application::DisplaySettingsService::new(store.clone());
-            let security = wyrmgrid_application::SecurityCentreService::new(store.clone());
+            let authorization_runtime = wyrmgrid_application::AuthorizationRuntime::default();
+            let security = wyrmgrid_application::SecurityCentreService::with_runtime(
+                store.clone(),
+                authorization_runtime.clone(),
+            );
             let data_protection = wyrmgrid_application::DataProtectionService::new(store.clone());
             let onair = wyrmgrid_application::OnAirSession::with_default_store(store.clone());
+            let accounts = wyrmgrid_application::AccountSettingsService::new(
+                store.clone(),
+                credential_store::PlatformOnAirSecretStore,
+                onair.clone(),
+            );
             let dispatch = wyrmgrid_application::DispatchSession::with_default_provider();
             let simulator_provider =
                 wyrmgrid_application::SimulatorProviderRegistration::from_manifest_json(
@@ -624,16 +736,18 @@ pub fn run() {
                 simulator.provider_ids(),
             );
             let automatic_provider = simulator_settings.startup_provider_id().ok().flatten();
-            let plugins = wyrmgrid_application::PluginService::new(
+            let plugins = wyrmgrid_application::PluginService::with_authorization_runtime(
                 Some(app_data_directory.join("plugins")),
                 store,
                 onair.clone(),
                 simulator.clone(),
+                authorization_runtime,
             );
 
             app.manage(DesktopState {
                 startup_options: parsed_startup_options.clone(),
                 onair,
+                accounts,
                 dispatch,
                 plugins,
                 simulator,
@@ -667,7 +781,11 @@ pub fn run() {
             startup_options,
             platform_status,
             onair_connection_status,
+            onair_credential_profile_status,
             connect_onair,
+            connect_remembered_onair,
+            auto_connect_onair_if_enabled,
+            forget_onair_credentials,
             disconnect_onair,
             synchronize_onair_company_data,
             onair_fleet_snapshot,
@@ -679,6 +797,7 @@ pub fn run() {
             select_dispatch_job,
             clear_dispatch_job,
             import_simbrief_latest,
+            simbrief_account_preference,
             refresh_dispatch_weather,
             clear_dispatch_plan,
             diagnostic_log,
@@ -713,6 +832,8 @@ pub fn run() {
             start_simulator_recording,
             stop_simulator_recording,
             simulator_recording_session,
+            pin_simulator_recording,
+            export_simulator_recording,
             delete_simulator_recording,
             delete_all_simulator_recordings
         ])

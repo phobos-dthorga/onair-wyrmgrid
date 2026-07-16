@@ -1,6 +1,16 @@
 <script lang="ts">
   import { invokeDesktop, operationErrorMessage } from "$lib/desktop/client";
-  import type { OnAirConnectionStatus } from "./types";
+  import {
+    connectOnAir,
+    connectRememberedOnAir,
+    forgetOnAirCredentials,
+    loadOnAirCredentialProfile,
+  } from "./client";
+  import {
+    emptyCredentialProfile,
+    type OnAirConnectionStatus,
+    type OnAirCredentialProfileStatus,
+  } from "./types";
 
   let {
     open,
@@ -17,8 +27,16 @@
   let companyId = $state("");
   let apiKey = $state("");
   let revealApiKey = $state(false);
+  let remember = $state(false);
+  let connectOnStart = $state(false);
+  let profile = $state<OnAirCredentialProfileStatus>(emptyCredentialProfile);
+  let profileLoaded = $state(false);
   let submitting = $state(false);
   let errorMessage = $state("");
+
+  $effect(() => {
+    if (open) void refreshProfile();
+  });
 
   function safeError(error: unknown): string {
     return operationErrorMessage(
@@ -33,17 +51,62 @@
     errorMessage = "";
 
     try {
-      const connected = await invokeDesktop<OnAirConnectionStatus>(
-        "connect_onair",
-        {
-          companyId: companyId.trim(),
-          apiKey,
-        },
+      const result = await connectOnAir(
+        companyId.trim(),
+        apiKey,
+        remember,
+        remember && connectOnStart,
       );
+      profile = result.profile;
       apiKey = "";
       companyId = "";
       revealApiKey = false;
-      onstatuschange(connected);
+      onstatuschange(result.connection);
+    } catch (error) {
+      errorMessage = safeError(error);
+    } finally {
+      submitting = false;
+    }
+  }
+
+  async function refreshProfile(): Promise<void> {
+    profileLoaded = false;
+    try {
+      profile = await loadOnAirCredentialProfile();
+      remember = profile.remembered;
+      connectOnStart = profile.connect_on_start;
+      if (!companyId && profile.company_id) companyId = profile.company_id;
+    } catch (error) {
+      errorMessage = safeError(error);
+    } finally {
+      profileLoaded = true;
+    }
+  }
+
+  async function connectRemembered(): Promise<void> {
+    submitting = true;
+    errorMessage = "";
+    try {
+      const result = await connectRememberedOnAir();
+      profile = result.profile;
+      onstatuschange(result.connection);
+    } catch (error) {
+      errorMessage = safeError(error);
+      await refreshProfile();
+    } finally {
+      submitting = false;
+    }
+  }
+
+  async function forgetCredentials(): Promise<void> {
+    submitting = true;
+    errorMessage = "";
+    try {
+      profile = await forgetOnAirCredentials();
+      remember = false;
+      connectOnStart = false;
+      companyId = "";
+      apiKey = "";
     } catch (error) {
       errorMessage = safeError(error);
     } finally {
@@ -115,13 +178,22 @@
         </div>
 
         <p class="explanation">
-          The API key is held only in Rust memory and will be forgotten when
-          WyrmGrid closes.
+          {profile.remembered
+            ? "The API key is remembered by Windows Credential Manager. WyrmGrid's encrypted database stores only the Company ID and your startup choice."
+            : "This connection is session-only. The API key will be forgotten when WyrmGrid closes."}
         </p>
 
         {#if errorMessage}<p class="error" role="alert">{errorMessage}</p>{/if}
 
         <div class="dialog-actions">
+          {#if profile.remembered}
+            <button
+              class="danger"
+              type="button"
+              disabled={submitting}
+              onclick={forgetCredentials}>Forget saved details</button
+            >
+          {/if}
           <button class="secondary" type="button" onclick={close}>Done</button>
           <button
             class="danger"
@@ -145,6 +217,41 @@
             details are not yet valid for this connection.</span
           >
         </div>
+
+        {#if profileLoaded && profile.remembered}
+          <div class="remembered-profile">
+            <div>
+              <span>Remembered OnAir connection</span>
+              <strong>{profile.company_id}</strong>
+              <small>
+                {profile.connect_on_start
+                  ? "Automatic connection is enabled."
+                  : "Automatic connection is off."}
+              </small>
+            </div>
+            <div class="remembered-actions">
+              <button
+                class="secondary"
+                type="button"
+                disabled={submitting || !profile.secret_available}
+                onclick={connectRemembered}>Use saved details</button
+              >
+              <button
+                class="danger"
+                type="button"
+                disabled={submitting || !profile.credential_store_available}
+                onclick={forgetCredentials}>Forget</button
+              >
+            </div>
+            {#if !profile.secret_available}
+              <small class="profile-warning">
+                {profile.credential_store_available
+                  ? "Windows no longer has the saved API key. Enter it below to replace this connection."
+                  : "Windows Credential Manager is unavailable. Session-only connections can still be attempted."}
+              </small>
+            {/if}
+          </div>
+        {/if}
 
         <form onsubmit={connect}>
           <label for="company-id">Company ID</label>
@@ -181,12 +288,39 @@
             >
           </div>
 
+          <label class="remember-toggle">
+            <input type="checkbox" bind:checked={remember} disabled={submitting} />
+            <span>
+              <strong>Remember this connection</strong>
+              <small>
+                Windows stores the API key; WyrmGrid stores only the Company ID
+                in its encrypted database. Nothing is shared with plugins.
+              </small>
+            </span>
+          </label>
+
+          <label class="remember-toggle nested-toggle">
+            <input
+              type="checkbox"
+              bind:checked={connectOnStart}
+              disabled={submitting || !remember}
+            />
+            <span>
+              <strong>Connect automatically when WyrmGrid starts</strong>
+              <small>
+                Off by default. When enabled, WyrmGrid contacts OnAir after the
+                current privacy notice has been accepted.
+              </small>
+            </span>
+          </label>
+
           <div class="session-notice">
-            <strong>Session only</strong>
-            <span
-              >No credential is written to SQLite, browser storage, logs, or
-              plugins.</span
-            >
+            <strong>{remember ? "Protected local storage" : "Session only"}</strong>
+            <span>
+              {remember
+                ? "The API key is never written to SQLite, browser storage, logs, backups, or plugins."
+                : "No credential is written to SQLite, browser storage, logs, backups, or plugins."}
+            </span>
           </div>
 
           {#if errorMessage}<p class="error" role="alert">
@@ -223,8 +357,10 @@
   }
   .connection-dialog {
     width: min(480px, 100%);
+    max-height: calc(100vh - 48px);
     border: 1px solid var(--color-line-faint);
     padding: 24px;
+    overflow-y: auto;
     background: var(--color-surface);
     box-shadow: 0 28px 90px var(--color-shadow);
   }
@@ -311,6 +447,72 @@
     padding: 10px 12px;
     background: var(--color-highlight-soft);
     font-size: 11px;
+  }
+  .remember-toggle {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: start;
+    gap: 9px;
+    margin-top: 18px;
+    text-transform: none;
+    letter-spacing: normal;
+  }
+  .remember-toggle input {
+    width: auto;
+    margin-top: 3px;
+  }
+  .remember-toggle span {
+    display: grid;
+    gap: 3px;
+  }
+  .remember-toggle strong {
+    color: var(--color-text);
+    font-size: 12px;
+  }
+  .remember-toggle small {
+    color: var(--color-text-muted);
+    font-weight: 400;
+    line-height: 1.45;
+  }
+  .nested-toggle {
+    margin-top: 11px;
+    margin-left: 22px;
+  }
+  .remembered-profile {
+    display: grid;
+    gap: 12px;
+    margin-top: 16px;
+    border: 1px solid var(--color-accent-border);
+    padding: 13px;
+    background: var(--color-accent-soft);
+  }
+  .remembered-profile > div:first-child {
+    display: grid;
+    gap: 4px;
+  }
+  .remembered-profile span,
+  .remembered-profile small {
+    color: var(--color-text-muted);
+    font-size: 10px;
+  }
+  .remembered-profile strong {
+    overflow-wrap: anywhere;
+    font-size: 12px;
+  }
+  .remembered-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .remembered-actions button {
+    border: 1px solid var(--color-line-faint);
+    border-radius: 3px;
+    padding: 8px 11px;
+    cursor: pointer;
+  }
+  .profile-warning {
+    color: var(--color-danger) !important;
+    line-height: 1.45;
   }
   .session-notice strong {
     color: var(--color-highlight);
@@ -400,5 +602,16 @@
     border-radius: 50%;
     background: var(--color-accent);
     box-shadow: 0 0 12px var(--color-accent-glow);
+  }
+
+  @media (max-height: 720px), (max-width: 640px) {
+    .dialog-backdrop {
+      padding: 12px;
+    }
+
+    .connection-dialog {
+      max-height: calc(100vh - 24px);
+      padding: 18px;
+    }
   }
 </style>

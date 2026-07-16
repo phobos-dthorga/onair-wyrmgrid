@@ -1,6 +1,7 @@
 import { invokeDesktop } from "$lib/desktop/client";
 import type {
   DispatchStatus,
+  SimBriefAccountPreference,
   SimBriefReferenceKind,
 } from "$lib/dispatch/types";
 
@@ -11,11 +12,19 @@ export function loadDispatchStatus(): Promise<DispatchStatus> {
 export function importLatestSimBriefPlan(
   referenceKind: SimBriefReferenceKind,
   reference: string,
+  rememberReference: boolean,
 ): Promise<DispatchStatus> {
   return invokeDesktop<DispatchStatus>("import_simbrief_latest", {
     referenceKind,
     reference,
+    rememberReference,
   });
+}
+
+export function loadSimBriefAccountPreference(): Promise<SimBriefAccountPreference | null> {
+  return invokeDesktop<SimBriefAccountPreference | null>(
+    "simbrief_account_preference",
+  );
 }
 
 export function clearDispatchPlan(): Promise<DispatchStatus> {

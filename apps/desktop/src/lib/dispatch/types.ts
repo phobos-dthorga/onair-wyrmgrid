@@ -168,3 +168,8 @@ export type DispatchStatus = {
 };
 
 export type SimBriefReferenceKind = "pilot_id" | "username";
+
+export type SimBriefAccountPreference = {
+  reference_kind: SimBriefReferenceKind;
+  reference: string;
+};

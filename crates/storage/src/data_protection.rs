@@ -6,12 +6,11 @@ use std::path::{Path, PathBuf};
 use rusqlite::{Connection, OpenFlags, OptionalExtension, ffi, params};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
-use crate::{StorageError, Store};
+use crate::{CURRENT_SCHEMA_VERSION, StorageError, Store};
 
 pub const PORTABLE_BACKUP_FORMAT_VERSION: u32 = 1;
 const DATABASE_KEY_BYTES: usize = 32;
 const WYRMGRID_APPLICATION_ID: i64 = 1_465_471_565;
-const CURRENT_SCHEMA_VERSION: i64 = 9;
 
 #[derive(Zeroize, ZeroizeOnDrop)]
 pub struct DatabaseKey([u8; DATABASE_KEY_BYTES]);
@@ -173,10 +172,8 @@ impl Store {
                     application_version
                 ],
             )?;
-            connection.execute_batch(
-                "PRAGMA portable.application_id = 1465471565;
-                 PRAGMA portable.user_version = 9;",
-            )?;
+            connection.execute_batch("PRAGMA portable.application_id = 1465471565;")?;
+            connection.pragma_update(Some("portable"), "user_version", CURRENT_SCHEMA_VERSION)?;
             Ok::<(), StorageError>(())
         })();
         let detach = connection.execute_batch("DETACH DATABASE portable;");
@@ -209,10 +206,8 @@ pub(crate) fn mark_wyrmgrid_database(connection: &Connection) -> Result<(), Stor
     if application_id != 0 && application_id != WYRMGRID_APPLICATION_ID {
         return Err(StorageError::InvalidRecord);
     }
-    connection.execute_batch(
-        "PRAGMA application_id = 1465471565;
-         PRAGMA user_version = 9;",
-    )?;
+    connection.execute_batch("PRAGMA application_id = 1465471565;")?;
+    connection.pragma_update(None, "user_version", CURRENT_SCHEMA_VERSION)?;
     Ok(())
 }
 
@@ -319,9 +314,9 @@ fn export_backup_to_device_database(
         connection.query_row("SELECT sqlcipher_export('restored')", [], |_| Ok(()))?;
         connection.execute_batch(
             "DROP TABLE restored.wyrmgrid_backup_manifest;
-             PRAGMA restored.application_id = 1465471565;
-             PRAGMA restored.user_version = 9;",
+             PRAGMA restored.application_id = 1465471565;",
         )?;
+        connection.pragma_update(Some("restored"), "user_version", CURRENT_SCHEMA_VERSION)?;
         Ok::<(), StorageError>(())
     })();
     let detach = connection.execute_batch("DETACH DATABASE restored;");

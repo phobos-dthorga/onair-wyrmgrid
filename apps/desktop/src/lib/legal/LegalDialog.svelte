@@ -119,10 +119,27 @@
             </p>
             <div class="summary-grid">
               <article>
+                <strong>Flight recordings</strong>
+                <span
+                  >Manual recording or an optional default-off automatic setting
+                  stores local telemetry. A current sanitized SimBrief plan may
+                  be retained with that recording for later comparison.</span
+                >
+              </article>
+              <article>
                 <strong>OnAir credentials</strong>
                 <span
-                  >Held for the active session and not written to WyrmGrid's
-                  database.</span
+                  >Session-only unless you ask Windows Credential Manager to
+                  remember the API key. WyrmGrid's encrypted database keeps only
+                  the Company ID and startup choice.</span
+                >
+              </article>
+              <article>
+                <strong>SimBrief Pilot ID</strong>
+                <span
+                  >May be remembered in WyrmGrid's encrypted database at your
+                  request. WyrmGrid never asks for a SimBrief or Navigraph
+                  password.</span
                 >
               </article>
               <article>
