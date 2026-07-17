@@ -56,22 +56,20 @@ installer is assembled. This gives release artifacts independent evidence while
 avoiding slow or redundant hosted work during ordinary commits and pull
 requests.
 
-The repository's existing workflow triggers may continue to launch checks for
-some pull-request pushes until those triggers receive a dedicated update. That
-transitional behaviour is not the desired development policy and does not
-authorise avoidable reruns, manual dispatches, version changes, tags, or
-installer builds. Prefer one well-validated push and do not wait on an
-automatically started development run unless the maintainer asks for its result.
+Routine pushes and pull requests do not launch hosted checks. A manual workflow
+dispatch requires a specific maintainer-approved exception; ordinary work uses
+the local gates above. Prefer one well-validated push and reserve hosted runner
+time for the immutable release tag.
 
 Launch-art presentation tests cover dark/light theme selection, malformed
 colour fallback, and bounded minimum display timing. Every production frontend
 build also verifies that both approved hero-image checksums were packaged.
 
-Pull requests produce a downloadable Rust LCOV coverage report. Coverage is a
-map for finding untested decisions, not a score to game. A minimum threshold can
-be introduced once several releases establish a realistic baseline; until then,
-reviewers should reject meaningful coverage regressions in changed business
-logic.
+Release verification produces a downloadable Rust LCOV coverage report.
+Coverage is a map for finding untested decisions, not a score to game. A minimum
+threshold can be introduced once several releases establish a realistic
+baseline; until then, reviewers should reject meaningful coverage regressions
+in changed business logic during local review.
 
 ## Priority expansion
 

@@ -57,11 +57,11 @@ releases. This makes the tag both an unambiguous request for a complete release
 candidate and the point where independent hosted verification has material
 value.
 
-Existing pull-request workflow triggers may still run during the transition to
-this policy. Avoid unnecessary pushes and reruns, and do not manually dispatch
-hosted validation for routine development. A separate workflow-maintenance
-change should remove or narrow those triggers without weakening the tag-gated
-release suite.
+Routine pushes and pull requests do not start hosted validation. The CI workflow
+is invoked by an approved release or an explicit manual exception, while the
+security workflow additionally retains its scheduled dependency review. Avoid
+unnecessary manual dispatches and reruns; local gates remain authoritative for
+ordinary development.
 
 The release policy rejects malformed versions, tags outside `main`, and any tag
 whose version differs from the four checked-in application version sources. A
@@ -109,9 +109,10 @@ runner and are never valid for an end-user installation.
 - The draft release remains a human promotion boundary while releases are
   unsigned prereleases.
 
-Branch protection should require the Rust core, Frontend, Windows desktop,
-`rust-audit`, and `npm-audit` checks before `main` is merged. Force pushes and
-branch deletion remain disabled.
+Branch protection should restrict `main` updates to the maintainer and keep
+force pushes and branch deletion disabled. The immutable release tag then runs
+Rust core, Frontend, Windows desktop, `rust-audit`, and `npm-audit` checks before
+packaging begins.
 
 ## Diagnostic artifacts
 
