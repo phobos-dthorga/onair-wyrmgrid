@@ -41,6 +41,7 @@ fn persists_each_measurement_category_independently() {
         speed_unit: SpeedUnit::Knots,
         weight_unit: WeightUnit::Kilograms,
         fuel_unit: FuelUnit::Litres,
+        responsive_surfaces: false,
     };
 
     assert_eq!(service.update(preferences).unwrap(), preferences);

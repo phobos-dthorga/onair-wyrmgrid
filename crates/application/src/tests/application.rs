@@ -1,7 +1,10 @@
 use super::*;
 use chrono::{Duration as ChronoDuration, Timelike, Utc};
 use tempfile::tempdir;
-use wyrmgrid_domain::{AircraftId, AirportId, AirportSummary, FboId, Provenance, ProvenanceKind};
+use wyrmgrid_domain::{
+    AircraftId, AirportId, AirportSummary, FboId, Provenance, ProvenanceKind, StaffMemberId,
+    StaffMemberSummary,
+};
 use wyrmgrid_storage::DatabaseKey;
 
 #[derive(Default)]
@@ -241,11 +244,38 @@ fn restores_the_latest_persistent_company_data_as_offline() {
             },
         },
     };
+    let stored_staff = StoredStaffSnapshot {
+        schema_version: wyrmgrid_domain::STAFF_SNAPSHOT_SCHEMA_VERSION,
+        company: company.clone(),
+        snapshot: Observed {
+            value: StaffSnapshot {
+                schema_version: wyrmgrid_domain::STAFF_SNAPSHOT_SCHEMA_VERSION,
+                staff: vec![StaffMemberSummary {
+                    id: StaffMemberId(Uuid::new_v4()),
+                    display_name: Some("Synthetic Cached Aviator".into()),
+                    avatar_reference: None,
+                    category_code: Some(1),
+                    status_code: None,
+                    current_airport: None,
+                    home_airport: None,
+                    busy_until: None,
+                    is_online: None,
+                    class_qualifications: Vec::new(),
+                }],
+            },
+            provenance: Provenance {
+                kind: ProvenanceKind::OnAirFact,
+                source: "onair:company/employees".into(),
+                observed_at: Utc::now(),
+            },
+        },
+    };
     let mut store =
         Store::open(&database_path, &database_key).expect("persistent Hoard should open");
     save_stored_fleet(&mut store, &stored).expect("fleet should persist");
     save_stored_fbos(&mut store, &stored_fbos).expect("FBOs should persist");
     save_stored_jobs(&mut store, &stored_jobs).expect("jobs should persist");
+    save_stored_staff(&mut store, &stored_staff).expect("staff should persist");
     drop(store);
 
     let session = OnAirSession::with_store(
@@ -264,6 +294,10 @@ fn restores_the_latest_persistent_company_data_as_offline() {
         .job_snapshot()
         .expect("job state should be readable")
         .expect("cached jobs should restore");
+    let staff_view = session
+        .staff_snapshot()
+        .expect("staff state should be readable")
+        .expect("cached staff should restore");
 
     assert_eq!(fleet_view.company, ConnectedCompany::from(&company));
     assert_eq!(fleet_view.availability, SnapshotAvailability::Offline);
@@ -277,6 +311,10 @@ fn restores_the_latest_persistent_company_data_as_offline() {
     assert_eq!(job_view.availability, SnapshotAvailability::Offline);
     assert_eq!(job_view.storage, SnapshotStorage::Hoard);
     assert_eq!(job_view.snapshot, stored_jobs.snapshot);
+    assert_eq!(staff_view.company, ConnectedCompany::from(&company));
+    assert_eq!(staff_view.availability, SnapshotAvailability::Offline);
+    assert_eq!(staff_view.storage, SnapshotStorage::Hoard);
+    assert_eq!(staff_view.snapshot, stored_staff.snapshot);
 }
 
 #[test]
@@ -473,6 +511,12 @@ async fn refuses_company_sync_without_a_connected_session() {
             .expect("snapshot state should be readable"),
         None
     );
+    assert_eq!(
+        session
+            .staff_snapshot()
+            .expect("snapshot state should be readable"),
+        None
+    );
 }
 
 #[test]
@@ -527,6 +571,10 @@ fn maps_adapter_failures_to_bounded_user_messages() {
     assert!(matches!(
         classify_resource_error(ClientError::ApiRejected, CompanyDataResource::Fbos),
         ConnectionError::FbosUnavailable
+    ));
+    assert!(matches!(
+        classify_resource_error(ClientError::ApiRejected, CompanyDataResource::Staff),
+        ConnectionError::StaffUnavailable
     ));
 }
 

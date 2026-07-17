@@ -227,5 +227,6 @@ fn preferences(altitude_unit: &str, fuel_unit: &str) -> DisplayPreferencesRecord
         speed_unit: "knots".into(),
         weight_unit: "kilograms".into(),
         fuel_unit: fuel_unit.into(),
+        responsive_surfaces: true,
     }
 }

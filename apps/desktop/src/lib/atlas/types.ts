@@ -100,13 +100,45 @@ export type JobSnapshotView = {
   storage: SnapshotStorage;
 };
 
+export type AircraftClassQualification = {
+  id: string;
+  aircraft_class_id: string;
+  short_name?: string;
+  name?: string;
+  last_validated_at?: string;
+};
+
+export type StaffMemberSummary = {
+  id: string;
+  display_name?: string;
+  avatar_reference?: string;
+  category_code?: number;
+  status_code?: number;
+  current_airport?: AirportSummary;
+  home_airport?: AirportSummary;
+  busy_until?: string;
+  is_online?: boolean;
+  class_qualifications: AircraftClassQualification[];
+};
+
+export type StaffSnapshotView = {
+  company: FleetSnapshotView["company"];
+  snapshot: {
+    value: { schema_version: number; staff: StaffMemberSummary[] };
+    provenance: FleetSnapshot["provenance"];
+  };
+  availability: SnapshotAvailability;
+  storage: SnapshotStorage;
+};
+
 export type CompanyDataSyncResult = {
   disposition: "synchronized" | "quietly_ignored";
   fleet: FleetSnapshotView | null;
   fbos: FboSnapshotView | null;
   jobs: JobSnapshotView | null;
+  staff: StaffSnapshotView | null;
   failures: Array<{
-    resource: "fleet" | "fbos" | "jobs";
+    resource: "fleet" | "fbos" | "jobs" | "staff";
     message: string;
   }>;
 };

@@ -12,8 +12,8 @@
 .diagnostics-dialog {
   width: min(820px, calc(100vw - 48px));
   max-height: calc(100vh - 48px);
-  display: grid;
-  grid-template-rows: auto auto auto minmax(160px, 1fr) auto;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--color-line-soft);
   border-radius: 8px;
@@ -73,6 +73,60 @@
   font-size: 12px;
 }
 
+.diagnostics-explorer {
+  display: grid;
+  gap: 10px;
+  padding: 10px 22px 0;
+}
+
+.diagnostics-search,
+.diagnostics-filter-grid label {
+  display: grid;
+  gap: 5px;
+  color: var(--color-text-muted);
+  font-size: 10px;
+}
+
+.diagnostics-search input,
+.diagnostics-filter-grid select {
+  min-width: 0;
+  border: 1px solid var(--color-line-soft);
+  border-radius: 4px;
+  padding: 8px 9px;
+  color: var(--color-text);
+  background: var(--color-surface);
+  font: inherit;
+}
+
+.diagnostics-filter-panel {
+  border: 1px solid var(--color-line-faint);
+  padding: 9px 11px;
+  background: var(--color-surface-soft);
+}
+
+.diagnostics-filter-panel > summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-size: 10px;
+}
+
+.diagnostics-filter-panel > summary strong {
+  color: var(--color-accent);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.diagnostics-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+  margin-top: 10px;
+}
+
 .diagnostics-list {
   display: grid;
   align-content: start;
@@ -81,6 +135,7 @@
   margin-top: 8px;
   padding: 10px 22px 18px;
   overflow: auto;
+  flex: 1 1 160px;
 }
 
 .diagnostics-list article {
@@ -173,5 +228,9 @@
   .diagnostics-dialog footer {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .diagnostics-filter-grid {
+    grid-template-columns: 1fr;
   }
 }

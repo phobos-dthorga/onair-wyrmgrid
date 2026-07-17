@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$CargoTargetDir = (Join-Path $env:LOCALAPPDATA 'WyrmGrid\cargo-target'),
+    [string]$CargoTargetDir,
     [string]$PerlPath = (Join-Path $env:SystemDrive 'Strawberry\perl\bin\perl.exe'),
     [switch]$ValidateOnly
 )
@@ -38,6 +38,52 @@ function Find-VisualStudioDevShell {
     } | Select-Object -First 1
 }
 
+function Get-WorktreeCargoTargetDirectory {
+    param(
+        [Parameter(Mandatory)]
+        [string]$RepositoryRoot
+    )
+
+    $worktreeName = Split-Path -Leaf $RepositoryRoot
+    $cacheName = $worktreeName -replace '[^A-Za-z0-9._-]+', '-'
+    if ([string]::IsNullOrWhiteSpace($cacheName)) {
+        $cacheName = 'worktree'
+    }
+
+    $cacheRoot = Join-Path $env:LOCALAPPDATA 'WyrmGrid\cargo-target'
+    return Join-Path $cacheRoot $cacheName
+}
+
+function Restore-DevelopmentDependenciesIfNeeded {
+    param(
+        [Parameter(Mandatory)]
+        [string]$RepositoryRoot
+    )
+
+    $tauriCommand = Join-Path $RepositoryRoot 'node_modules\.bin\tauri.cmd'
+    if (Test-Path -LiteralPath $tauriCommand -PathType Leaf) {
+        return
+    }
+
+    $lockFile = Join-Path $RepositoryRoot 'package-lock.json'
+    if (-not (Test-Path -LiteralPath $lockFile -PathType Leaf)) {
+        throw "The local Tauri command is missing and '$lockFile' was not found, so WyrmGrid cannot safely restore its locked development dependencies."
+    }
+
+    Write-Host 'Local Tauri dependencies are missing. Restoring them from package-lock.json...'
+    & npm ci
+    if ($LASTEXITCODE -ne 0) {
+        throw "WyrmGrid dependency restoration exited with code $LASTEXITCODE."
+    }
+
+    if (-not (Test-Path -LiteralPath $tauriCommand -PathType Leaf)) {
+        throw "npm ci completed, but the local Tauri command was not created at '$tauriCommand'."
+    }
+
+    Write-Host 'WyrmGrid development dependencies restored successfully.'
+    Write-Host ''
+}
+
 $devShell = Find-VisualStudioDevShell
 if (-not $devShell) {
     throw 'Visual Studio with the Desktop development with C++ workload was not found.'
@@ -52,6 +98,9 @@ if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
 }
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
+if ([string]::IsNullOrWhiteSpace($CargoTargetDir)) {
+    $CargoTargetDir = Get-WorktreeCargoTargetDirectory -RepositoryRoot $repositoryRoot
+}
 $env:OPENSSL_SRC_PERL = (Resolve-Path -LiteralPath $PerlPath).Path
 $env:CARGO_TARGET_DIR = $CargoTargetDir
 
@@ -69,6 +118,8 @@ if ($ValidateOnly) {
 
 Push-Location -LiteralPath $repositoryRoot
 try {
+    Restore-DevelopmentDependenciesIfNeeded -RepositoryRoot $repositoryRoot
+
     & npm run dev
     if ($LASTEXITCODE -ne 0) {
         throw "WyrmGrid development run exited with code $LASTEXITCODE."

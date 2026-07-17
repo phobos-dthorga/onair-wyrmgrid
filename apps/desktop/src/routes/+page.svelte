@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import AtlasMap from "$lib/atlas/AtlasMap.svelte";
+  import AtlasSearch from "$lib/atlas/AtlasSearch.svelte";
   import { atlasPreviewFbos, atlasPreviewFleet } from "$lib/atlas/sample";
   import type {
     AircraftSummary,
@@ -11,6 +12,7 @@
     FleetSnapshot,
     FleetSnapshotView,
     JobSnapshotView,
+    StaffSnapshotView,
   } from "$lib/atlas/types";
   import WyrmChart from "$lib/charts/WyrmChart.svelte";
   import { foundationChart } from "$lib/charts/sample";
@@ -24,6 +26,7 @@
     loadDiagnosticLog,
   } from "$lib/diagnostics/client";
   import DiagnosticsDialog from "$lib/diagnostics/DiagnosticsDialog.svelte";
+  import { formatLocalDateTime } from "$lib/presentation/dateTime";
   import {
     emptyDiagnosticLog,
     type DiagnosticLogView,
@@ -183,6 +186,8 @@
     securityPreviewRevoked,
   } from "$lib/security/sample";
   import type { SecurityCentreStatus } from "$lib/security/types";
+  import StaffWorkspace from "$lib/staff/StaffWorkspace.svelte";
+  import { staffPreview } from "$lib/staff/sample";
   import ThemeDialog from "$lib/theme/ThemeDialog.svelte";
   import {
     browserThemeStatus,
@@ -202,7 +207,7 @@
 
   type FleetLoadState = "idle" | "loading" | "ready" | "error";
   type LegalLoadState = "loading" | "ready" | "error";
-  type Workspace = "atlas" | "jobs" | "dispatch";
+  type Workspace = "atlas" | "staff" | "jobs" | "dispatch";
   type AppDialogSurface =
     | "connection"
     | "diagnostics"
@@ -239,6 +244,7 @@
   let fleetView = $state<FleetSnapshotView | null>(null);
   let fboView = $state<FboSnapshotView | null>(null);
   let jobView = $state<JobSnapshotView | null>(null);
+  let staffView = $state<StaffSnapshotView | null>(null);
   let fleetLoadState = $state<FleetLoadState>("idle");
   let fleetError = $state("");
   let fleetVisible = $state(true);
@@ -317,9 +323,7 @@
   const showSettingsDialog = $derived(
     isDialogSurface(dialogNavigation, "settings"),
   );
-  const showThemeDialog = $derived(
-    isDialogSurface(dialogNavigation, "theme"),
-  );
+  const showThemeDialog = $derived(isDialogSurface(dialogNavigation, "theme"));
   const showLanguageDialog = $derived(
     isDialogSurface(dialogNavigation, "language"),
   );
@@ -347,9 +351,7 @@
   const showTimelineDialog = $derived(
     isDialogSurface(dialogNavigation, "hoard"),
   );
-  const showForgeDialog = $derived(
-    isDialogSurface(dialogNavigation, "forge"),
-  );
+  const showForgeDialog = $derived(isDialogSurface(dialogNavigation, "forge"));
 
   const activeFleetView = $derived(
     timelineMode === "historical" ? (historicalData?.fleet ?? null) : fleetView,
@@ -530,10 +532,10 @@
 
   function formatObservedAt(value: string | undefined): string {
     if (!value) return "No fleet observation yet";
-    const observed = new Date(value);
-    return Number.isNaN(observed.getTime())
-      ? "Observation time unavailable"
-      : `Observed ${observed.toLocaleString()}`;
+    const observed = formatLocalDateTime(value, "Observation time unavailable");
+    return observed === "Observation time unavailable"
+      ? observed
+      : `Observed ${observed}`;
   }
 
   function countedLabel(
@@ -731,8 +733,10 @@
     simulatorRecordingBusy = true;
     simulatorError = "";
     try {
-      if (action === "start") simulatorRecording = await startSimulatorRecording();
-      if (action === "stop") simulatorRecording = await stopSimulatorRecording();
+      if (action === "start")
+        simulatorRecording = await startSimulatorRecording();
+      if (action === "stop")
+        simulatorRecording = await stopSimulatorRecording();
       if (action === "delete" && sessionId)
         simulatorRecording = await deleteSimulatorRecording(sessionId);
       if (action === "delete_all")
@@ -755,7 +759,8 @@
     simulatorRecordingBusy = true;
     simulatorError = "";
     try {
-      simulatorRecordingSession = await loadSimulatorRecordingSession(sessionId);
+      simulatorRecordingSession =
+        await loadSimulatorRecordingSession(sessionId);
     } catch (error) {
       simulatorError = operationErrorMessage(
         error,
@@ -797,7 +802,8 @@
     simulatorError = "";
     try {
       simulatorRecording = await pinSimulatorRecording(sessionId, pinned);
-      simulatorRecordingSession = await loadSimulatorRecordingSession(sessionId);
+      simulatorRecordingSession =
+        await loadSimulatorRecordingSession(sessionId);
     } catch (error) {
       simulatorError = operationErrorMessage(
         error,
@@ -902,7 +908,8 @@
         { trigger },
       );
       if (result.disposition === "quietly_ignored") {
-        fleetLoadState = fleetView || fboView ? "ready" : "idle";
+        fleetLoadState =
+          fleetView || fboView || jobView || staffView ? "ready" : "idle";
         await refreshTimeline();
         return;
       }
@@ -910,6 +917,7 @@
       if (result.fleet) acceptFleetView(result.fleet);
       if (result.fbos) acceptFboView(result.fbos);
       if (result.jobs) jobView = result.jobs;
+      if (result.staff) staffView = result.staff;
       if (result.failures.length > 0) {
         fleetError = result.failures
           .map((failure) => failure.message)
@@ -934,6 +942,10 @@
           "onair_job_snapshot",
         );
         if (retainedJobs) jobView = retainedJobs;
+        const retainedStaff = await invokeDesktop<StaffSnapshotView | null>(
+          "onair_staff_snapshot",
+        );
+        if (retainedStaff) staffView = retainedStaff;
       } catch {
         // Keep the existing presentation state when Hoard cannot be read.
       }
@@ -945,10 +957,11 @@
     synchronizeAfterRestore: boolean,
   ): Promise<void> {
     try {
-      const [fleet, fboNetwork, pendingJobs] = await Promise.all([
+      const [fleet, fboNetwork, pendingJobs, staffRoster] = await Promise.all([
         invokeDesktop<FleetSnapshotView | null>("onair_fleet_snapshot"),
         invokeDesktop<FboSnapshotView | null>("onair_fbo_snapshot"),
         invokeDesktop<JobSnapshotView | null>("onair_job_snapshot"),
+        invokeDesktop<StaffSnapshotView | null>("onair_staff_snapshot"),
       ]);
       if (fleet) {
         acceptFleetView(fleet);
@@ -959,11 +972,17 @@
       if (fboNetwork) acceptFboView(fboNetwork);
       else fboView = null;
       jobView = pendingJobs;
-      if (!fleet && !fboNetwork && !pendingJobs) fleetLoadState = "idle";
+      staffView = staffRoster;
+      if (!fleet && !fboNetwork && !pendingJobs && !staffRoster)
+        fleetLoadState = "idle";
       await refreshTimeline();
       if (
         connection.connected &&
-        (synchronizeAfterRestore || !fleet || !fboNetwork || !pendingJobs)
+        (synchronizeAfterRestore ||
+          !fleet ||
+          !fboNetwork ||
+          !pendingJobs ||
+          !staffRoster)
       ) {
         await synchronizeCompanyData("initial");
       }
@@ -1257,7 +1276,8 @@
       await refreshPluginHost();
     } finally {
       pluginBusy = false;
-      if (showSecurityCentre && isDesktopRuntime()) void refreshSecurityCentre();
+      if (showSecurityCentre && isDesktopRuntime())
+        void refreshSecurityCentre();
     }
   }
 
@@ -1268,6 +1288,7 @@
     if (!isDesktopRuntime()) {
       fleetView = atlasPreviewFleet;
       fboView = atlasPreviewFbos;
+      staffView = staffPreview;
       timeline = hoardPreviewTimeline;
       timelineCursor = timeline.observation_times.length - 1;
       fleetLoadState = "ready";
@@ -1283,7 +1304,9 @@
     void refreshSimulatorBridge();
     void refreshDispatchStatus();
     void loadSimBriefAccountPreference()
-      .then((preference) => (simbriefAccountPreference = preference ?? undefined))
+      .then(
+        (preference) => (simbriefAccountPreference = preference ?? undefined),
+      )
       .catch((error) => {
         dispatchError = operationErrorMessage(
           error,
@@ -1480,11 +1503,12 @@
   async function initializeSimulatorPreferences(): Promise<void> {
     if (!isDesktopRuntime()) return;
     try {
-      [simulatorPreferences, simulatorBridge, simulatorRecording] = await Promise.all([
-        loadSimulatorPreferences(),
-        loadSimulatorBridge(),
-        loadSimulatorRecording(),
-      ]);
+      [simulatorPreferences, simulatorBridge, simulatorRecording] =
+        await Promise.all([
+          loadSimulatorPreferences(),
+          loadSimulatorBridge(),
+          loadSimulatorRecording(),
+        ]);
     } catch (error) {
       settingsError = operationErrorMessage(
         error,
@@ -1501,11 +1525,15 @@
     settingsBusy = true;
     settingsError = "";
     try {
-      const [savedDisplay, savedSimulator, savedRecording] = await Promise.all([
-        saveDisplayPreferences(preferences),
-        saveSimulatorPreferences(nextSimulatorPreferences),
-        saveSimulatorRecordingPreferences(nextRecordingPreferences),
-      ]);
+      const savedDisplay = await saveDisplayPreferences(preferences);
+      let savedSimulator = nextSimulatorPreferences;
+      let savedRecording = nextRecordingPreferences;
+      if (isDesktopRuntime()) {
+        [savedSimulator, savedRecording] = await Promise.all([
+          saveSimulatorPreferences(nextSimulatorPreferences),
+          saveSimulatorRecordingPreferences(nextRecordingPreferences),
+        ]);
+      }
       displayPreferences = savedDisplay;
       simulatorPreferences = savedSimulator;
       simulatorRecording = {
@@ -1702,6 +1730,7 @@
     class:compact-ui={startupOptions.compact_ui || viewportMode === "narrow"}
     class:short-ui={viewportMode === "short"}
     class:low-resource={startupOptions.low_resource}
+    class:responsive-surfaces={displayPreferences.responsive_surfaces}
     class="shell"
     inert={showLegalDialog ||
       showThemeDialog ||
@@ -1731,6 +1760,12 @@
         >
         <button class="nav-item" type="button" disabled
           >{$translation("nav-fleet")}</button
+        >
+        <button
+          class="nav-item"
+          class:active={activeWorkspace === "staff"}
+          type="button"
+          onclick={() => (activeWorkspace = "staff")}>Staff</button
         >
         <button
           class="nav-item"
@@ -1884,6 +1919,22 @@
               </button>
             {/each}
           </div>
+
+          <AtlasSearch
+            {aircraft}
+            {fbos}
+            {selectedAircraftId}
+            {selectedFboId}
+            responsiveSurfaces={displayPreferences.responsive_surfaces}
+            onselectaircraft={(aircraftId) => {
+              selectedAircraftId = aircraftId;
+              selectedFboId = null;
+            }}
+            onselectfbo={(fboId) => {
+              selectedFboId = fboId;
+              selectedAircraftId = null;
+            }}
+          />
 
           <div
             class="sidebar-note"
@@ -2075,6 +2126,28 @@
           </div>
         </aside>
       </section>
+    {:else if activeWorkspace === "staff"}
+      <section class="time-mode-bar dispatch-mode-bar">
+        <div class="time-mode-copy">
+          <span class="time-mode-indicator" aria-hidden="true"></span>
+          <strong>Read only</strong>
+          <span>
+            Staff facts remain attributed to OnAir and unavailable fields are
+            never inferred.
+          </span>
+        </div>
+        <div class="time-mode-actions">
+          <span>Staff snapshot contract · v1</span>
+        </div>
+      </section>
+
+      <StaffWorkspace
+        view={staffView}
+        responsiveSurfaces={displayPreferences.responsive_surfaces}
+        busy={fleetLoadState === "loading"}
+        errorMessage={fleetError}
+        onsynchronize={() => void synchronizeCompanyData("manual")}
+      />
     {:else if activeWorkspace === "jobs"}
       <section class="time-mode-bar dispatch-mode-bar">
         <div class="time-mode-copy">
@@ -2089,6 +2162,7 @@
 
       <JobsWorkspace
         view={jobView}
+        responsiveSurfaces={displayPreferences.responsive_surfaces}
         busy={fleetLoadState === "loading"}
         errorMessage={fleetError}
         onsynchronize={() => void synchronizeCompanyData("manual")}
@@ -2164,10 +2238,12 @@
     onrecordstart={() => void runRecordingAction("start")}
     onrecordstop={() => void runRecordingAction("stop")}
     onsessionselect={(sessionId) => void selectRecordingSession(sessionId)}
-    onsessiondelete={(sessionId) => void runRecordingAction("delete", sessionId)}
+    onsessiondelete={(sessionId) =>
+      void runRecordingAction("delete", sessionId)}
     ondeleteall={() => void runRecordingAction("delete_all")}
     onpin={(sessionId, pinned) => void setRecordingPinned(sessionId, pinned)}
-    onpage={(sessionId, sampleOffset) => void pageRecordingSession(sessionId, sampleOffset)}
+    onpage={(sessionId, sampleOffset) =>
+      void pageRecordingSession(sessionId, sampleOffset)}
     onexport={(sessionId, format) => void exportRecording(sessionId, format)}
     onclose={leaveDialog}
   />
@@ -2297,9 +2373,12 @@
     onrecordingdelete={(sessionId) =>
       void runRecordingAction("delete", sessionId)}
     onrecordingdeleteall={() => void runRecordingAction("delete_all")}
-    onrecordingpin={(sessionId, pinned) => void setRecordingPinned(sessionId, pinned)}
-    onrecordingpage={(sessionId, sampleOffset) => void pageRecordingSession(sessionId, sampleOffset)}
-    onrecordingexport={(sessionId, format) => void exportRecording(sessionId, format)}
+    onrecordingpin={(sessionId, pinned) =>
+      void setRecordingPinned(sessionId, pinned)}
+    onrecordingpage={(sessionId, sampleOffset) =>
+      void pageRecordingSession(sessionId, sampleOffset)}
+    onrecordingexport={(sessionId, format) =>
+      void exportRecording(sessionId, format)}
     onclose={leaveDialog}
   />
 

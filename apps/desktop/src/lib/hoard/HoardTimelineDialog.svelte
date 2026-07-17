@@ -2,6 +2,7 @@
   import WyrmChart from "$lib/charts/WyrmChart.svelte";
   import type { ChartSpec } from "$lib/charts/types";
   import type { DisplayPreferences } from "$lib/settings/types";
+  import { formatLocalDateTime } from "$lib/presentation/dateTime";
   import RecordingHistory from "$lib/simulator/RecordingHistory.svelte";
   import type {
     SimulatorRecordingView,
@@ -65,9 +66,7 @@
   const selectedAt = $derived(timeline.observation_times[cursor]);
 
   function formatTime(value: string | undefined): string {
-    if (!value) return "No retained observation";
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+    return formatLocalDateTime(value, value ?? "No retained observation");
   }
 
   function handleKeydown(event: KeyboardEvent): void {

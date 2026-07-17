@@ -26,7 +26,9 @@ const SIMULATOR_RECORDINGS_SCHEMA: &str =
 const AUTHORIZATION_SCHEMA: &str = include_str!("../migrations/0009_authorization.sql");
 const SIMULATOR_EVIDENCE_SCHEMA: &str = include_str!("../migrations/0010_simulator_evidence.sql");
 const PROVIDER_ACCOUNTS_SCHEMA: &str = include_str!("../migrations/0011_provider_accounts.sql");
-pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 11;
+const INTERACTION_PREFERENCES_SCHEMA: &str =
+    include_str!("../migrations/0012_interaction_preferences.sql");
+pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 12;
 
 #[derive(Debug, Error)]
 pub enum StorageError {
@@ -105,6 +107,7 @@ pub struct DisplayPreferencesRecord {
     pub speed_unit: String,
     pub weight_unit: String,
     pub fuel_unit: String,
+    pub responsive_surfaces: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -231,6 +234,7 @@ impl Store {
         connection.execute_batch(AUTHORIZATION_SCHEMA)?;
         connection.execute_batch(SIMULATOR_EVIDENCE_SCHEMA)?;
         connection.execute_batch(PROVIDER_ACCOUNTS_SCHEMA)?;
+        connection.execute_batch(INTERACTION_PREFERENCES_SCHEMA)?;
         if path.is_some() {
             data_protection::mark_wyrmgrid_database(&connection)?;
         }
@@ -374,8 +378,15 @@ impl Store {
             .map_err(|_| StorageError::StateUnavailable)?;
         connection
             .query_row(
-                "SELECT altitude_unit, speed_unit, weight_unit, fuel_unit
-                 FROM display_preferences WHERE singleton_id = 1",
+                "SELECT display.altitude_unit,
+                        display.speed_unit,
+                        display.weight_unit,
+                        display.fuel_unit,
+                        COALESCE(interaction.responsive_surfaces, 1)
+                 FROM display_preferences AS display
+                 LEFT JOIN interaction_preferences AS interaction
+                   ON interaction.singleton_id = display.singleton_id
+                 WHERE display.singleton_id = 1",
                 [],
                 |row| {
                     Ok(DisplayPreferencesRecord {
@@ -383,6 +394,7 @@ impl Store {
                         speed_unit: row.get(1)?,
                         weight_unit: row.get(2)?,
                         fuel_unit: row.get(3)?,
+                        responsive_surfaces: row.get(4)?,
                     })
                 },
             )
@@ -394,11 +406,12 @@ impl Store {
         &self,
         preferences: &DisplayPreferencesRecord,
     ) -> Result<(), StorageError> {
-        let connection = self
+        let mut connection = self
             .connection
             .lock()
             .map_err(|_| StorageError::StateUnavailable)?;
-        connection
+        let transaction = connection.transaction()?;
+        transaction
             .execute(
                 "INSERT INTO display_preferences (
                     singleton_id, altitude_unit, speed_unit, weight_unit, fuel_unit
@@ -416,8 +429,16 @@ impl Store {
                     preferences.fuel_unit,
                 ],
             )
-            .map(|_| ())
-            .map_err(StorageError::from)
+            .map_err(StorageError::from)?;
+        transaction.execute(
+            "INSERT INTO interaction_preferences (singleton_id, responsive_surfaces)
+             VALUES (1, ?1)
+             ON CONFLICT(singleton_id) DO UPDATE SET
+                responsive_surfaces = excluded.responsive_surfaces,
+                updated_at = CURRENT_TIMESTAMP",
+            params![preferences.responsive_surfaces],
+        )?;
+        transaction.commit().map_err(StorageError::from)
     }
 
     pub fn load_simulator_preferences_record(

@@ -35,7 +35,7 @@ use std::time::{Duration, Instant};
 use thiserror::Error;
 use uuid::Uuid;
 use wyrmgrid_domain::{
-    AircraftSummary, CompanyId, CompanySummary, FboSummary, JobSnapshot, Observed,
+    AircraftSummary, CompanyId, CompanySummary, FboSummary, JobSnapshot, Observed, StaffSnapshot,
 };
 use wyrmgrid_onair_api::{ClientError, DEFAULT_BASE_URL, OnAirClient};
 use wyrmgrid_plugin_protocol::PLUGIN_API_VERSION;
@@ -48,6 +48,7 @@ const FBOS_RESOURCE_KIND: &str = "onair_company_fbos";
 const FBOS_SNAPSHOT_SCHEMA_VERSION: u32 = 1;
 const JOBS_RESOURCE_KIND: &str = "onair_company_pending_jobs";
 const JOBS_SNAPSHOT_SCHEMA_VERSION: u32 = 1;
+const STAFF_RESOURCE_KIND: &str = "onair_company_staff";
 const MAX_HOARD_TIMELINE_OBSERVATIONS: usize = 4_096;
 const UNKNOWN_AIRCRAFT_MODEL: &str = "Unknown model";
 
@@ -589,12 +590,21 @@ pub struct JobSnapshotView {
     pub storage: SnapshotStorage,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct StaffSnapshotView {
+    pub company: ConnectedCompany,
+    pub snapshot: Observed<StaffSnapshot>,
+    pub availability: SnapshotAvailability,
+    pub storage: SnapshotStorage,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CompanyDataResource {
     Fleet,
     Fbos,
     Jobs,
+    Staff,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -610,6 +620,7 @@ pub struct CompanyDataSyncResult {
     pub fleet: Option<FleetSnapshotView>,
     pub fbos: Option<FboSnapshotView>,
     pub jobs: Option<JobSnapshotView>,
+    pub staff: Option<StaffSnapshotView>,
     pub failures: Vec<DataSyncFailure>,
 }
 
@@ -669,6 +680,13 @@ struct StoredJobSnapshot {
     snapshot: Observed<JobSnapshot>,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+struct StoredStaffSnapshot {
+    schema_version: u32,
+    company: CompanySummary,
+    snapshot: Observed<StaffSnapshot>,
+}
+
 #[derive(Debug, Error, Clone, Copy, PartialEq, Eq)]
 pub enum ConnectionError {
     #[error("Enter a valid OnAir company ID.")]
@@ -701,6 +719,10 @@ pub enum ConnectionError {
         "WyrmGrid could not refresh pending jobs. A previous successful observation, if present, remains available."
     )]
     JobsUnavailable,
+    #[error(
+        "WyrmGrid could not refresh the staff roster. A previous successful observation, if present, remains available."
+    )]
+    StaffUnavailable,
     #[error("That pending OnAir job is no longer available in the current observation.")]
     JobUnavailable,
 }
@@ -750,6 +772,7 @@ impl From<ConnectionError> for OperationError {
             ConnectionError::FleetUnavailable => ("onair.fleet_unavailable", true, false),
             ConnectionError::FbosUnavailable => ("onair.fbos_unavailable", true, false),
             ConnectionError::JobsUnavailable => ("onair.jobs_unavailable", true, false),
+            ConnectionError::StaffUnavailable => ("onair.staff_unavailable", true, false),
             ConnectionError::JobUnavailable => ("onair.job_unavailable", false, false),
         };
 
@@ -1135,6 +1158,7 @@ pub struct OnAirSession {
     fleet: Arc<RwLock<Option<FleetSnapshotView>>>,
     fbos: Arc<RwLock<Option<FboSnapshotView>>>,
     jobs: Arc<RwLock<Option<JobSnapshotView>>>,
+    staff: Arc<RwLock<Option<StaffSnapshotView>>>,
     store: Arc<Mutex<Store>>,
     base_url: &'static str,
 }
@@ -1214,6 +1238,10 @@ impl OnAirSession {
             anchor_company = stored_fbos.as_ref().map(|stored| stored.company.id.clone());
         }
         let stored_jobs = load_stored_jobs(&store, anchor_company.as_ref());
+        if anchor_company.is_none() {
+            anchor_company = stored_jobs.as_ref().map(|stored| stored.company.id.clone());
+        }
+        let stored_staff = load_stored_staff(&store, anchor_company.as_ref());
         let storage = if persistent {
             SnapshotStorage::Hoard
         } else {
@@ -1225,11 +1253,14 @@ impl OnAirSession {
             stored_fbos.map(|stored| fbo_view(stored, SnapshotAvailability::Offline, storage));
         let cached_jobs =
             stored_jobs.map(|stored| job_view(stored, SnapshotAvailability::Offline, storage));
+        let cached_staff =
+            stored_staff.map(|stored| staff_view(stored, SnapshotAvailability::Offline, storage));
         Self {
             inner: Arc::new(RwLock::new(None)),
             fleet: Arc::new(RwLock::new(cached_fleet)),
             fbos: Arc::new(RwLock::new(cached_fbos)),
             jobs: Arc::new(RwLock::new(cached_jobs)),
+            staff: Arc::new(RwLock::new(cached_staff)),
             store: Arc::new(Mutex::new(store)),
             base_url,
         }
@@ -1274,22 +1305,29 @@ impl OnAirSession {
             .await
             .map_err(classify_client_error)?;
 
-        let (cached_fleet, cached_fbos, cached_jobs) =
-            self.store.lock().ok().map_or((None, None, None), |store| {
-                let storage = if store.is_persistent() {
-                    SnapshotStorage::Hoard
-                } else {
-                    SnapshotStorage::MemoryOnly
-                };
-                (
-                    load_stored_fleet(&store, Some(&company.id))
-                        .map(|stored| fleet_view(stored, SnapshotAvailability::Cached, storage)),
-                    load_stored_fbos(&store, Some(&company.id))
-                        .map(|stored| fbo_view(stored, SnapshotAvailability::Cached, storage)),
-                    load_stored_jobs(&store, Some(&company.id))
-                        .map(|stored| job_view(stored, SnapshotAvailability::Cached, storage)),
-                )
-            });
+        let (cached_fleet, cached_fbos, cached_jobs, cached_staff) =
+            self.store
+                .lock()
+                .ok()
+                .map_or((None, None, None, None), |store| {
+                    let storage = if store.is_persistent() {
+                        SnapshotStorage::Hoard
+                    } else {
+                        SnapshotStorage::MemoryOnly
+                    };
+                    (
+                        load_stored_fleet(&store, Some(&company.id)).map(|stored| {
+                            fleet_view(stored, SnapshotAvailability::Cached, storage)
+                        }),
+                        load_stored_fbos(&store, Some(&company.id))
+                            .map(|stored| fbo_view(stored, SnapshotAvailability::Cached, storage)),
+                        load_stored_jobs(&store, Some(&company.id))
+                            .map(|stored| job_view(stored, SnapshotAvailability::Cached, storage)),
+                        load_stored_staff(&store, Some(&company.id)).map(|stored| {
+                            staff_view(stored, SnapshotAvailability::Cached, storage)
+                        }),
+                    )
+                });
 
         *self
             .inner
@@ -1311,6 +1349,10 @@ impl OnAirSession {
             .jobs
             .write()
             .map_err(|_| ConnectionError::StateUnavailable)? = cached_jobs;
+        *self
+            .staff
+            .write()
+            .map_err(|_| ConnectionError::StateUnavailable)? = cached_staff;
 
         self.status()
     }
@@ -1343,6 +1385,14 @@ impl OnAirSession {
             .as_mut()
         {
             jobs.availability = SnapshotAvailability::Offline;
+        }
+        if let Some(staff) = self
+            .staff
+            .write()
+            .map_err(|_| ConnectionError::StateUnavailable)?
+            .as_mut()
+        {
+            staff.availability = SnapshotAvailability::Offline;
         }
         self.status()
     }
@@ -1388,6 +1438,7 @@ impl OnAirSession {
                     fleet: self.fleet_snapshot()?,
                     fbos: self.fbo_snapshot()?,
                     jobs: self.job_snapshot()?,
+                    staff: self.staff_snapshot()?,
                     failures: Vec::new(),
                 });
             }
@@ -1445,6 +1496,7 @@ impl OnAirSession {
             }
         };
 
+        let mut stop_after_jobs = stop_after_fbos;
         let jobs = if stop_after_fbos {
             self.mark_jobs_cached(&company.id)?;
             failures.push(DataSyncFailure {
@@ -1459,6 +1511,10 @@ impl OnAirSession {
             match client.pending_jobs().await {
                 Ok(snapshot) => Some(self.accept_job_snapshot(&company, snapshot)?),
                 Err(error) => {
+                    stop_after_jobs = matches!(
+                        error,
+                        ClientError::AuthenticationRejected | ClientError::RateLimited
+                    );
                     self.mark_jobs_cached(&company.id)?;
                     failures.push(DataSyncFailure {
                         resource: CompanyDataResource::Jobs,
@@ -1471,11 +1527,37 @@ impl OnAirSession {
             }
         };
 
+        let staff = if stop_after_jobs {
+            self.mark_staff_cached(&company.id)?;
+            failures.push(DataSyncFailure {
+                resource: CompanyDataResource::Staff,
+                code: "onair.request_skipped",
+                message: "Staff synchronization was skipped to avoid another rejected request."
+                    .to_owned(),
+            });
+            self.staff_snapshot()?
+        } else {
+            match client.staff().await {
+                Ok(snapshot) => Some(self.accept_staff_snapshot(&company, snapshot)?),
+                Err(error) => {
+                    self.mark_staff_cached(&company.id)?;
+                    failures.push(DataSyncFailure {
+                        resource: CompanyDataResource::Staff,
+                        code: error.diagnostic_code(),
+                        message: classify_resource_error(error, CompanyDataResource::Staff)
+                            .to_string(),
+                    });
+                    self.staff_snapshot()?
+                }
+            }
+        };
+
         Ok(CompanyDataSyncResult {
             disposition: DataSyncDisposition::Synchronized,
             fleet,
             fbos,
             jobs,
+            staff,
             failures,
         })
     }
@@ -1562,6 +1644,36 @@ impl OnAirSession {
         Ok(view)
     }
 
+    fn accept_staff_snapshot(
+        &self,
+        company: &CompanySummary,
+        snapshot: Observed<StaffSnapshot>,
+    ) -> Result<StaffSnapshotView, ConnectionError> {
+        self.ensure_current_company(&company.id)?;
+        snapshot
+            .value
+            .validate()
+            .map_err(|_| ConnectionError::StaffUnavailable)?;
+        let stored = StoredStaffSnapshot {
+            schema_version: wyrmgrid_domain::STAFF_SNAPSHOT_SCHEMA_VERSION,
+            company: company.clone(),
+            snapshot,
+        };
+        let storage = self
+            .store
+            .lock()
+            .ok()
+            .filter(|store| store.is_persistent())
+            .and_then(|mut store| save_stored_staff(&mut store, &stored).ok())
+            .map_or(SnapshotStorage::MemoryOnly, |_| SnapshotStorage::Hoard);
+        let view = staff_view(stored, SnapshotAvailability::Live, storage);
+        *self
+            .staff
+            .write()
+            .map_err(|_| ConnectionError::StateUnavailable)? = Some(view.clone());
+        Ok(view)
+    }
+
     pub fn fleet_snapshot(&self) -> Result<Option<FleetSnapshotView>, ConnectionError> {
         self.fleet
             .read()
@@ -1580,6 +1692,13 @@ impl OnAirSession {
         self.jobs
             .read()
             .map(|jobs| jobs.clone())
+            .map_err(|_| ConnectionError::StateUnavailable)
+    }
+
+    pub fn staff_snapshot(&self) -> Result<Option<StaffSnapshotView>, ConnectionError> {
+        self.staff
+            .read()
+            .map(|staff| staff.clone())
             .map_err(|_| ConnectionError::StateUnavailable)
     }
 
@@ -1845,6 +1964,25 @@ impl OnAirSession {
         }
         Ok(())
     }
+
+    fn mark_staff_cached(&self, company_id: &CompanyId) -> Result<(), ConnectionError> {
+        let is_current_company = self
+            .inner
+            .read()
+            .map_err(|_| ConnectionError::StateUnavailable)?
+            .as_ref()
+            .is_some_and(|connected| &connected.company.id == company_id);
+        if is_current_company
+            && let Some(staff) = self
+                .staff
+                .write()
+                .map_err(|_| ConnectionError::StateUnavailable)?
+                .as_mut()
+        {
+            staff.availability = SnapshotAvailability::Cached;
+        }
+        Ok(())
+    }
 }
 
 fn fleet_view(
@@ -1879,6 +2017,19 @@ fn job_view(
     storage: SnapshotStorage,
 ) -> JobSnapshotView {
     JobSnapshotView {
+        company: ConnectedCompany::from(&stored.company),
+        snapshot: stored.snapshot,
+        availability,
+        storage,
+    }
+}
+
+fn staff_view(
+    stored: StoredStaffSnapshot,
+    availability: SnapshotAvailability,
+    storage: SnapshotStorage,
+) -> StaffSnapshotView {
+    StaffSnapshotView {
         company: ConnectedCompany::from(&stored.company),
         snapshot: stored.snapshot,
         availability,
@@ -1968,6 +2119,34 @@ fn save_stored_jobs(store: &mut Store, stored: &StoredJobSnapshot) -> Result<(),
         .map_err(|_| ())
 }
 
+fn load_stored_staff(store: &Store, company_id: Option<&CompanyId>) -> Option<StoredStaffSnapshot> {
+    let resource_key = company_id.map(|id| id.0.to_string());
+    let record = store
+        .latest_api_snapshot(STAFF_RESOURCE_KIND, resource_key.as_deref())
+        .ok()??;
+    stored_staff_from_record(record)
+}
+
+fn stored_staff_from_record(record: ApiSnapshotRecord) -> Option<StoredStaffSnapshot> {
+    let stored: StoredStaffSnapshot = serde_json::from_str(&record.payload_json).ok()?;
+    (stored.schema_version == wyrmgrid_domain::STAFF_SNAPSHOT_SCHEMA_VERSION
+        && stored.snapshot.value.validate().is_ok()
+        && record.resource_key == stored.company.id.0.to_string())
+    .then_some(stored)
+}
+
+fn save_stored_staff(store: &mut Store, stored: &StoredStaffSnapshot) -> Result<(), ()> {
+    let payload = serde_json::to_string(stored).map_err(|_| ())?;
+    store
+        .save_api_snapshot(
+            STAFF_RESOURCE_KIND,
+            &stored.company.id.0.to_string(),
+            &stored.snapshot.provenance.observed_at.to_rfc3339(),
+            &payload,
+        )
+        .map_err(|_| ())
+}
+
 fn format_timeline_time(value: DateTime<Utc>) -> String {
     value.to_rfc3339_opts(SecondsFormat::Secs, true)
 }
@@ -2023,6 +2202,7 @@ fn classify_resource_error(error: ClientError, resource: CompanyDataResource) ->
             CompanyDataResource::Fleet => ConnectionError::FleetUnavailable,
             CompanyDataResource::Fbos => ConnectionError::FbosUnavailable,
             CompanyDataResource::Jobs => ConnectionError::JobsUnavailable,
+            CompanyDataResource::Staff => ConnectionError::StaffUnavailable,
         },
     }
 }

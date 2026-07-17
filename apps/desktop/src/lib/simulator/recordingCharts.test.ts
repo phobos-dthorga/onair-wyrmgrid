@@ -8,6 +8,7 @@ const preferences: DisplayPreferences = {
   speed_unit: "kilometres_per_hour",
   weight_unit: "kilograms",
   fuel_unit: "litres",
+  responsive_surfaces: true,
 };
 
 const session: SimulatorSessionView = {
