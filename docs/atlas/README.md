@@ -55,6 +55,19 @@ The first Atlas slice provides:
   being inspected;
 - clearly labelled synthetic browser-preview fleet and FBO data for interface testing.
 
+The current Dispatch route slice additionally provides:
+
+- a Rust-owned, projection-versioned Atlas route view derived from the current
+  session-only validated flight plan;
+- stable plan-scoped selection IDs for origin, destination, alternates, and
+  ordered route fixes, including duplicate identifiers;
+- coordinate-only route points and dashed segments which break at unresolved
+  fixes rather than inventing geometry;
+- antimeridian-safe full-route framing including mapped alternates; and
+- linked Dispatch actions for the full route, airports, weather stations, and
+  route fixes, with an explicit Atlas inspector result when a coordinate is
+  unavailable.
+
 The committed fixtures and browser-preview data are synthetic. They contain
 no user company, aircraft, airport, or credential data.
 

@@ -22,8 +22,9 @@
     onimport,
     onweather,
     onclear,
-    onviewatlas,
     onviewweatheratlas,
+    onviewroute,
+    onviewfeature,
   }: {
     status: DispatchStatus;
     busy?: boolean;
@@ -36,8 +37,9 @@
     ) => void;
     onweather: () => void;
     onclear: () => void;
-    onviewatlas: (pointId?: string) => void;
     onviewweatheratlas: (stationId?: string) => void;
+    onviewroute: () => void;
+    onviewfeature: (featureId: string) => void;
   } = $props();
 
   let referenceKind = $state<SimBriefReferenceKind>("pilot_id");
@@ -62,16 +64,7 @@
   const fuel = $derived(plan?.fuel?.value);
   const comparison = $derived(status.comparison);
   const weather = $derived(status.weather.snapshot);
-  const atlasPlan = $derived(status.atlas_plan);
   const atlasWeather = $derived(status.atlas_weather);
-  const routeMapPoints = $derived(
-    atlasPlan?.points.filter((point) => point.kind === "route_leg") ?? [],
-  );
-
-  function atlasPointId(kind: "origin" | "destination"): string | undefined {
-    return atlasPlan?.points.find((point) => point.kind === kind)?.id;
-  }
-
   function atlasWeatherStationId(stationIcao: string): string | undefined {
     return atlasWeather?.stations.find(
       (station) => station.station_icao === stationIcao,
@@ -83,6 +76,16 @@
       .getElementById("dispatch-weather")
       ?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
+  const atlasRoute = $derived(status.atlas_route);
+  const originRouteFeature = $derived(
+    atlasRoute?.features.find((feature) => feature.kind === "origin"),
+  );
+  const destinationRouteFeature = $derived(
+    atlasRoute?.features.find((feature) => feature.kind === "destination"),
+  );
+  const alternateRouteFeatures = $derived(
+    atlasRoute?.features.filter((feature) => feature.kind === "alternate") ?? [],
+  );
 
   function formatDate(value: string | undefined): string {
     return formatLocalDateTime(value, "Not supplied", mediumDateShortTime);
@@ -114,6 +117,14 @@
     const last = selectedJob?.legs.at(-1)?.destination?.icao;
     return first && last ? `${first} → ${last}` : "Route unavailable";
   }
+
+  function routeFeatureForSequence(sequence: number) {
+    return atlasRoute?.features.find(
+      (feature) =>
+        feature.kind === "route_fix" && feature.sequence === sequence,
+    );
+  }
+
 </script>
 
 <section class="dispatch-workspace" aria-label="Dispatch flight plan workspace">
@@ -218,25 +229,33 @@
     {#if plan && airports}
       <header class="dispatch-route-header">
         <button
+          class="dispatch-airport dispatch-atlas-link"
           type="button"
-          class="dispatch-airport dispatch-map-link"
-          title="Open the origin on Atlas"
-          onclick={() => onviewatlas(atlasPointId("origin"))}
+          disabled={!originRouteFeature}
+          onclick={() =>
+            originRouteFeature && onviewfeature(originRouteFeature.id)}
         >
           <span>Origin</span>
           <strong>{airports.origin.icao}</strong>
           <small>{airports.origin.name ?? "Name not supplied"}</small>
           <i>{airports.origin.planned_runway ?? "RWY —"}</i>
         </button>
-        <div class="dispatch-route-line" aria-hidden="true">
+        <button
+          class="dispatch-route-line dispatch-atlas-link"
+          type="button"
+          disabled={!atlasRoute}
+          aria-label="View the complete Dispatch route in Atlas"
+          onclick={onviewroute}
+        >
           <span></span><b>✦</b><span></span>
           <small>{route?.distance_nm?.toFixed(0) ?? "—"} NM</small>
-        </div>
+        </button>
         <button
+          class="dispatch-airport dispatch-airport-arrival dispatch-atlas-link"
           type="button"
-          class="dispatch-airport dispatch-airport-arrival dispatch-map-link"
-          title="Open the destination on Atlas"
-          onclick={() => onviewatlas(atlasPointId("destination"))}
+          disabled={!destinationRouteFeature}
+          onclick={() =>
+            destinationRouteFeature && onviewfeature(destinationRouteFeature.id)}
         >
           <span>Destination</span>
           <strong>{airports.destination.icao}</strong>
@@ -280,7 +299,7 @@
       <FlightOperationJourney
         journey={status.journey}
         onweather={scrollWeatherIntoView}
-        onatlas={() => onviewatlas()}
+        onatlas={onviewroute}
       />
 
       <div class="dispatch-plan-grid">
@@ -292,36 +311,41 @@
             </div>
             <div class="dispatch-route-actions">
               <strong>{route?.legs.length ?? 0} fixes</strong>
-              <button type="button" onclick={() => onviewatlas()}>
-                View full route in Atlas
-              </button>
+              <button type="button" disabled={!atlasRoute} onclick={onviewroute}
+                >View full route</button
+              >
             </div>
           </div>
           <p class="dispatch-route-text">
             {route?.source_text ?? "Route text was not supplied."}
           </p>
-          {#if routeMapPoints.length}
+          {#if route?.legs.length}
             <ol class="dispatch-fix-list">
-              {#each routeMapPoints.slice(0, 12) as point}
+              {#each route.legs.slice(0, 12) as leg}
+                {@const atlasFeature = routeFeatureForSequence(leg.sequence)}
                 <li>
                   <button
                     type="button"
-                    class:dispatch-map-unavailable={!point.location}
-                    title={point.location
-                      ? `Open ${point.label} on Atlas`
-                      : `Open ${point.label} in Atlas; its location was not supplied`}
-                    onclick={() => onviewatlas(point.id)}
+                    disabled={!atlasFeature}
+                    aria-label={`${leg.ident}${atlasFeature?.availability === "location_unavailable" ? ", location unavailable" : ", view in Atlas"}`}
+                    onclick={() => atlasFeature && onviewfeature(atlasFeature.id)}
                   >
-                    <span>{(point.sequence ?? 0) + 1}</span><strong
-                      >{point.label}</strong
-                    ><small>{point.airway ?? "DCT"}</small>
-                    {#if !point.location}<i>Location unavailable</i>{/if}
+                    <span>{leg.sequence + 1}</span><strong>{leg.ident}</strong>
+                    <small>{leg.airway ?? "DCT"}</small>
+                    <em
+                      class:unavailable={atlasFeature?.availability ===
+                        "location_unavailable"}
+                    >
+                      {atlasFeature?.availability === "resolved"
+                        ? "Atlas"
+                        : "Location unavailable"}
+                    </em>
                   </button>
                 </li>
               {/each}
             </ol>
-            {#if routeMapPoints.length > 12}<small class="dispatch-muted"
-                >+ {routeMapPoints.length - 12} additional fixes retained in the snapshot</small
+            {#if route.legs.length > 12}<small class="dispatch-muted"
+                >+ {route.legs.length - 12} additional fixes retained in the snapshot</small
               >{/if}
           {/if}
         </article>
@@ -499,7 +523,7 @@
                       >
                         {airport.metar?.value.flight_category?.toUpperCase() ??
                           "NO METAR"}
-                      </span>
+                        </span>
                     </div>
                   </header>
                   {#if airport.metar}
@@ -611,14 +635,13 @@
         </article>
         <article>
           <span>Alternates</span>
-          {#if atlasPlan?.points.some((point) => point.kind === "alternate")}
+          {#if alternateRouteFeatures.length}
             <div class="dispatch-alternate-links">
-              {#each atlasPlan.points.filter((point) => point.kind === "alternate") as alternate}
+              {#each alternateRouteFeatures as alternate}
                 <button
                   type="button"
-                  class:dispatch-map-unavailable={!alternate.location}
-                  onclick={() => onviewatlas(alternate.id)}
-                  >{alternate.label}</button
+                  onclick={() => onviewfeature(alternate.id)}
+                  >{alternate.ident}</button
                 >
               {/each}
             </div>

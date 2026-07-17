@@ -66,6 +66,10 @@ export type AtlasFlightRoute = {
   recorded?: AtlasRecordedRoute;
 };
 
+export type AtlasFocusRequest =
+  | { request_id: number; kind: "route" }
+  | { request_id: number; kind: "feature"; feature_id: string };
+
 export type AirportSummary = {
   id: string;
   icao: string | null;

@@ -6,6 +6,7 @@
   } from "maplibre-gl";
   import "maplibre-gl/dist/maplibre-gl.css";
   import { onMount } from "svelte";
+  import type { AtlasRouteView } from "$lib/dispatch/types";
   import type { PublishedPluginLayer } from "$lib/forge/types";
   import { activeTheme } from "$lib/theme/runtime";
   import {
@@ -31,8 +32,14 @@
     AircraftSummary,
     AtlasAdministrativeRegion,
     AtlasFlightRoute,
+    AtlasFocusRequest,
     FboSummary,
   } from "./types";
+  import {
+    atlasRouteBounds,
+    atlasRouteGeoJson,
+    findRouteFeature,
+  } from "./route";
 
   let {
     aircraft,
@@ -49,14 +56,19 @@
     selectedRegionId,
     selectedRoutePointId,
     selectedWeatherStationId,
+    route,
+    routeVisible,
     selectedAircraftId,
     selectedFboId,
+    selectedRouteFeatureId,
+    focusRequest,
     onselectaircraft,
     onselectfbo,
     onselectroutepoint,
     onselectweatherstation,
     onselectregion,
     onhoverregion,
+    onselectroutefeature,
   }: {
     aircraft: AircraftSummary[];
     fbos: FboSummary[];
@@ -72,14 +84,19 @@
     selectedRegionId?: string;
     selectedRoutePointId?: string;
     selectedWeatherStationId?: string;
+    route?: AtlasRouteView;
+    routeVisible: boolean;
     selectedAircraftId: string | null;
     selectedFboId: string | null;
+    selectedRouteFeatureId: string | null;
+    focusRequest: AtlasFocusRequest | null;
     onselectaircraft: (aircraftId: string) => void;
     onselectfbo: (fboId: string) => void;
     onselectroutepoint: (pointId: string) => void;
     onselectweatherstation: (stationId: string) => void;
     onselectregion: (region: AtlasAdministrativeRegion) => void;
     onhoverregion: (region?: AtlasAdministrativeRegion) => void;
+    onselectroutefeature: (featureId: string) => void;
   } = $props();
 
   const REGION_SOURCE_ID = "wyrmgrid-administrative-regions";
@@ -109,6 +126,10 @@
   const WEATHER_SOURCE_ID = "wyrmgrid-flight-weather";
   const WEATHER_LAYER_ID = "wyrmgrid-flight-weather-stations";
   const WEATHER_LABEL_LAYER_ID = "wyrmgrid-flight-weather-labels";
+  const DISPATCH_ROUTE_SOURCE_ID = "wyrmgrid-dispatch-route";
+  const DISPATCH_ROUTE_LINE_LAYER_ID = "wyrmgrid-dispatch-route-line";
+  const DISPATCH_ROUTE_POINT_LAYER_ID = "wyrmgrid-dispatch-route-points";
+  const DISPATCH_ROUTE_LABEL_LAYER_ID = "wyrmgrid-dispatch-route-labels";
 
   let mapContainer: HTMLDivElement;
   let map: Map | undefined;
@@ -185,6 +206,7 @@
     }
     selectedRegionFeatureId = selectedRegionId;
   }
+  let handledFocusRequestId = 0;
 
   type FleetFeatureCollection = {
     type: "FeatureCollection";
@@ -356,6 +378,7 @@
     const routes = routeLineFeatures(flightRoute);
     const routeMarkers = routeMarkerFeatures(flightRoute);
     const weatherStations = weatherStationFeatures(weather);
+    const dispatchRouteData = atlasRouteGeoJson(route);
     (map.getSource(FLEET_SOURCE_ID) as GeoJSONSource | undefined)?.setData(
       fleet,
     );
@@ -374,6 +397,9 @@
     (map.getSource(WEATHER_SOURCE_ID) as GeoJSONSource | undefined)?.setData(
       weatherStations,
     );
+    (
+      map.getSource(DISPATCH_ROUTE_SOURCE_ID) as GeoJSONSource | undefined
+    )?.setData(dispatchRouteData);
 
     const visibility = fleetVisible ? "visible" : "none";
     map.setLayoutProperty(FLEET_LAYER_ID, "visibility", visibility);
@@ -394,6 +420,22 @@
       WEATHER_LABEL_LAYER_ID,
       "visibility",
       weatherVisibility,
+    );
+    const routeVisibility = routeVisible ? "visible" : "none";
+    map.setLayoutProperty(
+      DISPATCH_ROUTE_LINE_LAYER_ID,
+      "visibility",
+      routeVisibility,
+    );
+    map.setLayoutProperty(
+      DISPATCH_ROUTE_POINT_LAYER_ID,
+      "visibility",
+      routeVisibility,
+    );
+    map.setLayoutProperty(
+      DISPATCH_ROUTE_LABEL_LAYER_ID,
+      "visibility",
+      routeVisibility,
     );
     map.setPaintProperty(FLEET_LAYER_ID, "circle-color", [
       "case",
@@ -454,6 +496,34 @@
     );
     map.setPaintProperty(
       PLUGIN_LABEL_LAYER_ID,
+      "text-halo-color",
+      $activeTheme.colors.map_halo,
+    );
+    map.setPaintProperty(
+      DISPATCH_ROUTE_LINE_LAYER_ID,
+      "line-color",
+      $activeTheme.colors.highlight,
+    );
+    map.setPaintProperty(DISPATCH_ROUTE_POINT_LAYER_ID, "circle-color", [
+      "case",
+      ["==", ["get", "id"], selectedRouteFeatureId ?? ""],
+      $activeTheme.colors.accent,
+      ["==", ["get", "kind"], "alternate"],
+      $activeTheme.colors.map_fbo,
+      $activeTheme.colors.highlight,
+    ]);
+    map.setPaintProperty(
+      DISPATCH_ROUTE_POINT_LAYER_ID,
+      "circle-stroke-color",
+      $activeTheme.colors.map_halo,
+    );
+    map.setPaintProperty(
+      DISPATCH_ROUTE_LABEL_LAYER_ID,
+      "text-color",
+      $activeTheme.colors.highlight,
+    );
+    map.setPaintProperty(
+      DISPATCH_ROUTE_LABEL_LAYER_ID,
       "text-halo-color",
       $activeTheme.colors.map_halo,
     );
@@ -554,29 +624,68 @@
     }
     if (routeSignature || weatherSignature) return;
 
-    const visibleFeatures = [
-      ...(fleetVisible ? fleet.features : []),
-      ...(fboVisible ? fboNetwork.features : []),
-      ...(pluginLayersVisible ? pluginData.features : []),
+    const visibleCoordinates: [number, number][] = [
+      ...(fleetVisible
+        ? fleet.features.map((feature) => feature.geometry.coordinates)
+        : []),
+      ...(fboVisible
+        ? fboNetwork.features.map((feature) => feature.geometry.coordinates)
+        : []),
+      ...(pluginLayersVisible
+        ? pluginData.features.map((feature) => feature.geometry.coordinates)
+        : []),
+      ...(routeVisible
+        ? dispatchRouteData.features.flatMap((feature) =>
+            feature.geometry.type === "Point"
+              ? [feature.geometry.coordinates]
+              : [],
+          )
+        : []),
     ];
-    const signature = visibleFeatures
-      .map(
-        (feature) =>
-          `${feature.properties.id}:${feature.geometry.coordinates.join(",")}`,
-      )
+    const signature = visibleCoordinates
+      .map((coordinate) => coordinate.join(","))
       .sort()
       .join("|");
     if (!signature || signature === fittedAtlasSignature) return;
 
     fittedAtlasSignature = signature;
-    const coordinates = visibleFeatures.map(
-      (feature) => feature.geometry.coordinates,
-    );
-    const bounds = coordinates.reduce(
+    const bounds = visibleCoordinates.reduce(
       (current, coordinate) => current.extend(coordinate),
-      new maplibregl.LngLatBounds(coordinates[0], coordinates[0]),
+      new maplibregl.LngLatBounds(
+        visibleCoordinates[0],
+        visibleCoordinates[0],
+      ),
     );
     map.fitBounds(bounds, { padding: 90, maxZoom: 6, duration: 700 });
+  }
+
+  function applyFocusRequest(): void {
+    if (
+      !map ||
+      !mapReady ||
+      !focusRequest ||
+      focusRequest.request_id === handledFocusRequestId
+    ) {
+      return;
+    }
+    handledFocusRequestId = focusRequest.request_id;
+
+    if (focusRequest.kind === "route") {
+      const bounds = atlasRouteBounds(route);
+      if (bounds) {
+        map.fitBounds(bounds, { padding: 110, maxZoom: 7, duration: 700 });
+      }
+      return;
+    }
+
+    const feature = findRouteFeature(route, focusRequest.feature_id);
+    if (feature?.location) {
+      map.flyTo({
+        center: [feature.location.longitude, feature.location.latitude],
+        zoom: Math.max(map.getZoom(), 7),
+        duration: 700,
+      });
+    }
   }
 
   let maplibregl: typeof import("maplibre-gl");
@@ -597,10 +706,20 @@
     prefersReducedMotion;
     selectedRoutePointId;
     selectedWeatherStationId;
+    route;
+    routeVisible;
     selectedAircraftId;
     selectedFboId;
+    selectedRouteFeatureId;
     $activeTheme;
     updateAtlas();
+  });
+
+  $effect(() => {
+    mapReady;
+    focusRequest;
+    route;
+    applyFocusRequest();
   });
 
   onMount(() => {
@@ -869,6 +988,22 @@
             "text-halo-width": 1.5,
           },
         });
+        atlasMap.addSource(DISPATCH_ROUTE_SOURCE_ID, {
+          type: "geojson",
+          data: atlasRouteGeoJson(route),
+        });
+        atlasMap.addLayer({
+          id: DISPATCH_ROUTE_LINE_LAYER_ID,
+          type: "line",
+          source: DISPATCH_ROUTE_SOURCE_ID,
+          filter: ["==", ["get", "feature_type"], "route"],
+          paint: {
+            "line-color": $activeTheme.colors.highlight,
+            "line-width": ["interpolate", ["linear"], ["zoom"], 1, 1.5, 8, 4],
+            "line-opacity": 0.88,
+            "line-dasharray": [2, 1.4],
+          },
+        });
         atlasMap.addLayer({
           id: FBO_LAYER_ID,
           type: "circle",
@@ -964,6 +1099,38 @@
             "text-halo-width": 1.5,
           },
         });
+        atlasMap.addLayer({
+          id: DISPATCH_ROUTE_POINT_LAYER_ID,
+          type: "circle",
+          source: DISPATCH_ROUTE_SOURCE_ID,
+          filter: ["==", ["get", "feature_type"], "point"],
+          paint: {
+            "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, 5, 8, 9],
+            "circle-color": $activeTheme.colors.highlight,
+            "circle-stroke-color": $activeTheme.colors.map_halo,
+            "circle-stroke-width": 2,
+            "circle-opacity": 0.96,
+          },
+        });
+        atlasMap.addLayer({
+          id: DISPATCH_ROUTE_LABEL_LAYER_ID,
+          type: "symbol",
+          source: DISPATCH_ROUTE_SOURCE_ID,
+          filter: ["==", ["get", "feature_type"], "point"],
+          minzoom: 3,
+          layout: {
+            "text-field": ["get", "ident"],
+            "text-size": 10,
+            "text-offset": [0, -1.5],
+            "text-anchor": "bottom",
+            "text-allow-overlap": false,
+          },
+          paint: {
+            "text-color": $activeTheme.colors.highlight,
+            "text-halo-color": $activeTheme.colors.map_halo,
+            "text-halo-width": 1.5,
+          },
+        });
         atlasMap.on("click", FLEET_LAYER_ID, (event) => {
           const aircraftId = event.features?.[0]?.properties?.id;
           if (typeof aircraftId === "string") onselectaircraft(aircraftId);
@@ -988,6 +1155,7 @@
                 FLEET_LAYER_ID,
                 FBO_LAYER_ID,
                 ROUTE_MARKER_LAYER_ID,
+                DISPATCH_ROUTE_POINT_LAYER_ID,
                 WEATHER_LAYER_ID,
                 PLUGIN_LAYER_ID,
               ],
@@ -1017,6 +1185,10 @@
           clearHoveredRegion();
           atlasMap.getCanvas().style.cursor = "";
         });
+        atlasMap.on("click", DISPATCH_ROUTE_POINT_LAYER_ID, (event) => {
+          const featureId = event.features?.[0]?.properties?.id;
+          if (typeof featureId === "string") onselectroutefeature(featureId);
+        });
         atlasMap.on("mouseenter", FLEET_LAYER_ID, () => {
           atlasMap.getCanvas().style.cursor = "pointer";
         });
@@ -1039,6 +1211,12 @@
           atlasMap.getCanvas().style.cursor = "pointer";
         });
         atlasMap.on("mouseleave", WEATHER_LAYER_ID, () => {
+          atlasMap.getCanvas().style.cursor = "";
+        });
+        atlasMap.on("mouseenter", DISPATCH_ROUTE_POINT_LAYER_ID, () => {
+          atlasMap.getCanvas().style.cursor = "pointer";
+        });
+        atlasMap.on("mouseleave", DISPATCH_ROUTE_POINT_LAYER_ID, () => {
           atlasMap.getCanvas().style.cursor = "";
         });
         mapReady = true;

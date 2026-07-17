@@ -120,6 +120,7 @@ export type DispatchStatus = {
   atlas_plan?: import("$lib/atlas/types").AtlasPlannedRoute;
   atlas_weather?: FlightWeatherMapView;
   journey: FlightOperationJourneyView;
+  atlas_route?: AtlasRouteView;
   comparison?: DispatchComparison;
   selected_job?: {
     job: import("$lib/atlas/types").JobSummary;
@@ -133,6 +134,32 @@ export type DispatchStatus = {
     cache: "none" | "fresh" | "expired";
     snapshot?: WeatherSnapshot;
   };
+};
+
+export type AtlasRouteFeatureKind =
+  "origin" | "route_fix" | "destination" | "alternate";
+
+export type AtlasRouteFeature = {
+  id: string;
+  kind: AtlasRouteFeatureKind;
+  ident: string;
+  name?: string;
+  sequence?: number;
+  airway?: string;
+  availability: "resolved" | "location_unavailable";
+  location?: Coordinates;
+};
+
+export type AtlasRouteView = {
+  projection_version: number;
+  plan_id: string;
+  airac?: string;
+  source_text?: string;
+  route_feature_ids: string[];
+  features: AtlasRouteFeature[];
+  mapped_route_feature_count: number;
+  unresolved_route_feature_count: number;
+  provenance: OperationalProvenance;
 };
 
 export type SimBriefReferenceKind = "pilot_id" | "username";

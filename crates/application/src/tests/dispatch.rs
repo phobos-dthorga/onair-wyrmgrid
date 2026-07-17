@@ -2,10 +2,11 @@ use super::*;
 use std::sync::atomic::AtomicUsize;
 use uuid::Uuid;
 use wyrmgrid_domain::{
-    AircraftId, AirportId, AirportSummary, FlightPlanAirport, FlightPlanAirports,
+    AircraftId, AirportId, AirportSummary, Coordinates, FlightPlanAirport, FlightPlanAirports,
     FlightPlanIdentity, FlightPlanSnapshotId, JobSnapshot, Mass, MassUnit, Observed,
-    OperationalObservation, PlannedAircraft, PlannedSchedule, PlannedWeights, Provenance,
-    SnapshotFreshness, WEATHER_SNAPSHOT_SCHEMA_VERSION, WeatherSnapshotId,
+    OperationalObservation, PlannedAircraft, PlannedRoute, PlannedRouteLeg, PlannedSchedule,
+    PlannedWeights, Provenance, SnapshotFreshness, WEATHER_SNAPSHOT_SCHEMA_VERSION,
+    WeatherSnapshotId,
 };
 
 struct FakeProvider {
@@ -142,6 +143,74 @@ fn fleet() -> FleetSnapshotView {
         availability: SnapshotAvailability::Live,
         storage: crate::SnapshotStorage::Hoard,
     }
+}
+
+#[test]
+fn atlas_route_projection_preserves_order_duplicate_idents_and_unresolved_facts() {
+    let mut plan = snapshot("NZAA");
+    let plan_id = plan.id.0.to_string();
+    plan.airports.value.origin.location = Some(Coordinates {
+        latitude: -33.9461,
+        longitude: 151.1772,
+    });
+    plan.airports.value.destination.location = Some(Coordinates {
+        latitude: -37.0082,
+        longitude: 174.785,
+    });
+    let provenance = plan.airports.provenance.clone();
+    plan.route = Some(OperationalObservation {
+        value: PlannedRoute {
+            source_text: Some("DUP DCT DUP".into()),
+            initial_altitude_ft: Some(36_000),
+            distance_nm: Some(1_184.6),
+            legs: vec![
+                PlannedRouteLeg {
+                    sequence: 0,
+                    ident: "DUP".into(),
+                    airway: Some("DCT".into()),
+                    location: Some(Coordinates {
+                        latitude: -35.0,
+                        longitude: 160.0,
+                    }),
+                },
+                PlannedRouteLeg {
+                    sequence: 1,
+                    ident: "DUP".into(),
+                    airway: None,
+                    location: None,
+                },
+            ],
+        },
+        provenance,
+    });
+
+    let route = project_atlas_route(&plan);
+
+    assert_eq!(route.projection_version, ATLAS_ROUTE_PROJECTION_VERSION);
+    assert_eq!(
+        route.route_feature_ids,
+        vec![
+            format!("{plan_id}:origin"),
+            format!("{plan_id}:route-fix:0"),
+            format!("{plan_id}:route-fix:1"),
+            format!("{plan_id}:destination"),
+        ]
+    );
+    assert_ne!(route.route_feature_ids[1], route.route_feature_ids[2]);
+    assert_eq!(route.mapped_route_feature_count, 3);
+    assert_eq!(route.unresolved_route_feature_count, 1);
+    assert!(
+        route
+            .features
+            .iter()
+            .any(|feature| feature.kind == AtlasRouteFeatureKind::Alternate
+                && !route.route_feature_ids.contains(&feature.id))
+    );
+    assert_eq!(
+        route.features[2].availability,
+        AtlasRouteFeatureAvailability::LocationUnavailable
+    );
+    assert_eq!(route.provenance.provider, "simbrief");
 }
 
 #[tokio::test]
