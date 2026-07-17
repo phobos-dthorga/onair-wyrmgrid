@@ -10,10 +10,13 @@ it is not installed or invoked by a released WyrmGrid application.
 
 The repository's synchronized path can exceed limits encountered by OpenSSL's
 MSVC build and debug-symbol tooling. Keep Cargo output in a short local cache
-while building WyrmGrid from a long checkout:
+while building WyrmGrid from a long checkout. Each Git worktree needs its own
+subdirectory because WyrmGrid's path crates use the same names and versions in
+every checkout; sharing one Cargo target directory can mix incompatible
+intermediate artifacts.
 
 ```powershell
-$env:CARGO_TARGET_DIR = "$env:LOCALAPPDATA\WyrmGrid\cargo-target"
+$env:CARGO_TARGET_DIR = "$env:LOCALAPPDATA\WyrmGrid\cargo-target\OnAir-WyrmGrid"
 $env:OPENSSL_SRC_PERL = "C:\Strawberry\perl\bin\perl.exe"
 ```
 
@@ -38,6 +41,17 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev-windows.ps1
 The script accepts `-PerlPath` and `-CargoTargetDir` overrides when a developer
 uses non-standard locations. Run it with `-ValidateOnly` to verify the toolchain
 and environment without launching WyrmGrid.
+
+By default, the launcher derives a filesystem-safe cache name from the current
+worktree directory, such as `OnAir-WyrmGrid` or `OnAir-WyrmGrid-staff`, under
+`%LOCALAPPDATA%\WyrmGrid\cargo-target`. This keeps the path short without
+allowing separate worktrees to reuse each other's Rust intermediates.
+
+On a normal launch, the script also checks for WyrmGrid's repository-local
+Tauri command. If dependencies were removed during a disk cleanup or the
+checkout has not been prepared yet, it runs `npm ci` against the committed
+`package-lock.json` before starting the application. `-ValidateOnly` remains
+non-mutating and does not install dependencies.
 
 ```powershell
 npm ci
