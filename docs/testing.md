@@ -56,10 +56,13 @@ installer is assembled. This gives release artifacts independent evidence while
 avoiding slow or redundant hosted work during ordinary commits and pull
 requests.
 
-Routine pushes and pull requests do not launch hosted checks. A manual workflow
-dispatch requires a specific maintainer-approved exception; ordinary work uses
-the local gates above. Prefer one well-validated push and reserve hosted runner
-time for the immutable release tag.
+Release pull requests named `codex/release-*` launch the required hosted checks
+once so branch protection can admit the approved version to `main`. Jobs on
+other pull requests are reported as skipped without allocating hosted runners.
+A manual workflow dispatch requires a specific maintainer-approved exception;
+ordinary work uses the local gates above. Prefer one well-validated push and
+reserve the complete hosted rerun and packaging work for the immutable release
+tag.
 
 Launch-art presentation tests cover dark/light theme selection, malformed
 colour fallback, and bounded minimum display timing. Every production frontend

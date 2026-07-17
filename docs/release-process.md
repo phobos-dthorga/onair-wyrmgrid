@@ -57,8 +57,10 @@ releases. This makes the tag both an unambiguous request for a complete release
 candidate and the point where independent hosted verification has material
 value.
 
-Routine pushes and pull requests do not start hosted validation. The CI workflow
-is invoked by an approved release or an explicit manual exception, while the
+Release pull requests named `codex/release-*` run the branch-protection checks
+needed before the approved version can reach `main`. Other pull requests report
+those jobs as skipped and do not allocate hosted runners. The complete CI and
+security workflows run again against the immutable release tag, while the
 security workflow additionally retains its scheduled dependency review. Avoid
 unnecessary manual dispatches and reruns; local gates remain authoritative for
 ordinary development.
