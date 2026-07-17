@@ -1,9 +1,11 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import AtlasMap from "$lib/atlas/AtlasMap.svelte";
+  import { administrativeRegionContext } from "$lib/atlas/regions";
   import { atlasPreviewFbos, atlasPreviewFleet } from "$lib/atlas/sample";
   import type {
     AircraftSummary,
+    AtlasAdministrativeRegion,
     AtlasFlightRoute,
     CompanyDataSyncResult,
     DataSyncTrigger,
@@ -285,6 +287,9 @@
   let atlasFlightRoute = $state<AtlasFlightRoute>();
   let atlasWeather = $state<FlightWeatherMapView>();
   let weatherVisible = $state(true);
+  let regionsVisible = $state(true);
+  let selectedAdministrativeRegion = $state<AtlasAdministrativeRegion>();
+  let hoveredAdministrativeRegion = $state<AtlasAdministrativeRegion>();
   let selectedRoutePointId = $state<string>();
   let selectedWeatherStationId = $state<string>();
   let simulatorRecordingBusy = $state(false);
@@ -504,6 +509,13 @@
     ),
   );
   const layers = $derived([
+    {
+      id: "regions",
+      name: "Regional boundaries",
+      count: "ADM1",
+      active: regionsVisible,
+      available: true,
+    },
     {
       id: "fleet",
       name: "Fleet",
@@ -2003,6 +2015,7 @@
                 onclick={() => {
                   if (layer.id === "fleet") fleetVisible = !fleetVisible;
                   if (layer.id === "fbos") fboVisible = !fboVisible;
+                  if (layer.id === "regions") regionsVisible = !regionsVisible;
                   if (layer.id === "weather") weatherVisible = !weatherVisible;
                   if (layer.id === "jobs") activeWorkspace = "jobs";
                   if (layer.id === "plugins")
@@ -2015,6 +2028,17 @@
               </button>
             {/each}
           </div>
+
+          {#if regionsVisible}
+            <div class="sidebar-note regional-lens-note">
+              <span class="note-icon">⌖</span>
+              <p>
+                <strong>Regional lens</strong><br />
+                Hover over a sourced state, province, or equivalent region to raise
+                it; click or tap to pin its details.
+              </p>
+            </div>
+          {/if}
 
           {#if atlasFlightRoute}
             <div class="sidebar-note route-note">
@@ -2091,6 +2115,9 @@
             flightRoute={atlasFlightRoute}
             weather={atlasWeather}
             {weatherVisible}
+            {regionsVisible}
+            lowResource={startupOptions.low_resource}
+            selectedRegionId={selectedAdministrativeRegion?.id}
             {selectedRoutePointId}
             {selectedWeatherStationId}
             {selectedAircraftId}
@@ -2100,27 +2127,52 @@
               selectedFboId = null;
               selectedRoutePointId = undefined;
               selectedWeatherStationId = undefined;
+              selectedAdministrativeRegion = undefined;
             }}
             onselectfbo={(fboId) => {
               selectedFboId = fboId;
               selectedAircraftId = null;
               selectedRoutePointId = undefined;
               selectedWeatherStationId = undefined;
+              selectedAdministrativeRegion = undefined;
             }}
             onselectroutepoint={(pointId) => {
               selectedRoutePointId = pointId;
               selectedAircraftId = null;
               selectedFboId = null;
               selectedWeatherStationId = undefined;
+              selectedAdministrativeRegion = undefined;
             }}
             onselectweatherstation={(stationId) => {
               selectedWeatherStationId = stationId;
               selectedRoutePointId = undefined;
               selectedAircraftId = null;
               selectedFboId = null;
+              selectedAdministrativeRegion = undefined;
+            }}
+            onselectregion={(region) => {
+              selectedAdministrativeRegion = region;
+              selectedRoutePointId = undefined;
+              selectedWeatherStationId = undefined;
+              selectedAircraftId = null;
+              selectedFboId = null;
+            }}
+            onhoverregion={(region) => {
+              hoveredAdministrativeRegion = region;
             }}
           />
           <div class="map-wash"></div>
+          {#if hoveredAdministrativeRegion}
+            <div class="region-hover-card" aria-hidden="true">
+              <span
+                >{administrativeRegionContext(
+                  hoveredAdministrativeRegion,
+                )}</span
+              >
+              <strong>{hoveredAdministrativeRegion.name}</strong>
+              <small>Click or tap to pin this region</small>
+            </div>
+          {/if}
           <div class="map-title">
             <span class="eyebrow">Universal operations map</span>
             <strong>See the network. Command the skies.</strong>
@@ -2216,6 +2268,54 @@
                   >{formatObservedAt(
                     activeFboView?.snapshot.provenance.observed_at,
                   )}</small
+                >
+              </article>
+            </div>
+          {:else if selectedAdministrativeRegion}
+            <h2>{selectedAdministrativeRegion.name}</h2>
+            <p>
+              {administrativeRegionContext(selectedAdministrativeRegion)}.
+              Contextual planning geography, not an airspace or navigation
+              boundary.
+            </p>
+
+            <div class="selection-details">
+              <article>
+                <span>Administrative tier</span>
+                <strong
+                  >{selectedAdministrativeRegion.level === "ADM1"
+                    ? "First-level region"
+                    : "Second-level region"}</strong
+                >
+                <small
+                  >{selectedAdministrativeRegion.local_type ??
+                    "Local classification unavailable"}</small
+                >
+              </article>
+              <article>
+                <span>Regional code</span>
+                <strong
+                  >{selectedAdministrativeRegion.subdivision_code ??
+                    "Not supplied"}</strong
+                >
+                <small
+                  >{selectedAdministrativeRegion.country_code ??
+                    "Country code unavailable"}</small
+                >
+              </article>
+              {#if selectedAdministrativeRegion.name_local && selectedAdministrativeRegion.name_local !== selectedAdministrativeRegion.name}
+                <article>
+                  <span>Local name</span>
+                  <strong>{selectedAdministrativeRegion.name_local}</strong>
+                </article>
+              {/if}
+              <article>
+                <span>Boundary source</span>
+                <strong
+                  >{selectedAdministrativeRegion.source} v{selectedAdministrativeRegion.source_version}</strong
+                >
+                <small
+                  >Versioned, bundled, and available without a live lookup</small
                 >
               </article>
             </div>

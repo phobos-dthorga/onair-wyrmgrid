@@ -1,5 +1,9 @@
 <script lang="ts">
-  import type { GeoJSONSource, Map } from "maplibre-gl";
+  import type {
+    ExpressionSpecification,
+    GeoJSONSource,
+    Map,
+  } from "maplibre-gl";
   import "maplibre-gl/dist/maplibre-gl.css";
   import { onMount } from "svelte";
   import type { PublishedPluginLayer } from "$lib/forge/types";
@@ -12,13 +16,23 @@
   } from "$lib/weather/atlasWeather";
   import type { FlightWeatherMapView } from "$lib/weather/types";
   import {
+    ADMINISTRATIVE_REGION_LABEL_BANDS,
+    administrativeRegionFromMapFeature,
+    ATLAS_ADMIN1_DATASET_URL,
+  } from "./regions";
+  import {
     flightRouteSignature,
     routeFitCoordinates,
     routeLineFeatures,
     routeMarkerFeatures,
     routePointCoordinates,
   } from "./flightRoute";
-  import type { AircraftSummary, AtlasFlightRoute, FboSummary } from "./types";
+  import type {
+    AircraftSummary,
+    AtlasAdministrativeRegion,
+    AtlasFlightRoute,
+    FboSummary,
+  } from "./types";
 
   let {
     aircraft,
@@ -30,6 +44,9 @@
     flightRoute,
     weather,
     weatherVisible,
+    regionsVisible,
+    lowResource,
+    selectedRegionId,
     selectedRoutePointId,
     selectedWeatherStationId,
     selectedAircraftId,
@@ -38,6 +55,8 @@
     onselectfbo,
     onselectroutepoint,
     onselectweatherstation,
+    onselectregion,
+    onhoverregion,
   }: {
     aircraft: AircraftSummary[];
     fbos: FboSummary[];
@@ -48,6 +67,9 @@
     flightRoute?: AtlasFlightRoute;
     weather?: FlightWeatherMapView;
     weatherVisible: boolean;
+    regionsVisible: boolean;
+    lowResource: boolean;
+    selectedRegionId?: string;
     selectedRoutePointId?: string;
     selectedWeatherStationId?: string;
     selectedAircraftId: string | null;
@@ -56,7 +78,18 @@
     onselectfbo: (fboId: string) => void;
     onselectroutepoint: (pointId: string) => void;
     onselectweatherstation: (stationId: string) => void;
+    onselectregion: (region: AtlasAdministrativeRegion) => void;
+    onhoverregion: (region?: AtlasAdministrativeRegion) => void;
   } = $props();
+
+  const REGION_SOURCE_ID = "wyrmgrid-administrative-regions";
+  const REGION_FILL_LAYER_ID = "wyrmgrid-administrative-region-fills";
+  const REGION_BOUNDARY_LAYER_ID = "wyrmgrid-administrative-region-boundaries";
+  const REGION_HALO_LAYER_ID = "wyrmgrid-administrative-region-halo";
+  const REGION_LABEL_LAYER_PREFIX = "wyrmgrid-administrative-region-labels";
+  const REGION_LABEL_LAYER_IDS = ADMINISTRATIVE_REGION_LABEL_BANDS.map(
+    (band) => `${REGION_LABEL_LAYER_PREFIX}-${band.id}`,
+  );
 
   const FLEET_SOURCE_ID = "wyrmgrid-fleet";
   const FLEET_LAYER_ID = "wyrmgrid-fleet-aircraft";
@@ -81,6 +114,77 @@
   let map: Map | undefined;
   let mapReady = $state(false);
   let fittedAtlasSignature = "";
+  let hoveredRegionFeatureId: string | number | undefined;
+  let selectedRegionFeatureId: string | number | undefined;
+  let prefersReducedMotion = $state(false);
+
+  const regionHovered: ExpressionSpecification = [
+    "boolean",
+    ["feature-state", "hover"],
+    false,
+  ];
+  const regionSelected: ExpressionSpecification = [
+    "boolean",
+    ["feature-state", "selected"],
+    false,
+  ];
+
+  function regionFillOpacity(): ExpressionSpecification {
+    return [
+      "case",
+      regionSelected,
+      lowResource ? 0.12 : 0.2,
+      regionHovered,
+      lowResource ? 0.07 : 0.14,
+      lowResource ? 0.008 : 0.018,
+    ];
+  }
+
+  function regionHaloWidth(): ExpressionSpecification {
+    return [
+      "case",
+      regionHovered,
+      lowResource ? 3 : 7,
+      regionSelected,
+      lowResource ? 2.5 : 5,
+      0,
+    ];
+  }
+
+  function regionMotionDuration(): number {
+    return lowResource || prefersReducedMotion ? 0 : 160;
+  }
+
+  function clearHoveredRegion(): void {
+    if (map && hoveredRegionFeatureId !== undefined) {
+      map.setFeatureState(
+        { source: REGION_SOURCE_ID, id: hoveredRegionFeatureId },
+        { hover: false },
+      );
+    }
+    if (hoveredRegionFeatureId !== undefined) onhoverregion(undefined);
+    hoveredRegionFeatureId = undefined;
+  }
+
+  function updateSelectedRegionState(): void {
+    if (!map?.getSource(REGION_SOURCE_ID)) return;
+    if (
+      selectedRegionFeatureId !== undefined &&
+      selectedRegionFeatureId !== selectedRegionId
+    ) {
+      map.setFeatureState(
+        { source: REGION_SOURCE_ID, id: selectedRegionFeatureId },
+        { selected: false },
+      );
+    }
+    if (selectedRegionId) {
+      map.setFeatureState(
+        { source: REGION_SOURCE_ID, id: selectedRegionId },
+        { selected: true },
+      );
+    }
+    selectedRegionFeatureId = selectedRegionId;
+  }
 
   type FleetFeatureCollection = {
     type: "FeatureCollection";
@@ -198,6 +302,53 @@
 
   function updateAtlas(): void {
     if (!map || !mapReady) return;
+
+    const regionVisibility = regionsVisible ? "visible" : "none";
+    map.setLayoutProperty(REGION_FILL_LAYER_ID, "visibility", regionVisibility);
+    map.setLayoutProperty(
+      REGION_BOUNDARY_LAYER_ID,
+      "visibility",
+      regionVisibility,
+    );
+    map.setLayoutProperty(REGION_HALO_LAYER_ID, "visibility", regionVisibility);
+    for (const layerId of REGION_LABEL_LAYER_IDS) {
+      map.setLayoutProperty(layerId, "visibility", regionVisibility);
+    }
+    if (!regionsVisible) clearHoveredRegion();
+    updateSelectedRegionState();
+    map.setPaintProperty(
+      REGION_FILL_LAYER_ID,
+      "fill-color",
+      $activeTheme.colors.highlight,
+    );
+    map.setPaintProperty(
+      REGION_FILL_LAYER_ID,
+      "fill-opacity",
+      regionFillOpacity(),
+    );
+    map.setPaintProperty(
+      REGION_BOUNDARY_LAYER_ID,
+      "line-color",
+      $activeTheme.colors.map_label,
+    );
+    map.setPaintProperty(
+      REGION_HALO_LAYER_ID,
+      "line-color",
+      $activeTheme.colors.highlight,
+    );
+    map.setPaintProperty(REGION_HALO_LAYER_ID, "line-width", regionHaloWidth());
+    for (const layerId of REGION_LABEL_LAYER_IDS) {
+      map.setPaintProperty(
+        layerId,
+        "text-color",
+        $activeTheme.colors.map_label,
+      );
+      map.setPaintProperty(
+        layerId,
+        "text-halo-color",
+        $activeTheme.colors.map_halo,
+      );
+    }
 
     const fleet = fleetFeatures();
     const fboNetwork = fboFeatures();
@@ -440,6 +591,10 @@
     flightRoute;
     weather;
     weatherVisible;
+    regionsVisible;
+    lowResource;
+    selectedRegionId;
+    prefersReducedMotion;
     selectedRoutePointId;
     selectedWeatherStationId;
     selectedAircraftId;
@@ -450,6 +605,12 @@
 
   onMount(() => {
     let cancelled = false;
+    const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const updateMotionPreference = () => {
+      prefersReducedMotion = motionQuery.matches;
+    };
+    updateMotionPreference();
+    motionQuery.addEventListener("change", updateMotionPreference);
 
     void import("maplibre-gl").then((module) => {
       if (cancelled) return;
@@ -474,6 +635,11 @@
       );
 
       atlasMap.on("load", () => {
+        atlasMap.addSource(REGION_SOURCE_ID, {
+          type: "geojson",
+          data: ATLAS_ADMIN1_DATASET_URL,
+          promoteId: "region_id",
+        });
         atlasMap.addSource(FLEET_SOURCE_ID, {
           type: "geojson",
           data: fleetFeatures(),
@@ -498,6 +664,121 @@
           type: "geojson",
           data: weatherStationFeatures(weather),
         });
+        atlasMap.addLayer({
+          id: REGION_FILL_LAYER_ID,
+          type: "fill",
+          source: REGION_SOURCE_ID,
+          minzoom: 1.75,
+          layout: { visibility: regionsVisible ? "visible" : "none" },
+          paint: {
+            "fill-color": $activeTheme.colors.highlight,
+            "fill-opacity": regionFillOpacity(),
+            "fill-opacity-transition": {
+              duration: regionMotionDuration(),
+            },
+          },
+        });
+        atlasMap.addLayer({
+          id: REGION_BOUNDARY_LAYER_ID,
+          type: "line",
+          source: REGION_SOURCE_ID,
+          minzoom: 1.75,
+          layout: { visibility: regionsVisible ? "visible" : "none" },
+          paint: {
+            "line-color": $activeTheme.colors.map_label,
+            "line-width": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              1.75,
+              0.35,
+              8,
+              1.15,
+            ],
+            "line-opacity": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              1.75,
+              0.14,
+              4,
+              0.3,
+              8,
+              0.42,
+            ],
+          },
+        });
+        atlasMap.addLayer({
+          id: REGION_HALO_LAYER_ID,
+          type: "line",
+          source: REGION_SOURCE_ID,
+          minzoom: 1.75,
+          layout: { visibility: regionsVisible ? "visible" : "none" },
+          paint: {
+            "line-color": $activeTheme.colors.highlight,
+            "line-width": regionHaloWidth(),
+            "line-blur": lowResource ? 0.5 : 2,
+            "line-opacity": [
+              "case",
+              regionHovered,
+              lowResource ? 0.7 : 0.9,
+              regionSelected,
+              0.82,
+              0,
+            ],
+            "line-width-transition": {
+              duration: regionMotionDuration(),
+            },
+            "line-opacity-transition": {
+              duration: regionMotionDuration(),
+            },
+          },
+        });
+        for (const band of ADMINISTRATIVE_REGION_LABEL_BANDS) {
+          atlasMap.addLayer({
+            id: `${REGION_LABEL_LAYER_PREFIX}-${band.id}`,
+            type: "symbol",
+            source: REGION_SOURCE_ID,
+            minzoom: band.min_zoom,
+            maxzoom: band.max_zoom,
+            filter: [
+              "<=",
+              ["coalesce", ["get", "label_min_zoom"], 99],
+              band.maximum_source_min_zoom,
+            ],
+            layout: {
+              visibility: regionsVisible ? "visible" : "none",
+              "text-field": ["get", "name"],
+              "text-size": [
+                "interpolate",
+                ["linear"],
+                ["zoom"],
+                2.5,
+                8,
+                10,
+                11,
+              ],
+              "text-font": ["Noto Sans Regular"],
+              "text-max-width": 9,
+              "text-padding": band.text_padding,
+              "text-allow-overlap": false,
+              "symbol-sort-key": [
+                "coalesce",
+                ["get", "label_rank"],
+                99,
+              ],
+            },
+            paint: {
+              "text-color": $activeTheme.colors.map_label,
+              "text-opacity": 0.82,
+              "text-halo-color": $activeTheme.colors.map_halo,
+              "text-halo-width": 1.4,
+              "text-opacity-transition": {
+                duration: regionMotionDuration(),
+              },
+            },
+          });
+        }
         atlasMap.addLayer({
           id: WEATHER_LAYER_ID,
           type: "circle",
@@ -604,7 +885,7 @@
           id: FBO_LABEL_LAYER_ID,
           type: "symbol",
           source: FBO_SOURCE_ID,
-          minzoom: 3,
+          minzoom: 4.5,
           layout: {
             "text-field": ["coalesce", ["get", "name"], ["get", "icao"], "FBO"],
             "text-size": 11,
@@ -633,7 +914,7 @@
           id: FLEET_LABEL_LAYER_ID,
           type: "symbol",
           source: FLEET_SOURCE_ID,
-          minzoom: 3,
+          minzoom: 4.75,
           layout: {
             "text-field": [
               "coalesce",
@@ -699,6 +980,43 @@
           const stationId = event.features?.[0]?.properties?.id;
           if (typeof stationId === "string") onselectweatherstation(stationId);
         });
+        atlasMap.on("click", REGION_FILL_LAYER_ID, (event) => {
+          const foregroundFeatures = atlasMap.queryRenderedFeatures(
+            event.point,
+            {
+              layers: [
+                FLEET_LAYER_ID,
+                FBO_LAYER_ID,
+                ROUTE_MARKER_LAYER_ID,
+                WEATHER_LAYER_ID,
+                PLUGIN_LAYER_ID,
+              ],
+            },
+          );
+          if (foregroundFeatures.length > 0) return;
+          const region = administrativeRegionFromMapFeature(
+            event.features?.[0],
+          );
+          if (region) onselectregion(region);
+        });
+        atlasMap.on("mousemove", REGION_FILL_LAYER_ID, (event) => {
+          const region = administrativeRegionFromMapFeature(
+            event.features?.[0],
+          );
+          if (!region || region.feature_id === hoveredRegionFeatureId) return;
+          clearHoveredRegion();
+          hoveredRegionFeatureId = region.feature_id;
+          atlasMap.setFeatureState(
+            { source: REGION_SOURCE_ID, id: region.feature_id },
+            { hover: true },
+          );
+          atlasMap.getCanvas().style.cursor = "pointer";
+          onhoverregion(region);
+        });
+        atlasMap.on("mouseleave", REGION_FILL_LAYER_ID, () => {
+          clearHoveredRegion();
+          atlasMap.getCanvas().style.cursor = "";
+        });
         atlasMap.on("mouseenter", FLEET_LAYER_ID, () => {
           atlasMap.getCanvas().style.cursor = "pointer";
         });
@@ -730,6 +1048,8 @@
 
     return () => {
       cancelled = true;
+      motionQuery.removeEventListener("change", updateMotionPreference);
+      clearHoveredRegion();
       map?.remove();
     };
   });

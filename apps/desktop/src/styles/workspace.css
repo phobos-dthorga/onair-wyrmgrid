@@ -396,6 +396,42 @@ nav {
     var(--color-overlay)
   );
 }
+.region-hover-card {
+  pointer-events: none;
+  position: absolute;
+  z-index: 2;
+  top: 22px;
+  right: 58px;
+  min-width: 190px;
+  max-width: min(320px, calc(100% - 116px));
+  border: 1px solid var(--color-highlight-border);
+  border-radius: 4px;
+  padding: 11px 13px;
+  color: var(--color-text);
+  background: var(--color-surface-translucent);
+  box-shadow: 0 12px 34px var(--color-shadow);
+  backdrop-filter: blur(9px);
+}
+.region-hover-card span,
+.region-hover-card small {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: 9px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.region-hover-card strong {
+  display: block;
+  margin: 4px 0 6px;
+  color: var(--color-highlight);
+  font-family: Georgia, serif;
+  font-size: 17px;
+  font-weight: 400;
+}
+.regional-lens-note {
+  border-color: var(--color-highlight-border);
+  background: var(--color-highlight-soft);
+}
 .map-title {
   position: absolute;
   left: 24px;
@@ -696,6 +732,13 @@ footer {
 
   .map-stage {
     min-height: 420px;
+  }
+
+  .region-hover-card {
+    top: auto;
+    right: 16px;
+    bottom: 16px;
+    max-width: calc(100% - 32px);
   }
 }
 

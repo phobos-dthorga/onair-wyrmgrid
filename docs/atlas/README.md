@@ -71,6 +71,19 @@ Historical simulator debriefs reuse the same planned-route projection beside a
 separate bounded recorded trace. This keeps provenance and missing-evidence
 rules identical between the live plan and Hoard history.
 
+## Regional lens
+
+Atlas bundles a versioned, locally served ADM1 snapshot covering sourced
+states, provinces, regions, territories, prefectures, and equivalent first-level
+divisions. Hover raises a region through feature-state styling without moving
+its actual border; click or tap pins its source and identifiers in the shared
+inspector. Reduced-motion and low-resource runs retain the facts with a quieter
+effect.
+
+The data, terminology, licensing, disputed-boundary posture, reproducible build
+path, and zoom-gated ADM2 county/district design are defined in
+[Administrative regions in Atlas](administrative-regions.md).
+
 ## Deliberate limits
 
 This slice does not yet provide FBO capacity, fuel, workshop, pricing, or

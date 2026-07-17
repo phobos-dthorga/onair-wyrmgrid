@@ -5,6 +5,22 @@ import type {
 
 export type { Coordinates } from "$lib/operational/types";
 
+export type AtlasAdministrativeLevel = "ADM1" | "ADM2";
+
+export type AtlasAdministrativeRegion = {
+  id: string;
+  feature_id: string | number;
+  level: AtlasAdministrativeLevel;
+  name: string;
+  name_local?: string;
+  local_type?: string;
+  country_name?: string;
+  country_code?: string;
+  subdivision_code?: string;
+  source: string;
+  source_version: string;
+};
+
 export type AtlasRoutePoint = {
   location: Coordinates;
   label?: string;

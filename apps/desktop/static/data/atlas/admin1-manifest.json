@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "generated_file": "admin1-natural-earth-5.1.2.geojson",
+  "generated_sha256": "362c2f8a2acb83595e6ec60514eb0dfda44cec557e4ec3a5fd65af51b4c5e96e",
+  "feature_count": 4589,
+  "administrative_level": "ADM1",
+  "source": "Natural Earth",
+  "source_version": "5.1.2",
+  "source_commit": "9380cca83db5f9aef52d5e762765100745f84b27",
+  "source_url": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/9380cca83db5f9aef52d5e762765100745f84b27/geojson/ne_10m_admin_1_states_provinces.geojson",
+  "source_sha256": "22d0e3ad85eb3e27f17cabf8ba2d50e554fbc27a87796ff891d958185da62fb5",
+  "source_scale": "1:10m",
+  "simplification": {
+    "tool": "mapshaper",
+    "version": "0.7.45",
+    "retained": "8%",
+    "method": "weighted",
+    "keep_shapes": true,
+    "coordinate_precision": 0.00001
+  },
+  "licence": "Public domain",
+  "attribution": "Made with Natural Earth",
+  "boundary_view": "de_facto",
+  "navigation_authority": false
+}

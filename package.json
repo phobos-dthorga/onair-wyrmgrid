@@ -13,6 +13,7 @@
     "dev": "npm run tauri --workspace @wyrmgrid/desktop -- dev",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "atlas:regions": "node scripts/prepare-atlas-regions.mjs",
     "provider:prepare": "node scripts/prepare-simulator-provider.mjs",
     "test:tooling": "node --test scripts/*.test.mjs",
     "tauri": "npm run tauri --workspace @wyrmgrid/desktop --"
