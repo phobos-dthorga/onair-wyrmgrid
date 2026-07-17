@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import AtlasMap from "$lib/atlas/AtlasMap.svelte";
   import AtlasSearch from "$lib/atlas/AtlasSearch.svelte";
+  import { findRouteFeature } from "$lib/atlas/route";
   import { atlasPreviewFbos, atlasPreviewFleet } from "$lib/atlas/sample";
   import type {
     AircraftSummary,
@@ -11,6 +12,7 @@
     FboSummary,
     FleetSnapshot,
     FleetSnapshotView,
+    AtlasFocusRequest,
     JobSnapshotView,
     StaffSnapshotView,
   } from "$lib/atlas/types";
@@ -56,6 +58,7 @@
   } from "$lib/dispatch/sample";
   import type {
     DispatchStatus,
+    AtlasRouteFeature,
     SimBriefAccountPreference,
     SimBriefReferenceKind,
   } from "$lib/dispatch/types";
@@ -249,8 +252,12 @@
   let fleetError = $state("");
   let fleetVisible = $state(true);
   let fboVisible = $state(true);
+  let routeVisible = $state(true);
   let selectedAircraftId = $state<string | null>(null);
   let selectedFboId = $state<string | null>(null);
+  let selectedRouteFeatureId = $state<string | null>(null);
+  let atlasFocusRequest = $state<AtlasFocusRequest | null>(null);
+  let atlasFocusSequence = 0;
   let automaticSyncMinutes = $state(30);
   let legalStatus = $state<LegalStatus>({
     terms_version: CURRENT_TERMS_VERSION,
@@ -377,6 +384,10 @@
   const selectedFbo = $derived(
     fbos.find((item) => item.id === selectedFboId) ?? null,
   );
+  const atlasRoute = $derived(dispatchStatus.atlas_route);
+  const selectedRouteFeature = $derived(
+    findRouteFeature(atlasRoute, selectedRouteFeatureId),
+  );
   const atlasAvailability = $derived(
     activeFleetView?.availability ?? activeFboView?.availability,
   );
@@ -487,6 +498,13 @@
   );
   const layers = $derived([
     {
+      id: "route",
+      name: "Dispatch route",
+      count: atlasRoute?.mapped_route_feature_count ?? 0,
+      active: routeVisible && Boolean(atlasRoute),
+      available: Boolean(atlasRoute),
+    },
+    {
       id: "fleet",
       name: "Fleet",
       count: plottedAircraftCount,
@@ -548,6 +566,49 @@
 
   function displayRegistration(item: AircraftSummary): string {
     return item.registration ?? "Unknown registration";
+  }
+
+  function formatRouteFeatureKind(
+    feature: AtlasRouteFeature,
+  ): string {
+    if (feature.kind === "route_fix") return "Route fix";
+    return feature.kind[0].toUpperCase() + feature.kind.slice(1);
+  }
+
+  function acceptDispatchStatus(next: DispatchStatus): void {
+    const previousPlanId = dispatchStatus.atlas_route?.plan_id;
+    dispatchStatus = next;
+    if (
+      previousPlanId !== next.atlas_route?.plan_id ||
+      (selectedRouteFeatureId &&
+        !next.atlas_route?.features.some(
+          (feature) => feature.id === selectedRouteFeatureId,
+        ))
+    ) {
+      selectedRouteFeatureId = null;
+    }
+  }
+
+  function requestAtlasRouteFocus(featureId?: string): void {
+    routeVisible = true;
+    selectedAircraftId = null;
+    selectedFboId = null;
+    selectedRouteFeatureId = featureId ?? null;
+    atlasFocusSequence += 1;
+    atlasFocusRequest = featureId
+      ? {
+          request_id: atlasFocusSequence,
+          kind: "feature",
+          feature_id: featureId,
+        }
+      : { request_id: atlasFocusSequence, kind: "route" };
+    activeWorkspace = "atlas";
+  }
+
+  function selectAtlasRouteFeature(featureId: string): void {
+    selectedAircraftId = null;
+    selectedFboId = null;
+    selectedRouteFeatureId = featureId;
   }
 
   function formatCoordinates(item: AircraftSummary): string {
@@ -1138,7 +1199,7 @@
   async function refreshDispatchStatus(): Promise<void> {
     if (!isDesktopRuntime()) return;
     try {
-      dispatchStatus = await loadDispatchStatus();
+      acceptDispatchStatus(await loadDispatchStatus());
     } catch (error) {
       dispatchError = operationErrorMessage(
         error,
@@ -1156,9 +1217,11 @@
     dispatchBusy = true;
     dispatchError = "";
     try {
-      dispatchStatus = isDesktopRuntime()
-        ? await importLatestSimBriefPlan(kind, reference, rememberReference)
-        : dispatchPreviewReady;
+      acceptDispatchStatus(
+        isDesktopRuntime()
+          ? await importLatestSimBriefPlan(kind, reference, rememberReference)
+          : dispatchPreviewReady,
+      );
       simbriefAccountPreference = isDesktopRuntime()
         ? ((await loadSimBriefAccountPreference()) ?? undefined)
         : rememberReference
@@ -1180,9 +1243,11 @@
     dispatchBusy = true;
     dispatchError = "";
     try {
-      dispatchStatus = isDesktopRuntime()
-        ? await clearDispatchPlan()
-        : dispatchPreviewEmpty;
+      acceptDispatchStatus(
+        isDesktopRuntime()
+          ? await clearDispatchPlan()
+          : dispatchPreviewEmpty,
+      );
     } catch (error) {
       dispatchError = operationErrorMessage(
         error,
@@ -1198,7 +1263,9 @@
     dispatchBusy = true;
     dispatchError = "";
     try {
-      if (isDesktopRuntime()) dispatchStatus = await selectDispatchJob(jobId);
+      if (isDesktopRuntime()) {
+        acceptDispatchStatus(await selectDispatchJob(jobId));
+      }
       activeWorkspace = "dispatch";
     } catch (error) {
       dispatchError = operationErrorMessage(
@@ -1215,9 +1282,11 @@
     dispatchBusy = true;
     dispatchError = "";
     try {
-      dispatchStatus = isDesktopRuntime()
-        ? await refreshDispatchWeather()
-        : dispatchPreviewReady;
+      acceptDispatchStatus(
+        isDesktopRuntime()
+          ? await refreshDispatchWeather()
+          : dispatchPreviewReady,
+      );
     } catch (error) {
       dispatchError = operationErrorMessage(
         error,
@@ -1296,7 +1365,7 @@
       securityCentre = securityPreviewGranted;
       securityCentreLoaded = true;
       simulatorBridge = emptySimulatorBridge;
-      dispatchStatus = dispatchPreviewReady;
+      acceptDispatchStatus(dispatchPreviewReady);
       return;
     }
 
@@ -1906,6 +1975,7 @@
                   ? `Toggle ${layer.name}`
                   : `${layer.name} is planned for a later slice`}
                 onclick={() => {
+                  if (layer.id === "route") routeVisible = !routeVisible;
                   if (layer.id === "fleet") fleetVisible = !fleetVisible;
                   if (layer.id === "fbos") fboVisible = !fboVisible;
                   if (layer.id === "jobs") activeWorkspace = "jobs";
@@ -1929,10 +1999,12 @@
             onselectaircraft={(aircraftId) => {
               selectedAircraftId = aircraftId;
               selectedFboId = null;
+              selectedRouteFeatureId = null;
             }}
             onselectfbo={(fboId) => {
               selectedFboId = fboId;
               selectedAircraftId = null;
+              selectedRouteFeatureId = null;
             }}
           />
 
@@ -1984,16 +2056,23 @@
             {fboVisible}
             pluginLayers={pluginHost.layers}
             {pluginLayersVisible}
+            route={atlasRoute}
+            {routeVisible}
             {selectedAircraftId}
             {selectedFboId}
+            {selectedRouteFeatureId}
+            focusRequest={atlasFocusRequest}
             onselectaircraft={(aircraftId) => {
               selectedAircraftId = aircraftId;
               selectedFboId = null;
+              selectedRouteFeatureId = null;
             }}
             onselectfbo={(fboId) => {
               selectedFboId = fboId;
               selectedAircraftId = null;
+              selectedRouteFeatureId = null;
             }}
+            onselectroutefeature={selectAtlasRouteFeature}
           />
           <div class="map-wash"></div>
           <div class="map-title">
@@ -2039,7 +2118,42 @@
 
         <aside class="inspector" aria-label="Selection inspector">
           <span class="eyebrow">Inspector</span>
-          {#if selectedAircraft}
+          {#if selectedRouteFeature}
+            <h2>{selectedRouteFeature.ident}</h2>
+            <p>{formatRouteFeatureKind(selectedRouteFeature)} from the current Dispatch plan</p>
+
+            <div class="selection-details">
+              <article>
+                <span>Location</span>
+                <strong
+                  >{selectedRouteFeature.location
+                    ? `${selectedRouteFeature.location.latitude.toFixed(4)}, ${selectedRouteFeature.location.longitude.toFixed(4)}`
+                    : "Location unavailable"}</strong
+                >
+                <small>
+                  {selectedRouteFeature.location
+                    ? "Coordinate supplied by the validated plan"
+                    : "WyrmGrid has not inferred a coordinate for this item"}
+                </small>
+              </article>
+              <article>
+                <span>Route evidence</span>
+                <strong>{selectedRouteFeature.airway ?? "No airway reported"}</strong>
+                <small>
+                  {selectedRouteFeature.sequence === undefined
+                    ? selectedRouteFeature.name ?? "No additional label supplied"
+                    : `Ordered fix ${selectedRouteFeature.sequence + 1}`}
+                </small>
+              </article>
+              <article>
+                <span>Provenance</span>
+                <strong>{atlasRoute?.provenance.provider ?? "Not available"}</strong>
+                <small>
+                  {atlasRoute?.airac ? `AIRAC ${atlasRoute.airac}` : "AIRAC not reported"}
+                </small>
+              </article>
+            </div>
+          {:else if selectedAircraft}
             <h2>{displayRegistration(selectedAircraft)}</h2>
             <p>{selectedAircraft.model ?? "Aircraft type unavailable"}</p>
 
@@ -2094,6 +2208,32 @@
                 >
               </article>
             </div>
+          {:else if atlasRoute}
+            <h2>Dispatch route ready</h2>
+            <p>
+              {atlasRoute.mapped_route_feature_count} mapped route items and
+              {atlasRoute.unresolved_route_feature_count} location gaps are retained
+              from the current plan.
+            </p>
+            <div class="selection-details">
+              <article>
+                <span>Source</span>
+                <strong>{atlasRoute.provenance.provider}</strong>
+                <small>
+                  {atlasRoute.airac ? `AIRAC ${atlasRoute.airac}` : "AIRAC not reported"}
+                </small>
+              </article>
+              <article>
+                <span>Projection</span>
+                <strong>Coordinate-only route v{atlasRoute.projection_version}</strong>
+                <small>Unresolved fixes remain visible in Dispatch</small>
+              </article>
+            </div>
+            <button
+              class="sync-button"
+              type="button"
+              onclick={() => requestAtlasRouteFocus()}>Frame full route</button
+            >
           {:else}
             <h2>Nothing selected</h2>
             <p>
@@ -2122,6 +2262,13 @@
             </article>
             <article>
               <span>Storage</span><strong>{fleetStorageLabel}</strong>
+            </article>
+            <article>
+              <span>Dispatch route</span><strong
+                >{atlasRoute
+                  ? `${atlasRoute.mapped_route_feature_count} mapped`
+                  : "No plan"}</strong
+              >
             </article>
           </div>
         </aside>
@@ -2192,6 +2339,8 @@
           void importDispatchPlan(kind, reference, rememberReference)}
         onweather={() => void refreshCurrentDispatchWeather()}
         onclear={() => void clearCurrentDispatchPlan()}
+        onviewroute={() => requestAtlasRouteFocus()}
+        onviewfeature={(featureId) => requestAtlasRouteFocus(featureId)}
       />
     {/if}
 

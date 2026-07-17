@@ -4,7 +4,17 @@
   import { onMount } from "svelte";
   import type { PublishedPluginLayer } from "$lib/forge/types";
   import { activeTheme } from "$lib/theme/runtime";
-  import type { AircraftSummary, FboSummary } from "./types";
+  import type { AtlasRouteView } from "$lib/dispatch/types";
+  import {
+    atlasRouteBounds,
+    atlasRouteGeoJson,
+    findRouteFeature,
+  } from "./route";
+  import type {
+    AircraftSummary,
+    AtlasFocusRequest,
+    FboSummary,
+  } from "./types";
 
   let {
     aircraft,
@@ -13,10 +23,15 @@
     fboVisible,
     pluginLayers,
     pluginLayersVisible,
+    route,
+    routeVisible,
     selectedAircraftId,
     selectedFboId,
+    selectedRouteFeatureId,
+    focusRequest,
     onselectaircraft,
     onselectfbo,
+    onselectroutefeature,
   }: {
     aircraft: AircraftSummary[];
     fbos: FboSummary[];
@@ -24,10 +39,15 @@
     fboVisible: boolean;
     pluginLayers: PublishedPluginLayer[];
     pluginLayersVisible: boolean;
+    route?: AtlasRouteView;
+    routeVisible: boolean;
     selectedAircraftId: string | null;
     selectedFboId: string | null;
+    selectedRouteFeatureId: string | null;
+    focusRequest: AtlasFocusRequest | null;
     onselectaircraft: (aircraftId: string) => void;
     onselectfbo: (fboId: string) => void;
+    onselectroutefeature: (featureId: string) => void;
   } = $props();
 
   const FLEET_SOURCE_ID = "wyrmgrid-fleet";
@@ -39,11 +59,16 @@
   const PLUGIN_SOURCE_ID = "wyrmgrid-plugin-layers";
   const PLUGIN_LAYER_ID = "wyrmgrid-plugin-points";
   const PLUGIN_LABEL_LAYER_ID = "wyrmgrid-plugin-labels";
+  const ROUTE_SOURCE_ID = "wyrmgrid-dispatch-route";
+  const ROUTE_LINE_LAYER_ID = "wyrmgrid-dispatch-route-line";
+  const ROUTE_POINT_LAYER_ID = "wyrmgrid-dispatch-route-points";
+  const ROUTE_LABEL_LAYER_ID = "wyrmgrid-dispatch-route-labels";
 
   let mapContainer: HTMLDivElement;
   let map: Map | undefined;
   let mapReady = $state(false);
   let fittedAtlasSignature = "";
+  let handledFocusRequestId = 0;
 
   type FleetFeatureCollection = {
     type: "FeatureCollection";
@@ -165,6 +190,7 @@
     const fleet = fleetFeatures();
     const fboNetwork = fboFeatures();
     const pluginData = pluginFeatures();
+    const routeData = atlasRouteGeoJson(route);
     (map.getSource(FLEET_SOURCE_ID) as GeoJSONSource | undefined)?.setData(
       fleet,
     );
@@ -173,6 +199,9 @@
     );
     (map.getSource(PLUGIN_SOURCE_ID) as GeoJSONSource | undefined)?.setData(
       pluginData,
+    );
+    (map.getSource(ROUTE_SOURCE_ID) as GeoJSONSource | undefined)?.setData(
+      routeData,
     );
 
     const visibility = fleetVisible ? "visible" : "none";
@@ -188,6 +217,10 @@
       "visibility",
       pluginVisibility,
     );
+    const routeVisibility = routeVisible ? "visible" : "none";
+    map.setLayoutProperty(ROUTE_LINE_LAYER_ID, "visibility", routeVisibility);
+    map.setLayoutProperty(ROUTE_POINT_LAYER_ID, "visibility", routeVisibility);
+    map.setLayoutProperty(ROUTE_LABEL_LAYER_ID, "visibility", routeVisibility);
     map.setPaintProperty(FLEET_LAYER_ID, "circle-color", [
       "case",
       ["==", ["get", "id"], selectedAircraftId ?? ""],
@@ -250,30 +283,97 @@
       "text-halo-color",
       $activeTheme.colors.map_halo,
     );
+    map.setPaintProperty(
+      ROUTE_LINE_LAYER_ID,
+      "line-color",
+      $activeTheme.colors.highlight,
+    );
+    map.setPaintProperty(ROUTE_POINT_LAYER_ID, "circle-color", [
+      "case",
+      ["==", ["get", "id"], selectedRouteFeatureId ?? ""],
+      $activeTheme.colors.accent,
+      ["==", ["get", "kind"], "alternate"],
+      $activeTheme.colors.map_fbo,
+      $activeTheme.colors.highlight,
+    ]);
+    map.setPaintProperty(
+      ROUTE_POINT_LAYER_ID,
+      "circle-stroke-color",
+      $activeTheme.colors.map_halo,
+    );
+    map.setPaintProperty(
+      ROUTE_LABEL_LAYER_ID,
+      "text-color",
+      $activeTheme.colors.highlight,
+    );
+    map.setPaintProperty(
+      ROUTE_LABEL_LAYER_ID,
+      "text-halo-color",
+      $activeTheme.colors.map_halo,
+    );
 
-    const visibleFeatures = [
-      ...(fleetVisible ? fleet.features : []),
-      ...(fboVisible ? fboNetwork.features : []),
-      ...(pluginLayersVisible ? pluginData.features : []),
+    const visibleCoordinates: [number, number][] = [
+      ...(fleetVisible
+        ? fleet.features.map((feature) => feature.geometry.coordinates)
+        : []),
+      ...(fboVisible
+        ? fboNetwork.features.map((feature) => feature.geometry.coordinates)
+        : []),
+      ...(pluginLayersVisible
+        ? pluginData.features.map((feature) => feature.geometry.coordinates)
+        : []),
+      ...(routeVisible
+        ? routeData.features.flatMap((feature) =>
+            feature.geometry.type === "Point"
+              ? [feature.geometry.coordinates]
+              : [],
+          )
+        : []),
     ];
-    const signature = visibleFeatures
-      .map(
-        (feature) =>
-          `${feature.properties.id}:${feature.geometry.coordinates.join(",")}`,
-      )
+    const signature = visibleCoordinates
+      .map((coordinate) => coordinate.join(","))
       .sort()
       .join("|");
     if (!signature || signature === fittedAtlasSignature) return;
 
     fittedAtlasSignature = signature;
-    const coordinates = visibleFeatures.map(
-      (feature) => feature.geometry.coordinates,
-    );
-    const bounds = coordinates.reduce(
+    const bounds = visibleCoordinates.reduce(
       (current, coordinate) => current.extend(coordinate),
-      new maplibregl.LngLatBounds(coordinates[0], coordinates[0]),
+      new maplibregl.LngLatBounds(
+        visibleCoordinates[0],
+        visibleCoordinates[0],
+      ),
     );
     map.fitBounds(bounds, { padding: 90, maxZoom: 6, duration: 700 });
+  }
+
+  function applyFocusRequest(): void {
+    if (
+      !map ||
+      !mapReady ||
+      !focusRequest ||
+      focusRequest.request_id === handledFocusRequestId
+    ) {
+      return;
+    }
+    handledFocusRequestId = focusRequest.request_id;
+
+    if (focusRequest.kind === "route") {
+      const bounds = atlasRouteBounds(route);
+      if (bounds) {
+        map.fitBounds(bounds, { padding: 110, maxZoom: 7, duration: 700 });
+      }
+      return;
+    }
+
+    const feature = findRouteFeature(route, focusRequest.feature_id);
+    if (feature?.location) {
+      map.flyTo({
+        center: [feature.location.longitude, feature.location.latitude],
+        zoom: Math.max(map.getZoom(), 7),
+        duration: 700,
+      });
+    }
   }
 
   let maplibregl: typeof import("maplibre-gl");
@@ -285,10 +385,20 @@
     fboVisible;
     pluginLayers;
     pluginLayersVisible;
+    route;
+    routeVisible;
     selectedAircraftId;
     selectedFboId;
+    selectedRouteFeatureId;
     $activeTheme;
     updateAtlas();
+  });
+
+  $effect(() => {
+    mapReady;
+    focusRequest;
+    route;
+    applyFocusRequest();
   });
 
   onMount(() => {
@@ -328,6 +438,22 @@
         atlasMap.addSource(PLUGIN_SOURCE_ID, {
           type: "geojson",
           data: pluginFeatures(),
+        });
+        atlasMap.addSource(ROUTE_SOURCE_ID, {
+          type: "geojson",
+          data: atlasRouteGeoJson(route),
+        });
+        atlasMap.addLayer({
+          id: ROUTE_LINE_LAYER_ID,
+          type: "line",
+          source: ROUTE_SOURCE_ID,
+          filter: ["==", ["get", "feature_type"], "route"],
+          paint: {
+            "line-color": $activeTheme.colors.highlight,
+            "line-width": ["interpolate", ["linear"], ["zoom"], 1, 1.5, 8, 4],
+            "line-opacity": 0.88,
+            "line-dasharray": [2, 1.4],
+          },
         });
         atlasMap.addLayer({
           id: FBO_LAYER_ID,
@@ -424,6 +550,38 @@
             "text-halo-width": 1.5,
           },
         });
+        atlasMap.addLayer({
+          id: ROUTE_POINT_LAYER_ID,
+          type: "circle",
+          source: ROUTE_SOURCE_ID,
+          filter: ["==", ["get", "feature_type"], "point"],
+          paint: {
+            "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, 5, 8, 9],
+            "circle-color": $activeTheme.colors.highlight,
+            "circle-stroke-color": $activeTheme.colors.map_halo,
+            "circle-stroke-width": 2,
+            "circle-opacity": 0.96,
+          },
+        });
+        atlasMap.addLayer({
+          id: ROUTE_LABEL_LAYER_ID,
+          type: "symbol",
+          source: ROUTE_SOURCE_ID,
+          filter: ["==", ["get", "feature_type"], "point"],
+          minzoom: 3,
+          layout: {
+            "text-field": ["get", "ident"],
+            "text-size": 10,
+            "text-offset": [0, -1.5],
+            "text-anchor": "bottom",
+            "text-allow-overlap": false,
+          },
+          paint: {
+            "text-color": $activeTheme.colors.highlight,
+            "text-halo-color": $activeTheme.colors.map_halo,
+            "text-halo-width": 1.5,
+          },
+        });
         atlasMap.on("click", FLEET_LAYER_ID, (event) => {
           const aircraftId = event.features?.[0]?.properties?.id;
           if (typeof aircraftId === "string") onselectaircraft(aircraftId);
@@ -431,6 +589,10 @@
         atlasMap.on("click", FBO_LAYER_ID, (event) => {
           const fboId = event.features?.[0]?.properties?.id;
           if (typeof fboId === "string") onselectfbo(fboId);
+        });
+        atlasMap.on("click", ROUTE_POINT_LAYER_ID, (event) => {
+          const featureId = event.features?.[0]?.properties?.id;
+          if (typeof featureId === "string") onselectroutefeature(featureId);
         });
         atlasMap.on("mouseenter", FLEET_LAYER_ID, () => {
           atlasMap.getCanvas().style.cursor = "pointer";
@@ -442,6 +604,12 @@
           atlasMap.getCanvas().style.cursor = "pointer";
         });
         atlasMap.on("mouseleave", FBO_LAYER_ID, () => {
+          atlasMap.getCanvas().style.cursor = "";
+        });
+        atlasMap.on("mouseenter", ROUTE_POINT_LAYER_ID, () => {
+          atlasMap.getCanvas().style.cursor = "pointer";
+        });
+        atlasMap.on("mouseleave", ROUTE_POINT_LAYER_ID, () => {
           atlasMap.getCanvas().style.cursor = "";
         });
         mapReady = true;

@@ -103,9 +103,10 @@ not replace completion of the current vertical slice.
   TAF airport context with raw coded text and provenance (implemented)
 - Route advisories and explainable weather findings (airport observation context
   implemented; route hazard products remain)
-- Dispatch-to-Atlas route projection with full-route framing and linked
-  airports/fixes, followed by clickable SID/STAR geometry only after navigation
-  and AIRAC resolution are implemented
+- Dispatch-to-Atlas coordinate-only route projection with antimeridian-safe
+  full-route framing, stable linked airport/fix selections, and explicit
+  unresolved-location results (implemented); clickable SID/STAR geometry still
+  waits for navigation and AIRAC resolution
 - Live and Hoard-historical Atlas weather with a default Compatibility renderer,
   opt-in GPU-enhanced effects, and identical facts across rendering profiles
 - SimBrief generation only after Navigraph approves the desktop flow and any

@@ -2,8 +2,9 @@
 
 This document defines how Dispatch, SimBrief, weather, Hoard, and Atlas should
 join without creating a second interpretation of the same operational facts.
-It is a design contract for future increments; the present Atlas does not yet
-draw flight plans or animated weather.
+It is the design contract for the current coordinate-only flight-plan
+projection and future weather increments. Atlas does not yet resolve navigation
+geometry or draw animated weather.
 
 ## One plan, two projections
 
@@ -19,6 +20,20 @@ private SimBrief response
   -> Atlas route projection
   -> shared selection and provenance
 ```
+
+The implemented projection is produced in the Rust application service and is
+included with `DispatchStatus`. It assigns plan-scoped stable IDs to the origin,
+destination, alternates, and every ordered route fix. Each feature explicitly
+reports either `resolved` with a source coordinate or
+`location_unavailable`; duplicate identifiers remain distinct through their
+sequence-based IDs.
+
+Atlas draws only supplied coordinates. A missing route fix breaks the rendered
+line rather than joining across the unknown location, while Dispatch keeps the
+unresolved item clickable and Atlas explains the gap in its inspector. Full
+route framing includes every mapped route feature and alternate and uses
+antimeridian-safe bounds. The browser preview uses clearly synthetic
+coordinate-bearing plan data solely for interface validation.
 
 The first route layer should provide:
 
@@ -181,8 +196,9 @@ warning effects may flash, while the runtime control prevents or reduces them.
 ## Delivery sequence and validation
 
 1. Add a stable Atlas route-view model and full-route framing using only
-   coordinates already present in the snapshot.
+   coordinates already present in the snapshot. **Implemented.**
 2. Add shared Dispatch/Atlas selection IDs and explicit unresolved-leg results.
+   **Implemented.**
 3. Introduce navigation resolution with procedure/AIRAC provenance before
    clickable SID/STAR geometry.
 4. Project current airport weather, followed by validated advisory geometries.

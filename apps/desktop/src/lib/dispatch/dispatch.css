@@ -207,6 +207,24 @@
   display: grid;
   gap: 4px;
 }
+.dispatch-atlas-link {
+  border: 1px solid transparent;
+  padding: 8px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+.dispatch-atlas-link:hover:not(:disabled),
+.dispatch-atlas-link:focus-visible {
+  border-color: var(--color-highlight-border);
+  background: var(--color-highlight-soft);
+  outline: none;
+}
+.dispatch-atlas-link:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
 .dispatch-airport > span {
   color: var(--color-highlight);
   font-size: 9px;
@@ -242,6 +260,7 @@
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   color: var(--color-highlight);
+  width: 100%;
 }
 .dispatch-route-line span {
   border-top: 1px dashed var(--color-highlight-border);
@@ -321,6 +340,33 @@
   color: var(--color-highlight);
   font-size: 9px;
 }
+.dispatch-route-actions {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+}
+.dispatch-route-actions strong {
+  color: var(--color-highlight);
+  font-size: 9px;
+}
+.dispatch-route-actions button {
+  border: 1px solid var(--color-highlight-border);
+  padding: 5px 7px;
+  color: var(--color-highlight);
+  background: transparent;
+  font: inherit;
+  font-size: 9px;
+  cursor: pointer;
+}
+.dispatch-route-actions button:hover:not(:disabled),
+.dispatch-route-actions button:focus-visible {
+  background: var(--color-highlight-soft);
+  outline: none;
+}
+.dispatch-route-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
 .dispatch-route-text {
   margin: 20px 0;
   color: var(--color-text);
@@ -338,13 +384,32 @@
   list-style: none;
 }
 .dispatch-fix-list li {
+  min-width: 0;
+}
+.dispatch-fix-list li > button {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 2px 8px;
-  border-top: 1px solid var(--color-line-faint);
-  padding-top: 7px;
+  width: 100%;
+  border: 1px solid transparent;
+  border-top-color: var(--color-line-faint);
+  padding: 7px 4px 4px;
+  color: var(--color-text);
+  text-align: left;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
 }
-.dispatch-fix-list li > span {
+.dispatch-fix-list li > button:hover,
+.dispatch-fix-list li > button:focus-visible {
+  border-color: var(--color-highlight-border);
+  background: var(--color-highlight-soft);
+  outline: none;
+}
+.dispatch-fix-list li > button:disabled {
+  cursor: default;
+}
+.dispatch-fix-list li > button > span {
   grid-row: span 2;
   color: var(--color-line);
   font-size: 9px;
@@ -355,6 +420,15 @@
 .dispatch-fix-list small {
   color: var(--color-text-muted);
   font-size: 9px;
+}
+.dispatch-fix-list em {
+  grid-column: 2;
+  color: var(--color-highlight);
+  font-size: 8px;
+  font-style: normal;
+}
+.dispatch-fix-list em.unavailable {
+  color: var(--color-text-muted);
 }
 .dispatch-metric-list {
   display: grid;
@@ -490,10 +564,31 @@
   justify-content: space-between;
   gap: 10px;
 }
-.dispatch-weather-station > header > strong {
+.dispatch-weather-station > header > button {
+  display: grid;
+  gap: 2px;
+  border: 1px solid transparent;
+  padding: 4px;
+  color: var(--color-text);
+  text-align: left;
+  background: transparent;
   font-family: Georgia, serif;
   font-size: 20px;
   font-weight: 400;
+  cursor: pointer;
+}
+.dispatch-weather-station > header > button:hover,
+.dispatch-weather-station > header > button:focus-visible {
+  border-color: var(--color-highlight-border);
+  outline: none;
+}
+.dispatch-weather-station > header > button:disabled {
+  cursor: default;
+}
+.dispatch-weather-station > header > button small {
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: 8px;
 }
 .dispatch-flight-category {
   border: 1px solid var(--color-line-faint);

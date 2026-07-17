@@ -21,6 +21,8 @@
     onimport,
     onweather,
     onclear,
+    onviewroute,
+    onviewfeature,
   }: {
     status: DispatchStatus;
     busy?: boolean;
@@ -33,6 +35,8 @@
     ) => void;
     onweather: () => void;
     onclear: () => void;
+    onviewroute: () => void;
+    onviewfeature: (featureId: string) => void;
   } = $props();
 
   let referenceKind = $state<SimBriefReferenceKind>("pilot_id");
@@ -57,6 +61,13 @@
   const fuel = $derived(plan?.fuel?.value);
   const comparison = $derived(status.comparison);
   const weather = $derived(status.weather.snapshot);
+  const atlasRoute = $derived(status.atlas_route);
+  const originRouteFeature = $derived(
+    atlasRoute?.features.find((feature) => feature.kind === "origin"),
+  );
+  const destinationRouteFeature = $derived(
+    atlasRoute?.features.find((feature) => feature.kind === "destination"),
+  );
 
   function formatDate(value: string | undefined): string {
     return formatLocalDateTime(value, "Not supplied", mediumDateShortTime);
@@ -87,6 +98,19 @@
     const first = selectedJob?.legs[0]?.departure?.icao;
     const last = selectedJob?.legs.at(-1)?.destination?.icao;
     return first && last ? `${first} → ${last}` : "Route unavailable";
+  }
+
+  function routeFeatureForSequence(sequence: number) {
+    return atlasRoute?.features.find(
+      (feature) =>
+        feature.kind === "route_fix" && feature.sequence === sequence,
+    );
+  }
+
+  function routeAirportFeature(icao: string) {
+    return atlasRoute?.features.find(
+      (feature) => feature.kind !== "route_fix" && feature.ident === icao,
+    );
   }
 </script>
 
@@ -183,22 +207,40 @@
   <section class="dispatch-board">
     {#if plan && airports}
       <header class="dispatch-route-header">
-        <div class="dispatch-airport">
+        <button
+          class="dispatch-airport dispatch-atlas-link"
+          type="button"
+          disabled={!originRouteFeature}
+          onclick={() =>
+            originRouteFeature && onviewfeature(originRouteFeature.id)}
+        >
           <span>Origin</span>
           <strong>{airports.origin.icao}</strong>
           <small>{airports.origin.name ?? "Name not supplied"}</small>
           <i>{airports.origin.planned_runway ?? "RWY —"}</i>
-        </div>
-        <div class="dispatch-route-line" aria-hidden="true">
+        </button>
+        <button
+          class="dispatch-route-line dispatch-atlas-link"
+          type="button"
+          disabled={!atlasRoute}
+          aria-label="View the complete Dispatch route in Atlas"
+          onclick={onviewroute}
+        >
           <span></span><b>✦</b><span></span>
           <small>{route?.distance_nm?.toFixed(0) ?? "—"} NM</small>
-        </div>
-        <div class="dispatch-airport dispatch-airport-arrival">
+        </button>
+        <button
+          class="dispatch-airport dispatch-airport-arrival dispatch-atlas-link"
+          type="button"
+          disabled={!destinationRouteFeature}
+          onclick={() =>
+            destinationRouteFeature && onviewfeature(destinationRouteFeature.id)}
+        >
           <span>Destination</span>
           <strong>{airports.destination.icao}</strong>
           <small>{airports.destination.name ?? "Name not supplied"}</small>
           <i>{airports.destination.planned_runway ?? "RWY —"}</i>
-        </div>
+        </button>
       </header>
 
       <div class="dispatch-summary-strip">
@@ -240,7 +282,12 @@
               <span class="eyebrow">Route spine</span>
               <h3>Filed route</h3>
             </div>
-            <strong>{route?.legs.length ?? 0} fixes</strong>
+            <div class="dispatch-route-actions">
+              <strong>{route?.legs.length ?? 0} fixes</strong>
+              <button type="button" disabled={!atlasRoute} onclick={onviewroute}
+                >View full route</button
+              >
+            </div>
           </div>
           <p class="dispatch-route-text">
             {route?.source_text ?? "Route text was not supplied."}
@@ -248,9 +295,25 @@
           {#if route?.legs.length}
             <ol class="dispatch-fix-list">
               {#each route.legs.slice(0, 12) as leg}
+                {@const atlasFeature = routeFeatureForSequence(leg.sequence)}
                 <li>
-                  <span>{leg.sequence + 1}</span><strong>{leg.ident}</strong
-                  ><small>{leg.airway ?? "DCT"}</small>
+                  <button
+                    type="button"
+                    disabled={!atlasFeature}
+                    aria-label={`${leg.ident}${atlasFeature?.availability === "location_unavailable" ? ", location unavailable" : ", view in Atlas"}`}
+                    onclick={() => atlasFeature && onviewfeature(atlasFeature.id)}
+                  >
+                    <span>{leg.sequence + 1}</span><strong>{leg.ident}</strong>
+                    <small>{leg.airway ?? "DCT"}</small>
+                    <em
+                      class:unavailable={atlasFeature?.availability ===
+                        "location_unavailable"}
+                    >
+                      {atlasFeature?.availability === "resolved"
+                        ? "Atlas"
+                        : "Location unavailable"}
+                    </em>
+                  </button>
                 </li>
               {/each}
             </ol>
@@ -402,9 +465,21 @@
           {#if weather}
             <div class="dispatch-weather-grid">
               {#each weather.airports as airport}
+                {@const atlasFeature = routeAirportFeature(airport.station_icao)}
                 <section class="dispatch-weather-station">
                   <header>
-                    <strong>{airport.station_icao}</strong>
+                    <button
+                      type="button"
+                      disabled={!atlasFeature}
+                      onclick={() => atlasFeature && onviewfeature(atlasFeature.id)}
+                    >
+                      {airport.station_icao}
+                      <small>
+                        {atlasFeature?.availability === "resolved"
+                          ? "View in Atlas"
+                          : "Location unavailable"}
+                      </small>
+                    </button>
                     <span
                       class={`dispatch-flight-category dispatch-flight-category-${airport.metar?.value.flight_category ?? "unknown"}`}
                     >
