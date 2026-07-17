@@ -1,6 +1,7 @@
 <script lang="ts">
   import termsText from "../../../../../docs/legal/terms-of-use.md?raw";
   import privacyText from "../../../../../docs/legal/privacy-notice.md?raw";
+  import { formatLocalDateTime } from "$lib/presentation/dateTime";
   import LegalDocument from "./LegalDocument.svelte";
   import type { LegalStatus } from "./client";
 
@@ -55,8 +56,7 @@
   }
 
   function formatAcknowledgedAt(value: string): string {
-    const date = new Date(value.includes("T") ? value : `${value}Z`);
-    return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+    return formatLocalDateTime(value, value);
   }
 </script>
 
@@ -111,11 +111,11 @@
             <p>
               WyrmGrid is a local-first, independent community application. It
               connects to OnAir only when you provide credentials. Successful
-              fleet, FBO, and pending-job observations are retained in the local
-              Hoard. Atlas uses MapLibre's public demo map service. Dispatch
-              contacts SimBrief only when you explicitly import the latest OFP,
-              and contacts AviationWeather.gov only when you request airport
-              weather.
+              fleet, FBO, pending-job, and bounded staff observations are
+              retained in the local Hoard. Atlas uses MapLibre's public demo map
+              service. Dispatch contacts SimBrief only when you explicitly
+              import the latest OFP, and contacts AviationWeather.gov only when
+              you request airport weather.
             </p>
             <div class="summary-grid">
               <article>
@@ -132,6 +132,16 @@
                   >Session-only unless you ask Windows Credential Manager to
                   remember the API key. WyrmGrid's encrypted database keeps only
                   the Company ID and startup choice.</span
+                >
+              </article>
+              <article>
+                <strong>Staff roster</strong>
+                <span
+                  >Reported names, airport presence, availability, provider
+                  codes, aircraft-class qualifications, and an opaque avatar
+                  reference may be kept in the encrypted Hoard. No avatar URL
+                  or portrait artwork is retained; other unused fields are
+                  discarded.</span
                 >
               </article>
               <article>
@@ -166,8 +176,8 @@
               <article>
                 <strong>Local customisation</strong>
                 <span
-                  >Imported themes and language packs remain in WyrmGrid's
-                  local database and are not sent to translation services.</span
+                  >Imported themes and language packs remain in WyrmGrid's local
+                  database and are not sent to translation services.</span
                 >
               </article>
               <article>
@@ -211,8 +221,8 @@
           <small
             >Optional. When the official build supports it, unexpected error
             codes and sanitized technical context go to Sentry's US region. No
-            OnAir API key, fleet data, typed input, or local paths are intended
-            to be sent.</small
+            OnAir API key, fleet or staff data, typed input, or local paths are
+            intended to be sent.</small
           >
         </span>
       </label>

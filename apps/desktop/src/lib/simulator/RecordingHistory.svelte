@@ -1,7 +1,10 @@
 <script lang="ts">
   import WyrmChart from "$lib/charts/WyrmChart.svelte";
   import type { AtlasFlightRoute } from "$lib/atlas/types";
+  import ExplorationSummary from "$lib/exploration/ExplorationSummary.svelte";
+  import ExplorationTabs from "$lib/exploration/ExplorationTabs.svelte";
   import { translation } from "$lib/i18n/runtime";
+  import { formatLocalDateTime } from "$lib/presentation/dateTime";
   import type { DisplayPreferences } from "$lib/settings/types";
   import {
     presentAltitude,
@@ -16,6 +19,13 @@
     speedDebriefChart,
     speedRecordingChart,
   } from "./recordingCharts";
+  import {
+    activeRecordingFilterCount,
+    defaultRecordingFilters,
+    filterAndSortRecordings,
+    recordingFilterOptions,
+    type RecordingFilters,
+  } from "./recordingPresentation";
   import type {
     SimulatorRecordingView,
     SimulatorSessionDebrief,
@@ -71,27 +81,28 @@
       (point) => point.on_route && !point.location,
     ) ?? [],
   );
-  let search = $state("");
+  let filters = $state<RecordingFilters>({ ...defaultRecordingFilters });
+  let detailSection = $state("debrief");
   const visibleSessions = $derived(
-    status.sessions.filter((recording) => {
-      const needle = search.trim().toLocaleLowerCase();
-      return (
-        needle.length === 0 ||
-        [
-          recording.aircraft_registration,
-          recording.aircraft_title,
-          recording.simulator_family,
-        ]
-          .filter(Boolean)
-          .some((value) => value!.toLocaleLowerCase().includes(needle))
-      );
-    }),
+    filterAndSortRecordings(status.sessions, filters),
   );
+  const filterOptions = $derived(recordingFilterOptions(status.sessions));
+  const activeFilterCount = $derived(activeRecordingFilterCount(filters));
+  const detailTabs = [
+    { id: "debrief", label: "Whole-flight debrief" },
+    { id: "samples", label: "Exact sample window" },
+    { id: "events", label: "Events & exports" },
+  ] as const;
+
+  function resetFilters(): void {
+    filters = { ...defaultRecordingFilters };
+  }
 
   function formatTime(value: string | undefined): string {
-    if (!value) return $translation("simulator-value-unavailable");
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+    return formatLocalDateTime(
+      value,
+      value ?? $translation("simulator-value-unavailable"),
+    );
   }
 
   function confirmDelete(sessionId: string): void {
@@ -234,14 +245,73 @@
   </div>
 
   {#if status.sessions.length > 0}
-    <label class="recording-search">
-      <span>{$translation("simulator-recording-search")}</span>
-      <input
-        type="search"
-        bind:value={search}
-        placeholder={$translation("simulator-recording-search-placeholder")}
+    <div class="recording-explorer">
+      <label class="recording-search">
+        <span>{$translation("simulator-recording-search")}</span>
+        <input
+          type="search"
+          bind:value={filters.query}
+          placeholder={$translation("simulator-recording-search-placeholder")}
+        />
+      </label>
+      <details class="recording-filter-panel">
+        <summary>
+          <span>Filter and sort</span>
+          {#if activeFilterCount > 0}<strong>{activeFilterCount} active</strong>{/if}
+        </summary>
+        <div class="recording-filter-grid">
+          <label>
+            <span>Recording status</span>
+            <select bind:value={filters.status}>
+              <option value="all">Any reported status</option>
+              {#each filterOptions.statuses as recordingStatus}
+                <option value={recordingStatus}>{recordingStatus}</option>
+              {/each}
+            </select>
+          </label>
+          <label>
+            <span>Capture mode</span>
+            <select bind:value={filters.captureMode}>
+              <option value="all">Either capture mode</option>
+              {#each filterOptions.captureModes as captureMode}
+                <option value={captureMode}>{captureMode}</option>
+              {/each}
+            </select>
+          </label>
+          <label>
+            <span>Flight plan</span>
+            <select bind:value={filters.plan}>
+              <option value="all">Either plan state</option>
+              <option value="linked">Plan linked</option>
+              <option value="unlinked">No linked plan</option>
+            </select>
+          </label>
+          <label>
+            <span>Pinned</span>
+            <select bind:value={filters.pinned}>
+              <option value="all">Either pin state</option>
+              <option value="pinned">Pinned</option>
+              <option value="unpinned">Not pinned</option>
+            </select>
+          </label>
+          <label>
+            <span>Order recordings by</span>
+            <select bind:value={filters.sort}>
+              <option value="newest">Newest first</option>
+              <option value="oldest">Oldest first</option>
+              <option value="samples">Sample count</option>
+            </select>
+          </label>
+        </div>
+      </details>
+      <ExplorationSummary
+        shown={visibleSessions.length}
+        total={status.sessions.length}
+        label="recordings"
+        activeFilters={activeFilterCount}
+        onclear={resetFilters}
       />
-    </label>
+    </div>
   {/if}
 
   {#if status.sessions.length === 0}
@@ -313,9 +383,24 @@
           </div>
         </article>
       {/each}
+      {#if visibleSessions.length === 0}
+        <p class="recording-empty">No recordings match the current filters.</p>
+      {/if}
     </div>
   {/if}
 
+  {#if debrief || session}
+    <div class="recording-detail-tabs">
+      <ExplorationTabs
+        tabs={detailTabs}
+        bind:selected={detailSection}
+        label="Recording detail sections"
+        idPrefix="recording"
+      />
+    </div>
+  {/if}
+
+  {#if detailSection === "debrief"}
   {#if debrief}
     <section class="whole-flight-debrief">
       <div class="debrief-heading">
@@ -473,7 +558,7 @@
       {/if}
     </section>
   {/if}
-
+  {:else if detailSection === "samples"}
   {#if session && session.samples.length > 0}
     <details class="exact-window">
       <summary>{$translation("simulator-recording-exact-window-title")}</summary
@@ -523,7 +608,9 @@
         />
       </div>
     </details>
-
+  {/if}
+  {:else if detailSection === "events"}
+  {#if session && session.samples.length > 0}
     <section class="recording-evidence">
       <div class="comparison-heading">
         <div>
@@ -561,6 +648,7 @@
         </ol>
       {/if}
     </section>
+  {/if}
   {/if}
 </section>
 
@@ -650,6 +738,45 @@
     color: var(--color-text);
     background: var(--color-surface);
   }
+  .recording-explorer {
+    display: grid;
+    gap: 9px;
+  }
+  .recording-filter-panel {
+    border: 1px solid var(--color-line-faint);
+    background: var(--color-surface);
+  }
+  .recording-filter-panel summary {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 10px;
+    color: var(--color-text-muted);
+    font-size: 9px;
+    cursor: pointer;
+  }
+  .recording-filter-panel summary strong {
+    color: var(--color-accent);
+  }
+  .recording-filter-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    padding: 0 10px 10px;
+  }
+  .recording-filter-grid label {
+    display: grid;
+    gap: 4px;
+    color: var(--color-text-muted);
+    font-size: 9px;
+  }
+  .recording-filter-grid select {
+    min-width: 0;
+    border: 1px solid var(--color-line-faint);
+    padding: 7px;
+    color: var(--color-text);
+    background: var(--color-surface-soft);
+  }
   .recording-sessions article {
     display: grid;
     grid-template-columns: 1fr auto;
@@ -716,6 +843,9 @@
     margin-top: 14px;
     color: var(--color-text-muted);
     font-size: 9px;
+  }
+  .recording-detail-tabs {
+    margin-top: 12px;
   }
   .whole-flight-debrief,
   .exact-window {
@@ -823,7 +953,8 @@
   @media (max-width: 760px) {
     .recording-sessions,
     .recording-charts,
-    .debrief-charts {
+    .debrief-charts,
+    .recording-filter-grid {
       grid-template-columns: 1fr;
     }
     .debrief-heading {

@@ -53,6 +53,11 @@ The implementation sequence and operating thresholds live in the
 - Bounded pending-job observations, Hoard-backed live/cached/offline state, and
   a read-only Jobs workspace (developer preview implemented; authenticated live
   contract confirmation remains)
+- Authenticated company-staff access gate, bounded translated roster,
+  Hoard-backed live/cached/offline state, data-derived roster filters,
+  accessible dossier drill-down, and a read-only Staff workspace (foundation
+  implemented; provider enum labels, general certifications, and actual avatar
+  artwork remain unavailable until their contracts are verified)
 
 ## Vertical slice 2: external plugin proof
 

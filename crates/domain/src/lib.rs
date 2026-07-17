@@ -4,12 +4,14 @@ mod flight_plan;
 mod job;
 mod operational;
 mod simulator;
+mod staff;
 mod weather;
 
 pub use flight_plan::*;
 pub use job::*;
 pub use operational::*;
 pub use simulator::*;
+pub use staff::*;
 pub use weather::*;
 
 use chrono::{DateTime, Utc};

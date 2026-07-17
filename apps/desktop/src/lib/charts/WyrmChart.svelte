@@ -11,6 +11,7 @@
   import type { ECharts, EChartsCoreOption } from "echarts/core";
   import { onMount } from "svelte";
   import { activeTheme } from "$lib/theme/runtime";
+  import { formatLocalDateTime } from "$lib/presentation/dateTime";
   import type { ThemeManifest } from "$lib/theme/types";
   import {
     categoricalChartHeight,
@@ -58,10 +59,7 @@
   }
 
   function formatObservedAt(value: string): string {
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime())
-      ? "Observation time unavailable"
-      : parsed.toLocaleString();
+    return formatLocalDateTime(value, "Observation time unavailable");
   }
 
   function expandedCategories(

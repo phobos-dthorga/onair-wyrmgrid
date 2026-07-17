@@ -106,6 +106,10 @@ MapLibre, and ECharts remain outside domain rules.
 New abstraction is justified by a current use case, not the possibility of a
 future contributor. See
 [ADR-0004](decisions/0004-declarative-charts-and-complexity-budget.md).
+Repeated presentation behavior follows the same rule: shared exploration,
+date/time, authorization-label, and responsive-surface primitives are reused,
+while domain-specific field meaning remains local. See the
+[presentation and exploration audit](reusable-presentation-and-exploration.md).
 
 The presentation runs in Tauri's platform webview: Chromium-based WebView2 on
 Windows and WebKit-backed views on macOS and Linux. WRY is the application

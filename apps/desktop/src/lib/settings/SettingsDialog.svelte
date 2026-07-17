@@ -66,7 +66,10 @@
   });
 
   function applyPreset(preset: keyof typeof displayPresets): void {
-    draft = { ...displayPresets[preset] };
+    draft = {
+      ...displayPresets[preset],
+      responsive_surfaces: draft.responsive_surfaces,
+    };
   }
 
   function handleKeydown(event: KeyboardEvent): void {
@@ -221,6 +224,34 @@
 
         <p class="settings-boundary">
           {$translation("settings-units-boundary")}
+        </p>
+      </section>
+
+      <section class="settings-section">
+        <div class="section-copy">
+          <span class="eyebrow"
+            >{$translation("settings-accessibility-eyebrow")}</span
+          >
+          <h3>{$translation("settings-accessibility-title")}</h3>
+          <p>{$translation("settings-accessibility-detail")}</p>
+        </div>
+
+        <label class="settings-toggle settings-motion-toggle">
+          <input
+            type="checkbox"
+            disabled={busy}
+            bind:checked={draft.responsive_surfaces}
+          />
+          <span>
+            <strong>{$translation("settings-responsive-surfaces")}</strong>
+            <small
+              >{$translation("settings-responsive-surfaces-detail")}</small
+            >
+          </span>
+        </label>
+
+        <p class="settings-boundary">
+          {$translation("settings-motion-boundary")}
         </p>
       </section>
 

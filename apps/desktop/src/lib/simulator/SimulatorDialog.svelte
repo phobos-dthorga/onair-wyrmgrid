@@ -1,6 +1,7 @@
 <script lang="ts">
   import { translation } from "$lib/i18n/runtime";
   import type { AtlasFlightRoute } from "$lib/atlas/types";
+  import { formatLocalDateTime } from "$lib/presentation/dateTime";
   import type { DisplayPreferences } from "$lib/settings/types";
   import {
     presentAltitude,
@@ -158,9 +159,10 @@
   }
 
   function formatTime(value: string | undefined): string {
-    if (!value) return $translation("simulator-value-unavailable");
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+    return formatLocalDateTime(
+      value,
+      value ?? $translation("simulator-value-unavailable"),
+    );
   }
 
   function handleKeydown(event: KeyboardEvent): void {

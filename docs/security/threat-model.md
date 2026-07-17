@@ -47,6 +47,10 @@
   preferences;
 - personal network data, routes, coordinates, callsigns, or free-form content
   leaking through persistence, plugins, support output, or diagnostics;
+- staff names, airport presence, availability, or qualifications leaking through
+  raw provider retention, plugins, diagnostics, exports, or misleading UI labels;
+- undocumented staff avatar references being converted into attacker-controlled
+  URLs, remote tracking requests, oversized media, or misleading portraits;
 - embedded desktop application secrets being extracted and abused;
 - a SayIntentions key leaking through query URLs, redirects, HTTP diagnostics,
   local `flight.json` parsing, support bundles, or automatic retries;
@@ -109,6 +113,17 @@
   validation, state verification, and system-browser authentication;
 - public online-network adapters discard names, member IDs, remarks, and other
   fields not required by the implemented view before persistence or display;
+- the Staff adapter discards salary, birth date, weight, fatigue, happiness,
+  avatar URLs and artwork, raw JSON, and other unused employee fields before the
+  roster crosses into application services. A bounded avatar image-name may be
+  retained only as opaque source evidence and is never interpreted as a path or
+  URL. The bounded translated roster is encrypted in
+  Hoard, remains unavailable to plugins and Sentry, and displays undocumented
+  provider enums as codes rather than invented role or status labels;
+- responsive surfaces are bounded to a small transform and non-informational
+  glow, can be disabled in Settings, ignore touch and pen movement, preserve
+  static keyboard focus cues, and defer to the operating system's reduced-motion
+  preference. No data, warning, consent, or authorization state relies on motion;
 - Bridge sidecars use a 64 KiB length-prefixed JSON ceiling, independent
   monotonic sequences, a three-second identity/version handshake, explicit
   capabilities, validated provider and simulator provenance, supervised

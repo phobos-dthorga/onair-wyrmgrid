@@ -1,6 +1,6 @@
 # OnAir WyrmGrid Privacy Notice
 
-**Version and effective date:** 2026-07-16.1 (optional remembered-account revision)
+**Version and effective date:** 2026-07-17.2 (staff avatar-reference and motion-preference revision)
 
 This preliminary notice describes information handled by official builds of
 OnAir WyrmGrid distributed by Phobos A. D'thorga. It does not describe an
@@ -19,6 +19,13 @@ professionally reviewed before a stable or commercial release.
 - Your OnAir API key is used for the active connection and is not written to the
   WyrmGrid database. If you explicitly ask WyrmGrid to remember it, the key is
   stored separately by the operating-system credential service.
+- Staff synchronization may retrieve display names, provider category and
+  status codes, current and home airports, availability times, online presence,
+  reported aircraft-class qualifications, and an opaque provider avatar-image
+  reference. WyrmGrid stores only this bounded translated roster locally; the
+  public API currently supplies no usable avatar URL, so WyrmGrid does not load
+  or invent portrait artwork. Raw responses and unneeded personal or employment
+  fields are excluded.
 - If you choose to import a flight plan, your SimBrief Pilot ID or username is
   sent directly to SimBrief to retrieve the account's latest OFP. WyrmGrid does
   not ask for a SimBrief or Navigraph password. The reference is remembered in
@@ -50,16 +57,23 @@ WyrmGrid currently keeps the following information on the user's device:
   language-pack manifest includes its translated text and may include the
   author name supplied by the pack creator;
 - interface preferences, such as the selected automatic synchronization
-  interval, in the desktop webview's local storage; and
+  interval, in the desktop webview's local storage, and the responsive-surface
+  motion choice in WyrmGrid's encrypted database; and
 - while the application is running, the supplied OnAir company ID, API key,
-  translated company details, and current fleet, FBO, and pending-job
+  translated company details, and current fleet, FBO, pending-job, and staff
   observations in process memory. If the user selects **Remember this
   connection**, Windows' credential service stores the API key while the
   SQLCipher database stores the Company ID and separate default-off automatic
   connection choice;
-- successful translated fleet, FBO, and pending-job observations in WyrmGrid's
+- successful translated fleet, FBO, pending-job, and staff observations in WyrmGrid's
   local Hoard database. These records contain stable WyrmGrid fields and
-  provenance, not the raw OnAir response or API key;
+  provenance, not the raw OnAir response or API key. Staff records are limited
+  to display name, numeric provider category and status, current and home
+  airports, busy-until time, online presence, and reported aircraft-class
+  qualifications, plus an opaque bounded avatar image-name reference. The
+  reference is not used as a URL or image path. WyrmGrid does not retain salary,
+  birth date, weight, fatigue, happiness, avatar URLs or artwork, or other unused
+  employee fields;
 - after the user explicitly starts recording or enables automatic recording,
   translated simulator session identity and one-hertz position, on-ground,
   engine, parking-brake, pause, altitude, speed, fuel, weight, attitude,
@@ -113,8 +127,8 @@ When the user chooses to connect—or separately enables automatic connection on
 startup—WyrmGrid sends the company ID and API key directly to OnAir's public API
 and requests the selected company information. Automatic connection is off by
 default and begins only after current legal acknowledgement.
-Subsequent synchronization requests retrieve fleet, FBO-network, and pending-job
-information. OnAir operates
+Subsequent synchronization requests retrieve fleet, FBO-network, pending-job,
+and bounded staff-roster information. OnAir operates
 independently under its own terms and privacy practices. WyrmGrid does not send
 the API key to Sentry, map services, or plugins.
 

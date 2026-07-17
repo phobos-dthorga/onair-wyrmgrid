@@ -1,0 +1,48 @@
+{
+  "Content": [
+    {
+      "Id": "11111111-1111-4111-8111-111111111111",
+      "Pseudo": "Synthetic Pilot",
+      "AvatarImageName": "synthetic-pilot-avatar.png",
+      "Category": 1,
+      "Status": 2,
+      "CurrentAirport": {
+        "Id": "22222222-2222-4222-8222-222222222222",
+        "ICAO": "YSSY",
+        "Name": "Synthetic Airport",
+        "Latitude": -33.9461,
+        "Longitude": 151.1772
+      },
+      "HomeAirport": null,
+      "BusyUntil": "2026-07-17T12:00:00Z",
+      "IsOnline": false,
+      "Certifications": null,
+      "ClassCertifications": [
+        {
+          "Id": "33333333-3333-4333-8333-333333333333",
+          "AircraftClassId": "44444444-4444-4444-8444-444444444444",
+          "AircraftClass": {
+            "Id": "44444444-4444-4444-8444-444444444444",
+            "ShortName": "MEP",
+            "Name": "Synthetic multi-engine class"
+          },
+          "LastValidation": "2026-07-01T00:00:00Z"
+        }
+      ]
+    },
+    {
+      "Id": "55555555-5555-4555-8555-555555555555",
+      "Pseudo": "Synthetic Attendant",
+      "AvatarImageName": null,
+      "Category": 2,
+      "Status": 3,
+      "CurrentAirport": null,
+      "HomeAirport": null,
+      "BusyUntil": null,
+      "IsOnline": null,
+      "Certifications": null,
+      "ClassCertifications": []
+    }
+  ],
+  "Error": null
+}

@@ -16,6 +16,20 @@ Forge, Diagnostics, or provider dialogs.
 Open **Settings** from WyrmGrid's top navigation to manage measurement units,
 themes, language packs, and privacy choices from one place.
 
+## Motion and responsive surfaces
+
+**Responsive information surfaces** is enabled by default. When a mouse or
+trackpad pointer moves across an enabled card or text panel, the surface may
+shift by a very small bounded amount and show a restrained glow. The effect does
+not resize the layout, hide content, indicate authority, or change any source
+fact. Touch and pen input do not trigger pointer-following motion.
+
+Turn the option off under **Settings → Motion & response** to remove these
+effects. Keyboard focus continues to receive a visible static cue. WyrmGrid also
+honours the operating system or browser **Reduce Motion** preference, which
+overrides the enabled setting and removes movement while preserving content and
+controls.
+
 ## Simulator provider launch
 
 The **Provider launch** section remembers which trusted simulator sidecar to
@@ -123,6 +137,9 @@ fields—currently feet, knots, pounds, US gallons, and degrees. Plugins therefo
 receive stable facts rather than values whose meaning changes with the desktop
 user's display choices.
 
+The responsive-surface preference is also local and is not sent to OnAir,
+plugins, simulator providers, map services, or diagnostics.
+
 ## Implementation notes
 
 The append-only `0006_display_preferences.sql` migration stores one typed choice
@@ -146,3 +163,8 @@ format canonical measurements into the user's selected display units.
 The append-only `0010_simulator_evidence.sql` migration adds automation
 preferences, direct lifecycle facts, recording events, pins, and sanitized plan
 associations without rewriting the released recording migration.
+
+The append-only `0012_interaction_preferences.sql` migration stores whether
+responsive surfaces are enabled. Pointer response is a reusable presentational
+primitive with tested motion bounds; CSS reduced-motion rules remain the final
+accessibility override.

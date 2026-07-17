@@ -121,6 +121,13 @@ English fallback when compatibility requires one; do not choose a locale in a
 domain or application service. Update source-catalogue compatibility and
 community-pack fixtures when variables or message meaning change.
 
+When adding a searchable collection or dossier, use the shared presentation
+and exploration primitives instead of recreating query normalization, result
+counts, tab semantics, date parsing, or responsive pointer effects. Keep the
+domain adapter explicit about which received facts may be searched or filtered.
+The [reuse policy and interface audit](architecture/reusable-presentation-and-exploration.md)
+records the implemented areas, intentional exceptions, and extraction rule.
+
 Keep real credentials outside `.env` files in the repository. The committed
 `.env.example` contains names only and is not the planned production secret
 storage mechanism.

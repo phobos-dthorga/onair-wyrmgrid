@@ -2,6 +2,11 @@
   import "./dispatch.css";
   import FlightOperationJourney from "$lib/flightOperation/FlightOperationJourney.svelte";
   import { translation } from "$lib/i18n/runtime";
+  import {
+    formatLocalDateTime,
+    mediumDateShortTime,
+    shortClockTime,
+  } from "$lib/presentation/dateTime";
   import type {
     DispatchStatus,
     Mass,
@@ -80,19 +85,11 @@
   }
 
   function formatDate(value: string | undefined): string {
-    if (!value) return "Not supplied";
-    const date = new Date(value);
-    return Number.isNaN(date.getTime())
-      ? "Not supplied"
-      : date.toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+    return formatLocalDateTime(value, "Not supplied", mediumDateShortTime);
   }
 
   function formatTime(value: string | undefined): string {
-    if (!value) return "—";
-    const date = new Date(value);
-    return Number.isNaN(date.getTime())
-      ? "—"
-      : date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return formatLocalDateTime(value, "—", shortClockTime);
   }
 
   function formatDuration(seconds: number | undefined): string {
