@@ -153,6 +153,15 @@
                 >
               </article>
               <article>
+                <strong>Accepted flight operations</strong>
+                <span
+                  >Beginning an operation stores its sanitized plan, selected
+                  read-only OnAir job, and aggregate passenger or freight facts
+                  as immutable revisions in the encrypted local database.
+                  Missing facts stay unavailable.</span
+                >
+              </article>
+              <article>
                 <strong>Map requests</strong>
                 <span
                   >The map provider receives ordinary connection metadata such

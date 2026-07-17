@@ -23,6 +23,7 @@ struct DesktopState {
         credential_store::PlatformOnAirSecretStore,
     >,
     dispatch: wyrmgrid_application::DispatchSession,
+    flight_operations: wyrmgrid_application::FlightOperationService,
     plugins: wyrmgrid_application::PluginService,
     simulator: wyrmgrid_application::SimulatorBridgeService,
     simulator_settings: wyrmgrid_application::SimulatorSettingsService<wyrmgrid_storage::Store>,
@@ -208,10 +209,48 @@ fn dispatch_status(
     state: tauri::State<'_, DesktopState>,
 ) -> Result<wyrmgrid_application::DispatchStatus, wyrmgrid_application::OperationError> {
     let fleet = state.onair.fleet_snapshot().map_err(operation_error)?;
-    state
+    let jobs = state.onair.job_snapshot().map_err(operation_error)?;
+    let staff = state.onair.staff_snapshot().map_err(operation_error)?;
+    let mut status = state
         .dispatch
         .briefing(fleet.as_ref())
-        .map_err(operation_error)
+        .map_err(operation_error)?;
+    state
+        .flight_operations
+        .enrich_dispatch_status(
+            &mut status,
+            wyrmgrid_application::FlightOperationAvailability {
+                jobs: jobs.is_some(),
+                fleet: fleet.is_some(),
+                staff: staff.is_some(),
+            },
+        )
+        .map_err(operation_error)?;
+    Ok(status)
+}
+
+#[tauri::command]
+fn start_flight_operation(
+    state: tauri::State<'_, DesktopState>,
+) -> Result<wyrmgrid_application::DispatchStatus, wyrmgrid_application::OperationError> {
+    let status = dispatch_status(state.clone())?;
+    state
+        .flight_operations
+        .start_from_dispatch(&status)
+        .map_err(operation_error)?;
+    dispatch_status(state)
+}
+
+#[tauri::command]
+fn revise_flight_operation(
+    state: tauri::State<'_, DesktopState>,
+) -> Result<wyrmgrid_application::DispatchStatus, wyrmgrid_application::OperationError> {
+    let status = dispatch_status(state.clone())?;
+    state
+        .flight_operations
+        .revise_from_dispatch(&status)
+        .map_err(operation_error)?;
+    dispatch_status(state)
 }
 
 #[tauri::command]
@@ -737,6 +776,8 @@ pub fn run() {
                 onair.clone(),
             );
             let dispatch = wyrmgrid_application::DispatchSession::with_default_provider();
+            let flight_operations =
+                wyrmgrid_application::FlightOperationService::new(store.clone());
             let simulator_provider =
                 wyrmgrid_application::SimulatorProviderRegistration::from_manifest_json(
                     include_str!("../../../../providers/msfs2024-simconnect/provider.json"),
@@ -767,6 +808,7 @@ pub fn run() {
                 onair,
                 accounts,
                 dispatch,
+                flight_operations,
                 plugins,
                 simulator,
                 simulator_settings,
@@ -813,6 +855,8 @@ pub fn run() {
             onair_hoard_timeline,
             onair_historical_company_data,
             dispatch_status,
+            start_flight_operation,
+            revise_flight_operation,
             select_dispatch_job,
             clear_dispatch_job,
             import_simbrief_latest,

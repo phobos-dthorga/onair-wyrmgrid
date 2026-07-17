@@ -1163,6 +1163,36 @@ impl From<DispatchError> for OperationError {
     }
 }
 
+impl From<FlightOperationError> for OperationError {
+    fn from(error: FlightOperationError) -> Self {
+        let (code, retryable, reportable) = match error {
+            FlightOperationError::PlanRequired => ("operation.plan_required", false, false),
+            FlightOperationError::ActiveOperationExists => {
+                ("operation.active_exists", false, false)
+            }
+            FlightOperationError::NoActiveOperation => {
+                ("operation.no_active_operation", false, false)
+            }
+            FlightOperationError::NoRevisionChange => {
+                ("operation.no_revision_change", false, false)
+            }
+            FlightOperationError::InvalidStoredOperation => {
+                ("operation.invalid_stored_state", false, true)
+            }
+            FlightOperationError::StorageUnavailable => {
+                ("operation.storage_unavailable", true, true)
+            }
+        };
+        Self {
+            code,
+            message: error.to_string(),
+            retryable,
+            reportable,
+            report_id: None,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct OnAirSession {
     inner: Arc<RwLock<Option<ConnectedSession>>>,
@@ -1715,6 +1745,13 @@ impl OnAirSession {
 
     pub fn job_for_dispatch(&self, job_id: &str) -> Result<DispatchJobSelection, ConnectionError> {
         let job_id = Uuid::parse_str(job_id).map_err(|_| ConnectionError::JobUnavailable)?;
+        let company_id = self
+            .inner
+            .read()
+            .map_err(|_| ConnectionError::StateUnavailable)?
+            .as_ref()
+            .map(|session| session.company.id.clone())
+            .ok_or(ConnectionError::JobUnavailable)?;
         let jobs = self
             .jobs
             .read()
@@ -1729,6 +1766,7 @@ impl OnAirSession {
             .cloned()
             .ok_or(ConnectionError::JobUnavailable)?;
         Ok(DispatchJobSelection {
+            company_id,
             job,
             observed_at: view.snapshot.provenance.observed_at,
             availability: view.availability,

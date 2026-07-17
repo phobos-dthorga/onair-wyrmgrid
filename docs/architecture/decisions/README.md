@@ -17,3 +17,4 @@ record rather than silently rewriting history.
 - [ADR-0012: Core authorization and distinct consent boundaries](0012-core-authorization-and-consent-boundaries.md)
 - [ADR-0013: SQLCipher, device-bound keys, and portable backups](0013-sqlcipher-device-keys-and-portable-backups.md)
 - [ADR-0014: Optional OS-protected provider accounts](0014-optional-os-protected-provider-accounts.md)
+- [ADR-0015: Persistent flight-operation revisions and evidence-derived manifests](0015-persistent-flight-operation-revisions.md)

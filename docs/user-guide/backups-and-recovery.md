@@ -23,7 +23,9 @@ WyrmGrid never overwrites an existing backup and never stores or recovers the
 backup password. A portable backup is encrypted but contains the complete local
 WyrmGrid database: Hoard observations, retained simulator recordings, local
 authorisation history, legal choices, display preferences, and imported theme
-and language manifests. Treat it as sensitive operational history.
+and language manifests, plus accepted flight operations and their retained
+plan, selected-job, and aggregate-manifest revisions. Treat it as sensitive
+operational history.
 
 The OnAir API key is not included because an optionally remembered key belongs
 to the operating-system credential store, outside the database. The encrypted

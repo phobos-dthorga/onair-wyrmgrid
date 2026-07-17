@@ -1,6 +1,6 @@
 # OnAir WyrmGrid Privacy Notice
 
-**Version and effective date:** 2026-07-17.2 (staff avatar-reference and motion-preference revision)
+**Version and effective date:** 2026-07-17.3 (persistent flight-operation revision)
 
 This preliminary notice describes information handled by official builds of
 OnAir WyrmGrid distributed by Phobos A. D'thorga. It does not describe an
@@ -30,6 +30,11 @@ professionally reviewed before a stable or commercial release.
   sent directly to SimBrief to retrieve the account's latest OFP. WyrmGrid does
   not ask for a SimBrief or Navigraph password. The reference is remembered in
   the encrypted local database only if you select that option.
+- If you explicitly begin a flight operation, WyrmGrid stores the sanitized
+  imported plan, the selected read-only OnAir job observation and originating
+  company identifier when present, and a per-leg aggregate manifest in the
+  encrypted local database. Missing passenger counts or freight weights remain
+  marked unavailable.
 - If you choose to fetch airport weather, the plan's origin, destination, and
   alternate ICAO identifiers are sent to AviationWeather.gov for current METAR
   and TAF products.
@@ -83,6 +88,12 @@ WyrmGrid currently keeps the following information on the user's device:
   validated `FlightPlanSnapshot`, plan/recording correlation version, and
   calculated comparisons. The account reference is not copied into that
   recording, and the raw OFP response is not written to the database;
+- after the user explicitly begins a flight operation, a random local operation
+  identifier and immutable numbered revisions containing the sanitized plan,
+  selected validated OnAir job observation and originating company identifier
+  when present, and deterministic per-leg aggregate passenger counts or freight
+  weights. Missing source fields are retained as unavailable; WyrmGrid does not
+  add individual people, consignments, or assumed loads;
 - symbolic authorization grant and revoke decisions, including actor ID,
   capability scope revision, capability count, and decision time. These records
   are limited to the newest 4,096 decisions and never contain API keys, raw
@@ -94,7 +105,8 @@ WyrmGrid currently keeps the following information on the user's device:
   request and the translated latest OFP in process memory. If **Remember this
   account reference** is selected after a successful import, that Pilot ID or
   username is stored in the SQLCipher database; the translated plan is written
-  only when associated with a local recording; and
+  only when associated with a local recording or explicitly accepted as a
+  flight-operation revision; and
 - after an explicit weather request, translated METAR and TAF observations for
   at most ten plan airports in process memory. The current cache is tied to the
   session plan, reused for ten minutes, and not written to the WyrmGrid database.
@@ -111,9 +123,10 @@ the selected local path and supplied backup password in process memory. It does
 not persist the password or send either value to WyrmGrid, Sentry, plugins, or
 an external service. The chosen backup is a complete encrypted copy of local
 database content, including remembered Company ID, automatic-connect choice,
-and SimBrief account reference, but it cannot contain the OnAir API key held by
-the operating system. Restore creates encrypted pending and rollback files beside
-the active database until the next successful startup completes activation.
+SimBrief account reference, accepted flight operations, and their retained
+revisions, but it cannot contain the OnAir API key held by the operating system.
+Restore creates encrypted pending and rollback files beside the active database
+until the next successful startup completes activation.
 
 ## Connections to other services
 
@@ -229,8 +242,8 @@ unrelated user profiling.
 ## Retention and deletion
 
 Session-only credentials, unremembered account references, fleet state,
-unassociated SimBrief plans, and weather snapshots are discarded when the
-process exits. A
+SimBrief plans that were not accepted into an operation or associated with a
+recording, and weather snapshots are discarded when the process exits. A
 Dispatch user can also clear the current plan and its associated weather during
 the session. A plan already associated with a recording follows that recording's
 retention and deletion instead.
@@ -240,6 +253,9 @@ local data. The OnAir key stored by Windows is outside portable backups. Local
 preferences and imported customisation manifests remain until changed, removed
 by a management function, or deleted with the application's local data.
 Version 1 does not yet provide an individual language-pack deletion control.
+Accepted flight operations and their immutable revisions remain until the local
+database is deleted or a future operation-management control removes them; the
+current foundation does not yet offer per-operation deletion.
 The local diagnostic log rotates at 200 entries and can be cleared from the
 application. Optional Sentry diagnostic events follow
 the Sentry retention configuration disclosed when public telemetry is enabled.

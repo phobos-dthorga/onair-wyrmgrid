@@ -167,11 +167,13 @@ not replace completion of the current vertical slice.
 
 - Host-owned flight-operation identity, revision semantics, and a non-blocking
   Plan -> Weather -> Jobs -> Manifest -> Fleet -> Staff -> Review -> Atlas
-  journey rail (schema-1 host-derived Plan/Weather/Atlas summaries implemented;
-  persistent identity and revisions remain)
+  journey rail (schema-1 persistent identity, append-only revisions, current
+  stage availability, and restart-safe active-operation view implemented)
 - A per-leg manifest that distinguishes passengers, company personnel,
   positioning staff, the player avatar, and freight without double-counting
-  people who operate one leg and travel on another
+  people who operate one leg and travel on another (aggregate OnAir passenger
+  counts, freight weights, and explicit missing facts implemented as the first
+  evidence-derived slice; identities and roles remain)
 - Explainable reconciliation across jobs, load, seats, payload, aircraft and
   staff location, sourced qualifications, weather, schedule, and plan evidence
 - Explicit invalidation and user-reviewed revisions instead of silent cascading

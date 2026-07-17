@@ -9,8 +9,8 @@ use std::sync::{
 use std::time::{Duration, Instant};
 use thiserror::Error;
 use wyrmgrid_domain::{
-    AircraftSummary, Coordinates, FlightPlanAirport, FlightPlanSnapshot, JobSummary, Mass,
-    MassUnit, OperationalProvenance, ProvenanceKind, SnapshotFreshness, WeatherSnapshot,
+    AircraftSummary, CompanyId, Coordinates, FlightPlanAirport, FlightPlanSnapshot, JobSummary,
+    Mass, MassUnit, OperationalProvenance, ProvenanceKind, SnapshotFreshness, WeatherSnapshot,
 };
 use wyrmgrid_simbrief_api::{ClientError, SimBriefClient, UserReference, UserReferenceKind};
 use wyrmgrid_weather_api::{AviationWeatherClient, ClientError as WeatherClientError};
@@ -203,11 +203,16 @@ pub struct DispatchStatus {
     pub comparison: Option<DispatchComparison>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub selected_job: Option<DispatchJobSelection>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub operation: Option<crate::FlightOperationView>,
+    pub operation_change: crate::FlightOperationContextChange,
     pub weather: DispatchWeatherStatus,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct DispatchJobSelection {
+    #[serde(skip)]
+    pub company_id: CompanyId,
     pub job: JobSummary,
     pub observed_at: DateTime<Utc>,
     pub availability: SnapshotAvailability,
@@ -377,6 +382,8 @@ impl DispatchSession {
             atlas_route,
             comparison,
             selected_job,
+            operation: None,
+            operation_change: crate::FlightOperationContextChange::None,
             weather,
         })
     }

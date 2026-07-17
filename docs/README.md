@@ -10,6 +10,7 @@
 - [Settings and measurement units](user-guide/settings-and-units.md)
 - [Encrypted backups and recovery](user-guide/backups-and-recovery.md)
 - [Remembered accounts and credentials](user-guide/accounts-and-credentials.md)
+- [Flight operations in Dispatch](user-guide/flight-operations.md)
 - [Testing strategy](testing.md)
 - [Roadmap](roadmap.md)
 - [WyrmGrid Atlas](atlas/README.md)

@@ -281,6 +281,7 @@ async fn compares_a_selected_read_only_job_with_the_imported_plan() {
     .unwrap();
     session
         .select_job(DispatchJobSelection {
+            company_id: wyrmgrid_domain::CompanyId(Uuid::new_v4()),
             job: jobs.jobs[0].clone(),
             observed_at: Utc::now(),
             availability: SnapshotAvailability::Cached,
@@ -337,6 +338,7 @@ fn compares_job_payload_units_and_deadlines_without_inference() {
         &plan,
         None,
         Some(&DispatchJobSelection {
+            company_id: wyrmgrid_domain::CompanyId(Uuid::new_v4()),
             job: job.clone(),
             observed_at: Utc::now(),
             availability: SnapshotAvailability::Cached,
@@ -362,6 +364,7 @@ fn compares_job_payload_units_and_deadlines_without_inference() {
         &plan,
         None,
         Some(&DispatchJobSelection {
+            company_id: wyrmgrid_domain::CompanyId(Uuid::new_v4()),
             job: job.clone(),
             observed_at: Utc::now(),
             availability: SnapshotAvailability::Cached,

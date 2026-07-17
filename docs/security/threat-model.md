@@ -19,6 +19,8 @@
   restores, rollback databases, and backup-format metadata;
 - selected language, imported community language-pack content, translator
   metadata, and the integrity of security-sensitive interface wording;
+- accepted flight-operation identities and revisions, sanitized plans, selected
+  jobs, and aggregate passenger or freight manifests;
 - update integrity and release artifacts.
 
 ## Primary threats
@@ -49,6 +51,11 @@
   leaking through persistence, plugins, support output, or diagnostics;
 - staff names, airport presence, availability, or qualifications leaking through
   raw provider retention, plugins, diagnostics, exports, or misleading UI labels;
+- accepted plans, selected jobs, aggregate passenger/freight facts, or revision
+  history leaking through diagnostics, plugins, public map requests, backups,
+  screenshots, or support material;
+- a provider refresh or interface action silently replacing accepted operation
+  evidence, or a malformed stored manifest diverging from its retained job;
 - undocumented staff avatar references being converted into attacker-controlled
   URLs, remote tracking requests, oversized media, or misleading portraits;
 - embedded desktop application secrets being extracted and abused;
@@ -234,6 +241,21 @@
 - Dispatch job selection carries only a validated Hoard observation. It exposes
   no OnAir acceptance command, and route, payload, and expiry findings remain
   calculated comparisons rather than OnAir instructions or guarantees.
+- flight-operation schema 1 is created only by an explicit user action and
+  stores a sanitized plan, optional validated OnAir job observation, and a
+  deterministic aggregate per-leg manifest in SQLCipher. Attached jobs retain
+  their originating company identity so a later account change cannot silently
+  reattribute them. Missing passenger or freight fields remain explicit gaps.
+  Domain validation recomputes the manifest from its retained job evidence and
+  rejects any divergence;
+- operation changes are append-only and user-reviewed. A changed plan, selected
+  job, or same-identity job fact produces a context-change notice instead of
+  mutating the accepted revision. The webview never supplies operation IDs,
+  revision numbers, timestamps, manifest values, or persistence SQL;
+- operation data is not exposed to current plugin capabilities, Sentry,
+  diagnostics, or public Atlas tile requests. Migration 13 stores one active
+  pointer and immutable revision rows; it contains no provider credential or raw
+  response;
 - Hoard stores stable domain snapshots rather than raw API payloads, never stores
   credentials, applies bounded retention, and visibly distinguishes live,
   cached, offline, preview, and memory-only data.
@@ -366,7 +388,8 @@ The exact implemented boundary and deferred hardening are recorded in
 ## Residual Hoard risks
 
 The local SQLCipher database contains company identifiers, company names,
-aircraft and FBO details, locations, observation history, and other local state.
+aircraft and FBO details, locations, observation history, accepted
+flight-operation plans, selected jobs, aggregate manifests, and other local state.
 At-rest encryption reduces exposure from a copied file but does not protect
 against a process or logged-in account that can retrieve the device key, memory
 inspection, crash dumps, screenshots, or deliberate export. A user must still
@@ -376,7 +399,9 @@ reports unless they intentionally mean to disclose their contents.
 Retention limits intraday growth but deliberately preserves one daily
 historical record, so sensitive operational history remains inside encrypted
 storage until the user deletes the database or a future data-management feature
-removes it. Portable backups are complete, user-controlled copies: WyrmGrid
+removes it. The first flight-operation foundation likewise has no individual
+archive or deletion control, so accepted revisions follow that database-level
+retention boundary. Portable backups are complete, user-controlled copies: WyrmGrid
 cannot rotate, revoke, erase, or recover their passwords. Filesystem snapshots,
 cloud services, and deleted-file recovery may retain both databases and backups.
 Loss of the operating-system credential entry without a usable portable backup

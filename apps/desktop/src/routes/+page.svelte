@@ -52,7 +52,9 @@
     loadDispatchStatus,
     loadSimBriefAccountPreference,
     refreshDispatchWeather,
+    reviseFlightOperation,
     selectDispatchJob,
+    startFlightOperation,
   } from "$lib/dispatch/client";
   import DispatchWorkspace from "$lib/dispatch/DispatchWorkspace.svelte";
   import {
@@ -66,6 +68,7 @@
     SimBriefReferenceKind,
   } from "$lib/dispatch/types";
   import type { FlightWeatherMapView } from "$lib/weather/types";
+  import type { FlightOperationStage } from "$lib/flightOperation/types";
   import JobsWorkspace from "$lib/jobs/JobsWorkspace.svelte";
   import LaunchScreen from "$lib/launch/LaunchScreen.svelte";
   import {
@@ -1334,6 +1337,52 @@
         "WyrmGrid could not read the current Dispatch plan.",
       );
     }
+  }
+
+  async function runFlightOperationAction(
+    action: "start" | "revise",
+  ): Promise<void> {
+    if (dispatchBusy || !isDesktopRuntime()) return;
+    dispatchBusy = true;
+    dispatchError = "";
+    try {
+      acceptDispatchStatus(
+        action === "start"
+          ? await startFlightOperation()
+          : await reviseFlightOperation(),
+      );
+    } catch (error) {
+      dispatchError = operationErrorMessage(
+        error,
+        action === "start"
+          ? "WyrmGrid could not begin this flight operation."
+          : "WyrmGrid could not create the reviewed operation revision.",
+      );
+      await refreshDispatchStatus();
+    } finally {
+      dispatchBusy = false;
+    }
+  }
+
+  function openFlightOperationStage(stage: FlightOperationStage): void {
+    if (stage === "jobs") {
+      activeWorkspace = "jobs";
+      return;
+    }
+    if (stage === "staff") {
+      activeWorkspace = "staff";
+      return;
+    }
+    if (stage === "fleet") {
+      fleetVisible = true;
+      activeWorkspace = "atlas";
+      return;
+    }
+    if (stage === "atlas") {
+      requestAtlasRouteFocus();
+      return;
+    }
+    activeWorkspace = "dispatch";
   }
 
   async function importDispatchPlan(
@@ -2797,6 +2846,8 @@
           void importDispatchPlan(kind, reference, rememberReference)}
         onweather={() => void refreshCurrentDispatchWeather()}
         onclear={() => void clearCurrentDispatchPlan()}
+        onoperation={(action) => void runFlightOperationAction(action)}
+        onjourney={openFlightOperationStage}
         onviewweatheratlas={openDispatchWeatherInAtlas}
         onviewroute={() => requestAtlasRouteFocus()}
         onviewfeature={(featureId) => requestAtlasRouteFocus(featureId)}

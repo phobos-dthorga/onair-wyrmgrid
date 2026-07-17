@@ -7,12 +7,10 @@
 
   let {
     journey,
-    onweather,
-    onatlas,
+    onstage,
   }: {
     journey: FlightOperationJourneyView;
-    onweather: () => void;
-    onatlas: () => void;
+    onstage: (stage: FlightOperationStage) => void;
   } = $props();
 
   const labels: Record<FlightOperationStage, string> = {
@@ -36,12 +34,11 @@
   };
 
   function openStage(stage: FlightOperationStage): void {
-    if (stage === "weather") onweather();
-    if (stage === "atlas") onatlas();
+    onstage(stage);
   }
 
-  function isActionable(stage: FlightOperationStage): boolean {
-    return stage === "weather" || stage === "atlas";
+  function isActionable(state: FlightOperationStageState): boolean {
+    return state !== "not_started" && state !== "unavailable";
   }
 </script>
 
@@ -58,7 +55,7 @@
       <li class={`flight-journey-${item.state}`}>
         <button
           type="button"
-          disabled={!isActionable(item.stage)}
+          disabled={!isActionable(item.state)}
           onclick={() => openStage(item.stage)}
           aria-label={`${labels[item.stage]}: ${stateLabels[item.state]}`}
         >

@@ -1,4 +1,8 @@
-import type { FlightOperationJourneyView } from "$lib/flightOperation/types";
+import type {
+  FlightOperationContextChange,
+  FlightOperationJourneyView,
+  FlightOperationView,
+} from "$lib/flightOperation/types";
 import type {
   Coordinates,
   Observation,
@@ -127,6 +131,8 @@ export type DispatchStatus = {
     observed_at: string;
     availability: "live" | "cached" | "offline";
   };
+  operation?: FlightOperationView;
+  operation_change: FlightOperationContextChange;
   weather: {
     provider_available: boolean;
     availability: "not_requested" | "ready";

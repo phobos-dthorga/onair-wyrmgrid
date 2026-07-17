@@ -86,6 +86,7 @@ export const dispatchPreviewEmpty: DispatchStatus = {
   availability: "empty",
   persistence: "session_only",
   importing: false,
+  operation_change: "none",
   journey: {
     schema_version: 1,
     stages: [
@@ -112,6 +113,7 @@ export const dispatchPreviewReady: DispatchStatus = {
   availability: "ready",
   persistence: "session_only",
   importing: false,
+  operation_change: "none",
   atlas_plan: previewAtlasPlan,
   journey: {
     schema_version: 1,

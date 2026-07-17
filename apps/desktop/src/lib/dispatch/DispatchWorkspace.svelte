@@ -1,5 +1,6 @@
 <script lang="ts">
   import "./dispatch.css";
+  import FlightOperationCard from "$lib/flightOperation/FlightOperationCard.svelte";
   import FlightOperationJourney from "$lib/flightOperation/FlightOperationJourney.svelte";
   import { translation } from "$lib/i18n/runtime";
   import {
@@ -13,6 +14,7 @@
     SimBriefAccountPreference,
     SimBriefReferenceKind,
   } from "$lib/dispatch/types";
+  import type { FlightOperationStage } from "$lib/flightOperation/types";
 
   let {
     status,
@@ -22,6 +24,8 @@
     onimport,
     onweather,
     onclear,
+    onoperation,
+    onjourney,
     onviewweatheratlas,
     onviewroute,
     onviewfeature,
@@ -37,6 +41,8 @@
     ) => void;
     onweather: () => void;
     onclear: () => void;
+    onoperation: (action: "start" | "revise") => void;
+    onjourney: (stage: FlightOperationStage) => void;
     onviewweatheratlas: (stationId?: string) => void;
     onviewroute: () => void;
     onviewfeature: (featureId: string) => void;
@@ -65,6 +71,7 @@
   const comparison = $derived(status.comparison);
   const weather = $derived(status.weather.snapshot);
   const atlasWeather = $derived(status.atlas_weather);
+  const operation = $derived(status.operation);
   function atlasWeatherStationId(stationIcao: string): string | undefined {
     return atlasWeather?.stations.find(
       (station) => station.station_icao === stationIcao,
@@ -76,6 +83,21 @@
       .getElementById("dispatch-weather")
       ?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
+
+  function openJourneyStage(stage: FlightOperationStage): void {
+    if (stage === "weather") {
+      scrollWeatherIntoView();
+      return;
+    }
+    if (stage === "manifest" || stage === "review") {
+      document
+        .getElementById("dispatch-operation")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    onjourney(stage);
+  }
+
   const atlasRoute = $derived(status.atlas_route);
   const originRouteFeature = $derived(
     atlasRoute?.features.find((feature) => feature.kind === "origin"),
@@ -210,7 +232,7 @@
         >
         <span>
           {rememberReference
-            ? "The reference is retained locally; imported plans remain session-only in this preview."
+            ? "The reference is retained locally; a plan is persisted only when accepted into an operation or associated with a recording."
             : "The account reference and imported plan are cleared when WyrmGrid closes."}
         </span>
       </div>
@@ -298,8 +320,14 @@
 
       <FlightOperationJourney
         journey={status.journey}
-        onweather={scrollWeatherIntoView}
-        onatlas={onviewroute}
+        onstage={openJourneyStage}
+      />
+
+      <FlightOperationCard
+        {operation}
+        operationChange={status.operation_change}
+        {busy}
+        {onoperation}
       />
 
       <div class="dispatch-plan-grid">
@@ -594,6 +622,24 @@
             </div>
           {/if}
         </article>
+      </div>
+    {:else if operation}
+      <div class="dispatch-persisted-operation">
+        <FlightOperationJourney
+          journey={status.journey}
+          onstage={openJourneyStage}
+        />
+        <FlightOperationCard
+          {operation}
+          operationChange={status.operation_change}
+          {busy}
+          {onoperation}
+        />
+        <p>
+          This accepted revision remains available after restart. Import a
+          current plan to compare or revise it; the stored revision is not
+          silently replaced.
+        </p>
       </div>
     {:else}
       <div class="dispatch-empty-state">
