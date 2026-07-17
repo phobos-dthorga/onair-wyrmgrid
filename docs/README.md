@@ -2,6 +2,7 @@
 
 - [Project brief](project-brief.md)
 - [Architecture overview](architecture/overview.md)
+- [Reusable presentation and data exploration](architecture/reusable-presentation-and-exploration.md)
 - [First vertical slice](architecture/vertical-slice.md)
 - [Architecture decisions](architecture/decisions/README.md)
 - [Development environment](development.md)
@@ -14,6 +15,7 @@
 - [WyrmGrid Atlas](atlas/README.md)
   - [Flight plans, linked procedures, and live/historical weather](atlas/flight-plan-and-weather.md)
 - [WyrmGrid Hoard](hoard/README.md)
+- [WyrmGrid Staff](staff/README.md)
 - [Core authorization model](security/authorization-model.md)
 - [Themes and community theme manifests](themes/README.md)
 - [Localization and community language packs](localization/README.md)
@@ -30,6 +32,7 @@
   - [Simulator provider authoring and FSUIPC path](integrations/simulator-provider-authoring.md)
   - [Simulator connection, recording, in-game control, and graphs](integrations/simulator-experience-roadmap.md)
 - [Observability and Sentry plan](operations/observability.md)
+- [Flight operation lifecycle](operations/flight-operation-lifecycle.md)
 - [Application Terms of Use](legal/terms-of-use.md)
 - [Privacy Notice](legal/privacy-notice.md)
 - [Third-party service register](legal/third-party-services.md)

@@ -25,6 +25,9 @@ The first read-only increment is implemented behind WyrmGrid Dispatch:
   retrieved, validity, transformation, and freshness metadata; and
 - Dispatch shows raw coded METAR and TAF text plus a small allowlisted set of
   provider-decoded METAR fields without converting them into a go/no-go score.
+- Rust builds `FlightWeatherMapView` schema 1 from those same snapshots and the
+  validated plan, allowing Dispatch to open the complete weather layer or one
+  airport directly in Atlas without reparsing provider data in Svelte.
 
 The sanitized fixtures follow the official OpenAPI field contract and public
 responses captured on 2026-07-14. No provider credentials or private operational
@@ -97,6 +100,28 @@ These are WyrmGrid operating limits, not claims about provider guarantees.
 Weather must not be reduced to a single hidden score. Recommendations retain the
 observations, thresholds, and uncertainty that produced them.
 
+## Real weather and simulator weather
+
+External weather and simulator weather are not interchangeable. WyrmGrid uses
+three separately attributed evidence streams:
+
+- external real-world observations, forecasts, radar, and advisories;
+- the simulator-selected weather mode or scenario, when an SDK contract reports
+  it; and
+- ambient conditions observed by telemetry around the simulated aircraft.
+
+The mode may eventually be recorded as `live`, `preset_or_custom`, or `unknown`
+only from verified simulator evidence. It must not be inferred by comparing
+ambient values with an external report. Mode changes and ambient samples may be
+stored with a recording after a versioned Bridge protocol change, fixtures, and
+compatibility decision; external weather remains a separate source snapshot
+with its own observation and retrieval times.
+
+This allows a debrief to say, for example, that the simulator was using a
+custom scenario while external airport weather reported something else. It
+does not label the player's chosen weather as false, overwrite it with external
+data, or imply that simulator ambient observations were real-world conditions.
+
 GPU-enhanced rain, snow, cloud, wind, and lightning are valid presentation
 goals only when the adopted product supplies the corresponding phenomenon,
 spatial precision, and valid time. A coded thunderstorm observation may support
@@ -117,6 +142,9 @@ source-shaped rendering rule lives in the
 WIFS, graphical forecast imagery, radar tiles, and commercial weather sources
 are deferred. Each introduces authentication, licensing, rendering, volume, or
 coverage questions beyond the initial airport and route-weather slice.
+
+The specific radar source and rendering gates are defined in the
+[weather radar integration contract](radar.md).
 
 The planned Atlas projection, historical Hoard model, conservative-by-default
 rendering profile, and optional GPU-enhanced presentation are defined in the

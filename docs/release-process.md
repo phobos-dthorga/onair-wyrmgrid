@@ -6,7 +6,7 @@
 2. Run `npm run test:tooling`,
    `node scripts/verify-release-version.mjs <version>`, and
    `node scripts/verify-installer-contract.mjs`, then complete the normal local
-   checks and confirm CI on `main`.
+   checks on the maintainer's development machine.
 3. Create and push an annotated `vX.Y.Z` tag from a commit on `main`. Supported
    prerelease suffixes such as `v0.2.0-rc.1` are also accepted; build metadata is
    deliberately excluded from installer versions.
@@ -47,12 +47,23 @@ break that continuity and therefore requires a separately designed data and
 installer migration. The installer-contract tooling intentionally rejects such
 drift. A portable backup is still recommended before prerelease upgrades.
 
-## Installer build policy
+## Installer and hosted-runner policy
 
-Routine commits and pull requests compile-check and test the desktop but do not
-assemble installers. Every intentional semantic-version release tag produces
-packages, including patch releases. This keeps normal CI economical while making
-the tag an unambiguous request for a complete release candidate.
+Routine commits and pull requests compile-check and test the desktop locally;
+hosted CI/CD is reserved for releases unless the maintainer explicitly approves
+an exception. Every intentional semantic-version release tag repeats the full
+validation suite on clean hosted runners and produces packages, including patch
+releases. This makes the tag both an unambiguous request for a complete release
+candidate and the point where independent hosted verification has material
+value.
+
+Release pull requests named `codex/release-*` run the branch-protection checks
+needed before the approved version can reach `main`. Other pull requests report
+those jobs as skipped and do not allocate hosted runners. The complete CI and
+security workflows run again against the immutable release tag, while the
+security workflow additionally retains its scheduled dependency review. Avoid
+unnecessary manual dispatches and reruns; local gates remain authoritative for
+ordinary development.
 
 The release policy rejects malformed versions, tags outside `main`, and any tag
 whose version differs from the four checked-in application version sources. A
@@ -100,9 +111,10 @@ runner and are never valid for an end-user installation.
 - The draft release remains a human promotion boundary while releases are
   unsigned prereleases.
 
-Branch protection should require the Rust core, Frontend, Windows desktop,
-`rust-audit`, and `npm-audit` checks before `main` is merged. Force pushes and
-branch deletion remain disabled.
+Branch protection should restrict `main` updates to the maintainer and keep
+force pushes and branch deletion disabled. The immutable release tag then runs
+Rust core, Frontend, Windows desktop, `rust-audit`, and `npm-audit` checks before
+packaging begins.
 
 ## Diagnostic artifacts
 

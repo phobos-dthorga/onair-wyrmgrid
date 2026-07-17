@@ -7,14 +7,18 @@ use chrono::{DateTime, Utc};
 use reqwest::{Client, StatusCode, header};
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Deserializer, de::DeserializeOwned};
+use std::collections::HashSet;
 use std::time::Duration;
 use thiserror::Error;
 use url::Url;
 use uuid::Uuid;
 use wyrmgrid_domain::{
-    AircraftId, AircraftSummary, AirportId, AirportSummary, CompanyId, CompanySummary, Coordinates,
-    FboId, FboSummary, JOB_SNAPSHOT_SCHEMA_VERSION, JobId, JobLeg, JobLegId, JobLegKind,
-    JobSnapshot, JobSummary, MAX_JOBS_PER_SNAPSHOT, Observed, Provenance, ProvenanceKind,
+    AircraftClassId, AircraftClassQualification, AircraftId, AircraftSummary, AirportId,
+    AirportSummary, CompanyId, CompanySummary, Coordinates, FboId, FboSummary,
+    JOB_SNAPSHOT_SCHEMA_VERSION, JobId, JobLeg, JobLegId, JobLegKind, JobSnapshot, JobSummary,
+    MAX_CLASS_QUALIFICATIONS_PER_STAFF_MEMBER, MAX_JOBS_PER_SNAPSHOT, MAX_STAFF_PER_SNAPSHOT,
+    Observed, Provenance, ProvenanceKind, STAFF_SNAPSHOT_SCHEMA_VERSION, StaffMemberId,
+    StaffMemberSummary, StaffQualificationId, StaffSnapshot,
 };
 
 const API_KEY_HEADER: &str = "oa-apikey";
@@ -22,6 +26,7 @@ const COMPANY_ID_HEADER: &str = "CompanyUniqueId";
 const FLEET_PROVENANCE_SOURCE: &str = "onair:company/fleet";
 const FBOS_PROVENANCE_SOURCE: &str = "onair:company/fbos";
 const JOBS_PROVENANCE_SOURCE: &str = "onair:company/jobs/pending";
+const STAFF_PROVENANCE_SOURCE: &str = "onair:company/employees";
 const MAX_RESPONSE_BYTES: usize = 8 * 1024 * 1024;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
 pub const DEFAULT_BASE_URL: &str = "https://server1.onair.company/api/v1";
@@ -250,6 +255,64 @@ struct RawCharter {
     current_airport: Option<RawAirport>,
 }
 
+#[derive(Debug, Deserialize)]
+struct RawStaffMember {
+    #[serde(rename = "Id", default)]
+    id: Option<Uuid>,
+    #[serde(rename = "Pseudo", default)]
+    display_name: Option<String>,
+    #[serde(rename = "AvatarImageName", default)]
+    avatar_reference: Option<String>,
+    #[serde(rename = "Category", default)]
+    category_code: Option<i32>,
+    #[serde(rename = "Status", default)]
+    status_code: Option<i32>,
+    #[serde(rename = "CurrentAirport", default)]
+    current_airport: Option<RawAirport>,
+    #[serde(rename = "HomeAirport", default)]
+    home_airport: Option<RawAirport>,
+    #[serde(
+        rename = "BusyUntil",
+        default,
+        deserialize_with = "deserialize_onair_datetime"
+    )]
+    busy_until: Option<DateTime<Utc>>,
+    #[serde(rename = "IsOnline", default)]
+    is_online: Option<bool>,
+    #[serde(
+        rename = "ClassCertifications",
+        default,
+        deserialize_with = "deserialize_null_default"
+    )]
+    class_certifications: Vec<RawClassCertification>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawClassCertification {
+    #[serde(rename = "Id", default)]
+    id: Option<Uuid>,
+    #[serde(rename = "AircraftClassId", default)]
+    aircraft_class_id: Option<Uuid>,
+    #[serde(rename = "AircraftClass", default)]
+    aircraft_class: Option<RawAircraftClass>,
+    #[serde(
+        rename = "LastValidation",
+        default,
+        deserialize_with = "deserialize_onair_datetime"
+    )]
+    last_validated_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawAircraftClass {
+    #[serde(rename = "Id", default)]
+    id: Option<Uuid>,
+    #[serde(rename = "ShortName", default)]
+    short_name: Option<String>,
+    #[serde(rename = "Name", default)]
+    name: Option<String>,
+}
+
 impl OnAirClient {
     pub fn new(
         base_url: &str,
@@ -365,6 +428,38 @@ impl OnAirClient {
             provenance: Provenance {
                 kind: ProvenanceKind::OnAirFact,
                 source: JOBS_PROVENANCE_SOURCE.to_owned(),
+                observed_at: Utc::now(),
+            },
+        })
+    }
+
+    pub async fn staff(&self) -> Result<Observed<StaffSnapshot>, ClientError> {
+        let response: ApiResult<Vec<RawStaffMember>> = self
+            .get(&format!("company/{}/employees", self.company_id))
+            .await?;
+        if response.error.is_some_and(|error| !error.trim().is_empty()) {
+            return Err(ClientError::ApiRejected);
+        }
+
+        let snapshot = StaffSnapshot {
+            schema_version: STAFF_SNAPSHOT_SCHEMA_VERSION,
+            staff: response
+                .content
+                .ok_or(ClientError::MissingContent)?
+                .into_iter()
+                .filter_map(translate_staff_member)
+                .take(MAX_STAFF_PER_SNAPSHOT)
+                .collect(),
+        };
+        snapshot
+            .validate()
+            .map_err(|_| ClientError::MissingContent)?;
+
+        Ok(Observed {
+            value: snapshot,
+            provenance: Provenance {
+                kind: ProvenanceKind::OnAirFact,
+                source: STAFF_PROVENANCE_SOURCE.to_owned(),
                 observed_at: Utc::now(),
             },
         })
@@ -545,6 +640,57 @@ fn translate_charter(charter: RawCharter) -> Option<(u32, u8, JobLeg)> {
             description: bounded_text(charter.description, 512),
         },
     ))
+}
+
+fn translate_staff_member(member: RawStaffMember) -> Option<StaffMemberSummary> {
+    let mut qualification_ids = HashSet::new();
+    let mut aircraft_class_ids = HashSet::new();
+    let staff = StaffMemberSummary {
+        id: StaffMemberId(member.id?),
+        display_name: bounded_text(member.display_name, 120),
+        avatar_reference: bounded_text(member.avatar_reference, 255),
+        category_code: member.category_code.filter(|code| (0..=4).contains(code)),
+        status_code: member.status_code.filter(|code| (0..=11).contains(code)),
+        current_airport: member.current_airport.and_then(translate_airport),
+        home_airport: member.home_airport.and_then(translate_airport),
+        busy_until: member.busy_until,
+        is_online: member.is_online,
+        class_qualifications: member
+            .class_certifications
+            .into_iter()
+            .filter_map(translate_class_qualification)
+            .filter(|qualification| {
+                qualification_ids.insert(qualification.id.clone())
+                    && aircraft_class_ids.insert(qualification.aircraft_class_id.clone())
+            })
+            .take(MAX_CLASS_QUALIFICATIONS_PER_STAFF_MEMBER)
+            .collect(),
+    };
+    staff.validate().is_ok().then_some(staff)
+}
+
+fn translate_class_qualification(
+    qualification: RawClassCertification,
+) -> Option<AircraftClassQualification> {
+    let aircraft_class = qualification.aircraft_class;
+    let declared_aircraft_class_id = qualification.aircraft_class_id;
+    let nested_aircraft_class_id = aircraft_class.as_ref().and_then(|class| class.id);
+    if declared_aircraft_class_id
+        .zip(nested_aircraft_class_id)
+        .is_some_and(|(declared, nested)| declared != nested)
+    {
+        return None;
+    }
+    let aircraft_class_id = declared_aircraft_class_id.or(nested_aircraft_class_id)?;
+    Some(AircraftClassQualification {
+        id: StaffQualificationId(qualification.id?),
+        aircraft_class_id: AircraftClassId(aircraft_class_id),
+        short_name: aircraft_class
+            .as_ref()
+            .and_then(|class| bounded_text(class.short_name.clone(), 64)),
+        name: aircraft_class.and_then(|class| bounded_text(class.name, 160)),
+        last_validated_at: qualification.last_validated_at,
+    })
 }
 
 fn coordinates(latitude: Option<f64>, longitude: Option<f64>) -> Option<Coordinates> {

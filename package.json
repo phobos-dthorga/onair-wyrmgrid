@@ -1,6 +1,6 @@
 {
   "name": "onair-wyrmgrid",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "A modular operations and intelligence platform for OnAir Airline Manager.",
   "license": "MIT",
@@ -13,6 +13,7 @@
     "dev": "npm run tauri --workspace @wyrmgrid/desktop -- dev",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "atlas:regions": "node scripts/prepare-atlas-regions.mjs",
     "provider:prepare": "node scripts/prepare-simulator-provider.mjs",
     "test:tooling": "node --test scripts/*.test.mjs",
     "tauri": "npm run tauri --workspace @wyrmgrid/desktop --"

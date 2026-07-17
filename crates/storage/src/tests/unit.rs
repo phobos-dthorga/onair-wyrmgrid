@@ -6,7 +6,7 @@ fn initializes_the_database_schema() {
     let store = Store::open_in_memory().expect("in-memory database should open");
     assert_eq!(
         store.schema_version().expect("version should be readable"),
-        11
+        12
     );
 }
 
@@ -105,6 +105,7 @@ fn persists_independent_display_preferences() {
         speed_unit: "knots".into(),
         weight_unit: "kilograms".into(),
         fuel_unit: "litres".into(),
+        responsive_surfaces: false,
     };
     store
         .save_display_preferences_record(&preferences)

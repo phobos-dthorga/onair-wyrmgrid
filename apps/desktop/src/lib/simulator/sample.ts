@@ -1,4 +1,8 @@
-import type { SimulatorRecordingView, SimulatorSessionView } from "./types";
+import type {
+  SimulatorRecordingView,
+  SimulatorSessionDebrief,
+  SimulatorSessionView,
+} from "./types";
 
 const previewSession = {
   id: "preview-flight-2026-07-14",
@@ -57,7 +61,7 @@ export const simulatorRecordingSessionPreview: SimulatorSessionView = {
   ],
   comparison: {
     association: {
-      correlation_version: 1,
+      correlation_version: 2,
       plan_id: "preview-simbrief-plan",
       origin_icao: "YSSY",
       destination_icao: "NZAA",
@@ -70,31 +74,150 @@ export const simulatorRecordingSessionPreview: SimulatorSessionView = {
     planned_initial_altitude_ft: 31_000,
     recorded_peak_altitude_ft: 31_000,
     planned_takeoff_fuel_pounds: 7_800,
+    planned_landing_fuel_pounds: 3_400,
+    recorded_start_fuel_pounds: 7_740,
+    recorded_end_fuel_pounds: 3_580,
     recorded_fuel_used_pounds: 4_160,
+    duration_delta_seconds: 150,
+    distance_delta_nm: 16.6,
+    altitude_delta_ft: 0,
+    takeoff_fuel_delta_pounds: -60,
+    landing_fuel_delta_pounds: 180,
     origin_proximity_nm: 0.8,
     destination_proximity_nm: 1.4,
     registration_matches: true,
   },
   samples: [
-    [1, "2026-07-14T09:20:00Z", 1200, 95, 101, 98, false],
-    [2, "2026-07-14T09:26:00Z", 4200, 145, 153, 150, false],
-    [3, "2026-07-14T09:32:00Z", 9100, 205, 218, 212, false],
-    [4, "2026-07-14T09:38:00Z", 18000, 260, 285, 279, false],
-    [8, "2026-07-14T09:44:00Z", 26000, 282, 320, 315, true],
-    [9, "2026-07-14T09:50:00Z", 31000, 274, 336, 331, false],
-    [10, "2026-07-14T09:56:00Z", 16000, 238, 270, 264, false],
-    [11, "2026-07-14T10:05:00Z", 1300, 112, 118, 115, false],
+    [1, "2026-07-14T09:20:00Z", 1200, 95, 101, 98, 7740, 4, 1, false],
+    [2, "2026-07-14T09:26:00Z", 4200, 145, 153, 150, 7370, 8, 4, false],
+    [3, "2026-07-14T09:32:00Z", 9100, 205, 218, 212, 6930, 5, -9, false],
+    [4, "2026-07-14T09:38:00Z", 18000, 260, 285, 279, 6410, 3, 14, false],
+    [8, "2026-07-14T09:44:00Z", 26000, 282, 320, 315, 5820, 2, -3, true],
+    [9, "2026-07-14T09:50:00Z", 31000, 274, 336, 331, 5240, 0, 2, false],
+    [10, "2026-07-14T09:56:00Z", 16000, 238, 270, 264, 4380, -4, -12, false],
+    [11, "2026-07-14T10:05:00Z", 1300, 112, 118, 115, 3580, -2, 3, false],
   ].map(
-    ([sequence, observedAt, altitude, indicated, trueSpeed, ground, gap]) => ({
+    (
+      [
+        sequence,
+        observedAt,
+        altitude,
+        indicated,
+        trueSpeed,
+        ground,
+        fuel,
+        pitch,
+        bank,
+        gap,
+      ],
+      index,
+    ) => ({
       source_sequence: sequence as number,
       observed_at: observedAt as string,
       altitude_feet: altitude as number,
       indicated_airspeed_knots: indicated as number,
       true_airspeed_knots: trueSpeed as number,
       ground_speed_knots: ground as number,
-      pitch_degrees: 0,
-      bank_degrees: 0,
+      fuel_total_weight_pounds: fuel as number,
+      pitch_degrees: pitch as number,
+      bank_degrees: bank as number,
+      position: {
+        latitude: -33.9461 + index * 0.66,
+        longitude: 151.1772 + index * 3.54,
+      },
       gap_before: gap as boolean,
     }),
   ),
+};
+
+const previewTrace = {
+  source_sample_count: simulatorRecordingSessionPreview.samples.length,
+  represented_sample_count: simulatorRecordingSessionPreview.samples.length,
+  gap_count: 1,
+  method: "exact" as const,
+  samples: simulatorRecordingSessionPreview.samples,
+};
+
+export const simulatorRecordingDebriefPreview: SimulatorSessionDebrief = {
+  schema_version: 1,
+  session: previewSession,
+  source_sample_count: simulatorRecordingSessionPreview.samples.length,
+  traces: {
+    altitude: previewTrace,
+    speed: previewTrace,
+    fuel: previewTrace,
+    attitude: previewTrace,
+  },
+  comparison: simulatorRecordingSessionPreview.comparison,
+  route: {
+    schema_version: 2,
+    session_id: previewSession.id,
+    planned: {
+      schema_version: 1,
+      plan_id: "preview-simbrief-plan",
+      origin_icao: "YSSY",
+      destination_icao: "NZAA",
+      airac: "2607",
+      provenance: {
+        kind: "external_calculation",
+        provider: "simbrief",
+        provider_revision: "2607",
+        retrieved_at: "2026-07-15T22:00:00Z",
+        transformation_version: 1,
+        freshness: "current",
+      },
+      points: [
+        {
+          id: "origin:yssy",
+          kind: "origin",
+          location: { latitude: -33.9461, longitude: 151.1772 },
+          label: "YSSY",
+          on_route: true,
+          gap_before: false,
+        },
+        {
+          id: "route:0000:mudgi",
+          kind: "route_leg",
+          location: { latitude: -32.9167, longitude: 151.8167 },
+          label: "MUDGI",
+          sequence: 0,
+          on_route: true,
+          gap_before: false,
+        },
+        {
+          id: "route:0001:unresolved",
+          kind: "route_leg",
+          label: "UNRESOLVED",
+          sequence: 1,
+          on_route: true,
+          gap_before: false,
+        },
+        {
+          id: "destination:nzaa",
+          kind: "destination",
+          location: { latitude: -37.0081, longitude: 174.7917 },
+          label: "NZAA",
+          on_route: true,
+          gap_before: true,
+        },
+      ],
+    },
+    recorded: {
+      source_sample_count: simulatorRecordingSessionPreview.samples.length,
+      represented_point_count: simulatorRecordingSessionPreview.samples.length,
+      method: "exact",
+      points: simulatorRecordingSessionPreview.samples.flatMap((sample) =>
+        sample.position
+          ? [
+              {
+                location: sample.position,
+                source_sequence: sample.source_sequence,
+                observed_at: sample.observed_at,
+                gap_before: sample.gap_before,
+              },
+            ]
+          : [],
+      ),
+    },
+  },
 };

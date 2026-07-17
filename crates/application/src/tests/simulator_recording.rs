@@ -248,10 +248,31 @@ fn simbrief_plan_is_snapshotted_and_compared_only_with_available_recorded_facts(
     let comparison = detail.comparison.expect("plan should be correlated");
     assert_eq!(comparison.association.origin_icao, "YSSY");
     assert_eq!(comparison.association.destination_icao, "NZAA");
+    assert_eq!(comparison.association.correlation_version, 2);
     assert_eq!(comparison.planned_distance_nm, Some(1_184.6));
     assert_eq!(comparison.recorded_peak_altitude_ft, Some(5_500.0));
     assert_eq!(comparison.recorded_seconds, Some(5));
     assert_eq!(comparison.planned_enroute_seconds, None);
+    assert_eq!(comparison.altitude_delta_ft, Some(-30_500.0));
+
+    let debrief = service.debrief(&session_id).unwrap();
+    assert_eq!(debrief.schema_version, 1);
+    assert_eq!(debrief.source_sample_count, 2);
+    assert_eq!(
+        debrief
+            .route
+            .planned
+            .as_ref()
+            .expect("stored plan should project")
+            .points
+            .iter()
+            .filter(|point| {
+                point.kind == crate::FlightPlanMapPointKind::RouteLeg && point.location.is_none()
+            })
+            .map(|point| point.label.as_str())
+            .collect::<Vec<_>>(),
+        ["TESAT", "LIZZI", "LUNBI"]
+    );
 
     let json = service
         .export_session(&session_id, SimulatorExportFormat::Json)

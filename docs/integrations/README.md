@@ -54,8 +54,8 @@ Online networks --------------------------+--> Atlas overlays     |
    a sanitized snapshot may also be retained with an explicitly created local
    flight recording. Authenticated live-field certification remains.)
 4. Add cached airport weather and route-weather summaries. (Initial explicitly
-   requested, session-cached METAR/TAF airport context implemented; route
-   advisories remain.)
+   requested, session-cached METAR/TAF airport context and linked Atlas airport
+   projection implemented; route advisories remain.)
 5. Connect OnAir jobs, fleet selection, SimBrief plans, and explainable dispatch
    checks. (Registration, exact model-label, and current-airport comparison
    implemented; job payload and deadline checks await those OnAir contracts.)
@@ -100,6 +100,7 @@ require a sanitized captured response or an outside-repository integration test.
 - [SimBrief](simbrief.md)
 - [SayIntentions.AI](sayintentions.md)
 - [Aviation weather](weather.md)
+- [Weather radar](radar.md)
 - [VATSIM and IVAO](online-networks.md)
 - [Navigation data and flight-plan interchange](navigation-and-interchange.md)
 - [WyrmGrid Bridge and simulator providers](wyrmgrid-bridge.md)

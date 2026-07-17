@@ -43,6 +43,7 @@ pub struct DisplayPreferences {
     pub speed_unit: SpeedUnit,
     pub weight_unit: WeightUnit,
     pub fuel_unit: FuelUnit,
+    pub responsive_surfaces: bool,
 }
 
 impl Default for DisplayPreferences {
@@ -52,6 +53,7 @@ impl Default for DisplayPreferences {
             speed_unit: SpeedUnit::Knots,
             weight_unit: WeightUnit::Pounds,
             fuel_unit: FuelUnit::Pounds,
+            responsive_surfaces: true,
         }
     }
 }
@@ -141,6 +143,7 @@ fn preferences_to_record(preferences: DisplayPreferences) -> DisplayPreferencesR
             FuelUnit::Litres => "litres",
         }
         .to_owned(),
+        responsive_surfaces: preferences.responsive_surfaces,
     }
 }
 
@@ -152,6 +155,7 @@ fn record_to_preferences(
         speed_unit: parse_unit(&record.speed_unit)?,
         weight_unit: parse_unit(&record.weight_unit)?,
         fuel_unit: parse_unit(&record.fuel_unit)?,
+        responsive_surfaces: record.responsive_surfaces,
     })
 }
 

@@ -1,5 +1,7 @@
 <script lang="ts">
   import { translation } from "$lib/i18n/runtime";
+  import type { AtlasFlightRoute } from "$lib/atlas/types";
+  import { formatLocalDateTime } from "$lib/presentation/dateTime";
   import type { DisplayPreferences } from "$lib/settings/types";
   import {
     presentAltitude,
@@ -15,6 +17,7 @@
     SimulatorBridgeView,
     SimulatorProviderView,
     SimulatorRecordingView,
+    SimulatorSessionDebrief,
     SimulatorSessionView,
   } from "./types";
 
@@ -26,6 +29,7 @@
     displayPreferences,
     recordingStatus,
     recordingSession,
+    recordingDebrief,
     recordingBusy = false,
     onrefresh,
     onstart,
@@ -38,6 +42,7 @@
     onpin,
     onpage,
     onexport,
+    onviewatlas,
     onclose,
   }: {
     open: boolean;
@@ -47,6 +52,7 @@
     displayPreferences: DisplayPreferences;
     recordingStatus: SimulatorRecordingView;
     recordingSession?: SimulatorSessionView;
+    recordingDebrief?: SimulatorSessionDebrief;
     recordingBusy?: boolean;
     onrefresh: () => void;
     onstart: (providerId: string) => void;
@@ -59,6 +65,7 @@
     onpin: (sessionId: string, pinned: boolean) => void;
     onpage: (sessionId: string, sampleOffset: number) => void;
     onexport: (sessionId: string, format: "json" | "csv") => void;
+    onviewatlas: (route: AtlasFlightRoute) => void;
     onclose: () => void;
   } = $props();
 
@@ -152,15 +159,15 @@
   }
 
   function formatTime(value: string | undefined): string {
-    if (!value) return $translation("simulator-value-unavailable");
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+    return formatLocalDateTime(
+      value,
+      value ?? $translation("simulator-value-unavailable"),
+    );
   }
 
   function handleKeydown(event: KeyboardEvent): void {
     if (open && event.key === "Escape" && !busy && !recordingBusy) onclose();
   }
-
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
@@ -396,6 +403,7 @@
       <RecordingHistory
         status={recordingStatus}
         session={recordingSession}
+        debrief={recordingDebrief}
         {displayPreferences}
         busy={recordingBusy}
         captureControls
@@ -408,6 +416,7 @@
         {onpin}
         {onpage}
         {onexport}
+        {onviewatlas}
       />
 
       <footer class="simulator-footer">

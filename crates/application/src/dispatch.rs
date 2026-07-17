@@ -9,8 +9,8 @@ use std::sync::{
 use std::time::{Duration, Instant};
 use thiserror::Error;
 use wyrmgrid_domain::{
-    AircraftSummary, FlightPlanSnapshot, JobSummary, Mass, MassUnit, OperationalProvenance,
-    ProvenanceKind, SnapshotFreshness, WeatherSnapshot,
+    AircraftSummary, Coordinates, FlightPlanAirport, FlightPlanSnapshot, JobSummary, Mass,
+    MassUnit, OperationalProvenance, ProvenanceKind, SnapshotFreshness, WeatherSnapshot,
 };
 use wyrmgrid_simbrief_api::{ClientError, SimBriefClient, UserReference, UserReferenceKind};
 use wyrmgrid_weather_api::{AviationWeatherClient, ClientError as WeatherClientError};
@@ -19,6 +19,7 @@ use crate::{FleetSnapshotView, SnapshotAvailability};
 
 pub const WEATHER_CACHE_TTL: Duration = Duration::from_secs(10 * 60);
 pub const WEATHER_REQUEST_COOLDOWN: Duration = Duration::from_secs(60);
+pub const ATLAS_ROUTE_PROJECTION_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -136,6 +137,53 @@ pub struct DispatchWeatherStatus {
     pub snapshot: Option<WeatherSnapshot>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AtlasRouteFeatureKind {
+    Origin,
+    RouteFix,
+    Destination,
+    Alternate,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AtlasRouteFeatureAvailability {
+    Resolved,
+    LocationUnavailable,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct AtlasRouteFeature {
+    pub id: String,
+    pub kind: AtlasRouteFeatureKind,
+    pub ident: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sequence: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub airway: Option<String>,
+    pub availability: AtlasRouteFeatureAvailability,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub location: Option<Coordinates>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct AtlasRouteView {
+    pub projection_version: u32,
+    pub plan_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub airac: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_text: Option<String>,
+    pub route_feature_ids: Vec<String>,
+    pub features: Vec<AtlasRouteFeature>,
+    pub mapped_route_feature_count: usize,
+    pub unresolved_route_feature_count: usize,
+    pub provenance: OperationalProvenance,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct DispatchStatus {
     pub provider_available: bool,
@@ -144,6 +192,13 @@ pub struct DispatchStatus {
     pub importing: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub snapshot: Option<FlightPlanSnapshot>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub atlas_plan: Option<crate::FlightPlanMapView>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub atlas_weather: Option<crate::FlightWeatherMapView>,
+    pub journey: crate::FlightOperationJourneyView,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub atlas_route: Option<AtlasRouteView>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub comparison: Option<DispatchComparison>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -290,6 +345,22 @@ impl DispatchSession {
         let comparison = snapshot
             .as_ref()
             .map(|snapshot| compare_plan_to_fleet(snapshot, fleet, selected_job.as_ref()));
+        let atlas_plan = snapshot.as_ref().map(crate::build_flight_plan_map_view);
+        let weather = self.weather_status()?;
+        let atlas_weather = snapshot
+            .as_ref()
+            .zip(weather.snapshot.as_ref())
+            .map(|(plan, weather)| crate::build_flight_weather_map_view(plan, weather));
+        let journey =
+            crate::build_initial_flight_operation_journey(crate::InitialJourneyEvidence {
+                plan_provider_available: self.inner.provider.is_some(),
+                plan_available: snapshot.is_some(),
+                weather_provider_available: weather.provider_available,
+                weather_available: weather.snapshot.is_some(),
+                weather_stale: weather.cache == DispatchWeatherCacheState::Expired,
+                atlas_available: atlas_plan.is_some(),
+            });
+        let atlas_route = snapshot.as_ref().map(project_atlas_route);
         Ok(DispatchStatus {
             provider_available: self.inner.provider.is_some(),
             availability: if snapshot.is_some() {
@@ -300,9 +371,13 @@ impl DispatchSession {
             persistence: DispatchPersistence::SessionOnly,
             importing: self.inner.importing.load(Ordering::Acquire),
             snapshot,
+            atlas_plan,
+            atlas_weather,
+            journey,
+            atlas_route,
             comparison,
             selected_job,
-            weather: self.weather_status()?,
+            weather,
         })
     }
 
@@ -502,6 +577,100 @@ impl DispatchSession {
             .lock()
             .map_err(|_| DispatchError::StateUnavailable)? = None;
         Ok(())
+    }
+}
+
+fn project_atlas_route(plan: &FlightPlanSnapshot) -> AtlasRouteView {
+    let plan_id = plan.id.0.to_string();
+    let mut features = Vec::new();
+    let mut route_feature_ids = Vec::new();
+
+    let origin_id = format!("{plan_id}:origin");
+    route_feature_ids.push(origin_id.clone());
+    features.push(airport_route_feature(
+        origin_id,
+        AtlasRouteFeatureKind::Origin,
+        &plan.airports.value.origin,
+    ));
+
+    if let Some(route) = &plan.route {
+        for leg in &route.value.legs {
+            let id = format!("{plan_id}:route-fix:{}", leg.sequence);
+            route_feature_ids.push(id.clone());
+            features.push(AtlasRouteFeature {
+                id,
+                kind: AtlasRouteFeatureKind::RouteFix,
+                ident: leg.ident.clone(),
+                name: None,
+                sequence: Some(leg.sequence),
+                airway: leg.airway.clone(),
+                availability: route_feature_availability(leg.location),
+                location: leg.location,
+            });
+        }
+    }
+
+    let destination_id = format!("{plan_id}:destination");
+    route_feature_ids.push(destination_id.clone());
+    features.push(airport_route_feature(
+        destination_id,
+        AtlasRouteFeatureKind::Destination,
+        &plan.airports.value.destination,
+    ));
+
+    for (index, alternate) in plan.airports.value.alternates.iter().enumerate() {
+        features.push(airport_route_feature(
+            format!("{plan_id}:alternate:{index}"),
+            AtlasRouteFeatureKind::Alternate,
+            alternate,
+        ));
+    }
+
+    let mapped_route_feature_count = features
+        .iter()
+        .filter(|feature| {
+            feature.kind != AtlasRouteFeatureKind::Alternate && feature.location.is_some()
+        })
+        .count();
+
+    AtlasRouteView {
+        projection_version: ATLAS_ROUTE_PROJECTION_VERSION,
+        plan_id,
+        airac: plan.identity.value.airac.clone(),
+        source_text: plan
+            .route
+            .as_ref()
+            .and_then(|route| route.value.source_text.clone()),
+        unresolved_route_feature_count: route_feature_ids.len() - mapped_route_feature_count,
+        mapped_route_feature_count,
+        route_feature_ids,
+        features,
+        provenance: plan.identity.provenance.clone(),
+    }
+}
+
+fn airport_route_feature(
+    id: String,
+    kind: AtlasRouteFeatureKind,
+    airport: &FlightPlanAirport,
+) -> AtlasRouteFeature {
+    AtlasRouteFeature {
+        id,
+        kind,
+        ident: airport.icao.clone(),
+        name: airport.name.clone(),
+        sequence: None,
+        airway: None,
+        availability: route_feature_availability(airport.location),
+        location: airport.location,
+    }
+}
+
+fn route_feature_availability(location: Option<Coordinates>) -> AtlasRouteFeatureAvailability {
+    if location.is_some() {
+        AtlasRouteFeatureAvailability::Resolved
+    } else {
+        AtlasRouteFeatureAvailability::LocationUnavailable
     }
 }
 

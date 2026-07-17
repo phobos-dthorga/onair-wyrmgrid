@@ -2,8 +2,11 @@
 
 This document defines how Dispatch, SimBrief, weather, Hoard, and Atlas should
 join without creating a second interpretation of the same operational facts.
-It is a design contract for future increments; the present Atlas does not yet
-draw flight plans or animated weather.
+It is the design contract for staged increments. Atlas now draws the current
+coordinate-only Dispatch plan, its current airport-weather observations, and a
+bounded planned-versus-recorded route for a selected historical simulator
+recording. It does not yet resolve navigation geometry or draw animated
+weather.
 
 ## One plan, two projections
 
@@ -20,12 +23,27 @@ private SimBrief response
   -> shared selection and provenance
 ```
 
-The first route layer should provide:
+The implemented projection is produced in the Rust application service and is
+included with `DispatchStatus`. It assigns plan-scoped stable IDs to the origin,
+destination, alternates, and every ordered route fix. Each feature explicitly
+reports either `resolved` with a source coordinate or
+`location_unavailable`; duplicate identifiers remain distinct through their
+sequence-based IDs.
+
+Atlas draws only supplied coordinates. A missing route fix breaks the rendered
+line rather than joining across the unknown location, while Dispatch keeps the
+unresolved item clickable and Atlas explains the gap in its inspector. Full
+route framing includes every mapped route feature and alternate and uses
+antimeridian-safe bounds. The browser preview uses clearly synthetic
+coordinate-bearing plan data solely for interface validation.
+
+The route layer provides:
 
 - origin, destination, and alternate airport markers;
 - an ordered geodesic route line through every resolved leg;
-- distinct direct, airway, procedure, and unresolved-leg presentation only
-  after those classifications enter the stable navigation contract;
+- distinct airport, alternate, route-fix, and unresolved-location
+  presentation, while direct and procedure classifications remain gated on a
+  future stable navigation contract;
 - a **View full route** action that fits origin, resolved legs, destination,
   and relevant alternates, including antimeridian-safe bounds; and
 - a route inspector that retains SimBrief provenance, generation/retrieval
@@ -57,6 +75,52 @@ provenance. It must never be silently dropped or plotted at a plausible
 location. AIRAC disagreement between the plan and navigation source remains
 visible and may prevent procedure geometry from being joined.
 
+### Current Dispatch plan explorer
+
+`DispatchStatus.atlas_plan` is an additive application view using
+`FlightPlanMapView` schema 1. Rust constructs it from the already validated
+snapshot; Dispatch and Atlas never independently parse or resolve route text.
+Every origin, destination, alternate, and route leg receives a stable point ID
+for the lifetime of that plan. Dispatch sends only that ID when the user opens
+the complete route or a particular point.
+
+Atlas plots only points with supplied valid coordinates. Missing points remain
+in the inspector as **Location unavailable** and break the line before the next
+resolved point. Alternates are selectable markers but are not joined to the
+filed route. Full-route framing includes all sourced plan locations and handles
+the antimeridian. A point selection focuses its sourced position; selecting an
+unresolved point opens the same plan and provenance without inventing a camera
+target.
+
+The inspector shows point kind, airway where supplied, provider, retrieval
+time, and whether the point belongs to the filed route. The complete plan view
+also reports resolved and unresolved counts. Current plan state remains
+session-only and clearing Dispatch removes its source snapshot; the Atlas
+projection contains no independent persistent copy.
+
+### Historical recording route slice
+
+Hoard Flight Debrief route-view schema 2 is the first shared-projection route
+layer. It
+contains only coordinates already present in the recording's sanitized
+`FlightPlanSnapshot` and its bounded recorded position trace. Plan and recording
+are separate MapLibre line features. A gap splits its source line; a missing plan
+coordinate remains a selectable `FlightPlanMapPoint` and also splits the plan.
+Planned fix markers retain their identifiers, and an antimeridian-safe fit
+frames both sources together. Dispatch and Hoard now reuse the same host-built
+`FlightPlanMapView`, so missing-coordinate and provenance rules cannot drift.
+Svelte does not resolve or infer geometry. The route remains local and is not
+published to community plugins or sent to the public basemap service as
+feature data.
+
+`FlightPlanMapView` schema 1 changes only the internal application/read-model
+contract. It adds `atlas_plan` to Dispatch status. Debrief route-view schema 2
+replaces its schema-1 planned-route fields with the same projection; route
+views are regenerated from retained source facts rather than persisted, so no
+database migration or legacy reader is required before public release. This
+does not change the plugin protocol, simulator sidecar protocol, SQLite schema,
+or canonical `FlightPlanSnapshot` version.
+
 The selection contract belongs in Rust application/domain types. Svelte may
 request `focus route`, `focus airport`, or `focus feature`, while Atlas alone
 owns camera animation and fit bounds.
@@ -67,6 +131,23 @@ Atlas weather layers consume translated immutable weather products, not raw
 provider JSON, images, or arbitrary remote map styles. Each feature carries at
 least source, product kind, issue/observation time, validity interval, retrieval
 time, freshness, coverage, and geometry provenance.
+
+### Current airport-weather projection
+
+`DispatchStatus.atlas_weather` is an additive `FlightWeatherMapView` schema-1
+projection built in Rust by joining the validated plan airports with the
+current `WeatherSnapshot`. It gives origin, destination, and alternates stable
+selection IDs and carries only source coordinates and translated METAR/TAF
+observations. Dispatch can open the complete weather layer or one station in
+Atlas; Atlas displays category, wind, visibility, raw reports, timestamps, and
+provenance in its inspector.
+
+A station with coordinates but no report is plotted as **Unknown**, never
+clear. A report whose plan airport lacks coordinates remains part of the
+evidence view and inspector contract but is not plotted. The weather view is
+session-only, disappears when its source plan is cleared, and does not change
+the canonical plan, weather snapshot, plugin protocol, simulator protocol, or
+database schema.
 
 The intended layers are incremental:
 
@@ -181,11 +262,14 @@ warning effects may flash, while the runtime control prevents or reduces them.
 ## Delivery sequence and validation
 
 1. Add a stable Atlas route-view model and full-route framing using only
-   coordinates already present in the snapshot.
+   coordinates already present in the snapshot. **Implemented.**
 2. Add shared Dispatch/Atlas selection IDs and explicit unresolved-leg results.
+   **Implemented.**
 3. Introduce navigation resolution with procedure/AIRAC provenance before
    clickable SID/STAR geometry.
 4. Project current airport weather, followed by validated advisory geometries.
+   The airport projection and linked inspector are implemented; route hazards
+   remain later work.
 5. Add append-only bounded weather persistence and Hoard historical playback.
 6. Add Compatibility/Enhanced settings, GPU capability reporting, budgets, and
    device-loss fallback before high-detail effects.
@@ -200,3 +284,7 @@ Open decisions include the approved navigation geometry source, MapLibre custom
 layer versus a separately composited renderer, WebGL2/WebGPU support policy,
 weather imagery licensing, historical retention limits, and the measurable
 frame-time/VRAM thresholds for each profile.
+
+Radar source evaluation, immutable frame requirements, rendering profiles, and
+historical gates are defined in the
+[weather radar integration contract](../integrations/radar.md).

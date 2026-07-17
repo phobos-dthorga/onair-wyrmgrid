@@ -1,6 +1,12 @@
 <script lang="ts">
   import "./dispatch.css";
+  import FlightOperationJourney from "$lib/flightOperation/FlightOperationJourney.svelte";
   import { translation } from "$lib/i18n/runtime";
+  import {
+    formatLocalDateTime,
+    mediumDateShortTime,
+    shortClockTime,
+  } from "$lib/presentation/dateTime";
   import type {
     DispatchStatus,
     Mass,
@@ -16,6 +22,9 @@
     onimport,
     onweather,
     onclear,
+    onviewweatheratlas,
+    onviewroute,
+    onviewfeature,
   }: {
     status: DispatchStatus;
     busy?: boolean;
@@ -28,6 +37,9 @@
     ) => void;
     onweather: () => void;
     onclear: () => void;
+    onviewweatheratlas: (stationId?: string) => void;
+    onviewroute: () => void;
+    onviewfeature: (featureId: string) => void;
   } = $props();
 
   let referenceKind = $state<SimBriefReferenceKind>("pilot_id");
@@ -52,21 +64,35 @@
   const fuel = $derived(plan?.fuel?.value);
   const comparison = $derived(status.comparison);
   const weather = $derived(status.weather.snapshot);
+  const atlasWeather = $derived(status.atlas_weather);
+  function atlasWeatherStationId(stationIcao: string): string | undefined {
+    return atlasWeather?.stations.find(
+      (station) => station.station_icao === stationIcao,
+    )?.id;
+  }
+
+  function scrollWeatherIntoView(): void {
+    document
+      .getElementById("dispatch-weather")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  const atlasRoute = $derived(status.atlas_route);
+  const originRouteFeature = $derived(
+    atlasRoute?.features.find((feature) => feature.kind === "origin"),
+  );
+  const destinationRouteFeature = $derived(
+    atlasRoute?.features.find((feature) => feature.kind === "destination"),
+  );
+  const alternateRouteFeatures = $derived(
+    atlasRoute?.features.filter((feature) => feature.kind === "alternate") ?? [],
+  );
 
   function formatDate(value: string | undefined): string {
-    if (!value) return "Not supplied";
-    const date = new Date(value);
-    return Number.isNaN(date.getTime())
-      ? "Not supplied"
-      : date.toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+    return formatLocalDateTime(value, "Not supplied", mediumDateShortTime);
   }
 
   function formatTime(value: string | undefined): string {
-    if (!value) return "—";
-    const date = new Date(value);
-    return Number.isNaN(date.getTime())
-      ? "—"
-      : date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return formatLocalDateTime(value, "—", shortClockTime);
   }
 
   function formatDuration(seconds: number | undefined): string {
@@ -91,6 +117,14 @@
     const last = selectedJob?.legs.at(-1)?.destination?.icao;
     return first && last ? `${first} → ${last}` : "Route unavailable";
   }
+
+  function routeFeatureForSequence(sequence: number) {
+    return atlasRoute?.features.find(
+      (feature) =>
+        feature.kind === "route_fix" && feature.sequence === sequence,
+    );
+  }
+
 </script>
 
 <section class="dispatch-workspace" aria-label="Dispatch flight plan workspace">
@@ -128,7 +162,11 @@
         </select>
       </label>
       <label class="dispatch-remember-reference">
-        <input type="checkbox" bind:checked={rememberReference} disabled={busy} />
+        <input
+          type="checkbox"
+          bind:checked={rememberReference}
+          disabled={busy}
+        />
         <span>
           <strong>Remember this account reference</strong>
           <small>
@@ -165,7 +203,11 @@
       </div>
     {:else}
       <div class="dispatch-notice">
-        <strong>{rememberReference ? "Account reference remembered" : "Session-only by choice"}</strong>
+        <strong
+          >{rememberReference
+            ? "Account reference remembered"
+            : "Session-only by choice"}</strong
+        >
         <span>
           {rememberReference
             ? "The reference is retained locally; imported plans remain session-only in this preview."
@@ -186,22 +228,40 @@
   <section class="dispatch-board">
     {#if plan && airports}
       <header class="dispatch-route-header">
-        <div class="dispatch-airport">
+        <button
+          class="dispatch-airport dispatch-atlas-link"
+          type="button"
+          disabled={!originRouteFeature}
+          onclick={() =>
+            originRouteFeature && onviewfeature(originRouteFeature.id)}
+        >
           <span>Origin</span>
           <strong>{airports.origin.icao}</strong>
           <small>{airports.origin.name ?? "Name not supplied"}</small>
           <i>{airports.origin.planned_runway ?? "RWY —"}</i>
-        </div>
-        <div class="dispatch-route-line" aria-hidden="true">
+        </button>
+        <button
+          class="dispatch-route-line dispatch-atlas-link"
+          type="button"
+          disabled={!atlasRoute}
+          aria-label="View the complete Dispatch route in Atlas"
+          onclick={onviewroute}
+        >
           <span></span><b>✦</b><span></span>
           <small>{route?.distance_nm?.toFixed(0) ?? "—"} NM</small>
-        </div>
-        <div class="dispatch-airport dispatch-airport-arrival">
+        </button>
+        <button
+          class="dispatch-airport dispatch-airport-arrival dispatch-atlas-link"
+          type="button"
+          disabled={!destinationRouteFeature}
+          onclick={() =>
+            destinationRouteFeature && onviewfeature(destinationRouteFeature.id)}
+        >
           <span>Destination</span>
           <strong>{airports.destination.icao}</strong>
           <small>{airports.destination.name ?? "Name not supplied"}</small>
           <i>{airports.destination.planned_runway ?? "RWY —"}</i>
-        </div>
+        </button>
       </header>
 
       <div class="dispatch-summary-strip">
@@ -236,6 +296,12 @@
         </article>
       </div>
 
+      <FlightOperationJourney
+        journey={status.journey}
+        onweather={scrollWeatherIntoView}
+        onatlas={onviewroute}
+      />
+
       <div class="dispatch-plan-grid">
         <article class="dispatch-card dispatch-route-card">
           <div class="dispatch-card-heading">
@@ -243,7 +309,12 @@
               <span class="eyebrow">Route spine</span>
               <h3>Filed route</h3>
             </div>
-            <strong>{route?.legs.length ?? 0} fixes</strong>
+            <div class="dispatch-route-actions">
+              <strong>{route?.legs.length ?? 0} fixes</strong>
+              <button type="button" disabled={!atlasRoute} onclick={onviewroute}
+                >View full route</button
+              >
+            </div>
           </div>
           <p class="dispatch-route-text">
             {route?.source_text ?? "Route text was not supplied."}
@@ -251,9 +322,25 @@
           {#if route?.legs.length}
             <ol class="dispatch-fix-list">
               {#each route.legs.slice(0, 12) as leg}
+                {@const atlasFeature = routeFeatureForSequence(leg.sequence)}
                 <li>
-                  <span>{leg.sequence + 1}</span><strong>{leg.ident}</strong
-                  ><small>{leg.airway ?? "DCT"}</small>
+                  <button
+                    type="button"
+                    disabled={!atlasFeature}
+                    aria-label={`${leg.ident}${atlasFeature?.availability === "location_unavailable" ? ", location unavailable" : ", view in Atlas"}`}
+                    onclick={() => atlasFeature && onviewfeature(atlasFeature.id)}
+                  >
+                    <span>{leg.sequence + 1}</span><strong>{leg.ident}</strong>
+                    <small>{leg.airway ?? "DCT"}</small>
+                    <em
+                      class:unavailable={atlasFeature?.availability ===
+                        "location_unavailable"}
+                    >
+                      {atlasFeature?.availability === "resolved"
+                        ? "Atlas"
+                        : "Location unavailable"}
+                    </em>
+                  </button>
                 </li>
               {/each}
             </ol>
@@ -375,6 +462,7 @@
         </article>
 
         <article
+          id="dispatch-weather"
           class="dispatch-card dispatch-intelligence-card dispatch-weather-card"
         >
           <div class="dispatch-card-heading">
@@ -389,18 +477,29 @@
             alternates. Raw coded text remains visible; no hidden safety score
             is applied.
           </p>
-          <button
-            class="dispatch-inline-action"
-            type="button"
-            disabled={busy || !status.weather.provider_available}
-            onclick={onweather}
-          >
-            {busy
-              ? "Working…"
-              : weather
-                ? "Refresh when due"
-                : "Fetch airport weather"}
-          </button>
+          <div class="dispatch-weather-actions">
+            <button
+              class="dispatch-inline-action"
+              type="button"
+              disabled={busy || !status.weather.provider_available}
+              onclick={onweather}
+            >
+              {busy
+                ? "Working…"
+                : weather
+                  ? "Refresh when due"
+                  : "Fetch airport weather"}
+            </button>
+            {#if atlasWeather}
+              <button
+                class="dispatch-inline-action"
+                type="button"
+                onclick={() => onviewweatheratlas()}
+              >
+                View weather in Atlas
+              </button>
+            {/if}
+          </div>
 
           {#if weather}
             <div class="dispatch-weather-grid">
@@ -408,12 +507,24 @@
                 <section class="dispatch-weather-station">
                   <header>
                     <strong>{airport.station_icao}</strong>
-                    <span
-                      class={`dispatch-flight-category dispatch-flight-category-${airport.metar?.value.flight_category ?? "unknown"}`}
-                    >
-                      {airport.metar?.value.flight_category?.toUpperCase() ??
-                        "NO METAR"}
-                    </span>
+                    <div class="dispatch-weather-station-actions">
+                      <button
+                        type="button"
+                        disabled={!atlasWeatherStationId(airport.station_icao)}
+                        onclick={() =>
+                          onviewweatheratlas(
+                            atlasWeatherStationId(airport.station_icao),
+                          )}
+                      >
+                        Atlas
+                      </button>
+                      <span
+                        class={`dispatch-flight-category dispatch-flight-category-${airport.metar?.value.flight_category ?? "unknown"}`}
+                      >
+                        {airport.metar?.value.flight_category?.toUpperCase() ??
+                          "NO METAR"}
+                        </span>
+                    </div>
                   </header>
                   {#if airport.metar}
                     <div class="dispatch-weather-metrics">
@@ -523,10 +634,20 @@
           >
         </article>
         <article>
-          <span>Alternate</span><strong
-            >{airports.alternates.map((airport) => airport.icao).join(", ") ||
-              "None supplied"}</strong
-          >
+          <span>Alternates</span>
+          {#if alternateRouteFeatures.length}
+            <div class="dispatch-alternate-links">
+              {#each alternateRouteFeatures as alternate}
+                <button
+                  type="button"
+                  onclick={() => onviewfeature(alternate.id)}
+                  >{alternate.ident}</button
+                >
+              {/each}
+            </div>
+          {:else}
+            <strong>None supplied</strong>
+          {/if}
         </article>
         <article>
           <span>OnAir aircraft</span><strong

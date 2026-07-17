@@ -47,6 +47,10 @@
   preferences;
 - personal network data, routes, coordinates, callsigns, or free-form content
   leaking through persistence, plugins, support output, or diagnostics;
+- staff names, airport presence, availability, or qualifications leaking through
+  raw provider retention, plugins, diagnostics, exports, or misleading UI labels;
+- undocumented staff avatar references being converted into attacker-controlled
+  URLs, remote tracking requests, oversized media, or misleading portraits;
 - embedded desktop application secrets being extracted and abused;
 - a SayIntentions key leaking through query URLs, redirects, HTTP diagnostics,
   local `flight.json` parsing, support bundles, or automatic retries;
@@ -109,6 +113,17 @@
   validation, state verification, and system-browser authentication;
 - public online-network adapters discard names, member IDs, remarks, and other
   fields not required by the implemented view before persistence or display;
+- the Staff adapter discards salary, birth date, weight, fatigue, happiness,
+  avatar URLs and artwork, raw JSON, and other unused employee fields before the
+  roster crosses into application services. A bounded avatar image-name may be
+  retained only as opaque source evidence and is never interpreted as a path or
+  URL. The bounded translated roster is encrypted in
+  Hoard, remains unavailable to plugins and Sentry, and displays undocumented
+  provider enums as codes rather than invented role or status labels;
+- responsive surfaces are bounded to a small transform and non-informational
+  glow, can be disabled in Settings, ignore touch and pen movement, preserve
+  static keyboard focus cues, and defer to the operating system's reduced-motion
+  preference. No data, warning, consent, or authorization state relies on motion;
 - Bridge sidecars use a 64 KiB length-prefixed JSON ceiling, independent
   monotonic sequences, a three-second identity/version handshake, explicit
   capabilities, validated provider and simulator provenance, supervised
@@ -133,7 +148,16 @@
 - a recording may retain only the validated sanitized SimBrief domain snapshot
   in force, never the entered account reference or raw OFP. Planned and recorded
   values stay separately labelled, missing comparisons stay unavailable, and
-  analysis above the exact-sample bound is withheld rather than partial;
+  no climb, fuel, or route values are inferred. Debrief reads reject more than
+  250,000 source samples and reduce each graph to at most 1,200 points. Omitted
+  source gaps propagate to represented points, and missing plan/position facts
+  split route geometry;
+- the current Dispatch-to-Atlas projection is built in the Rust application
+  from the same validated session-only plan. Stable point IDs contain only
+  bounded point kind, sequence, and normalized labels. Missing coordinates
+  remain inspectable but unplotted, alternates are not joined to the route, and
+  the projection is not exposed through existing plugin capabilities,
+  diagnostics, Sentry, or public tile requests;
 - simulator plan loading and every other external mutation require a distinct
   negotiated capability and explicit user action;
 - deny-by-default plugin capabilities persisted separately from manifests; the
@@ -399,6 +423,17 @@ successful data is reused for ten minutes, failed attempts have a one-minute
 retry floor, response bodies and URLs never cross safe errors, and weather is
 excluded from plugins and Sentry.
 
+Atlas receives a host-built airport-weather projection rather than raw weather
+payloads or arbitrary provider map resources. Missing reports remain unknown,
+and missing coordinates remain unplotted. Future external radar frames,
+simulator-selected weather mode, and ambient simulator observations are three
+distinct evidence classes: none may impersonate or silently overwrite another.
+Radar adoption requires approved access/licensing, bounded decoded dimensions,
+projection and geometry validation, no-data masks, cache/retention limits, and
+GPU resource-loss fallbacks. Simulator weather recording requires a versioned
+Bridge compatibility decision and must not infer Live Weather from resemblance
+to an external report.
+
 - A translated snapshot can still be wrong because the provider, captured
   fixture, mapping, unit conversion, identifier correlation, or local clock is
   wrong. WyrmGrid exposes source and age and does not market these integrations
@@ -434,10 +469,13 @@ excluded from plugins and Sentry.
   bounded freshness window so stale aircraft state is not presented as live.
 - Local simulator recordings reveal operational timing and aircraft behaviour.
   SQLCipher protects a database copied while closed, but deletion may remain
-  recoverable in filesystem or portable backups, and the first graph view
-  exposes only the latest 600 exact samples rather than claiming a whole-session
-  downsample. Users must omit databases and backups from support bundles unless
-  they intend to share recordings.
+  recoverable in filesystem or portable backups. A whole-flight debrief and
+  Atlas overlay can expose precise routes, altitude, fuel weight, and attitude
+  while WyrmGrid is open. The host bounds the interface projection, preserves
+  gaps, and excludes it from plugins, Sentry, and public tile requests, but
+  screenshots and deliberate exports remain disclosures. Users must omit
+  databases and backups from support bundles unless they intend to share
+  recordings.
 - JSON and CSV recording exports are deliberate plaintext disclosures outside
   SQLCipher. Pinning protects against automatic pruning only; explicit deletion
   and copies made by the user remain outside WyrmGrid's recovery control.

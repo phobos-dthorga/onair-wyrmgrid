@@ -1,5 +1,20 @@
 <script lang="ts">
+  import ExplorationSummary from "$lib/exploration/ExplorationSummary.svelte";
+  import ExplorationTabs from "$lib/exploration/ExplorationTabs.svelte";
+  import {
+    capabilityTranslationKey,
+    lifetimeTranslationKey,
+  } from "$lib/authorization/presentation";
   import { translation } from "$lib/i18n/runtime";
+  import { formatLocalDateTime } from "$lib/presentation/dateTime";
+  import {
+    activeSecurityFilterCount,
+    defaultSecurityFilters,
+    filterSecurityDecisions,
+    filterSecurityGrants,
+    securityFilterOptions,
+    type SecurityFilters,
+  } from "./presentation";
   import type { SecurityCentreStatus, SecurityGrantView } from "./types";
 
   let {
@@ -24,21 +39,32 @@
     onclose: () => void;
   } = $props();
 
-  const capabilityKeys: Record<string, string> = {
-    on_air_company_read: "security-capability-company-read",
-    on_air_fleet_read: "security-capability-fleet-read",
-    on_air_jobs_read: "security-capability-jobs-read",
-    on_air_finance_read: "security-capability-finance-read",
-    map_layers_publish: "security-capability-map-publish",
-    charts_publish: "security-capability-charts-publish",
-    notifications_create: "security-capability-notifications-create",
-    plugin_storage: "security-capability-plugin-storage",
-    simulator_telemetry_read: "security-capability-simulator-read",
-    external_network: "security-capability-external-network",
-  };
+  let activeSection = $state("access");
+  let filters = $state<SecurityFilters>({ ...defaultSecurityFilters });
+  const filterOptions = $derived(securityFilterOptions(status.active_grants));
+  const visibleGrants = $derived(
+    filterSecurityGrants(status.active_grants, filters),
+  );
+  const visibleDecisions = $derived(
+    filterSecurityDecisions(status.recent_decisions, filters),
+  );
+  const activeFilterCount = $derived(
+    activeSecurityFilterCount(
+      filters,
+      activeSection === "history" ? "history" : "access",
+    ),
+  );
+  const securityTabs = [
+    { id: "access", label: "Current access" },
+    { id: "history", label: "Decision history" },
+  ] as const;
+
+  function resetFilters(): void {
+    filters = { ...defaultSecurityFilters };
+  }
 
   function capabilityLabel(capability: string): string {
-    const key = capabilityKeys[capability];
+    const key = capabilityTranslationKey(capability);
     return key ? $translation(key) : capability;
   }
 
@@ -49,13 +75,11 @@
   }
 
   function localTime(value: string): string {
-    const normalized = value.includes("T") ? value : `${value.replace(" ", "T")}Z`;
-    const parsed = new Date(normalized);
-    return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+    return formatLocalDateTime(value, value);
   }
 
   function lifetimeLabel(lifetime: "once" | "session" | "standing"): string {
-    return $translation(`security-lifetime-${lifetime}`);
+    return $translation(lifetimeTranslationKey(lifetime));
   }
 
   function handleKeydown(event: KeyboardEvent): void {
@@ -136,99 +160,189 @@
         </article>
         </section>
 
-        <section class="security-section">
-        <div class="section-heading">
-          <div>
-            <span class="eyebrow">{$translation("security-access-eyebrow")}</span>
-            <h3>{$translation("security-access-title")}</h3>
-          </div>
-          <button type="button" disabled={busy} onclick={onrefresh}
-            >{$translation("security-refresh")}</button
-          >
-        </div>
-
-        {#if status.active_grants.length === 0}
-          <div class="empty-state">
-            <strong>{$translation("security-no-active-access")}</strong>
-            <span>{$translation("security-no-active-access-detail")}</span>
-          </div>
-        {:else}
-          <div class="grant-list">
-            {#each status.active_grants as grant}
-              <article class="grant-card">
-                <div class="grant-heading">
-                  <div>
-                    <span class="subject-kind">{subjectLabel(grant)}</span>
-                    <h4>{grant.subject_id}</h4>
-                    <small
-                      >{$translation("security-granted-at", {
-                        time: localTime(grant.granted_at),
-                      })} · {lifetimeLabel(grant.lifetime)}</small
-                    >
-                  </div>
-                  <button
-                    class="revoke-button"
-                    type="button"
-                    disabled={busy || grant.subject_kind !== "plugin"}
-                    onclick={() => onrevoke(grant.subject_id)}
-                    >{$translation("security-revoke")}</button
+        <section class="security-explorer" aria-label="Security record exploration">
+          <ExplorationTabs
+            tabs={securityTabs}
+            bind:selected={activeSection}
+            label="Security Centre sections"
+            idPrefix="security"
+          />
+          <label class="security-search">
+            <span>Find an actor, capability, scope, or decision</span>
+            <input type="search" bind:value={filters.query} />
+          </label>
+          <details class="security-filter-panel">
+            <summary>
+              <span>Filter and sort</span>
+              {#if activeFilterCount > 0}<strong>{activeFilterCount} active</strong>{/if}
+            </summary>
+            <div class="security-filter-grid">
+              {#if activeSection === "access"}
+                <label>
+                  <span>Grant lifetime</span>
+                  <select bind:value={filters.lifetime}>
+                    <option value="all">Any current lifetime</option>
+                    {#each filterOptions.lifetimes as lifetime}
+                      <option value={lifetime}>{lifetimeLabel(lifetime)}</option>
+                    {/each}
+                  </select>
+                </label>
+                <label>
+                  <span>Capability</span>
+                  <select
+                    value={filters.capability ?? ""}
+                    onchange={(event) =>
+                      (filters.capability = event.currentTarget.value || null)}
                   >
-                </div>
-                <ul class="capability-list">
-                  {#each grant.capabilities as capability}
-                    <li>{capabilityLabel(capability)}</li>
-                  {/each}
-                </ul>
-                <details>
-                  <summary>{$translation("security-scope-revision")}</summary>
-                  <code>{grant.scope_revision}</code>
-                </details>
-              </article>
-            {/each}
-          </div>
-        {/if}
+                    <option value="">Any current capability</option>
+                    {#each filterOptions.capabilities as capability}
+                      <option value={capability}>{capabilityLabel(capability)}</option>
+                    {/each}
+                  </select>
+                </label>
+              {:else}
+                <label>
+                  <span>Decision</span>
+                  <select bind:value={filters.decision}>
+                    <option value="all">Grant and revoke decisions</option>
+                    <option value="grant">Grant</option>
+                    <option value="revoke">Revoke</option>
+                  </select>
+                </label>
+              {/if}
+              <label>
+                <span>Order records by</span>
+                <select bind:value={filters.sort}>
+                  <option value="newest">Newest first</option>
+                  <option value="subject">Actor identifier</option>
+                </select>
+              </label>
+            </div>
+          </details>
+          <ExplorationSummary
+            shown={activeSection === "access"
+              ? visibleGrants.length
+              : visibleDecisions.length}
+            total={activeSection === "access"
+              ? status.active_grants.length
+              : status.recent_decisions.length}
+            label={activeSection === "access" ? "active actors" : "decisions"}
+            activeFilters={activeFilterCount}
+            onclear={resetFilters}
+          />
+          <p>
+            These controls change presentation only. Hidden rows remain fully
+            subject to WyrmGrid's authorization service.
+          </p>
         </section>
 
-        <section class="security-section">
-        <div class="section-heading">
-          <div>
-            <span class="eyebrow">{$translation("security-history-eyebrow")}</span>
-            <h3>{$translation("security-history-title")}</h3>
-          </div>
-          <small
-            >{$translation("security-history-retention", {
-              count: status.decision_retention_limit,
-            })}</small
-          >
-        </div>
-        {#if status.recent_decisions.length === 0}
-          <div class="empty-state compact">
-            <span>{$translation("security-no-history")}</span>
-          </div>
+        {#if activeSection === "access"}
+          <section id="security-panel-access" class="security-section" role="tabpanel">
+            <div class="section-heading">
+              <div>
+                <span class="eyebrow">{$translation("security-access-eyebrow")}</span>
+                <h3>{$translation("security-access-title")}</h3>
+              </div>
+              <button type="button" disabled={busy} onclick={onrefresh}
+                >{$translation("security-refresh")}</button
+              >
+            </div>
+
+            {#if visibleGrants.length === 0}
+              <div class="empty-state">
+                <strong
+                  >{status.active_grants.length
+                    ? "No active access matches the filters"
+                    : $translation("security-no-active-access")}</strong
+                >
+                <span
+                  >{status.active_grants.length
+                    ? "Clear the presentation filters to review every active actor."
+                    : $translation("security-no-active-access-detail")}</span
+                >
+              </div>
+            {:else}
+              <div class="grant-list">
+                {#each visibleGrants as grant}
+                  <article class="grant-card">
+                    <div class="grant-heading">
+                      <div>
+                        <span class="subject-kind">{subjectLabel(grant)}</span>
+                        <h4>{grant.subject_id}</h4>
+                        <small
+                          >{$translation("security-granted-at", {
+                            time: localTime(grant.granted_at),
+                          })} · {lifetimeLabel(grant.lifetime)}</small
+                        >
+                      </div>
+                      <button
+                        class="revoke-button"
+                        type="button"
+                        disabled={busy || grant.subject_kind !== "plugin"}
+                        onclick={() => onrevoke(grant.subject_id)}
+                        >{$translation("security-revoke")}</button
+                      >
+                    </div>
+                    <ul class="capability-list">
+                      {#each grant.capabilities as capability}
+                        <li>{capabilityLabel(capability)}</li>
+                      {/each}
+                    </ul>
+                    <details>
+                      <summary>{$translation("security-scope-revision")}</summary>
+                      <code>{grant.scope_revision}</code>
+                    </details>
+                  </article>
+                {/each}
+              </div>
+            {/if}
+          </section>
         {:else}
-          <ol class="decision-list">
-            {#each status.recent_decisions as decision}
-              <li>
-                <i class:revoked={decision.decision === "revoke"}></i>
-                <div>
-                  <strong>{decision.subject_id}</strong>
-                  <span>
-                    {decision.decision === "grant"
-                      ? $translation("security-decision-granted", {
-                          count: decision.capability_count,
-                        }) +
-                        (decision.lifetime
-                          ? ` · ${lifetimeLabel(decision.lifetime)}`
-                          : "")
-                      : $translation("security-decision-revoked")}
-                  </span>
-                </div>
-                <time>{localTime(decision.decided_at)}</time>
-              </li>
-            {/each}
-          </ol>
+          <section id="security-panel-history" class="security-section" role="tabpanel">
+            <div class="section-heading">
+              <div>
+                <span class="eyebrow">{$translation("security-history-eyebrow")}</span>
+                <h3>{$translation("security-history-title")}</h3>
+              </div>
+              <small
+                >{$translation("security-history-retention", {
+                  count: status.decision_retention_limit,
+                })}</small
+              >
+            </div>
+            {#if visibleDecisions.length === 0}
+              <div class="empty-state compact">
+                <span
+                  >{status.recent_decisions.length
+                    ? "No decisions match the current filters."
+                    : $translation("security-no-history")}</span
+                >
+              </div>
+            {:else}
+              <ol class="decision-list">
+                {#each visibleDecisions as decision}
+                  <li>
+                    <i class:revoked={decision.decision === "revoke"}></i>
+                    <div>
+                      <strong>{decision.subject_id}</strong>
+                      <span>
+                        {decision.decision === "grant"
+                          ? $translation("security-decision-granted", {
+                              count: decision.capability_count,
+                            }) +
+                            (decision.lifetime
+                              ? ` · ${lifetimeLabel(decision.lifetime)}`
+                              : "")
+                          : $translation("security-decision-revoked")}
+                      </span>
+                    </div>
+                    <time>{localTime(decision.decided_at)}</time>
+                  </li>
+                {/each}
+              </ol>
+            {/if}
+          </section>
         {/if}
-        </section>
       {/if}
 
       {#if errorMessage}<p class="error-message" role="alert">
@@ -381,6 +495,56 @@
     font-size: 22px;
     font-weight: 500;
   }
+  .security-explorer {
+    display: grid;
+    gap: 12px;
+    padding: 0 24px 20px;
+  }
+  .security-explorer > p {
+    color: var(--color-text-muted);
+    font-size: 10px;
+    line-height: 1.5;
+  }
+  .security-search,
+  .security-filter-grid label {
+    display: grid;
+    gap: 6px;
+    color: var(--color-text-muted);
+    font-size: 10px;
+  }
+  .security-search input,
+  .security-filter-grid select {
+    min-width: 0;
+    border: 1px solid var(--color-line-soft);
+    border-radius: 3px;
+    padding: 9px 10px;
+    color: var(--color-text);
+    background: var(--color-surface);
+    font: inherit;
+  }
+  .security-filter-panel {
+    border: 1px solid var(--color-line-faint);
+    padding: 10px 12px;
+    background: var(--color-surface-soft);
+  }
+  .security-filter-panel > summary {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    cursor: pointer;
+  }
+  .security-filter-panel > summary strong {
+    color: var(--color-accent);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .security-filter-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 12px;
+  }
   .security-section {
     padding: 20px 24px;
     border-top: 1px solid var(--color-line-faint);
@@ -522,6 +686,9 @@
       max-height: calc(100vh - 24px);
     }
     .summary-grid {
+      grid-template-columns: 1fr;
+    }
+    .security-filter-grid {
       grid-template-columns: 1fr;
     }
     .authority-note,
