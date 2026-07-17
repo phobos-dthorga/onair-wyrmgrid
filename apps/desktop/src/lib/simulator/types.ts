@@ -1,3 +1,5 @@
+import type { AtlasFlightRoute } from "$lib/atlas/types";
+
 export type BridgeCapability =
   | "telemetry_read"
   | "active_plan_read"
@@ -173,7 +175,15 @@ export type PlannedActualComparison = {
   planned_initial_altitude_ft?: number;
   recorded_peak_altitude_ft?: number;
   planned_takeoff_fuel_pounds?: number;
+  planned_landing_fuel_pounds?: number;
+  recorded_start_fuel_pounds?: number;
+  recorded_end_fuel_pounds?: number;
   recorded_fuel_used_pounds?: number;
+  duration_delta_seconds?: number;
+  distance_delta_nm?: number;
+  altitude_delta_ft?: number;
+  takeoff_fuel_delta_pounds?: number;
+  landing_fuel_delta_pounds?: number;
   origin_proximity_nm?: number;
   destination_proximity_nm?: number;
   registration_matches?: boolean;
@@ -194,6 +204,30 @@ export type SimulatorSessionView = {
   has_older_samples: boolean;
   has_newer_samples: boolean;
   events: SimulatorSessionEvent[];
+  comparison?: PlannedActualComparison;
+};
+
+export type SimulatorDownsamplingMethod = "exact" | "min_max_envelope";
+
+export type SimulatorDebriefTrace = {
+  source_sample_count: number;
+  represented_sample_count: number;
+  gap_count: number;
+  method: SimulatorDownsamplingMethod;
+  samples: SimulatorRecordedSample[];
+};
+
+export type SimulatorSessionDebrief = {
+  schema_version: number;
+  session: SimulatorSessionSummary;
+  source_sample_count: number;
+  traces: {
+    altitude: SimulatorDebriefTrace;
+    speed: SimulatorDebriefTrace;
+    fuel?: SimulatorDebriefTrace;
+    attitude: SimulatorDebriefTrace;
+  };
+  route: AtlasFlightRoute;
   comparison?: PlannedActualComparison;
 };
 

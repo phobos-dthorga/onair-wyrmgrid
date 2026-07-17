@@ -6,3 +6,4 @@ apps/desktop/.svelte-kit/
 apps/desktop/src-tauri/gen/
 apps/desktop/src-tauri/binaries/
 assets/brand/key-art/derivatives/manifest.json
+apps/desktop/static/data/atlas/*.geojson

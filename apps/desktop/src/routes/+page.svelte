@@ -1,16 +1,23 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import AtlasMap from "$lib/atlas/AtlasMap.svelte";
+  import { administrativeRegionContext } from "$lib/atlas/regions";
+  import AtlasSearch from "$lib/atlas/AtlasSearch.svelte";
+  import { findRouteFeature } from "$lib/atlas/route";
   import { atlasPreviewFbos, atlasPreviewFleet } from "$lib/atlas/sample";
   import type {
     AircraftSummary,
+    AtlasAdministrativeRegion,
+    AtlasFlightRoute,
     CompanyDataSyncResult,
     DataSyncTrigger,
     FboSnapshotView,
     FboSummary,
     FleetSnapshot,
     FleetSnapshotView,
+    AtlasFocusRequest,
     JobSnapshotView,
+    StaffSnapshotView,
   } from "$lib/atlas/types";
   import WyrmChart from "$lib/charts/WyrmChart.svelte";
   import { foundationChart } from "$lib/charts/sample";
@@ -24,6 +31,7 @@
     loadDiagnosticLog,
   } from "$lib/diagnostics/client";
   import DiagnosticsDialog from "$lib/diagnostics/DiagnosticsDialog.svelte";
+  import { formatLocalDateTime } from "$lib/presentation/dateTime";
   import {
     emptyDiagnosticLog,
     type DiagnosticLogView,
@@ -53,9 +61,11 @@
   } from "$lib/dispatch/sample";
   import type {
     DispatchStatus,
+    AtlasRouteFeature,
     SimBriefAccountPreference,
     SimBriefReferenceKind,
   } from "$lib/dispatch/types";
+  import type { FlightWeatherMapView } from "$lib/weather/types";
   import JobsWorkspace from "$lib/jobs/JobsWorkspace.svelte";
   import LaunchScreen from "$lib/launch/LaunchScreen.svelte";
   import {
@@ -131,6 +141,7 @@
     loadSimulatorBridge,
     loadSimulatorPreferences,
     loadSimulatorRecording,
+    loadSimulatorRecordingDebrief,
     loadSimulatorRecordingSession,
     saveSimulatorPreferences,
     saveSimulatorRecordingPreferences,
@@ -152,10 +163,12 @@
     type SimulatorPreferences,
     type SimulatorRecordingPreferences,
     type SimulatorRecordingView,
+    type SimulatorSessionDebrief,
     type SimulatorSessionView,
   } from "$lib/simulator/types";
   import {
     simulatorRecordingPreview,
+    simulatorRecordingDebriefPreview,
     simulatorRecordingSessionPreview,
   } from "$lib/simulator/sample";
   import {
@@ -183,6 +196,8 @@
     securityPreviewRevoked,
   } from "$lib/security/sample";
   import type { SecurityCentreStatus } from "$lib/security/types";
+  import StaffWorkspace from "$lib/staff/StaffWorkspace.svelte";
+  import { staffPreview } from "$lib/staff/sample";
   import ThemeDialog from "$lib/theme/ThemeDialog.svelte";
   import {
     browserThemeStatus,
@@ -202,7 +217,7 @@
 
   type FleetLoadState = "idle" | "loading" | "ready" | "error";
   type LegalLoadState = "loading" | "ready" | "error";
-  type Workspace = "atlas" | "jobs" | "dispatch";
+  type Workspace = "atlas" | "staff" | "jobs" | "dispatch";
   type AppDialogSurface =
     | "connection"
     | "diagnostics"
@@ -239,12 +254,17 @@
   let fleetView = $state<FleetSnapshotView | null>(null);
   let fboView = $state<FboSnapshotView | null>(null);
   let jobView = $state<JobSnapshotView | null>(null);
+  let staffView = $state<StaffSnapshotView | null>(null);
   let fleetLoadState = $state<FleetLoadState>("idle");
   let fleetError = $state("");
   let fleetVisible = $state(true);
   let fboVisible = $state(true);
+  let routeVisible = $state(true);
   let selectedAircraftId = $state<string | null>(null);
   let selectedFboId = $state<string | null>(null);
+  let selectedRouteFeatureId = $state<string | null>(null);
+  let atlasFocusRequest = $state<AtlasFocusRequest | null>(null);
+  let atlasFocusSequence = 0;
   let automaticSyncMinutes = $state(30);
   let legalStatus = $state<LegalStatus>({
     terms_version: CURRENT_TERMS_VERSION,
@@ -276,6 +296,15 @@
     emptySimulatorRecording,
   );
   let simulatorRecordingSession = $state<SimulatorSessionView>();
+  let simulatorRecordingDebrief = $state<SimulatorSessionDebrief>();
+  let atlasFlightRoute = $state<AtlasFlightRoute>();
+  let atlasWeather = $state<FlightWeatherMapView>();
+  let weatherVisible = $state(true);
+  let regionsVisible = $state(true);
+  let selectedAdministrativeRegion = $state<AtlasAdministrativeRegion>();
+  let hoveredAdministrativeRegion = $state<AtlasAdministrativeRegion>();
+  let selectedRoutePointId = $state<string>();
+  let selectedWeatherStationId = $state<string>();
   let simulatorRecordingBusy = $state(false);
   let displayPreferences = $state<DisplayPreferences>(
     aviationDisplayPreferences,
@@ -317,9 +346,7 @@
   const showSettingsDialog = $derived(
     isDialogSurface(dialogNavigation, "settings"),
   );
-  const showThemeDialog = $derived(
-    isDialogSurface(dialogNavigation, "theme"),
-  );
+  const showThemeDialog = $derived(isDialogSurface(dialogNavigation, "theme"));
   const showLanguageDialog = $derived(
     isDialogSurface(dialogNavigation, "language"),
   );
@@ -347,9 +374,7 @@
   const showTimelineDialog = $derived(
     isDialogSurface(dialogNavigation, "hoard"),
   );
-  const showForgeDialog = $derived(
-    isDialogSurface(dialogNavigation, "forge"),
-  );
+  const showForgeDialog = $derived(isDialogSurface(dialogNavigation, "forge"));
 
   const activeFleetView = $derived(
     timelineMode === "historical" ? (historicalData?.fleet ?? null) : fleetView,
@@ -374,6 +399,23 @@
   );
   const selectedFbo = $derived(
     fbos.find((item) => item.id === selectedFboId) ?? null,
+  );
+  const selectedRoutePoint = $derived(
+    atlasFlightRoute?.planned?.points.find(
+      (point) => point.id === selectedRoutePointId,
+    ),
+  );
+  const selectedWeatherStation = $derived(
+    atlasWeather?.stations.find(
+      (station) => station.id === selectedWeatherStationId,
+    ),
+  );
+  const plottedWeatherStationCount = $derived(
+    atlasWeather?.stations.filter((station) => station.location).length ?? 0,
+  );
+  const atlasRoute = $derived(dispatchStatus.atlas_route);
+  const selectedRouteFeature = $derived(
+    findRouteFeature(atlasRoute, selectedRouteFeatureId),
   );
   const atlasAvailability = $derived(
     activeFleetView?.availability ?? activeFboView?.availability,
@@ -485,6 +527,20 @@
   );
   const layers = $derived([
     {
+      id: "regions",
+      name: "Regional boundaries",
+      count: "ADM1",
+      active: regionsVisible,
+      available: true,
+    },
+    {
+      id: "route",
+      name: "Dispatch route",
+      count: atlasRoute?.mapped_route_feature_count ?? 0,
+      active: routeVisible && Boolean(atlasRoute),
+      available: Boolean(atlasRoute),
+    },
+    {
       id: "fleet",
       name: "Fleet",
       count: plottedAircraftCount,
@@ -497,6 +553,13 @@
       count: plottedFboCount,
       active: fboVisible,
       available: true,
+    },
+    {
+      id: "weather",
+      name: "Airport weather",
+      count: plottedWeatherStationCount,
+      active: weatherVisible && plottedWeatherStationCount > 0,
+      available: plottedWeatherStationCount > 0,
     },
     {
       id: "jobs",
@@ -530,10 +593,18 @@
 
   function formatObservedAt(value: string | undefined): string {
     if (!value) return "No fleet observation yet";
-    const observed = new Date(value);
-    return Number.isNaN(observed.getTime())
-      ? "Observation time unavailable"
-      : `Observed ${observed.toLocaleString()}`;
+    const observed = formatLocalDateTime(value, "Observation time unavailable");
+    return observed === "Observation time unavailable"
+      ? observed
+      : `Observed ${observed}`;
+  }
+
+  function formatTimestamp(value: string | undefined): string {
+    if (!value) return "Time unavailable";
+    const timestamp = new Date(value);
+    return Number.isNaN(timestamp.getTime())
+      ? "Time unavailable"
+      : timestamp.toLocaleString();
   }
 
   function countedLabel(
@@ -546,6 +617,55 @@
 
   function displayRegistration(item: AircraftSummary): string {
     return item.registration ?? "Unknown registration";
+  }
+
+  function formatRouteFeatureKind(
+    feature: AtlasRouteFeature,
+  ): string {
+    if (feature.kind === "route_fix") return "Route fix";
+    return feature.kind[0].toUpperCase() + feature.kind.slice(1);
+  }
+
+  function acceptDispatchStatus(next: DispatchStatus): void {
+    const previousPlanId = dispatchStatus.atlas_route?.plan_id;
+    dispatchStatus = next;
+    if (
+      previousPlanId !== next.atlas_route?.plan_id ||
+      (selectedRouteFeatureId &&
+        !next.atlas_route?.features.some(
+          (feature) => feature.id === selectedRouteFeatureId,
+        ))
+    ) {
+      selectedRouteFeatureId = null;
+    }
+  }
+
+  function requestAtlasRouteFocus(featureId?: string): void {
+    routeVisible = true;
+    selectedAircraftId = null;
+    selectedFboId = null;
+    selectedRoutePointId = undefined;
+    selectedWeatherStationId = undefined;
+    selectedAdministrativeRegion = undefined;
+    selectedRouteFeatureId = featureId ?? null;
+    atlasFocusSequence += 1;
+    atlasFocusRequest = featureId
+      ? {
+          request_id: atlasFocusSequence,
+          kind: "feature",
+          feature_id: featureId,
+        }
+      : { request_id: atlasFocusSequence, kind: "route" };
+    activeWorkspace = "atlas";
+  }
+
+  function selectAtlasRouteFeature(featureId: string): void {
+    selectedAircraftId = null;
+    selectedFboId = null;
+    selectedRoutePointId = undefined;
+    selectedWeatherStationId = undefined;
+    selectedAdministrativeRegion = undefined;
+    selectedRouteFeatureId = featureId;
   }
 
   function formatCoordinates(item: AircraftSummary): string {
@@ -689,6 +809,7 @@
     if (!isDesktopRuntime()) {
       simulatorRecording = simulatorRecordingPreview;
       simulatorRecordingSession = simulatorRecordingSessionPreview;
+      simulatorRecordingDebrief = simulatorRecordingDebriefPreview;
       return;
     }
     try {
@@ -704,10 +825,14 @@
           : undefined) ??
         simulatorRecording.sessions[0]?.id;
       if (selectedId) {
-        simulatorRecordingSession =
-          await loadSimulatorRecordingSession(selectedId);
+        [simulatorRecordingSession, simulatorRecordingDebrief] =
+          await Promise.all([
+            loadSimulatorRecordingSession(selectedId),
+            loadSimulatorRecordingDebrief(selectedId),
+          ]);
       } else {
         simulatorRecordingSession = undefined;
+        simulatorRecordingDebrief = undefined;
       }
     } catch (error) {
       simulatorError = operationErrorMessage(
@@ -731,13 +856,16 @@
     simulatorRecordingBusy = true;
     simulatorError = "";
     try {
-      if (action === "start") simulatorRecording = await startSimulatorRecording();
-      if (action === "stop") simulatorRecording = await stopSimulatorRecording();
+      if (action === "start")
+        simulatorRecording = await startSimulatorRecording();
+      if (action === "stop")
+        simulatorRecording = await stopSimulatorRecording();
       if (action === "delete" && sessionId)
         simulatorRecording = await deleteSimulatorRecording(sessionId);
       if (action === "delete_all")
         simulatorRecording = await deleteAllSimulatorRecordings();
       simulatorRecordingSession = undefined;
+      simulatorRecordingDebrief = undefined;
       await refreshSimulatorRecording();
     } catch (error) {
       simulatorError = operationErrorMessage(
@@ -755,7 +883,11 @@
     simulatorRecordingBusy = true;
     simulatorError = "";
     try {
-      simulatorRecordingSession = await loadSimulatorRecordingSession(sessionId);
+      [simulatorRecordingSession, simulatorRecordingDebrief] =
+        await Promise.all([
+          loadSimulatorRecordingSession(sessionId),
+          loadSimulatorRecordingDebrief(sessionId),
+        ]);
     } catch (error) {
       simulatorError = operationErrorMessage(
         error,
@@ -797,7 +929,11 @@
     simulatorError = "";
     try {
       simulatorRecording = await pinSimulatorRecording(sessionId, pinned);
-      simulatorRecordingSession = await loadSimulatorRecordingSession(sessionId);
+      [simulatorRecordingSession, simulatorRecordingDebrief] =
+        await Promise.all([
+          loadSimulatorRecordingSession(sessionId),
+          loadSimulatorRecordingDebrief(sessionId),
+        ]);
     } catch (error) {
       simulatorError = operationErrorMessage(
         error,
@@ -833,6 +969,65 @@
     } finally {
       simulatorRecordingBusy = false;
     }
+  }
+
+  function openRecordingRouteInAtlas(route: AtlasFlightRoute): void {
+    atlasFlightRoute = { ...route, context: "recording" };
+    atlasWeather = undefined;
+    selectedRoutePointId = undefined;
+    selectedWeatherStationId = undefined;
+    selectedAircraftId = null;
+    selectedFboId = null;
+    activeWorkspace = "atlas";
+    dialogNavigation = closedDialogNavigation<AppDialogSurface>();
+  }
+
+  function openDispatchPlanInAtlas(pointId?: string): void {
+    const plan = dispatchStatus.atlas_plan;
+    if (!plan) return;
+    atlasFlightRoute = {
+      schema_version: plan.schema_version,
+      session_id: `dispatch:${plan.plan_id}`,
+      context: "dispatch_plan",
+      planned: plan,
+    };
+    atlasWeather = dispatchStatus.atlas_weather;
+    weatherVisible = true;
+    selectedRoutePointId = pointId;
+    selectedWeatherStationId = undefined;
+    selectedAircraftId = null;
+    selectedFboId = null;
+    activeWorkspace = "atlas";
+    dialogNavigation = closedDialogNavigation<AppDialogSurface>();
+  }
+
+  function openDispatchWeatherInAtlas(stationId?: string): void {
+    const weather = dispatchStatus.atlas_weather;
+    if (!weather) return;
+    const plan = dispatchStatus.atlas_plan;
+    atlasWeather = weather;
+    weatherVisible = true;
+    atlasFlightRoute = plan
+      ? {
+          schema_version: plan.schema_version,
+          session_id: `dispatch:${plan.plan_id}`,
+          context: "dispatch_plan",
+          planned: plan,
+        }
+      : undefined;
+    selectedWeatherStationId = stationId;
+    selectedRoutePointId = undefined;
+    selectedAircraftId = null;
+    selectedFboId = null;
+    activeWorkspace = "atlas";
+    dialogNavigation = closedDialogNavigation<AppDialogSurface>();
+  }
+
+  function clearAtlasRoute(): void {
+    atlasFlightRoute = undefined;
+    atlasWeather = undefined;
+    selectedRoutePointId = undefined;
+    selectedWeatherStationId = undefined;
   }
 
   async function runSimulatorAction(
@@ -902,7 +1097,8 @@
         { trigger },
       );
       if (result.disposition === "quietly_ignored") {
-        fleetLoadState = fleetView || fboView ? "ready" : "idle";
+        fleetLoadState =
+          fleetView || fboView || jobView || staffView ? "ready" : "idle";
         await refreshTimeline();
         return;
       }
@@ -910,6 +1106,7 @@
       if (result.fleet) acceptFleetView(result.fleet);
       if (result.fbos) acceptFboView(result.fbos);
       if (result.jobs) jobView = result.jobs;
+      if (result.staff) staffView = result.staff;
       if (result.failures.length > 0) {
         fleetError = result.failures
           .map((failure) => failure.message)
@@ -934,6 +1131,10 @@
           "onair_job_snapshot",
         );
         if (retainedJobs) jobView = retainedJobs;
+        const retainedStaff = await invokeDesktop<StaffSnapshotView | null>(
+          "onair_staff_snapshot",
+        );
+        if (retainedStaff) staffView = retainedStaff;
       } catch {
         // Keep the existing presentation state when Hoard cannot be read.
       }
@@ -945,10 +1146,11 @@
     synchronizeAfterRestore: boolean,
   ): Promise<void> {
     try {
-      const [fleet, fboNetwork, pendingJobs] = await Promise.all([
+      const [fleet, fboNetwork, pendingJobs, staffRoster] = await Promise.all([
         invokeDesktop<FleetSnapshotView | null>("onair_fleet_snapshot"),
         invokeDesktop<FboSnapshotView | null>("onair_fbo_snapshot"),
         invokeDesktop<JobSnapshotView | null>("onair_job_snapshot"),
+        invokeDesktop<StaffSnapshotView | null>("onair_staff_snapshot"),
       ]);
       if (fleet) {
         acceptFleetView(fleet);
@@ -959,11 +1161,17 @@
       if (fboNetwork) acceptFboView(fboNetwork);
       else fboView = null;
       jobView = pendingJobs;
-      if (!fleet && !fboNetwork && !pendingJobs) fleetLoadState = "idle";
+      staffView = staffRoster;
+      if (!fleet && !fboNetwork && !pendingJobs && !staffRoster)
+        fleetLoadState = "idle";
       await refreshTimeline();
       if (
         connection.connected &&
-        (synchronizeAfterRestore || !fleet || !fboNetwork || !pendingJobs)
+        (synchronizeAfterRestore ||
+          !fleet ||
+          !fboNetwork ||
+          !pendingJobs ||
+          !staffRoster)
       ) {
         await synchronizeCompanyData("initial");
       }
@@ -1119,7 +1327,7 @@
   async function refreshDispatchStatus(): Promise<void> {
     if (!isDesktopRuntime()) return;
     try {
-      dispatchStatus = await loadDispatchStatus();
+      acceptDispatchStatus(await loadDispatchStatus());
     } catch (error) {
       dispatchError = operationErrorMessage(
         error,
@@ -1137,9 +1345,12 @@
     dispatchBusy = true;
     dispatchError = "";
     try {
-      dispatchStatus = isDesktopRuntime()
-        ? await importLatestSimBriefPlan(kind, reference, rememberReference)
-        : dispatchPreviewReady;
+      acceptDispatchStatus(
+        isDesktopRuntime()
+          ? await importLatestSimBriefPlan(kind, reference, rememberReference)
+          : dispatchPreviewReady,
+      );
+      if (atlasFlightRoute?.context === "dispatch_plan") clearAtlasRoute();
       simbriefAccountPreference = isDesktopRuntime()
         ? ((await loadSimBriefAccountPreference()) ?? undefined)
         : rememberReference
@@ -1161,9 +1372,12 @@
     dispatchBusy = true;
     dispatchError = "";
     try {
-      dispatchStatus = isDesktopRuntime()
-        ? await clearDispatchPlan()
-        : dispatchPreviewEmpty;
+      acceptDispatchStatus(
+        isDesktopRuntime()
+          ? await clearDispatchPlan()
+          : dispatchPreviewEmpty,
+      );
+      if (atlasFlightRoute?.context === "dispatch_plan") clearAtlasRoute();
     } catch (error) {
       dispatchError = operationErrorMessage(
         error,
@@ -1179,7 +1393,9 @@
     dispatchBusy = true;
     dispatchError = "";
     try {
-      if (isDesktopRuntime()) dispatchStatus = await selectDispatchJob(jobId);
+      if (isDesktopRuntime()) {
+        acceptDispatchStatus(await selectDispatchJob(jobId));
+      }
       activeWorkspace = "dispatch";
     } catch (error) {
       dispatchError = operationErrorMessage(
@@ -1196,9 +1412,25 @@
     dispatchBusy = true;
     dispatchError = "";
     try {
-      dispatchStatus = isDesktopRuntime()
-        ? await refreshDispatchWeather()
-        : dispatchPreviewReady;
+      acceptDispatchStatus(
+        isDesktopRuntime()
+          ? await refreshDispatchWeather()
+          : dispatchPreviewReady,
+      );
+      if (
+        atlasFlightRoute?.context === "dispatch_plan" &&
+        atlasFlightRoute.planned?.plan_id === dispatchStatus.atlas_plan?.plan_id
+      ) {
+        atlasWeather = dispatchStatus.atlas_weather;
+        if (
+          selectedWeatherStationId &&
+          !atlasWeather?.stations.some(
+            (station) => station.id === selectedWeatherStationId,
+          )
+        ) {
+          selectedWeatherStationId = undefined;
+        }
+      }
     } catch (error) {
       dispatchError = operationErrorMessage(
         error,
@@ -1257,7 +1489,8 @@
       await refreshPluginHost();
     } finally {
       pluginBusy = false;
-      if (showSecurityCentre && isDesktopRuntime()) void refreshSecurityCentre();
+      if (showSecurityCentre && isDesktopRuntime())
+        void refreshSecurityCentre();
     }
   }
 
@@ -1268,6 +1501,7 @@
     if (!isDesktopRuntime()) {
       fleetView = atlasPreviewFleet;
       fboView = atlasPreviewFbos;
+      staffView = staffPreview;
       timeline = hoardPreviewTimeline;
       timelineCursor = timeline.observation_times.length - 1;
       fleetLoadState = "ready";
@@ -1275,7 +1509,7 @@
       securityCentre = securityPreviewGranted;
       securityCentreLoaded = true;
       simulatorBridge = emptySimulatorBridge;
-      dispatchStatus = dispatchPreviewReady;
+      acceptDispatchStatus(dispatchPreviewReady);
       return;
     }
 
@@ -1283,7 +1517,9 @@
     void refreshSimulatorBridge();
     void refreshDispatchStatus();
     void loadSimBriefAccountPreference()
-      .then((preference) => (simbriefAccountPreference = preference ?? undefined))
+      .then(
+        (preference) => (simbriefAccountPreference = preference ?? undefined),
+      )
       .catch((error) => {
         dispatchError = operationErrorMessage(
           error,
@@ -1480,11 +1716,12 @@
   async function initializeSimulatorPreferences(): Promise<void> {
     if (!isDesktopRuntime()) return;
     try {
-      [simulatorPreferences, simulatorBridge, simulatorRecording] = await Promise.all([
-        loadSimulatorPreferences(),
-        loadSimulatorBridge(),
-        loadSimulatorRecording(),
-      ]);
+      [simulatorPreferences, simulatorBridge, simulatorRecording] =
+        await Promise.all([
+          loadSimulatorPreferences(),
+          loadSimulatorBridge(),
+          loadSimulatorRecording(),
+        ]);
     } catch (error) {
       settingsError = operationErrorMessage(
         error,
@@ -1501,11 +1738,15 @@
     settingsBusy = true;
     settingsError = "";
     try {
-      const [savedDisplay, savedSimulator, savedRecording] = await Promise.all([
-        saveDisplayPreferences(preferences),
-        saveSimulatorPreferences(nextSimulatorPreferences),
-        saveSimulatorRecordingPreferences(nextRecordingPreferences),
-      ]);
+      const savedDisplay = await saveDisplayPreferences(preferences);
+      let savedSimulator = nextSimulatorPreferences;
+      let savedRecording = nextRecordingPreferences;
+      if (isDesktopRuntime()) {
+        [savedSimulator, savedRecording] = await Promise.all([
+          saveSimulatorPreferences(nextSimulatorPreferences),
+          saveSimulatorRecordingPreferences(nextRecordingPreferences),
+        ]);
+      }
       displayPreferences = savedDisplay;
       simulatorPreferences = savedSimulator;
       simulatorRecording = {
@@ -1702,6 +1943,7 @@
     class:compact-ui={startupOptions.compact_ui || viewportMode === "narrow"}
     class:short-ui={viewportMode === "short"}
     class:low-resource={startupOptions.low_resource}
+    class:responsive-surfaces={displayPreferences.responsive_surfaces}
     class="shell"
     inert={showLegalDialog ||
       showThemeDialog ||
@@ -1731,6 +1973,12 @@
         >
         <button class="nav-item" type="button" disabled
           >{$translation("nav-fleet")}</button
+        >
+        <button
+          class="nav-item"
+          class:active={activeWorkspace === "staff"}
+          type="button"
+          onclick={() => (activeWorkspace = "staff")}>Staff</button
         >
         <button
           class="nav-item"
@@ -1871,8 +2119,11 @@
                   ? `Toggle ${layer.name}`
                   : `${layer.name} is planned for a later slice`}
                 onclick={() => {
+                  if (layer.id === "route") routeVisible = !routeVisible;
                   if (layer.id === "fleet") fleetVisible = !fleetVisible;
                   if (layer.id === "fbos") fboVisible = !fboVisible;
+                  if (layer.id === "regions") regionsVisible = !regionsVisible;
+                  if (layer.id === "weather") weatherVisible = !weatherVisible;
                   if (layer.id === "jobs") activeWorkspace = "jobs";
                   if (layer.id === "plugins")
                     pluginLayersVisible = !pluginLayersVisible;
@@ -1884,6 +2135,59 @@
               </button>
             {/each}
           </div>
+
+          {#if regionsVisible}
+            <div class="sidebar-note regional-lens-note">
+              <span class="note-icon">⌖</span>
+              <p>
+                <strong>Regional lens</strong><br />
+                Hover over a sourced state, province, or equivalent region to raise
+                it; click or tap to pin its details.
+              </p>
+            </div>
+          {/if}
+
+          {#if atlasFlightRoute}
+            <div class="sidebar-note route-note">
+              <span class="note-icon">↝</span>
+              <p>
+                <strong
+                  >{atlasFlightRoute.context === "dispatch_plan"
+                    ? "Current Dispatch plan"
+                    : "Historical flight route"}</strong
+                ><br />
+                {atlasFlightRoute.planned
+                  ? `${atlasFlightRoute.planned.origin_icao} → ${atlasFlightRoute.planned.destination_icao}`
+                  : "Recorded route without an associated plan"}
+                {#if atlasFlightRoute.recorded}
+                  · {atlasFlightRoute.recorded.represented_point_count.toLocaleString()}
+                  recorded points
+                {/if}
+                {#if atlasWeather}
+                  · {plottedWeatherStationCount.toLocaleString()} weather stations
+                {/if}
+              </p>
+              <button type="button" onclick={clearAtlasRoute}>Clear</button>
+            </div>
+          {/if}
+
+          <AtlasSearch
+            {aircraft}
+            {fbos}
+            {selectedAircraftId}
+            {selectedFboId}
+            responsiveSurfaces={displayPreferences.responsive_surfaces}
+            onselectaircraft={(aircraftId) => {
+              selectedAircraftId = aircraftId;
+              selectedFboId = null;
+              selectedRouteFeatureId = null;
+            }}
+            onselectfbo={(fboId) => {
+              selectedFboId = fboId;
+              selectedAircraftId = null;
+              selectedRouteFeatureId = null;
+            }}
+          />
 
           <div
             class="sidebar-note"
@@ -1933,18 +2237,77 @@
             {fboVisible}
             pluginLayers={pluginHost.layers}
             {pluginLayersVisible}
+            flightRoute={atlasFlightRoute}
+            weather={atlasWeather}
+            {weatherVisible}
+            {regionsVisible}
+            lowResource={startupOptions.low_resource}
+            selectedRegionId={selectedAdministrativeRegion?.id}
+            {selectedRoutePointId}
+            {selectedWeatherStationId}
+            route={atlasRoute}
+            {routeVisible}
             {selectedAircraftId}
             {selectedFboId}
+            {selectedRouteFeatureId}
+            focusRequest={atlasFocusRequest}
             onselectaircraft={(aircraftId) => {
               selectedAircraftId = aircraftId;
               selectedFboId = null;
+              selectedRoutePointId = undefined;
+              selectedWeatherStationId = undefined;
+              selectedAdministrativeRegion = undefined;
+              selectedRouteFeatureId = null;
+              selectedRouteFeatureId = null;
             }}
             onselectfbo={(fboId) => {
               selectedFboId = fboId;
               selectedAircraftId = null;
+              selectedRoutePointId = undefined;
+              selectedWeatherStationId = undefined;
+              selectedAdministrativeRegion = undefined;
+              selectedRouteFeatureId = null;
             }}
+            onselectroutepoint={(pointId) => {
+              selectedRoutePointId = pointId;
+              selectedAircraftId = null;
+              selectedFboId = null;
+              selectedWeatherStationId = undefined;
+              selectedAdministrativeRegion = undefined;
+            }}
+            onselectweatherstation={(stationId) => {
+              selectedWeatherStationId = stationId;
+              selectedRoutePointId = undefined;
+              selectedAircraftId = null;
+              selectedFboId = null;
+              selectedAdministrativeRegion = undefined;
+              selectedRouteFeatureId = null;
+            }}
+            onselectregion={(region) => {
+              selectedAdministrativeRegion = region;
+              selectedRoutePointId = undefined;
+              selectedWeatherStationId = undefined;
+              selectedAircraftId = null;
+              selectedFboId = null;
+              selectedRouteFeatureId = null;
+            }}
+            onhoverregion={(region) => {
+              hoveredAdministrativeRegion = region;
+            }}
+            onselectroutefeature={selectAtlasRouteFeature}
           />
           <div class="map-wash"></div>
+          {#if hoveredAdministrativeRegion}
+            <div class="region-hover-card" aria-hidden="true">
+              <span
+                >{administrativeRegionContext(
+                  hoveredAdministrativeRegion,
+                )}</span
+              >
+              <strong>{hoveredAdministrativeRegion.name}</strong>
+              <small>Click or tap to pin this region</small>
+            </div>
+          {/if}
           <div class="map-title">
             <span class="eyebrow">Universal operations map</span>
             <strong>See the network. Command the skies.</strong>
@@ -1988,7 +2351,42 @@
 
         <aside class="inspector" aria-label="Selection inspector">
           <span class="eyebrow">Inspector</span>
-          {#if selectedAircraft}
+          {#if selectedRouteFeature}
+            <h2>{selectedRouteFeature.ident}</h2>
+            <p>{formatRouteFeatureKind(selectedRouteFeature)} from the current Dispatch plan</p>
+
+            <div class="selection-details">
+              <article>
+                <span>Location</span>
+                <strong
+                  >{selectedRouteFeature.location
+                    ? `${selectedRouteFeature.location.latitude.toFixed(4)}, ${selectedRouteFeature.location.longitude.toFixed(4)}`
+                    : "Location unavailable"}</strong
+                >
+                <small>
+                  {selectedRouteFeature.location
+                    ? "Coordinate supplied by the validated plan"
+                    : "WyrmGrid has not inferred a coordinate for this item"}
+                </small>
+              </article>
+              <article>
+                <span>Route evidence</span>
+                <strong>{selectedRouteFeature.airway ?? "No airway reported"}</strong>
+                <small>
+                  {selectedRouteFeature.sequence === undefined
+                    ? selectedRouteFeature.name ?? "No additional label supplied"
+                    : `Ordered fix ${selectedRouteFeature.sequence + 1}`}
+                </small>
+              </article>
+              <article>
+                <span>Provenance</span>
+                <strong>{atlasRoute?.provenance.provider ?? "Not available"}</strong>
+                <small>
+                  {atlasRoute?.airac ? `AIRAC ${atlasRoute.airac}` : "AIRAC not reported"}
+                </small>
+              </article>
+            </div>
+          {:else if selectedAircraft}
             <h2>{displayRegistration(selectedAircraft)}</h2>
             <p>{selectedAircraft.model ?? "Aircraft type unavailable"}</p>
 
@@ -2043,6 +2441,257 @@
                 >
               </article>
             </div>
+          {:else if selectedAdministrativeRegion}
+            <h2>{selectedAdministrativeRegion.name}</h2>
+            <p>
+              {administrativeRegionContext(selectedAdministrativeRegion)}.
+              Contextual planning geography, not an airspace or navigation
+              boundary.
+            </p>
+
+            <div class="selection-details">
+              <article>
+                <span>Administrative tier</span>
+                <strong
+                  >{selectedAdministrativeRegion.level === "ADM1"
+                    ? "First-level region"
+                    : "Second-level region"}</strong
+                >
+                <small
+                  >{selectedAdministrativeRegion.local_type ??
+                    "Local classification unavailable"}</small
+                >
+              </article>
+              <article>
+                <span>Regional code</span>
+                <strong
+                  >{selectedAdministrativeRegion.subdivision_code ??
+                    "Not supplied"}</strong
+                >
+                <small
+                  >{selectedAdministrativeRegion.country_code ??
+                    "Country code unavailable"}</small
+                >
+              </article>
+              {#if selectedAdministrativeRegion.name_local && selectedAdministrativeRegion.name_local !== selectedAdministrativeRegion.name}
+                <article>
+                  <span>Local name</span>
+                  <strong>{selectedAdministrativeRegion.name_local}</strong>
+                </article>
+              {/if}
+              <article>
+                <span>Boundary source</span>
+                <strong
+                  >{selectedAdministrativeRegion.source} v{selectedAdministrativeRegion.source_version}</strong
+                >
+                <small
+                  >Versioned, bundled, and available without a live lookup</small
+                >
+              </article>
+            </div>
+          {:else if selectedWeatherStation}
+            <h2>{selectedWeatherStation.station_icao}</h2>
+            <p>
+              {selectedWeatherStation.role} airport weather from the current external
+              report snapshot.
+            </p>
+
+            <div class="selection-details">
+              <article>
+                <span>Flight category</span>
+                <strong
+                  >{selectedWeatherStation.metar?.value.flight_category?.toUpperCase() ??
+                    "Unknown"}</strong
+                >
+                <small
+                  >{selectedWeatherStation.metar
+                    ? `Observed ${formatTimestamp(selectedWeatherStation.metar.value.observed_at)}`
+                    : "No METAR was returned; WyrmGrid does not infer clear conditions."}</small
+                >
+              </article>
+              <article>
+                <span>Wind and visibility</span>
+                <strong>
+                  {selectedWeatherStation.metar?.value.wind_direction?.kind ===
+                  "degrees"
+                    ? `${selectedWeatherStation.metar.value.wind_direction.value.toString().padStart(3, "0")}°`
+                    : selectedWeatherStation.metar?.value.wind_direction
+                          ?.kind === "variable"
+                      ? "VRB"
+                      : "—"}
+                  / {selectedWeatherStation.metar?.value.wind_speed_kt ?? "—"}
+                  kt · {selectedWeatherStation.metar?.value.visibility_sm ??
+                    "—"}
+                  sm
+                </strong>
+                <small
+                  >Present weather:
+                  {selectedWeatherStation.metar?.value.present_weather ??
+                    "not reported"}</small
+                >
+              </article>
+              <article>
+                <span>Station location</span>
+                <strong
+                  >{selectedWeatherStation.location
+                    ? `${selectedWeatherStation.location.latitude.toFixed(4)}, ${selectedWeatherStation.location.longitude.toFixed(4)}`
+                    : "Unavailable"}</strong
+                >
+                <small
+                  >{selectedWeatherStation.location
+                    ? "Coordinates supplied by the attributed flight plan."
+                    : "The report remains visible as evidence but is not plotted."}</small
+                >
+              </article>
+              <article>
+                <span>METAR source</span>
+                <strong
+                  >{selectedWeatherStation.metar?.provenance.provider ??
+                    "No report"}</strong
+                >
+                <small
+                  >{selectedWeatherStation.metar
+                    ? `Retrieved ${formatTimestamp(selectedWeatherStation.metar.provenance.retrieved_at)}`
+                    : "Unavailable in this snapshot"}</small
+                >
+              </article>
+              <article>
+                <span>Raw METAR</span>
+                <strong
+                  >{selectedWeatherStation.metar?.value.raw_text ??
+                    "No METAR returned"}</strong
+                >
+              </article>
+              <article>
+                <span>TAF</span>
+                <strong
+                  >{selectedWeatherStation.taf
+                    ? `Valid to ${formatTimestamp(selectedWeatherStation.taf.value.valid_to)}`
+                    : "No TAF returned"}</strong
+                >
+                {#if selectedWeatherStation.taf}<small
+                    >{selectedWeatherStation.taf.value.raw_text}</small
+                  >{/if}
+              </article>
+            </div>
+          {:else if selectedRoutePoint && atlasFlightRoute?.planned}
+            <h2>{selectedRoutePoint.label}</h2>
+            <p>
+              {selectedRoutePoint.kind.replaceAll("_", " ")} from the current attributed
+              flight plan.
+            </p>
+
+            <div class="selection-details">
+              <article>
+                <span>Location</span>
+                <strong
+                  >{selectedRoutePoint.location
+                    ? `${selectedRoutePoint.location.latitude.toFixed(4)}, ${selectedRoutePoint.location.longitude.toFixed(4)}`
+                    : "Unavailable"}</strong
+                >
+                <small
+                  >{selectedRoutePoint.location
+                    ? "Source coordinates; select another fix to move the map."
+                    : "No coordinates were supplied, so Atlas does not plot or infer this fix."}</small
+                >
+              </article>
+              <article>
+                <span>Route context</span>
+                <strong
+                  >{selectedRoutePoint.airway ?? "Direct / airport"}</strong
+                >
+                <small
+                  >{selectedRoutePoint.on_route
+                    ? "Part of the filed route spine"
+                    : "Alternate airport; not joined to the filed route"}</small
+                >
+              </article>
+              <article>
+                <span>Provenance</span>
+                <strong>{atlasFlightRoute.planned.provenance.provider}</strong>
+                <small
+                  >Retrieved {formatTimestamp(
+                    atlasFlightRoute.planned.provenance.retrieved_at,
+                  )}</small
+                >
+              </article>
+            </div>
+          {:else if atlasFlightRoute}
+            <h2>
+              {atlasFlightRoute.planned
+                ? `${atlasFlightRoute.planned.origin_icao} → ${atlasFlightRoute.planned.destination_icao}`
+                : "Recorded flight"}
+            </h2>
+            <p>
+              {atlasFlightRoute.context === "dispatch_plan"
+                ? "The current sourced plan, with unresolved coordinates kept visible but unplotted."
+                : "Planned and recorded paths remain separate, including every known gap."}
+            </p>
+
+            <div class="selection-details">
+              {#if atlasFlightRoute.recorded}
+                <article>
+                  <span>Recorded path</span>
+                  <strong
+                    >{atlasFlightRoute.recorded.represented_point_count.toLocaleString()}
+                    points</strong
+                  >
+                  <small
+                    >{atlasFlightRoute.recorded.method.replaceAll(
+                      "_",
+                      " ",
+                    )}</small
+                  >
+                </article>
+              {/if}
+              <article>
+                <span>Planned path</span>
+                <strong
+                  >{atlasFlightRoute.planned?.points
+                    .filter((point) => point.location)
+                    .length.toLocaleString() ?? "Unavailable"}</strong
+                >
+                <small
+                  >Attributed to {atlasFlightRoute.planned?.provenance
+                    .provider ?? "no plan provider"}</small
+                >
+              </article>
+              <article>
+                <span>Unresolved plan legs</span>
+                <strong
+                  >{atlasFlightRoute.planned?.points
+                    .filter((point) => point.on_route && !point.location)
+                    .length.toLocaleString() ?? "0"}</strong
+                >
+                <small>Unresolved coordinates are not plotted.</small>
+              </article>
+            </div>
+          {:else if atlasRoute}
+            <h2>Dispatch route ready</h2>
+            <p>
+              {atlasRoute.mapped_route_feature_count} mapped route items and
+              {atlasRoute.unresolved_route_feature_count} location gaps are retained
+              from the current plan.
+            </p>
+            <div class="selection-details">
+              <article>
+                <span>Source</span>
+                <strong>{atlasRoute.provenance.provider}</strong>
+                <small>
+                  {atlasRoute.airac ? `AIRAC ${atlasRoute.airac}` : "AIRAC not reported"}
+                </small>
+              </article>
+              <article>
+                <span>Projection</span>
+                <strong>Coordinate-only route v{atlasRoute.projection_version}</strong>
+                <small>Unresolved fixes remain visible in Dispatch</small>
+              </article>
+            </div>
+            <button
+              class="sync-button"
+              type="button"
+              onclick={() => requestAtlasRouteFocus()}>Frame full route</button
+            >
           {:else}
             <h2>Nothing selected</h2>
             <p>
@@ -2072,9 +2721,38 @@
             <article>
               <span>Storage</span><strong>{fleetStorageLabel}</strong>
             </article>
+            <article>
+              <span>Dispatch route</span><strong
+                >{atlasRoute
+                  ? `${atlasRoute.mapped_route_feature_count} mapped`
+                  : "No plan"}</strong
+              >
+            </article>
           </div>
         </aside>
       </section>
+    {:else if activeWorkspace === "staff"}
+      <section class="time-mode-bar dispatch-mode-bar">
+        <div class="time-mode-copy">
+          <span class="time-mode-indicator" aria-hidden="true"></span>
+          <strong>Read only</strong>
+          <span>
+            Staff facts remain attributed to OnAir and unavailable fields are
+            never inferred.
+          </span>
+        </div>
+        <div class="time-mode-actions">
+          <span>Staff snapshot contract · v1</span>
+        </div>
+      </section>
+
+      <StaffWorkspace
+        view={staffView}
+        responsiveSurfaces={displayPreferences.responsive_surfaces}
+        busy={fleetLoadState === "loading"}
+        errorMessage={fleetError}
+        onsynchronize={() => void synchronizeCompanyData("manual")}
+      />
     {:else if activeWorkspace === "jobs"}
       <section class="time-mode-bar dispatch-mode-bar">
         <div class="time-mode-copy">
@@ -2089,6 +2767,7 @@
 
       <JobsWorkspace
         view={jobView}
+        responsiveSurfaces={displayPreferences.responsive_surfaces}
         busy={fleetLoadState === "loading"}
         errorMessage={fleetError}
         onsynchronize={() => void synchronizeCompanyData("manual")}
@@ -2118,6 +2797,9 @@
           void importDispatchPlan(kind, reference, rememberReference)}
         onweather={() => void refreshCurrentDispatchWeather()}
         onclear={() => void clearCurrentDispatchPlan()}
+        onviewweatheratlas={openDispatchWeatherInAtlas}
+        onviewroute={() => requestAtlasRouteFocus()}
+        onviewfeature={(featureId) => requestAtlasRouteFocus(featureId)}
       />
     {/if}
 
@@ -2157,6 +2839,7 @@
     {displayPreferences}
     recordingStatus={simulatorRecording}
     recordingSession={simulatorRecordingSession}
+    recordingDebrief={simulatorRecordingDebrief}
     recordingBusy={simulatorRecordingBusy}
     onrefresh={() => void refreshSimulatorBridge()}
     onstart={(providerId) => void runSimulatorAction("start", providerId)}
@@ -2164,11 +2847,14 @@
     onrecordstart={() => void runRecordingAction("start")}
     onrecordstop={() => void runRecordingAction("stop")}
     onsessionselect={(sessionId) => void selectRecordingSession(sessionId)}
-    onsessiondelete={(sessionId) => void runRecordingAction("delete", sessionId)}
+    onsessiondelete={(sessionId) =>
+      void runRecordingAction("delete", sessionId)}
     ondeleteall={() => void runRecordingAction("delete_all")}
     onpin={(sessionId, pinned) => void setRecordingPinned(sessionId, pinned)}
-    onpage={(sessionId, sampleOffset) => void pageRecordingSession(sessionId, sampleOffset)}
+    onpage={(sessionId, sampleOffset) =>
+      void pageRecordingSession(sessionId, sampleOffset)}
     onexport={(sessionId, format) => void exportRecording(sessionId, format)}
+    onviewatlas={openRecordingRouteInAtlas}
     onclose={leaveDialog}
   />
 
@@ -2286,6 +2972,7 @@
     {displayPreferences}
     recordingStatus={simulatorRecording}
     recordingSession={simulatorRecordingSession}
+    recordingDebrief={simulatorRecordingDebrief}
     recordingBusy={simulatorRecordingBusy}
     recordingError={simulatorError}
     busy={timelineBusy}
@@ -2297,9 +2984,13 @@
     onrecordingdelete={(sessionId) =>
       void runRecordingAction("delete", sessionId)}
     onrecordingdeleteall={() => void runRecordingAction("delete_all")}
-    onrecordingpin={(sessionId, pinned) => void setRecordingPinned(sessionId, pinned)}
-    onrecordingpage={(sessionId, sampleOffset) => void pageRecordingSession(sessionId, sampleOffset)}
-    onrecordingexport={(sessionId, format) => void exportRecording(sessionId, format)}
+    onrecordingpin={(sessionId, pinned) =>
+      void setRecordingPinned(sessionId, pinned)}
+    onrecordingpage={(sessionId, sampleOffset) =>
+      void pageRecordingSession(sessionId, sampleOffset)}
+    onrecordingexport={(sessionId, format) =>
+      void exportRecording(sessionId, format)}
+    onrecordingviewatlas={openRecordingRouteInAtlas}
     onclose={leaveDialog}
   />
 

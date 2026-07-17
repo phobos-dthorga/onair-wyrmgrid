@@ -3,6 +3,7 @@
   import {
     GridComponent,
     LegendComponent,
+    MarkLineComponent,
     TooltipComponent,
   } from "echarts/components";
   import * as echarts from "echarts/core";
@@ -10,6 +11,7 @@
   import type { ECharts, EChartsCoreOption } from "echarts/core";
   import { onMount } from "svelte";
   import { activeTheme } from "$lib/theme/runtime";
+  import { formatLocalDateTime } from "$lib/presentation/dateTime";
   import type { ThemeManifest } from "$lib/theme/types";
   import {
     categoricalChartHeight,
@@ -24,6 +26,7 @@
     LineChart,
     GridComponent,
     LegendComponent,
+    MarkLineComponent,
     TooltipComponent,
     CanvasRenderer,
   ]);
@@ -56,10 +59,7 @@
   }
 
   function formatObservedAt(value: string): string {
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime())
-      ? "Observation time unavailable"
-      : parsed.toLocaleString();
+    return formatLocalDateTime(value, "Observation time unavailable");
   }
 
   function expandedCategories(
@@ -142,7 +142,7 @@
       },
       xAxis: horizontalBars ? valueAxis : categoryAxis,
       yAxis: horizontalBars ? categoryAxis : valueAxis,
-      series: chartSpec.series.map((series) => ({
+      series: chartSpec.series.map((series, index) => ({
         id: series.id,
         name: series.label,
         type: chartSpec.kind === "bar" ? "bar" : "line",
@@ -153,6 +153,29 @@
         symbolSize: 6,
         lineStyle: { width: 2 },
         areaStyle: chartSpec.kind === "area" ? { opacity: 0.16 } : undefined,
+        markLine:
+          index === 0 && chartSpec.reference_lines?.length
+            ? {
+                silent: true,
+                symbol: ["none", "none"],
+                label: {
+                  color: presentation.muted,
+                  formatter: "{b}",
+                },
+                lineStyle: {
+                  color: presentation.muted,
+                  type: "dashed",
+                  width: 1,
+                },
+                data: chartSpec.reference_lines.map((line) => ({
+                  id: line.id,
+                  name: line.label,
+                  ...(line.axis === "category"
+                    ? { xAxis: line.value }
+                    : { yAxis: line.value }),
+                })),
+              }
+            : undefined,
       })),
     };
   }
@@ -213,6 +236,11 @@
               `${point.gap_before ? "gap before, " : ""}${point.category}, ${formatValue(point.value)}`,
           )
           .join("; ")}.
+      {/each}
+      {#each spec.reference_lines ?? [] as line}
+        {line.label}: {typeof line.value === "number"
+          ? formatValue(line.value)
+          : line.value}.
       {/each}
     </div>
   {/if}

@@ -1,4 +1,9 @@
 <script lang="ts">
+  import {
+    capabilityTranslationKey,
+    lifetimeTranslationKey,
+  } from "$lib/authorization/presentation";
+  import ExplorationSummary from "$lib/exploration/ExplorationSummary.svelte";
   import { translation } from "$lib/i18n/runtime";
   import type {
     AuthorizationGrantLifetime,
@@ -6,6 +11,14 @@
     PluginPermission,
     PluginView,
   } from "./types";
+  import {
+    activeForgeFilterCount,
+    allRequestedCapabilitiesGranted,
+    defaultForgeFilters,
+    filterForgePlugins,
+    forgeFilterOptions,
+    type ForgeFilters,
+  } from "./presentation";
 
   let {
     open,
@@ -30,32 +43,26 @@
   } = $props();
 
   let approvalLifetime = $state<AuthorizationGrantLifetime>("session");
+  let filters = $state<ForgeFilters>({ ...defaultForgeFilters });
+  const visiblePlugins = $derived(filterForgePlugins(status.plugins, filters));
+  const filterOptions = $derived(forgeFilterOptions(status.plugins));
+  const activeFilterCount = $derived(activeForgeFilterCount(filters));
 
-  const permissionLabels: Record<PluginPermission, string> = {
-    on_air_company_read: "security-capability-company-read",
-    on_air_fleet_read: "security-capability-fleet-read",
-    on_air_jobs_read: "security-capability-jobs-read",
-    on_air_finance_read: "security-capability-finance-read",
-    map_layers_publish: "security-capability-map-publish",
-    charts_publish: "security-capability-charts-publish",
-    notifications_create: "security-capability-notifications-create",
-    plugin_storage: "security-capability-plugin-storage",
-    simulator_telemetry_read: "security-capability-simulator-read",
-    external_network: "security-capability-external-network",
-  };
+  function resetFilters(): void {
+    filters = { ...defaultForgeFilters };
+  }
 
   function permissionLabel(permission: PluginPermission): string {
-    return $translation(permissionLabels[permission]);
+    const key = capabilityTranslationKey(permission);
+    return key ? $translation(key) : permission;
   }
 
   function lifetimeLabel(lifetime: AuthorizationGrantLifetime): string {
-    return $translation(`security-lifetime-${lifetime}`);
+    return $translation(lifetimeTranslationKey(lifetime));
   }
 
   function allRequestedGranted(plugin: PluginView): boolean {
-    return plugin.requested_permissions.every((permission) =>
-      plugin.granted_permissions.includes(permission),
-    );
+    return allRequestedCapabilitiesGranted(plugin);
   }
 
   function stateLabel(plugin: PluginView): string {
@@ -119,8 +126,67 @@
           <span>Installed plugin folders will appear here for review.</span>
         </div>
       {:else}
+        <section class="forge-explorer" aria-label="Installed plugin exploration">
+          <label class="forge-search">
+            <span>Find a plugin, author, capability, state, or error</span>
+            <input type="search" bind:value={filters.query} />
+          </label>
+          <details class="forge-filter-panel">
+            <summary>
+              <span>Filter and sort</span>
+              {#if activeFilterCount > 0}<strong>{activeFilterCount} active</strong>{/if}
+            </summary>
+            <div class="forge-filter-grid">
+              <label>
+                <span>Process state</span>
+                <select bind:value={filters.state}>
+                  <option value="all">Any reported state</option>
+                  {#each filterOptions.states as state}
+                    <option value={state}>{state}</option>
+                  {/each}
+                </select>
+              </label>
+              <label>
+                <span>Access review</span>
+                <select bind:value={filters.access}>
+                  <option value="all">Approved and awaiting review</option>
+                  <option value="approved">All requested access approved</option>
+                  <option value="review">Permission review required</option>
+                </select>
+              </label>
+              <label>
+                <span>Requested capability</span>
+                <select
+                  value={filters.capability ?? ""}
+                  onchange={(event) =>
+                    (filters.capability =
+                      (event.currentTarget.value as PluginPermission) || null)}
+                >
+                  <option value="">Any requested capability</option>
+                  {#each filterOptions.capabilities as capability}
+                    <option value={capability}>{permissionLabel(capability)}</option>
+                  {/each}
+                </select>
+              </label>
+              <label>
+                <span>Order plugins by</span>
+                <select bind:value={filters.sort}>
+                  <option value="name">Plugin name</option>
+                  <option value="state">Process state</option>
+                </select>
+              </label>
+            </div>
+          </details>
+          <ExplorationSummary
+            shown={visiblePlugins.length}
+            total={status.plugins.length}
+            label="installed plugins"
+            activeFilters={activeFilterCount}
+            onclear={resetFilters}
+          />
+        </section>
         <div class="plugin-list" aria-label="Installed plugins">
-          {#each status.plugins as plugin}
+          {#each visiblePlugins as plugin}
             <article class:running={plugin.state === "running"}>
               <div class="plugin-heading">
                 <div>
@@ -224,6 +290,11 @@
                 </div>
               </footer>
             </article>
+          {:else}
+            <div class="empty-state filtered">
+              <strong>No plugins match these controls</strong>
+              <span>Clear the presentation filters to review every installed plugin.</span>
+            </div>
           {/each}
         </div>
       {/if}
@@ -324,6 +395,51 @@
     display: grid;
     gap: 12px;
     padding: 18px 24px 24px;
+  }
+  .forge-explorer {
+    display: grid;
+    gap: 12px;
+    padding: 18px 24px 0;
+  }
+  .forge-search,
+  .forge-filter-grid label {
+    display: grid;
+    gap: 6px;
+    color: var(--color-text-muted);
+    font-size: 10px;
+  }
+  .forge-search input,
+  .forge-filter-grid select {
+    min-width: 0;
+    border: 1px solid var(--color-line-soft);
+    border-radius: 4px;
+    padding: 9px 10px;
+    color: var(--color-text);
+    background: var(--color-surface);
+    font: inherit;
+  }
+  .forge-filter-panel {
+    border: 1px solid var(--color-line-faint);
+    padding: 10px 12px;
+    background: var(--color-surface-soft);
+  }
+  .forge-filter-panel > summary {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    cursor: pointer;
+  }
+  .forge-filter-panel > summary strong {
+    color: var(--color-accent);
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .forge-filter-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 12px;
   }
   article {
     border: 1px solid var(--color-line-faint);
@@ -489,6 +605,9 @@
     font-size: 18px;
     font-weight: 500;
   }
+  .empty-state.filtered {
+    margin: 0;
+  }
   @media (max-width: 700px) {
     .dialog-backdrop {
       padding: 12px;
@@ -499,6 +618,9 @@
     }
     .safety-note,
     article footer {
+      grid-template-columns: 1fr;
+    }
+    .forge-filter-grid {
       grid-template-columns: 1fr;
     }
     article footer {

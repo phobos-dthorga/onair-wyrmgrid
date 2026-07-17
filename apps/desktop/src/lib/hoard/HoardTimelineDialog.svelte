@@ -1,10 +1,13 @@
 <script lang="ts">
   import WyrmChart from "$lib/charts/WyrmChart.svelte";
+  import type { AtlasFlightRoute } from "$lib/atlas/types";
   import type { ChartSpec } from "$lib/charts/types";
   import type { DisplayPreferences } from "$lib/settings/types";
+  import { formatLocalDateTime } from "$lib/presentation/dateTime";
   import RecordingHistory from "$lib/simulator/RecordingHistory.svelte";
   import type {
     SimulatorRecordingView,
+    SimulatorSessionDebrief,
     SimulatorSessionView,
   } from "$lib/simulator/types";
   import type { HoardTimelineIndex, TimelineMode } from "./types";
@@ -20,6 +23,7 @@
     displayPreferences,
     recordingStatus,
     recordingSession,
+    recordingDebrief,
     recordingBusy,
     recordingError,
     busy,
@@ -33,6 +37,7 @@
     onrecordingpin,
     onrecordingpage,
     onrecordingexport,
+    onrecordingviewatlas,
     onclose,
   }: {
     open: boolean;
@@ -45,6 +50,7 @@
     displayPreferences: DisplayPreferences;
     recordingStatus: SimulatorRecordingView;
     recordingSession?: SimulatorSessionView;
+    recordingDebrief?: SimulatorSessionDebrief;
     recordingBusy: boolean;
     recordingError: string;
     busy: boolean;
@@ -58,6 +64,7 @@
     onrecordingpin: (sessionId: string, pinned: boolean) => void;
     onrecordingpage: (sessionId: string, sampleOffset: number) => void;
     onrecordingexport: (sessionId: string, format: "json" | "csv") => void;
+    onrecordingviewatlas: (route: AtlasFlightRoute) => void;
     onclose: () => void;
   } = $props();
 
@@ -65,9 +72,7 @@
   const selectedAt = $derived(timeline.observation_times[cursor]);
 
   function formatTime(value: string | undefined): string {
-    if (!value) return "No retained observation";
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+    return formatLocalDateTime(value, value ?? "No retained observation");
   }
 
   function handleKeydown(event: KeyboardEvent): void {
@@ -119,112 +124,117 @@
           type="button"
           aria-pressed={activeSection === "recordings"}
           onclick={() => (activeSection = "recordings")}
-        >Flight recordings ({recordingStatus.sessions.length})</button>
+          >Flight recordings ({recordingStatus.sessions.length})</button
+        >
       </nav>
 
       {#if activeSection === "company"}
         <div class="timeline-content">
-        <section
-          class="time-control"
-          aria-label="Historical observation selection"
-        >
-          <div class="control-heading">
-            <div>
-              <span>Selected observation</span>
-              <strong>{formatTime(selectedAt)}</strong>
-            </div>
-            <small>{timeline.observation_times.length} retained moments</small>
-          </div>
-
-          {#if timeline.observation_times.length > 0}
-            <input
-              type="range"
-              min="0"
-              max={timeline.observation_times.length - 1}
-              value={cursor}
-              aria-label="Choose a retained company observation"
-              oninput={(event) =>
-                oncursorchange(Number(event.currentTarget.value))}
-            />
-            <div class="range-labels">
-              <span>{formatTime(timeline.observation_times[0])}</span>
-              <span>{formatTime(timeline.observation_times.at(-1))}</span>
-            </div>
-            <div class="timeline-actions">
-              <button
-                class="view-button"
-                type="button"
-                disabled={busy || !selectedAt}
-                onclick={onview}
+          <section
+            class="time-control"
+            aria-label="Historical observation selection"
+          >
+            <div class="control-heading">
+              <div>
+                <span>Selected observation</span>
+                <strong>{formatTime(selectedAt)}</strong>
+              </div>
+              <small>{timeline.observation_times.length} retained moments</small
               >
-                {busy ? "Opening…" : "View this moment"}
-              </button>
-              {#if mode === "historical"}
+            </div>
+
+            {#if timeline.observation_times.length > 0}
+              <input
+                type="range"
+                min="0"
+                max={timeline.observation_times.length - 1}
+                value={cursor}
+                aria-label="Choose a retained company observation"
+                oninput={(event) =>
+                  oncursorchange(Number(event.currentTarget.value))}
+              />
+              <div class="range-labels">
+                <span>{formatTime(timeline.observation_times[0])}</span>
+                <span>{formatTime(timeline.observation_times.at(-1))}</span>
+              </div>
+              <div class="timeline-actions">
                 <button
-                  class="return-button"
+                  class="view-button"
                   type="button"
-                  disabled={busy}
-                  onclick={onreturn}
+                  disabled={busy || !selectedAt}
+                  onclick={onview}
                 >
-                  Return to present
+                  {busy ? "Opening…" : "View this moment"}
                 </button>
+                {#if mode === "historical"}
+                  <button
+                    class="return-button"
+                    type="button"
+                    disabled={busy}
+                    onclick={onreturn}
+                  >
+                    Return to present
+                  </button>
+                {/if}
+              </div>
+            {:else}
+              <div class="empty-state">
+                <strong>The Hoard is ready.</strong>
+                <span
+                  >Successful fleet and FBO synchronizations will appear here
+                  over time.</span
+                >
+              </div>
+            {/if}
+
+            {#if errorMessage}<p class="error-message" role="alert">
+                {errorMessage}
+              </p>{/if}
+            <p class="retention-note">
+              Recent observations are retained hourly for seven days, then
+              daily. Historical mode changes only what Atlas displays;
+              background synchronization keeps the live view ready.
+            </p>
+          </section>
+
+          <section class="charts" aria-label="Hoard history charts">
+            <div class="chart-slot">
+              {#if growthChart}
+                <WyrmChart spec={growthChart} height="180px" />
+              {:else}
+                <div class="chart-placeholder">
+                  Fleet growth appears after the first retained fleet
+                  observation.
+                </div>
               {/if}
             </div>
-          {:else}
-            <div class="empty-state">
-              <strong>The Hoard is ready.</strong>
-              <span
-                >Successful fleet and FBO synchronizations will appear here over
-                time.</span
-              >
+            <div class="chart-slot">
+              {#if fboGrowthChart}
+                <WyrmChart spec={fboGrowthChart} height="180px" />
+              {:else}
+                <div class="chart-placeholder">
+                  FBO growth appears after the first retained network
+                  observation.
+                </div>
+              {/if}
             </div>
-          {/if}
-
-          {#if errorMessage}<p class="error-message" role="alert">
-              {errorMessage}
-            </p>{/if}
-          <p class="retention-note">
-            Recent observations are retained hourly for seven days, then daily.
-            Historical mode changes only what Atlas displays; background
-            synchronization keeps the live view ready.
-          </p>
-        </section>
-
-        <section class="charts" aria-label="Hoard history charts">
-          <div class="chart-slot">
-            {#if growthChart}
-              <WyrmChart spec={growthChart} height="180px" />
-            {:else}
-              <div class="chart-placeholder">
-                Fleet growth appears after the first retained fleet observation.
-              </div>
-            {/if}
-          </div>
-          <div class="chart-slot">
-            {#if fboGrowthChart}
-              <WyrmChart spec={fboGrowthChart} height="180px" />
-            {:else}
-              <div class="chart-placeholder">
-                FBO growth appears after the first retained network observation.
-              </div>
-            {/if}
-          </div>
-          <div class="chart-slot composition-slot">
-            {#if compositionChart}
-              <WyrmChart spec={compositionChart} />
-            {:else}
-              <div class="chart-placeholder">
-                Fleet composition is unavailable for this moment.
-              </div>
-            {/if}
-          </div>
-        </section>
+            <div class="chart-slot composition-slot">
+              {#if compositionChart}
+                <WyrmChart spec={compositionChart} />
+              {:else}
+                <div class="chart-placeholder">
+                  Fleet composition is unavailable for this moment.
+                </div>
+              {/if}
+            </div>
+          </section>
         </div>
       {:else}
         <div class="recording-content">
           <RecordingHistory
             status={recordingStatus}
             session={recordingSession}
+            debrief={recordingDebrief}
             {displayPreferences}
             busy={recordingBusy}
             errorMessage={recordingError}
@@ -234,6 +244,7 @@
             onpin={onrecordingpin}
             onpage={onrecordingpage}
             onexport={onrecordingexport}
+            onviewatlas={onrecordingviewatlas}
           />
         </div>
       {/if}

@@ -48,11 +48,15 @@
 - Use semantic versioning for the application and separately version the plugin
   protocol, schema, and database migrations.
 - CI produces release artifacts. Do not hand-assemble published binaries.
-- Routine commits and pull requests compile-check the desktop application but
-  do not assemble installers. Every intentional semantic-version release tag
-  (`vX.Y.Z` or a supported prerelease) builds installers after the reusable CI
-  and security gates pass. A manual rebuild must target an existing tag and
-  record a concrete reason.
+- Run routine compilation, tests, formatting, linting, and dependency checks on
+  the maintainer's local development machine. Reserve hosted CI/CD for an
+  explicitly authorised release or exception. Every intentional semantic-version
+  release tag (`vX.Y.Z` or a supported prerelease) repeats the complete gates on
+  clean hosted runners and builds installers. A manual rebuild must target an
+  existing tag and record a concrete reason.
+- Existing pull-request workflow triggers may still run until they are changed
+  separately. Do not treat those transitional triggers as authority to request
+  reruns, wait for hosted results, or spend hosted minutes during routine work.
 - Keep early releases marked as prereleases until update signing and platform
   signing policies are complete.
 - Do not change the application semantic version or create or push a release

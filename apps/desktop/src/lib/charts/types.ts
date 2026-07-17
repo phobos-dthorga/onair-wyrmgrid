@@ -16,12 +16,20 @@ export type ChartSpec = {
   category_axis_label?: string;
   value_axis_label?: string;
   unit?: string;
+  reference_lines?: ChartReferenceLine[];
   series: ChartSeries[];
   provenance: {
     kind: ProvenanceKind;
     source: string;
     observed_at: string;
   };
+};
+
+export type ChartReferenceLine = {
+  id: string;
+  label: string;
+  axis: "category" | "value";
+  value: string | number;
 };
 
 export type ChartSeries = {

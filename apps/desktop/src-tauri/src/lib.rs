@@ -179,6 +179,13 @@ fn onair_job_snapshot(
 }
 
 #[tauri::command]
+fn onair_staff_snapshot(
+    state: tauri::State<'_, DesktopState>,
+) -> Result<Option<wyrmgrid_application::StaffSnapshotView>, wyrmgrid_application::OperationError> {
+    state.onair.staff_snapshot().map_err(operation_error)
+}
+
+#[tauri::command]
 fn onair_hoard_timeline(
     state: tauri::State<'_, DesktopState>,
 ) -> Result<wyrmgrid_application::HoardTimelineIndex, wyrmgrid_application::OperationError> {
@@ -617,6 +624,17 @@ fn simulator_recording_session(
 }
 
 #[tauri::command]
+fn simulator_recording_debrief(
+    state: tauri::State<'_, DesktopState>,
+    session_id: String,
+) -> Result<wyrmgrid_application::SimulatorSessionDebrief, wyrmgrid_application::OperationError> {
+    state
+        .simulator_recording
+        .debrief(&session_id)
+        .map_err(operation_error)
+}
+
+#[tauri::command]
 fn pin_simulator_recording(
     state: tauri::State<'_, DesktopState>,
     session_id: String,
@@ -791,6 +809,7 @@ pub fn run() {
             onair_fleet_snapshot,
             onair_fbo_snapshot,
             onair_job_snapshot,
+            onair_staff_snapshot,
             onair_hoard_timeline,
             onair_historical_company_data,
             dispatch_status,
@@ -832,6 +851,7 @@ pub fn run() {
             start_simulator_recording,
             stop_simulator_recording,
             simulator_recording_session,
+            simulator_recording_debrief,
             pin_simulator_recording,
             export_simulator_recording,
             delete_simulator_recording,

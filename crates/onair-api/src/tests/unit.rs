@@ -166,6 +166,115 @@ fn translates_pending_jobs_into_the_stable_snapshot_contract() {
 }
 
 #[test]
+fn translates_only_reviewed_bounded_staff_fields() {
+    let response: ApiResult<Vec<RawStaffMember>> = serde_json::from_str(include_str!(
+        "../../tests/fixtures/swagger-staff-response.json"
+    ))
+    .expect("synthetic Swagger fixture should deserialize");
+    let snapshot = StaffSnapshot {
+        schema_version: STAFF_SNAPSHOT_SCHEMA_VERSION,
+        staff: response
+            .content
+            .expect("fixture should contain staff")
+            .into_iter()
+            .filter_map(translate_staff_member)
+            .collect(),
+    };
+
+    snapshot.validate().expect("snapshot should validate");
+    assert_eq!(snapshot.staff.len(), 2);
+    assert_eq!(
+        snapshot.staff[0].display_name.as_deref(),
+        Some("Synthetic Pilot")
+    );
+    assert_eq!(
+        snapshot.staff[0].avatar_reference.as_deref(),
+        Some("synthetic-pilot-avatar.png")
+    );
+    assert_eq!(
+        snapshot.staff[0]
+            .current_airport
+            .as_ref()
+            .and_then(|airport| airport.icao.as_deref()),
+        Some("YSSY")
+    );
+    assert_eq!(snapshot.staff[0].class_qualifications.len(), 1);
+    assert_eq!(
+        snapshot.staff[0].class_qualifications[0]
+            .short_name
+            .as_deref(),
+        Some("MEP")
+    );
+    assert!(snapshot.staff[1].class_qualifications.is_empty());
+    assert_eq!(snapshot.staff[1].current_airport, None);
+}
+
+#[test]
+fn bounds_staff_qualifications_and_withholds_unknown_provider_codes() {
+    let member = RawStaffMember {
+        id: Some(Uuid::from_u128(1)),
+        display_name: Some("Synthetic Boundary Aviator".into()),
+        avatar_reference: Some("synthetic-boundary-avatar.png".into()),
+        category_code: Some(99),
+        status_code: Some(99),
+        current_airport: None,
+        home_airport: None,
+        busy_until: None,
+        is_online: None,
+        class_certifications: (0..(MAX_CLASS_QUALIFICATIONS_PER_STAFF_MEMBER + 1))
+            .map(|index| RawClassCertification {
+                id: Some(Uuid::from_u128(100 + index as u128)),
+                aircraft_class_id: Some(Uuid::from_u128(1_000 + index as u128)),
+                aircraft_class: None,
+                last_validated_at: None,
+            })
+            .collect(),
+    };
+
+    let translated = translate_staff_member(member).expect("bounded member should remain usable");
+    assert_eq!(translated.category_code, None);
+    assert_eq!(translated.status_code, None);
+    assert_eq!(
+        translated.class_qualifications.len(),
+        MAX_CLASS_QUALIFICATIONS_PER_STAFF_MEMBER
+    );
+    translated
+        .validate()
+        .expect("translated member should validate");
+}
+
+#[test]
+fn rejects_mismatched_staff_class_identity_without_guessing() {
+    let member = RawStaffMember {
+        id: Some(Uuid::from_u128(1)),
+        display_name: Some("Synthetic Class Boundary Aviator".into()),
+        avatar_reference: None,
+        category_code: Some(1),
+        status_code: Some(1),
+        current_airport: None,
+        home_airport: None,
+        busy_until: None,
+        is_online: None,
+        class_certifications: vec![RawClassCertification {
+            id: Some(Uuid::from_u128(2)),
+            aircraft_class_id: Some(Uuid::from_u128(3)),
+            aircraft_class: Some(RawAircraftClass {
+                id: Some(Uuid::from_u128(4)),
+                short_name: Some("MISMATCH".into()),
+                name: Some("Synthetic mismatched class".into()),
+            }),
+            last_validated_at: None,
+        }],
+    };
+
+    let translated = translate_staff_member(member).expect("member identity should remain usable");
+    assert!(translated.class_qualifications.is_empty());
+    translated
+        .validate()
+        .expect("member should remain valid without the ambiguous qualification");
+}
+
+#[test]
 fn accepts_null_job_leg_collections_and_naive_onair_timestamps() {
     let response: ApiResult<Vec<RawMission>> = serde_json::from_str(
         r#"{

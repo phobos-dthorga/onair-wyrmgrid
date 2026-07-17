@@ -1,28 +1,22 @@
-export type ProvenanceKind =
-  | "on_air_fact"
-  | "external_fact"
-  | "external_calculation"
-  | "calculated"
-  | "recommendation";
+import type { FlightOperationJourneyView } from "$lib/flightOperation/types";
+import type {
+  Coordinates,
+  Observation,
+  OperationalProvenance,
+  ProvenanceKind,
+} from "$lib/operational/types";
+import type { FlightWeatherMapView, WeatherSnapshot } from "$lib/weather/types";
 
-export type Coordinates = { latitude: number; longitude: number };
+export type {
+  Coordinates,
+  Observation,
+  OperationalProvenance,
+  ProvenanceKind,
+} from "$lib/operational/types";
+export type { WeatherSnapshot } from "$lib/weather/types";
+
 export type MassUnit = "kilograms" | "pounds";
 export type Mass = { value: number; unit: MassUnit };
-
-export type OperationalProvenance = {
-  kind: ProvenanceKind;
-  provider: string;
-  provider_revision?: string;
-  generated_at?: string;
-  retrieved_at: string;
-  transformation_version: number;
-  freshness: "current" | "stale" | "unknown";
-};
-
-export type Observation<T> = {
-  value: T;
-  provenance: OperationalProvenance;
-};
 
 export type FlightPlanAirport = {
   icao: string;
@@ -117,41 +111,16 @@ export type DispatchComparison = {
   provenance: OperationalProvenance;
 };
 
-export type WeatherSnapshot = {
-  schema_version: number;
-  id: string;
-  airports: Array<{
-    station_icao: string;
-    metar?: Observation<{
-      observed_at: string;
-      raw_text: string;
-      report_type?: string;
-      flight_category?: "vfr" | "mvfr" | "ifr" | "lifr" | "unknown";
-      wind_direction?:
-        { kind: "degrees"; value: number } | { kind: "variable" };
-      wind_speed_kt?: number;
-      wind_gust_kt?: number;
-      visibility_sm?: string;
-      temperature_c?: number;
-      dewpoint_c?: number;
-      altimeter_hpa?: number;
-      present_weather?: string;
-    }>;
-    taf?: Observation<{
-      issued_at: string;
-      valid_from: string;
-      valid_to: string;
-      raw_text: string;
-    }>;
-  }>;
-};
-
 export type DispatchStatus = {
   provider_available: boolean;
   availability: "empty" | "ready";
   persistence: "session_only";
   importing: boolean;
   snapshot?: FlightPlanSnapshot;
+  atlas_plan?: import("$lib/atlas/types").AtlasPlannedRoute;
+  atlas_weather?: FlightWeatherMapView;
+  journey: FlightOperationJourneyView;
+  atlas_route?: AtlasRouteView;
   comparison?: DispatchComparison;
   selected_job?: {
     job: import("$lib/atlas/types").JobSummary;
@@ -165,6 +134,32 @@ export type DispatchStatus = {
     cache: "none" | "fresh" | "expired";
     snapshot?: WeatherSnapshot;
   };
+};
+
+export type AtlasRouteFeatureKind =
+  "origin" | "route_fix" | "destination" | "alternate";
+
+export type AtlasRouteFeature = {
+  id: string;
+  kind: AtlasRouteFeatureKind;
+  ident: string;
+  name?: string;
+  sequence?: number;
+  airway?: string;
+  availability: "resolved" | "location_unavailable";
+  location?: Coordinates;
+};
+
+export type AtlasRouteView = {
+  projection_version: number;
+  plan_id: string;
+  airac?: string;
+  source_text?: string;
+  route_feature_ids: string[];
+  features: AtlasRouteFeature[];
+  mapped_route_feature_count: number;
+  unresolved_route_feature_count: number;
+  provenance: OperationalProvenance;
 };
 
 export type SimBriefReferenceKind = "pilot_id" | "username";

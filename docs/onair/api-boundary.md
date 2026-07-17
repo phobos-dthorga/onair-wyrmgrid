@@ -131,6 +131,40 @@ by some .NET serializers, interpreting the latter as UTC. Invalid optional
 timestamps become unavailable facts rather than invalidating an otherwise
 usable mission. These compatibility rules do not expose or retain raw JSON.
 
+## Staff boundary
+
+On 2026-07-17, the published Swagger document was checked for
+`GET /api/v1/company/{companyId}/employees` and
+`GET /api/v1/employee/{employeeId}`. WyrmGrid uses only the company roster read.
+An authenticated outside-repository probe succeeded with HTTP 200 and returned
+89 staff records. The probe recorded aggregate field-presence counts only; it
+did not print or retain names, IDs, salaries, raw JSON, or other source records.
+
+The stable `StaffSnapshot` version 1 translates only staff identity, optional
+display name, an opaque bounded avatar image-name reference, numeric provider
+category and status codes, current and home airport summaries, busy-until time,
+online presence, and bounded reported aircraft-class qualifications. Salary,
+birth date, weight, fatigue, happiness, avatar URLs, and other unused employee
+fields are discarded inside the adapter.
+The committed response fixture is entirely synthetic and Swagger-derived.
+
+The live roster reported display name, category, status, current airport,
+`AvatarImageName`, and class-certification collections for all 89 records; one
+record reported a busy-until value. General `Certifications` and avatar URLs
+were absent. A bounded probe of five official employee-detail reads likewise
+reported five image-name references and zero avatar URLs. Swagger exposes no
+avatar/image endpoint or documented URL construction. Avatar artwork therefore
+remains unavailable; the opaque reference is never interpreted as a path or
+network location. Missing facts remain visibly unavailable rather than being
+inferred from aircraft-class qualifications or any other field.
+
+Swagger publishes numeric ranges but not the meanings of individual category
+and status values. OnAir's employee guide describes user-facing employee types
+and states, but does not establish their numeric API mapping. WyrmGrid therefore
+preserves and labels the provider codes without guessing a human-readable role
+or status. A future mapping requires official documentation or a sanitized,
+repeatable compatibility test.
+
 ## Synchronization policy
 
 OnAir does not currently publish a formal public API rate-limit policy in the
@@ -147,11 +181,12 @@ official guidance:
 - requests inside either quiet period return the existing snapshot without
   contacting OnAir or displaying an error.
 
-An accepted synchronization performs fleet, FBO, then pending-job reads sequentially under
-that one gate. Each successful resource is timestamped and retained
+An accepted synchronization performs fleet, FBO, pending-job, then staff reads
+sequentially under that one gate. Each successful resource is timestamped and retained
 independently. If fleet authentication is rejected or rate-limited, WyrmGrid
 does not make later requests; an authentication or rate-limit failure at the
-FBO step skips pending jobs. Other resource failures may still allow subsequent
+FBO step skips pending jobs and staff; the same failure at pending jobs skips
+staff. Other resource failures may still allow subsequent
 snapshots to refresh. This preserves useful partial results without multiplying
 user-facing synchronization controls.
 
@@ -163,4 +198,5 @@ and the OnAir session is connected.
 References:
 
 - [OnAir public API wiki](https://onaircompany.hostwiki.io/en/Public-APIs)
+- [OnAir employee guide](https://onaircompany.hostwiki.io/en/career-progression/your-employees)
 - [OnAir v1 Swagger document](https://server1.onair.company/swagger/docs/v1)

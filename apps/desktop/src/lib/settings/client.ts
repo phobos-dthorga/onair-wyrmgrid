@@ -32,6 +32,7 @@ export async function saveDisplayPreferences(
 function validatePreferences(value: unknown): DisplayPreferences {
   if (!value || typeof value !== "object") return aviationDisplayPreferences;
   const candidate = value as Partial<DisplayPreferences>;
+  const responsiveSurfaces = candidate.responsive_surfaces ?? true;
   if (
     !["feet", "metres"].includes(candidate.altitude_unit ?? "") ||
     ![
@@ -47,9 +48,13 @@ function validatePreferences(value: unknown): DisplayPreferences {
       "us_gallons",
       "imperial_gallons",
       "litres",
-    ].includes(candidate.fuel_unit ?? "")
+    ].includes(candidate.fuel_unit ?? "") ||
+    typeof responsiveSurfaces !== "boolean"
   ) {
     return aviationDisplayPreferences;
   }
-  return candidate as DisplayPreferences;
+  return {
+    ...(candidate as Omit<DisplayPreferences, "responsive_surfaces">),
+    responsive_surfaces: responsiveSurfaces,
+  };
 }

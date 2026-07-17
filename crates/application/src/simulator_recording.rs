@@ -12,7 +12,7 @@ use wyrmgrid_storage::{
     SimulatorSessionRecord, Store,
 };
 
-use crate::SimulatorTelemetryObserver;
+use crate::{SimulatorSessionDebrief, SimulatorTelemetryObserver, build_simulator_debrief};
 
 const DEFAULT_RETENTION_DAYS: u32 = 30;
 const MIN_RETENTION_DAYS: u32 = 1;
@@ -20,13 +20,14 @@ const MAX_RETENTION_DAYS: u32 = 3_650;
 const MAX_SESSION_LIST: u32 = 500;
 const MAX_GRAPH_SAMPLES: u32 = 600;
 const MAX_ANALYSIS_SAMPLES: u32 = 50_000;
+const MAX_DEBRIEF_SOURCE_SAMPLES: u64 = 250_000;
 const MAX_EXPORT_SAMPLES: u64 = 250_000;
 const GAP_AFTER_SECONDS: i64 = 3;
 const DEFAULT_LANDING_SETTLE_SECONDS: u32 = 30;
 const MIN_LANDING_SETTLE_SECONDS: u32 = 10;
 const MAX_LANDING_SETTLE_SECONDS: u32 = 600;
 const AUTOMATIC_TAKEOFF_CONFIRMATION_SAMPLES: usize = 2;
-pub const SIMBRIEF_CORRELATION_VERSION: u32 = 1;
+pub const SIMBRIEF_CORRELATION_VERSION: u32 = 2;
 
 #[derive(Debug, Error, Clone, Copy, PartialEq, Eq)]
 pub enum SimulatorRecordingError {
@@ -42,6 +43,8 @@ pub enum SimulatorRecordingError {
     UnknownSession,
     #[error("The requested simulator recording export is too large.")]
     ExportTooLarge,
+    #[error("The requested simulator debrief is too large to project safely.")]
+    DebriefTooLarge,
     #[error("The imported flight plan is invalid or cannot be associated.")]
     InvalidPlan,
     #[error("Stop the active recording before deleting it.")]
@@ -164,7 +167,23 @@ pub struct PlannedActualComparison {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub planned_takeoff_fuel_pounds: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub planned_landing_fuel_pounds: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recorded_start_fuel_pounds: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recorded_end_fuel_pounds: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub recorded_fuel_used_pounds: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub duration_delta_seconds: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub distance_delta_nm: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub altitude_delta_ft: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub takeoff_fuel_delta_pounds: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub landing_fuel_delta_pounds: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub origin_proximity_nm: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -409,19 +428,49 @@ impl SimulatorRecordingService {
         self.session_window(session_id, 0)
     }
 
+    pub fn debrief(
+        &self,
+        session_id: &str,
+    ) -> Result<SimulatorSessionDebrief, SimulatorRecordingError> {
+        let record = self.session_record(session_id)?;
+        if record.sample_count > MAX_DEBRIEF_SOURCE_SAMPLES {
+            return Err(SimulatorRecordingError::DebriefTooLarge);
+        }
+        let plan = record
+            .plan_snapshot_json
+            .as_deref()
+            .map(serde_json::from_str::<FlightPlanSnapshot>)
+            .transpose()
+            .map_err(|_| SimulatorRecordingError::StorageUnavailable)?;
+        let session = session_from_record(record)?;
+        let sample_limit = u32::try_from(session.sample_count)
+            .map_err(|_| SimulatorRecordingError::DebriefTooLarge)?;
+        let samples = self
+            .inner
+            .store
+            .list_simulator_sample_record_window(session_id, 0, sample_limit)
+            .map_err(|_| SimulatorRecordingError::StorageUnavailable)?
+            .into_iter()
+            .map(sample_from_record)
+            .collect::<Vec<_>>();
+        let comparison = plan
+            .as_ref()
+            .map(|plan| comparison_from_samples(&session, plan, &samples, true))
+            .transpose()?;
+        Ok(build_simulator_debrief(
+            session,
+            &samples,
+            plan.as_ref(),
+            comparison,
+        ))
+    }
+
     pub fn session_window(
         &self,
         session_id: &str,
         sample_offset: u32,
     ) -> Result<SimulatorSessionView, SimulatorRecordingError> {
-        let record = self
-            .inner
-            .store
-            .list_simulator_session_records(MAX_SESSION_LIST)
-            .map_err(|_| SimulatorRecordingError::StorageUnavailable)?
-            .into_iter()
-            .find(|session| session.id == session_id)
-            .ok_or(SimulatorRecordingError::UnknownSession)?;
+        let record = self.session_record(session_id)?;
         let plan = record
             .plan_snapshot_json
             .as_deref()
@@ -999,77 +1048,20 @@ impl SimulatorRecordingService {
         } else {
             Vec::new()
         };
-        let airports = &plan.airports.value;
-        let route = plan.route.as_ref().map(|group| &group.value);
-        let recorded_seconds = samples
-            .first()
-            .zip(samples.last())
-            .and_then(|(first, last)| {
-                DateTime::parse_from_rfc3339(&last.observed_at)
-                    .ok()?
-                    .signed_duration_since(DateTime::parse_from_rfc3339(&first.observed_at).ok()?)
-                    .num_seconds()
-                    .try_into()
-                    .ok()
-            });
-        let recorded_track_distance_nm = analysis_complete
-            .then(|| track_distance_nm(&samples))
-            .flatten();
-        let recorded_peak_altitude_ft = analysis_complete.then(|| {
-            samples
-                .iter()
-                .map(|sample| sample.altitude_feet)
-                .fold(f64::NEG_INFINITY, f64::max)
-        });
-        let recorded_peak_altitude_ft =
-            recorded_peak_altitude_ft.filter(|altitude| altitude.is_finite());
-        let recorded_fuel_used_pounds = analysis_complete
-            .then(|| fuel_used_pounds(&samples))
-            .flatten();
-        let first_position = samples.iter().find_map(|sample| sample.position);
-        let last_position = samples.iter().rev().find_map(|sample| sample.position);
+        comparison_from_samples(session, plan, &samples, analysis_complete)
+    }
 
-        Ok(PlannedActualComparison {
-            association: FlightPlanAssociation {
-                correlation_version: SIMBRIEF_CORRELATION_VERSION,
-                plan_id: plan.id.0.to_string(),
-                origin_icao: airports.origin.icao.clone(),
-                destination_icao: airports.destination.icao.clone(),
-                provider_plan_reference: plan.identity.value.provider_plan_reference.clone(),
-            },
-            analysis_complete,
-            planned_enroute_seconds: plan
-                .schedule
-                .as_ref()
-                .and_then(|group| group.value.estimated_enroute_seconds),
-            recorded_seconds,
-            planned_distance_nm: route.and_then(|route| route.distance_nm),
-            recorded_track_distance_nm,
-            planned_initial_altitude_ft: route.and_then(|route| route.initial_altitude_ft),
-            recorded_peak_altitude_ft,
-            planned_takeoff_fuel_pounds: plan
-                .fuel
-                .as_ref()
-                .and_then(|group| group.value.takeoff)
-                .map(mass_in_pounds),
-            recorded_fuel_used_pounds,
-            origin_proximity_nm: airports
-                .origin
-                .location
-                .zip(first_position)
-                .map(|(airport, observed)| distance_nm(airport, observed)),
-            destination_proximity_nm: airports
-                .destination
-                .location
-                .zip(last_position)
-                .map(|(airport, observed)| distance_nm(airport, observed)),
-            registration_matches: plan
-                .aircraft
-                .as_ref()
-                .and_then(|group| group.value.registration.as_deref())
-                .zip(session.aircraft_registration.as_deref())
-                .map(|(planned, observed)| planned.eq_ignore_ascii_case(observed)),
-        })
+    fn session_record(
+        &self,
+        session_id: &str,
+    ) -> Result<SimulatorSessionRecord, SimulatorRecordingError> {
+        self.inner
+            .store
+            .list_simulator_session_records(MAX_SESSION_LIST)
+            .map_err(|_| SimulatorRecordingError::StorageUnavailable)?
+            .into_iter()
+            .find(|session| session.id == session_id)
+            .ok_or(SimulatorRecordingError::UnknownSession)
     }
 
     fn prune_expired(&self) -> Result<(), SimulatorRecordingError> {
@@ -1096,6 +1088,121 @@ impl SimulatorRecordingService {
             *last_code = Some(code.to_owned());
         }
     }
+}
+
+fn comparison_from_samples(
+    session: &SimulatorSessionSummary,
+    plan: &FlightPlanSnapshot,
+    samples: &[SimulatorRecordedSample],
+    analysis_complete: bool,
+) -> Result<PlannedActualComparison, SimulatorRecordingError> {
+    plan.validate()
+        .map_err(|_| SimulatorRecordingError::StorageUnavailable)?;
+    let airports = &plan.airports.value;
+    let route = plan.route.as_ref().map(|group| &group.value);
+    let recorded_seconds = samples
+        .first()
+        .zip(samples.last())
+        .and_then(|(first, last)| {
+            DateTime::parse_from_rfc3339(&last.observed_at)
+                .ok()?
+                .signed_duration_since(DateTime::parse_from_rfc3339(&first.observed_at).ok()?)
+                .num_seconds()
+                .try_into()
+                .ok()
+        });
+    let recorded_track_distance_nm = analysis_complete
+        .then(|| track_distance_nm(samples))
+        .flatten();
+    let recorded_peak_altitude_ft = analysis_complete.then(|| {
+        samples
+            .iter()
+            .map(|sample| sample.altitude_feet)
+            .fold(f64::NEG_INFINITY, f64::max)
+    });
+    let recorded_peak_altitude_ft =
+        recorded_peak_altitude_ft.filter(|altitude| altitude.is_finite());
+    let recorded_fuel_used_pounds = analysis_complete
+        .then(|| fuel_used_pounds(samples))
+        .flatten();
+    let recorded_start_fuel_pounds = samples
+        .iter()
+        .find_map(|sample| sample.fuel_total_weight_pounds);
+    let recorded_end_fuel_pounds = samples
+        .iter()
+        .rev()
+        .find_map(|sample| sample.fuel_total_weight_pounds);
+    let planned_takeoff_fuel_pounds = plan
+        .fuel
+        .as_ref()
+        .and_then(|group| group.value.takeoff)
+        .map(mass_in_pounds);
+    let planned_landing_fuel_pounds = plan
+        .fuel
+        .as_ref()
+        .and_then(|group| group.value.landing)
+        .map(mass_in_pounds);
+    let planned_enroute_seconds = plan
+        .schedule
+        .as_ref()
+        .and_then(|group| group.value.estimated_enroute_seconds);
+    let planned_distance_nm = route.and_then(|route| route.distance_nm);
+    let planned_initial_altitude_ft = route.and_then(|route| route.initial_altitude_ft);
+    let first_position = samples.iter().find_map(|sample| sample.position);
+    let last_position = samples.iter().rev().find_map(|sample| sample.position);
+
+    Ok(PlannedActualComparison {
+        association: FlightPlanAssociation {
+            correlation_version: SIMBRIEF_CORRELATION_VERSION,
+            plan_id: plan.id.0.to_string(),
+            origin_icao: airports.origin.icao.clone(),
+            destination_icao: airports.destination.icao.clone(),
+            provider_plan_reference: plan.identity.value.provider_plan_reference.clone(),
+        },
+        analysis_complete,
+        planned_enroute_seconds,
+        recorded_seconds,
+        planned_distance_nm,
+        recorded_track_distance_nm,
+        planned_initial_altitude_ft,
+        recorded_peak_altitude_ft,
+        planned_takeoff_fuel_pounds,
+        planned_landing_fuel_pounds,
+        recorded_start_fuel_pounds,
+        recorded_end_fuel_pounds,
+        recorded_fuel_used_pounds,
+        duration_delta_seconds: recorded_seconds
+            .zip(planned_enroute_seconds)
+            .map(|(recorded, planned)| recorded as i64 - i64::from(planned)),
+        distance_delta_nm: recorded_track_distance_nm
+            .zip(planned_distance_nm)
+            .map(|(recorded, planned)| recorded - planned),
+        altitude_delta_ft: recorded_peak_altitude_ft
+            .zip(planned_initial_altitude_ft)
+            .map(|(recorded, planned)| recorded - f64::from(planned)),
+        takeoff_fuel_delta_pounds: recorded_start_fuel_pounds
+            .zip(planned_takeoff_fuel_pounds)
+            .map(|(recorded, planned)| recorded - planned),
+        landing_fuel_delta_pounds: recorded_end_fuel_pounds
+            .zip(planned_landing_fuel_pounds)
+            .map(|(recorded, planned)| recorded - planned),
+        origin_proximity_nm: airports
+            .origin
+            .location
+            .zip(first_position)
+            .map(|(airport, observed)| distance_nm(airport, observed)),
+        destination_proximity_nm: airports
+            .destination
+            .location
+            .zip(last_position)
+            .map(|(airport, observed)| distance_nm(airport, observed)),
+        registration_matches: plan
+            .aircraft
+            .as_ref()
+            .and_then(|group| group.value.registration.as_deref())
+            .zip(session.aircraft_registration.as_deref())
+            .map(|(planned, observed)| planned.eq_ignore_ascii_case(observed)),
+    })
 }
 
 impl SimulatorTelemetryObserver for SimulatorRecordingService {

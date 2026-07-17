@@ -1,0 +1,73 @@
+.responsive-surface {
+  --surface-shift-x: 0px;
+  --surface-shift-y: 0px;
+  --surface-glow-x: 50%;
+  --surface-glow-y: 50%;
+  position: relative;
+  isolation: isolate;
+  transform: translate3d(0, 0, 0);
+}
+
+.responsive-surface::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(
+    circle at var(--surface-glow-x) var(--surface-glow-y),
+    var(--color-accent-soft),
+    transparent 68%
+  );
+}
+
+.responsive-surface > * {
+  position: relative;
+  z-index: 1;
+}
+
+.responsive-surfaces .responsive-surface {
+  transition:
+    transform 170ms ease,
+    border-color 170ms ease,
+    box-shadow 170ms ease;
+}
+
+.responsive-surfaces .responsive-surface::after {
+  transition: opacity 170ms ease;
+}
+
+.responsive-surfaces
+  .responsive-surface:is(:hover, :focus-visible, :focus-within) {
+  transform: translate3d(var(--surface-shift-x), var(--surface-shift-y), 0)
+    scale(1.006);
+  border-color: var(--color-accent-border);
+  box-shadow:
+    0 0 0 1px var(--color-accent-soft),
+    0 0.65rem 1.8rem rgb(0 0 0 / 18%);
+}
+
+.responsive-surfaces
+  .responsive-surface:is(:hover, :focus-visible, :focus-within)::after {
+  opacity: 0.42;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .responsive-surfaces .responsive-surface,
+  .responsive-surfaces .responsive-surface::after {
+    transition: none;
+  }
+
+  .responsive-surfaces
+    .responsive-surface:is(:hover, :focus-visible, :focus-within) {
+    transform: none;
+    box-shadow: 0 0 0 1px var(--color-accent-border);
+  }
+
+  .responsive-surfaces
+    .responsive-surface:is(:hover, :focus-visible, :focus-within)::after {
+    opacity: 0;
+  }
+}

@@ -53,6 +53,11 @@ The implementation sequence and operating thresholds live in the
 - Bounded pending-job observations, Hoard-backed live/cached/offline state, and
   a read-only Jobs workspace (developer preview implemented; authenticated live
   contract confirmation remains)
+- Authenticated company-staff access gate, bounded translated roster,
+  Hoard-backed live/cached/offline state, data-derived roster filters,
+  accessible dossier drill-down, and a read-only Staff workspace (foundation
+  implemented; provider enum labels, general certifications, and actual avatar
+  artwork remain unavailable until their contracts are verified)
 
 ## Vertical slice 2: external plugin proof
 
@@ -96,13 +101,19 @@ not replace completion of the current vertical slice.
   instead of inferred (implemented for the current read-only contracts)
 - Explicitly requested, ten-minute session-cached AviationWeather.gov METAR and
   TAF airport context with raw coded text and provenance (implemented)
+- Host-owned plan-airport weather projection, linked Dispatch/Atlas station
+  selection, explicit unknown/no-report rendering, and an initial
+  Plan-to-Atlas journey rail (implemented)
 - Route advisories and explainable weather findings (airport observation context
   implemented; route hazard products remain)
-- Dispatch-to-Atlas route projection with full-route framing and linked
-  airports/fixes, followed by clickable SID/STAR geometry only after navigation
-  and AIRAC resolution are implemented
+- Dispatch-to-Atlas coordinate-only route projection with antimeridian-safe
+  full-route framing, stable linked airport/fix selections, and explicit
+  unresolved-location results (implemented); clickable SID/STAR geometry still
+  waits for navigation and AIRAC resolution
 - Live and Hoard-historical Atlas weather with a default Compatibility renderer,
   opt-in GPU-enhanced effects, and identical facts across rendering profiles
+- Approved regional/global radar adapters with visible coverage and no-data
+  masks; bounded live animation precedes any licensed historical retention
 - SimBrief generation only after Navigraph approves the desktop flow and any
   required hosted-secret boundary receives a separate decision
 
@@ -128,14 +139,17 @@ not replace completion of the current vertical slice.
 - Default-off provider auto-start and evidence-led automatic recording, with
   explicit session retention, pinning, export, and deletion controls
 - Hoard flight-recording search, exact older/newer windows, lifecycle evidence,
-  pinning, export, and shared unit-aware altitude/speed graphs (implemented)
-- Versioned SimBrief planned-versus-recorded facts for duration, track distance,
-  altitude, fuel, airport proximity, and registration (implemented first slice)
-- WyrmChart telemetry sessions with gap-aware fuel and attitude graphs plus
-  whole-trace downsampling
+  pinning, export, and shared unit-aware whole-flight altitude, speed,
+  fuel-weight, and attitude graphs with bounded gap-safe downsampling
+  (implemented)
+- Versioned SimBrief planned-versus-recorded facts and labelled overlays for
+  duration, track distance, altitude, fuel, airport proximity, and registration,
+  plus historical planned/recorded Atlas route overlay (implemented v2)
 - A thin MSFS in-simulator recording controller after an independent CommBus
   and package-distribution spike
-- Additional lifecycle policies and richer planned-versus-recorded graph overlays
+- Additional lifecycle policies, phase analysis, and weather-along-track overlays
+- Simulator weather-mode transitions and ambient conditions recorded separately
+  from external real-world weather after an MSFS SDK and protocol spike
 - Explicit `.pln` export and flight-plan load after read-only telemetry is proven
 - MSFS 2020 and FSUIPC compatibility providers
 - X-Plane 12 Web API provider after the MSFS 2024 slice
@@ -148,6 +162,30 @@ not replace completion of the current vertical slice.
 - Optional VATSIM and IVAO Atlas layers with personal fields discarded
 - Local notifications and iCalendar export; community delivery through explicit
   plugin capabilities
+
+### Core flight operation lifecycle
+
+- Host-owned flight-operation identity, revision semantics, and a non-blocking
+  Plan -> Weather -> Jobs -> Manifest -> Fleet -> Staff -> Review -> Atlas
+  journey rail (schema-1 host-derived Plan/Weather/Atlas summaries implemented;
+  persistent identity and revisions remain)
+- A per-leg manifest that distinguishes passengers, company personnel,
+  positioning staff, the player avatar, and freight without double-counting
+  people who operate one leg and travel on another
+- Explainable reconciliation across jobs, load, seats, payload, aircraft and
+  staff location, sourced qualifications, weather, schedule, and plan evidence
+- Explicit invalidation and user-reviewed revisions instead of silent cascading
+  changes when a plan, manifest, aircraft, staff assignment, or observation
+  changes
+- Atlas, Bridge recording, and Hoard debrief association with the accepted
+  operation revision
+- Future core Industry models for facilities, inventory, production, workforce,
+  and logistics demand; Industry feeds flight operations rather than becoming a
+  linear wizard step
+
+The domain boundaries, staged sequence, privacy requirements, and current
+evidence questions live in the
+[flight operation lifecycle](operations/flight-operation-lifecycle.md).
 
 The complete sequence and provider constraints live in the
 [external integrations programme](integrations/README.md).

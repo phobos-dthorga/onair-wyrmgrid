@@ -1,7 +1,74 @@
-export type Coordinates = {
-  latitude: number;
-  longitude: number;
+import type {
+  Coordinates,
+  OperationalProvenance,
+} from "$lib/operational/types";
+
+export type { Coordinates } from "$lib/operational/types";
+
+export type AtlasAdministrativeLevel = "ADM1" | "ADM2";
+
+export type AtlasAdministrativeRegion = {
+  id: string;
+  feature_id: string | number;
+  level: AtlasAdministrativeLevel;
+  name: string;
+  name_local?: string;
+  local_type?: string;
+  country_name?: string;
+  country_code?: string;
+  subdivision_code?: string;
+  source: string;
+  source_version: string;
 };
+
+export type AtlasRoutePoint = {
+  location: Coordinates;
+  label?: string;
+  source_sequence?: number;
+  observed_at?: string;
+  gap_before: boolean;
+};
+
+export type AtlasPlannedPoint = {
+  id: string;
+  kind: "origin" | "route_leg" | "destination" | "alternate";
+  label: string;
+  sequence?: number;
+  airway?: string;
+  location?: Coordinates;
+  on_route: boolean;
+  gap_before: boolean;
+};
+
+export type AtlasPlannedRoute = {
+  schema_version: number;
+  plan_id: string;
+  origin_icao: string;
+  destination_icao: string;
+  airac?: string;
+  source_text?: string;
+  provenance: OperationalProvenance;
+  points: AtlasPlannedPoint[];
+};
+
+export type AtlasRecordedRoute = {
+  source_sample_count: number;
+  represented_point_count: number;
+  method: "exact" | "min_max_envelope";
+  points: AtlasRoutePoint[];
+};
+
+export type AtlasFlightRoute = {
+  schema_version: number;
+  session_id: string;
+  context?: "recording" | "dispatch_plan";
+  planned?: AtlasPlannedRoute;
+  recorded?: AtlasRecordedRoute;
+};
+
+export type AtlasFocusRequest =
+  | { request_id: number; kind: "route" }
+  | { request_id: number; kind: "feature"; feature_id: string };
 
 export type AirportSummary = {
   id: string;
@@ -100,13 +167,45 @@ export type JobSnapshotView = {
   storage: SnapshotStorage;
 };
 
+export type AircraftClassQualification = {
+  id: string;
+  aircraft_class_id: string;
+  short_name?: string;
+  name?: string;
+  last_validated_at?: string;
+};
+
+export type StaffMemberSummary = {
+  id: string;
+  display_name?: string;
+  avatar_reference?: string;
+  category_code?: number;
+  status_code?: number;
+  current_airport?: AirportSummary;
+  home_airport?: AirportSummary;
+  busy_until?: string;
+  is_online?: boolean;
+  class_qualifications: AircraftClassQualification[];
+};
+
+export type StaffSnapshotView = {
+  company: FleetSnapshotView["company"];
+  snapshot: {
+    value: { schema_version: number; staff: StaffMemberSummary[] };
+    provenance: FleetSnapshot["provenance"];
+  };
+  availability: SnapshotAvailability;
+  storage: SnapshotStorage;
+};
+
 export type CompanyDataSyncResult = {
   disposition: "synchronized" | "quietly_ignored";
   fleet: FleetSnapshotView | null;
   fbos: FboSnapshotView | null;
   jobs: JobSnapshotView | null;
+  staff: StaffSnapshotView | null;
   failures: Array<{
-    resource: "fleet" | "fbos" | "jobs";
+    resource: "fleet" | "fbos" | "jobs" | "staff";
     message: string;
   }>;
 };
