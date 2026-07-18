@@ -4,4 +4,7 @@
 /schemas/ @phobos-dthorga
 /.github/workflows/ @phobos-dthorga
 /docs/security/ @phobos-dthorga
-
+/docs/optional-ai/ @phobos-dthorga
+/examples/optional-ai/ @phobos-dthorga
+/scripts/optional-ai-contribution.mjs @phobos-dthorga
+/scripts/optional-ai-contribution.test.mjs @phobos-dthorga

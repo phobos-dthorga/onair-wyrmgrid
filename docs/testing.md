@@ -113,6 +113,12 @@ produce review-only drafts from approved rules and sanitized inputs. They do not
 write tests or fixtures, change production code, or claim validation. Run the
 named deterministic validator or test command after reconciling a draft.
 
+The `implementation-patch-v1` contract and generated-contribution broker do not
+claim that a model ran tests. The broker checks patch structure, allowed paths,
+hashes, credentials, and exact base identity, then opens a draft PR. A person
+must still run and record every applicable frontend, Rust, schema, protocol,
+migration, security, and release gate before the PR can be considered ready.
+
 Do not delegate interpretation of live provider behaviour, security or privacy
 boundaries, protocol compatibility decisions, or assertions that could
 silently redefine a business rule. Test-only pull requests should not change

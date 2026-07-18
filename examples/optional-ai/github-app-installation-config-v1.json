@@ -1,0 +1,10 @@
+{
+  "$schema": "../../schemas/optional-ai-github-app-config-v1.schema.json",
+  "schema_version": 1,
+  "kind": "optional-ai-github-app-installation",
+  "repository": "phobos-dthorga/onair-wyrmgrid",
+  "expected_app_slug": "wyrmgrid-hoardmind",
+  "app_id": "123456",
+  "installation_id": "12345678",
+  "private_key_path": "../../../private/wyrmgrid-hoardmind.private-key.pem"
+}

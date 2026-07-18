@@ -51,5 +51,13 @@ repository's optional development-task runner is local-only, profile-driven,
 review-only, and limited to built-in versioned contracts; using it is never a
 condition of contribution.
 
+A wholly assistant-generated textual patch may use the optional
+[GitHub attribution workflow](docs/optional-ai/github-app-attribution.md). It
+creates one hash-bound bot commit and branch through a dedicated GitHub App,
+then opens a human-maintainer draft PR with protected paths and review enforced.
+Materially human-written or rewritten changes remain human-authored and may
+record narrow assistance with `Assisted-by:` instead. No contributor needs the
+App or an AI assistant.
+
 By contributing, you agree that your contribution is licensed under this
 repository's MIT License.

@@ -16,6 +16,12 @@ major application version.
   versioned, review-only handoffs. The runner captures exact reported token
   counts plus available timing and resource metadata; unavailable non-portable
   measurements remain explicit. WyrmGrid itself has no AI dependency.
+- Added a provider-neutral generated-contribution provenance contract and
+  fail-closed maintainer broker. A dedicated, least-privileged GitHub App can
+  publish one hash-bound bot commit and branch for a wholly local-assistant-
+  generated text patch; the human maintainer then opens its draft PR. The App
+  private key remains isolated and the App receives no Pull requests, review,
+  merge, release, workflow, or protected-path authority.
 - Added durable, revisioned flight operations built from an imported SimBrief
   plan, an optional read-only OnAir job, and retained manifest evidence.
 - Added independent first-party AviationWeather.gov, Open-Meteo, and RainViewer

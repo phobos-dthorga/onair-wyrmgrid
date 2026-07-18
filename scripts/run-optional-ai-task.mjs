@@ -169,6 +169,36 @@ export const OPTIONAL_AI_TASKS = Object.freeze({
       "Uncertainty and verification",
     ],
   }),
+  "implementation-patch-v1": Object.freeze({
+    id: "implementation-patch-v1",
+    display_name: "Bounded implementation patch",
+    prompt_path: resolve(
+      optionalAiDocsRoot,
+      "tasks",
+      "implementation-patch-v1-system-prompt.md",
+    ),
+    template_path: resolve(
+      optionalAiDocsRoot,
+      "templates",
+      "implementation-patch-v1.md",
+    ),
+    required_packet_headings: [
+      "Task boundary",
+      "Approved behaviour",
+      "Allowed paths",
+      "Selected source evidence",
+      "Existing test conventions",
+      "Required validation",
+      "Compatibility decisions",
+      "Exclusions",
+    ],
+    required_output_headings: [
+      "Scope interpreted",
+      "Proposed patch",
+      "Validation plan",
+      "Risks and uncertainty",
+    ],
+  }),
   "failure-triage-v1": Object.freeze({
     id: "failure-triage-v1",
     display_name: "Sanitized failure triage",

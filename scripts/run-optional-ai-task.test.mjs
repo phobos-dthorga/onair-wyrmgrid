@@ -302,6 +302,7 @@ test("ships ordered packet and output contracts for every optional task", async 
     "test-matrix-v1",
     "docs-sync-v1",
     "fixture-variants-v1",
+    "implementation-patch-v1",
     "failure-triage-v1",
   ]);
 

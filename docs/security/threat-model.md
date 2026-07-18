@@ -13,6 +13,8 @@
 - plugin trust decisions and signatures;
 - diagnostic events, telemetry preferences, and Sentry report identifiers;
 - release source maps, native debug information, and telemetry upload credentials;
+- maintainer GitHub App private keys, short-lived installation tokens, generated-
+  contribution manifests, patch hashes, bot identity, and attribution records;
 - live debugger state, watch expressions, memory views, and debug screenshots;
 - legal-document versions, acknowledgement records, and privacy preferences;
 - the SQLCipher device key, portable-backup passwords and files, pending
@@ -68,6 +70,12 @@
 - incomplete or misleading release notes hiding a removed capability or
   compatibility break, including untrusted commit text influencing a local
   model-assisted changelog draft;
+- a generated patch escaping its approved path scope, modifying governance or
+  release controls, embedding credentials, replaying a stale approval, spoofing
+  an assistant identity, or being mistaken for human review or merge authority;
+- compromise of the maintainer GitHub App key, over-broad App installation or
+  permissions, branch reuse, base-branch races, or squash merging that discards
+  the durable generated-contribution provenance;
 - sensitive data escaping through diagnostic payloads, attachments, replay,
   logs, traces, or crash dumps;
 - network collection beginning before disclosure or continuing after the user
@@ -206,14 +214,14 @@
 - AI-assisted development tasks are optional and outside the WyrmGrid product.
   Hoardmind is the maintainer's private local assistant rather than a bundled
   component or required service. Change-impact, test-matrix, documentation-sync,
-  synthetic-fixture, sanitized failure-triage, and release-curation tasks each
-  use an explicit versioned packet and output contract with no tools, repository
-  access, durable memory, or change authority. Diffs, logs, schemas, fixtures,
-  documentation, and commit text remain untrusted evidence; sensitive provider
-  or user data is excluded, and a person or coordinating reviewer reconciles
-  every draft against the repository and deterministic tools. Model drafts are
-  never chained automatically. GitHub CI performs no model call and receives no
-  inference credential;
+  synthetic-fixture, bounded implementation-patch, sanitized failure-triage,
+  and release-curation tasks each use an explicit versioned packet and output
+  contract with no tools, repository access, durable memory, or change
+  authority. Diffs, logs, schemas, fixtures, documentation, and commit text
+  remain untrusted evidence; sensitive provider or user data is excluded, and a
+  person or coordinating reviewer reconciles every draft against the repository
+  and deterministic tools. Model drafts are never chained automatically.
+  GitHub CI performs no model call and receives no inference credential;
 - the optional local-AI measurement wrapper uses a versioned profile and accepts
   only unauthenticated loopback Ollama or OpenAI-compatible chat origins in
   schema version 1. It pins the advertised and returned model, requires
@@ -228,6 +236,25 @@
   automatic retention or publication. LAN, authenticated, or hosted adapters
   remain unsupported pending a separate privacy, authentication, data-flow, and
   threat-model decision;
+- the optional generated-contribution broker is a separate maintainer-side
+  boundary. It refuses CI and missing one-invocation approval, binds a reviewed
+  manifest and patch with SHA-256, validates an exact current base, enforces an
+  identity-bound branch, rejects branch reuse, and accepts only bounded regular
+  text modifications or additions inside reviewer-approved paths. It rejects
+  deletions, renames, copies, mode changes, path traversal, binary data,
+  credential signatures, dependency manifests, migrations, `.github`, legal,
+  security, protocol/schema, release, and optional-AI governance paths. The
+  assistant never receives the App private key or installation token. The key
+  must remain outside the repository, the App slug is pinned, and the requested
+  installation token is narrowed to Contents on this repository. A `main`
+  ruleset requires pull requests and grants the App no bypass. GitHub creates the
+  commit without custom author or committer fields, and the App creates only an
+  identity-labelled branch. After its token is discarded, the human
+  maintainer's authenticated GitHub CLI opens the draft PR. The App has no Pull
+  requests permission and cannot review, merge, version, tag, release,
+  administer, modify workflows, access secrets, or start and rerun Actions. A
+  person runs normal local gates, preserves provenance trailers in the one-task/
+  one-squash merge unit, and makes every landing decision;
 - platform build jobs are read-only and stage packages internally; one final job
   with narrowly scoped write and identity-token permissions generates SHA-256
   checksums and GitHub build-provenance attestations before creating a draft;

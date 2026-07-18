@@ -54,9 +54,9 @@
 - Release-note and changelog curation may be entirely manual. Optional local-AI
   assistance must use one of the built-in versioned task contracts with a
   bounded, review-only handoff. Change-impact, test-matrix, documentation-sync,
-  fixture-variant, failure-triage, and release-curation drafts remain untrusted
-  evidence. Reconcile every draft against source, deterministic tools, and tests
-  before using it.
+  fixture-variant, bounded implementation-patch, failure-triage, and
+  release-curation drafts remain untrusted evidence. Reconcile every draft
+  against source, deterministic tools, and tests before using it.
 - Hoardmind is the current maintainer's private local assistant, not a WyrmGrid
   component or requirement. Never assume it exists on another contributor's
   machine. WyrmGrid must remain usable, buildable, testable, contributable, and
@@ -77,6 +77,20 @@
   requires a separate privacy and security decision. Do not relabel local tokens
   as hosted tokens saved unless separate hosted usage data supports that
   calculation.
+- A wholly assistant-generated textual patch may be published only through the
+  hash-bound `scripts/optional-ai-contribution.mjs` workflow with explicit
+  one-invocation approval and a dedicated least-privileged GitHub App. The
+  assistant never receives the App private key or installation token. Generated
+  changes use `assistant/<assistant-id>/<contribution-id>` and one bot commit;
+  after the Contents-only App token is discarded, the human maintainer opens the
+  draft PR. Generated changes cannot target protected policy, dependency,
+  migration, legal, security, protocol/schema, release, workflow, or optional-
+  AI governance paths. `main` must require pull requests without an App bypass.
+  The App has no Pull requests, review, merge, version, tag, release, Actions,
+  workflow, administration, secret, or organization authority. A person must
+  run the normal local gates and explicitly decide whether to land the PR.
+  Human-written or materially rewritten changes remain human-authored and use
+  `Assisted-by:` when attribution is useful.
 - A declared application breaking change requires a new `X.0.0` major release
   line and must remain prominently identified in the changelog and generated
   GitHub notes. Minor and patch release tags containing a breaking-change entry
