@@ -13,6 +13,14 @@ describe("authorization presentation", () => {
   });
 
   it("uses the shared lifetime catalogue", () => {
-    expect(lifetimeTranslationKey("session")).toBe("security-lifetime-session");
+    const testCases = [
+      ["once", "security-lifetime-once"],
+      ["session", "security-lifetime-session"],
+      ["standing", "security-lifetime-standing"],
+    ] as const;
+
+    for (const [input, expected] of testCases) {
+      expect(lifetimeTranslationKey(input)).toBe(expected);
+    }
   });
 });
