@@ -219,6 +219,33 @@ fn starting_an_operation_persists_a_manifest_without_inventing_missing_loads() {
 }
 
 #[test]
+fn selecting_session_job_marks_jobs_ready_without_claiming_a_manifest() {
+    let service = FlightOperationService::new(Store::open_in_memory().unwrap());
+    let mut dispatch = status(Some(plan("NZAA")), Some(selected_job()));
+
+    service
+        .enrich_dispatch_status(
+            &mut dispatch,
+            FlightOperationAvailability {
+                jobs: true,
+                fleet: true,
+                staff: true,
+            },
+        )
+        .unwrap();
+
+    assert!(dispatch.operation.is_none());
+    assert_eq!(
+        stage_state(&dispatch, FlightOperationStage::Jobs),
+        FlightOperationStageState::Ready
+    );
+    assert_eq!(
+        stage_state(&dispatch, FlightOperationStage::Manifest),
+        FlightOperationStageState::NotStarted
+    );
+}
+
+#[test]
 fn starting_requires_a_real_plan_and_revision_requires_a_change() {
     let service = FlightOperationService::new(Store::open_in_memory().unwrap());
     assert_eq!(

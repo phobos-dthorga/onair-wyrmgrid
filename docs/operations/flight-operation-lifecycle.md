@@ -306,10 +306,13 @@ not alter that boundary:
    summaries, stable operation identity, explicit append-only revisions, and
    navigation to the current Plan/Weather/Jobs/Manifest/Fleet/Staff/Review/Atlas
    surfaces.
-2. **Jobs and manifest** — foundation implemented: a selected read-only OnAir
-   job and its per-leg aggregate passenger/freight facts are retained, with
-   source gaps explicit. Individual people, company travellers, avatar
-   presence, consignments, and per-leg roles remain future evidence-gated work.
+2. **Jobs and manifest** — foundation implemented: the SimBrief journey opens
+   Jobs with an editable exact-route presentation filter; no-match handling
+   never substitutes unrelated work. A selected read-only OnAir job returns to
+   an explicit job-to-manifest handoff, and only Begin/Revise retains its
+   per-leg aggregate passenger/freight facts. Source gaps remain explicit.
+   Individual people, company travellers, avatar presence, consignments, and
+   per-leg roles remain future evidence-gated work.
 3. **Fleet reconciliation** — compare the manifest and route with observed
    aircraft capacity, location, configuration, and availability.
 4. **Staff reconciliation** — add only live-contract staff facts proven by

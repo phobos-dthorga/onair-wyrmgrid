@@ -136,9 +136,10 @@ impl FlightOperationService {
             weather_stale: operation_matches_plan
                 && status.weather.cache == crate::DispatchWeatherCacheState::Expired,
             jobs_available: availability.jobs,
-            job_selected: revision
-                .as_ref()
-                .is_some_and(|revision| revision.selected_job.is_some()),
+            job_selected: status.selected_job.is_some()
+                || revision
+                    .as_ref()
+                    .is_some_and(|revision| revision.selected_job.is_some()),
             operation_available: revision.is_some(),
             manifest_available: manifest.is_some_and(|manifest| !manifest.legs.is_empty()),
             manifest_needs_attention: manifest.is_some_and(FlightManifest::needs_attention),

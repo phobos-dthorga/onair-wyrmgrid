@@ -7,10 +7,19 @@ certify a flight for real-world operation.
 
 ## Begin an operation
 
-1. Open **Jobs** and select a pending job if one is relevant.
-2. Open **Dispatch** and import the latest SimBrief plan.
-3. Review the plan, job comparison, and flight-operation journey.
-4. Select **Begin flight operation**.
+1. Open **Dispatch** and import the latest SimBrief plan.
+2. Select **Jobs** in the flight-operation journey. WyrmGrid opens the pending
+   work view with the plan's exact origin-to-destination route filter applied.
+3. Review and select a relevant job. WyrmGrid returns to Dispatch and focuses
+   the job-to-manifest handoff without accepting or changing the OnAir job.
+4. Review the plan, job comparison, staged manifest evidence, and
+   flight-operation journey.
+5. Select **Begin flight operation**.
+
+If the exact route has no pending job, WyrmGrid shows an explicit no-match
+state instead of substituting unrelated work. **Show all pending jobs** removes
+the presentation filters while retaining the SimBrief plan context, and
+**Restore route** reapplies the exact plan route.
 
 WyrmGrid creates revision 1 in its encrypted local database. A job is optional,
 but a validated plan is required. When a job is attached, the Manifest section
@@ -18,6 +27,12 @@ shows each supplied leg, aggregate passenger count, and freight weight. A field
 that OnAir did not report says **Unavailable**; WyrmGrid does not estimate it.
 The job is internally bound to its originating OnAir company so changing
 connections cannot silently reattribute old evidence.
+
+Before revision 1 exists, the handoff card labels the selected job as staged.
+For an existing operation, a changed selection remains pending until **Create
+reviewed revision** is selected. An attached or retained manifest is labelled
+with its accepted revision and OnAir provenance so current presentation state
+is not confused with persisted evidence.
 
 ## Review a change
 

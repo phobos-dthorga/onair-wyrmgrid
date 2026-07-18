@@ -14,6 +14,7 @@ export type JobSort = "mission" | "route" | "pay" | "expiry" | "legs";
 
 export type JobFilters = {
   query: string;
+  route: string | null;
   missionType: string | null;
   payload: JobPayloadFilter;
   expiry: JobExpiryFilter;
@@ -22,6 +23,7 @@ export type JobFilters = {
 
 export const defaultJobFilters: JobFilters = {
   query: "",
+  route: null,
   missionType: null,
   payload: "all",
   expiry: "all",
@@ -31,7 +33,16 @@ export const defaultJobFilters: JobFilters = {
 export function jobRoute(job: JobSummary): string | undefined {
   const first = job.legs[0]?.departure?.icao;
   const last = job.legs.at(-1)?.destination?.icao;
-  return first && last ? `${first} → ${last}` : undefined;
+  return jobRouteLabel(first, last) ?? undefined;
+}
+
+export function jobRouteLabel(
+  originIcao: string | null | undefined,
+  destinationIcao: string | null | undefined,
+): string | null {
+  const origin = originIcao?.trim().toUpperCase();
+  const destination = destinationIcao?.trim().toUpperCase();
+  return origin && destination ? `${origin} → ${destination}` : null;
 }
 
 export function jobPayloadKind(
@@ -48,12 +59,14 @@ export function jobPayloadKind(
 export function jobFilterOptions(jobs: readonly JobSummary[]): {
   missionTypes: string[];
   payloadKinds: Array<Exclude<JobPayloadFilter, "all">>;
+  routes: string[];
 } {
   return {
     missionTypes: uniqueReportedValues(
       jobs.map((job) => job.mission_type),
     ).sort(compareOptionalText),
     payloadKinds: uniqueReportedValues(jobs.map(jobPayloadKind)),
+    routes: uniqueReportedValues(jobs.map(jobRoute)).sort(compareOptionalText),
   };
 }
 
@@ -77,6 +90,9 @@ export function filterAndSortJobs(
           ]),
         ])
       ) {
+        return false;
+      }
+      if (filters.route !== null && jobRoute(job) !== filters.route) {
         return false;
       }
       if (
@@ -125,6 +141,7 @@ export function filterAndSortJobs(
 export function activeJobFilterCount(filters: JobFilters): number {
   return countActiveFilters([
     filters.query.trim().length > 0,
+    filters.route !== null,
     filters.missionType !== null,
     filters.payload !== "all",
     filters.expiry !== "all",
