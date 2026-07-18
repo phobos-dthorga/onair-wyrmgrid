@@ -7,6 +7,7 @@
   } from "maplibre-gl";
   import "maplibre-gl/dist/maplibre-gl.css";
   import { onMount } from "svelte";
+  import { translation } from "$lib/i18n/runtime";
   import type { AtlasRouteView } from "$lib/dispatch/types";
   import type {
     PublishedPluginLayer,
@@ -34,6 +35,7 @@
   import type { AdaptiveWeatherQuality } from "$lib/weather/renderer/quality";
   import { weatherProjectionSurfaceVisibility } from "$lib/weather/renderer/projectionVisibility";
   import { buildWeatherRenderScene } from "$lib/weather/renderer/weatherRenderScene";
+  import { presentWeatherRendererStatus } from "$lib/weather/renderer/statusPresentation";
   import {
     pluginRadarFrames,
     pluginWeatherGridFeatures,
@@ -245,6 +247,20 @@
     weatherStationFeatures(weather).features.filter(
       ({ properties }) => properties.effect !== "none",
     ).length,
+  );
+  const weatherStatusPresentation = $derived(
+    presentWeatherRendererStatus(
+      {
+        profile: weatherPolicy.profile,
+        rendererStatus: weatherRendererStatus,
+        lowResource,
+        reducedMotion: prefersReducedMotion,
+        stationCount: plottedWeatherStationCount,
+        windCount: plottedWeatherWindCount,
+        effectCount: activeWeatherEffectCount,
+      },
+      $translation,
+    ),
   );
 
   const regionHovered: ExpressionSpecification = [
@@ -2634,7 +2650,11 @@
   });
 </script>
 
-<div bind:this={mapContainer} class="map" aria-label="Atlas map"></div>
+<div
+  bind:this={mapContainer}
+  class="map"
+  aria-label={$translation("atlas-map-label")}
+></div>
 <canvas
   bind:this={weatherCanvas}
   class="weather-render-canvas"
@@ -2644,47 +2664,10 @@
 
 {#if weatherVisible && plottedWeatherStationCount > 0}
   <div class="weather-render-status" role="status">
-    <span
-      >{weatherPolicy.profile === "compatibility"
-        ? "Weather fallback"
-        : weatherRendererStatus.state === "ready"
-          ? weatherRendererStatus.backend === "webgpu"
-            ? "Three.js WebGPU volumetric weather"
-            : "Three.js WebGL2 fallback"
-          : weatherRendererStatus.state === "initializing"
-            ? "Starting detailed weather"
-            : weatherRendererStatus.state === "device_lost"
-              ? "Graphics device lost · weather fallback"
-              : weatherRendererStatus.state === "unavailable"
-                ? "Detailed weather unavailable · fallback"
-                : weatherPolicy.profile === "cinematic"
-                  ? "Cinematic GPU weather"
-                  : "Enhanced GPU weather"}</span
-    >
-    <strong>
-      {plottedWeatherStationCount} sourced
-      {plottedWeatherStationCount === 1 ? "station" : "stations"}
-    </strong>
-    <small>
-      {#if lowResource}
-        Markers only · low-resource mode
-      {:else if weatherPolicy.profile === "compatibility"}
-        Markers only · compatibility preference
-      {:else if weatherRendererStatus.state === "initializing"}
-        MapLibre effects remain visible while Three.js starts
-      {:else if weatherRendererStatus.state === "unavailable" || weatherRendererStatus.state === "device_lost"}
-        MapLibre effects retained · detailed renderer unavailable
-      {:else if prefersReducedMotion}
-        Static motion-safe atmosphere · {plottedWeatherWindCount} wind vectors
-      {:else}
-        {plottedWeatherWindCount} wind vectors · {activeWeatherEffectCount}
-        condition cells
-        {#if weatherRendererStatus.state === "ready" && weatherRendererStatus.quality !== "full"}
-          · adaptive {weatherRendererStatus.quality}
-        {/if}
-      {/if}
-    </small>
-    <em>Source-shaped only · station effects remain METAR-local</em>
+    <span>{weatherStatusPresentation.title}</span>
+    <strong>{weatherStatusPresentation.stationCount}</strong>
+    <small>{weatherStatusPresentation.detail}</small>
+    <em>{weatherStatusPresentation.sourceBoundary}</em>
   </div>
 {/if}
 

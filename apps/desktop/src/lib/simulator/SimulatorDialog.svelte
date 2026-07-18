@@ -12,6 +12,12 @@
   } from "$lib/settings/units";
   import "./simulator.css";
   import RecordingHistory from "./RecordingHistory.svelte";
+  import {
+    providerConnectionStateMessageKeys,
+    providerDetailFallbackMessageKey,
+    providerDetailMessageKeys,
+    simulatorRitualMessageKeys,
+  } from "./bridgePresentation";
   import type {
     ProviderConnectionState,
     SimulatorBridgeView,
@@ -72,31 +78,12 @@
   const snapshot = $derived(status.latest_snapshot);
 
   function stateLabel(state: ProviderConnectionState): string {
-    return $translation(`simulator-state-${state.replaceAll("_", "-")}`);
+    return $translation(providerConnectionStateMessageKeys[state]);
   }
-
-  const providerDetailKeys: Record<string, string> = {
-    "provider.executable_unavailable":
-      "error-simulator-provider-executable-unavailable",
-    "provider.handshake_failed": "error-simulator-provider-handshake",
-    "provider.protocol_violation": "error-simulator-provider-protocol",
-    "provider.stream_closed": "error-simulator-provider-connection",
-    "provider.write_failed": "error-simulator-provider-connection",
-    "provider.starting": "simulator-detail-starting",
-    "provider.stopped": "simulator-detail-stopped",
-    "provider.unsupported_platform": "simulator-detail-unsupported-platform",
-    "simconnect.client_unavailable": "error-simconnect-client-unavailable",
-    "simconnect.client_load_failed": "error-simconnect-client-unavailable",
-    "simconnect.waiting_for_simulator": "simulator-detail-waiting",
-    "simconnect.connected": "simulator-detail-connected",
-    "simconnect.disconnected": "simulator-detail-disconnected",
-    "simconnect.setup_failed": "error-simulator-provider-protocol",
-    "simconnect.protocol_error": "error-simulator-provider-protocol",
-  };
 
   function providerDetail(code: string): string {
     return $translation(
-      providerDetailKeys[code] ?? "simulator-detail-status-update",
+      providerDetailMessageKeys[code] ?? providerDetailFallbackMessageKey,
     );
   }
 
@@ -121,13 +108,6 @@
       return 3;
     return 0;
   }
-
-  const ritualSteps = [
-    "simulator-ritual-wake",
-    "simulator-ritual-identity",
-    "telemetry-simulator-ritual-capability",
-    "simulator-ritual-link",
-  ] as const;
 
   function formatNumber(value: number | undefined, digits = 0): string {
     return value === undefined || !Number.isFinite(value)
@@ -250,7 +230,7 @@
                   >{$translation("simulator-ritual-title")}</span
                 >
                 <ol aria-label={$translation("simulator-ritual-title")}>
-                  {#each ritualSteps as step, index}
+                  {#each simulatorRitualMessageKeys as step, index}
                     <li
                       class:complete={bridgeRitualStage(provider) > index + 1}
                       class:current={bridgeRitualStage(provider) === index + 1}

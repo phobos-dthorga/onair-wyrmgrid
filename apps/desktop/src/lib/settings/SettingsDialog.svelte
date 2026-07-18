@@ -1,6 +1,11 @@
 <script lang="ts">
   import { translation } from "$lib/i18n/runtime";
   import { displayPresets, type DisplayPreferences } from "./types";
+  import {
+    displayPresetMessageKeys,
+    weatherProfileDetailMessageKeys,
+    type DisplayPreset,
+  } from "./presentation";
   import type {
     SimulatorPreferences,
     SimulatorProviderView,
@@ -65,7 +70,7 @@
     }
   });
 
-  function applyPreset(preset: keyof typeof displayPresets): void {
+  function applyPreset(preset: DisplayPreset): void {
     draft = {
       ...displayPresets[preset],
       responsive_surfaces: draft.responsive_surfaces,
@@ -128,13 +133,13 @@
         </div>
 
         <div class="preset-row" aria-label={$translation("settings-presets")}>
-          {#each Object.keys(displayPresets) as preset}
+          {#each Object.keys(displayPresets) as preset (preset)}
             <button
               type="button"
               disabled={busy}
-              onclick={() => applyPreset(preset as keyof typeof displayPresets)}
+              onclick={() => applyPreset(preset as DisplayPreset)}
             >
-              {$translation(`settings-preset-${preset}`)}
+              {$translation(displayPresetMessageKeys[preset as DisplayPreset])}
             </button>
           {/each}
         </div>
@@ -317,7 +322,9 @@
             </select>
             <small>
               {$translation(
-                `settings-weather-profile-${draft.weather_rendering_profile}-detail`,
+                weatherProfileDetailMessageKeys[
+                  draft.weather_rendering_profile
+                ],
               )}
             </small>
           </label>

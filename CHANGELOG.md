@@ -48,6 +48,13 @@ major application version.
 
 ### Changes
 
+- Added compile-time catalogue-key ownership for translated interface code,
+  replaced constructed Settings and Simulator message identifiers with
+  explicit typed mappings, and moved Atlas renderer status text into source
+  catalogue version 12.
+- Added deterministic localization and desktop-command identifier audits, plus
+  a repository-wide boundary report covering current UI, Tauri, Atlas,
+  localization, migration, protocol, and provider separation.
 - Reserved Codex semantic review of valid Hoardmind output for high-benefit or
   critical work. Lower-benefit drafts now avoid redundant frontier-model review
   while deterministic gates and mandatory human release or generated-
