@@ -11,16 +11,20 @@ const previewPlugin: PluginView = {
   version: "0.1.0",
   author: "WyrmGrid contributors",
   runtime: "python",
+  weather_capabilities: [],
+  network_origins: [],
   requested_permissions: [...requestedPermissions],
   granted_permissions: [],
   state: "stopped",
   published_layer_count: 0,
+  published_weather_layer_count: 0,
 };
 
 export const forgePreviewStopped: PluginHostView = {
   available: true,
   plugins: [previewPlugin],
   layers: [],
+  weather_layers: [],
 };
 
 export const forgePreviewApproved: PluginHostView = {
@@ -32,6 +36,7 @@ export const forgePreviewApproved: PluginHostView = {
     },
   ],
   layers: [],
+  weather_layers: [],
 };
 
 export const forgePreviewRunning: PluginHostView = {
@@ -76,4 +81,5 @@ export const forgePreviewRunning: PluginHostView = {
       },
     },
   ],
+  weather_layers: [],
 };
