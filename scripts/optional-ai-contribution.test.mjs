@@ -451,8 +451,12 @@ test("publishes one App-authored commit and one draft PR without custom author f
     const manifestPath = join(evidence, "manifest.json");
     const configPath = join(evidence, "github-app.json");
     const keyPath = join(sandbox, "github-app.pem");
+    const patchWithRecountedMetadata = modifiedPatch.replace(
+      "@@ -1 +1 @@",
+      "@@ -1,99 +1,99 @@",
+    );
     await Promise.all([
-      writeFile(patchPath, modifiedPatch),
+      writeFile(patchPath, patchWithRecountedMetadata),
       writeFile(packetPath, "# Sanitized packet\n"),
     ]);
     const prepared = await prepareContributionManifest({

@@ -244,6 +244,8 @@
   deletions, renames, copies, mode changes, path traversal, binary data,
   credential signatures, dependency manifests, migrations, `.github`, legal,
   security, protocol/schema, release, and optional-AI governance paths. The
+  broker may deterministically recount generated hunk line metadata but never
+  infer or rewrite source content. The
   assistant never receives the App private key or installation token. The key
   must remain outside the repository, the App slug is pinned, and the requested
   installation token is narrowed to Contents on this repository. A `main`
@@ -255,6 +257,14 @@
   administer, modify workflows, access secrets, or start and rerun Actions. A
   person runs normal local gates, preserves provenance trailers in the one-task/
   one-squash merge unit, and makes every landing decision;
+- generated-contribution landing is a separate human-authenticated operation.
+  The local guard revalidates the reviewed manifest hash, repository, base,
+  identity-bound branch, exact one-commit head, App-bot attribution and commit
+  message, and clean protected merge state. It requires fresh one-invocation
+  approval, uses exact-head matching without administrative bypass, supplies a
+  deterministic squash message containing the input, output, metrics, bot-
+  commit, PR, review, and authority trailers, and verifies that GitHub retained
+  that message on the resulting merge commit before reporting success;
 - platform build jobs are read-only and stage packages internally; one final job
   with narrowly scoped write and identity-token permissions generates SHA-256
   checksums and GitHub build-provenance attestations before creating a draft;

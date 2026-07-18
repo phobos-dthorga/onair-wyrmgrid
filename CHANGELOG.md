@@ -31,6 +31,10 @@ major application version.
 
 ### Changes
 
+- Generated-contribution squash landing now uses a human-authenticated,
+  exact-head guard that verifies the App-bot commit and clean protected PR,
+  supplies every provenance trailer explicitly, forbids administrative bypass,
+  and verifies the resulting merge commit before reporting success.
 - Jobs opened from Dispatch now default to the imported plan's exact route and
   preserve an explicit path back to all pending jobs.
 - Atlas, Jobs, Dispatch, Flight Operations, Settings, Security, Simulator,

@@ -575,7 +575,7 @@ export function validateGitHubAppConfig(
   });
 }
 
-function isPrivateLocalPath(path, root = repositoryRoot) {
+export function isPrivateLocalPath(path, root = repositoryRoot) {
   const target = resolve(path);
   const relativeTarget = relative(resolve(root), target);
   return (
@@ -760,10 +760,15 @@ async function withPatchedWorktree({ root, baseSha, patchPath }, callback) {
   try {
     runGit(["worktree", "add", "--detach", worktree, baseSha], { cwd: root });
     added = true;
-    runGit(["apply", "--check", "--whitespace=error-all", patchPath], {
+    runGit(
+      ["apply", "--check", "--recount", "--whitespace=error-all", patchPath],
+      {
+        cwd: worktree,
+      },
+    );
+    runGit(["apply", "--recount", "--whitespace=error-all", patchPath], {
       cwd: worktree,
     });
-    runGit(["apply", "--whitespace=error-all", patchPath], { cwd: worktree });
     return await callback(worktree);
   } finally {
     if (added) {
