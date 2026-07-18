@@ -91,6 +91,13 @@
   run the normal local gates and explicitly decide whether to land the PR.
   Human-written or materially rewritten changes remain human-authored and use
   `Assisted-by:` when attribution is useful.
+- Land an assistant-generated PR only through the human-authenticated
+  `scripts/optional-ai-landing.mjs` guard. It must bind the reviewed manifest
+  hash, exact one-commit head, App-bot identity, clean protected PR state, and
+  one-invocation approval; provide an explicit provenance-preserving squash
+  subject and body; forbid administrative bypass; and verify the resulting
+  merge commit. Do not use a default GitHub squash message for a generated
+  contribution.
 - A declared application breaking change requires a new `X.0.0` major release
   line and must remain prominently identified in the changelog and generated
   GitHub notes. Minor and patch release tags containing a breaking-change entry

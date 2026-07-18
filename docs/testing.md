@@ -118,6 +118,9 @@ claim that a model ran tests. The broker checks patch structure, allowed paths,
 hashes, credentials, and exact base identity, then opens a draft PR. A person
 must still run and record every applicable frontend, Rust, schema, protocol,
 migration, security, and release gate before the PR can be considered ready.
+The separate landing guard is tested with simulated GitHub evidence and must
+verify the exact App-bot head, one-commit PR, protected merge state, explicit
+squash message, absence of administrative bypass, and merged-commit provenance.
 
 Do not delegate interpretation of live provider behaviour, security or privacy
 boundaries, protocol compatibility decisions, or assertions that could

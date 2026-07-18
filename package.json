@@ -24,6 +24,8 @@
     "ai:contribution:extract": "node scripts/optional-ai-contribution.mjs extract",
     "ai:contribution:prepare": "node scripts/optional-ai-contribution.mjs prepare",
     "ai:contribution:publish": "node scripts/optional-ai-contribution.mjs publish",
+    "ai:contribution:landing-preview": "node scripts/optional-ai-landing.mjs preview",
+    "ai:contribution:land": "node scripts/optional-ai-landing.mjs land",
     "atlas:regions": "node scripts/prepare-atlas-regions.mjs",
     "provider:prepare": "node scripts/prepare-simulator-provider.mjs",
     "test:tooling": "node --test scripts/*.test.mjs",

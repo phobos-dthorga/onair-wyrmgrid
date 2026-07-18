@@ -8,3 +8,5 @@
 /examples/optional-ai/ @phobos-dthorga
 /scripts/optional-ai-contribution.mjs @phobos-dthorga
 /scripts/optional-ai-contribution.test.mjs @phobos-dthorga
+/scripts/optional-ai-landing.mjs @phobos-dthorga
+/scripts/optional-ai-landing.test.mjs @phobos-dthorga

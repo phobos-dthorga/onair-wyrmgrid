@@ -122,6 +122,43 @@ then uses the maintainer's existing GitHub CLI session to open a draft PR. It
 does not merge, mark ready, release, tag, change a version, start or rerun hosted
 checks, or send the patch back to a model.
 
+## Provenance-preserving squash landing
+
+After reviewing the draft, running the applicable local gates, updating any
+protected changelog or policy files under human authorship, and marking the PR
+ready, preview the exact landing evidence and squash message:
+
+```powershell
+npm run ai:contribution:landing-preview -- `
+  --manifest .wyrmgrid-local\hm-20260718-001.manifest.json `
+  --config .wyrmgrid-local\github-app.json `
+  --expected-manifest-sha256 <reviewed-manifest-sha256> `
+  --expected-head-sha <exact-bot-commit-sha> `
+  --pr <pull-request-number>
+```
+
+The preview requires the authenticated GitHub CLI actor to be a person and
+checks the repository, `main` base, identity-bound branch, exact single commit,
+App-bot identity, original bot commit message, and clean protected merge state.
+Review the displayed subject and body, then give a separate one-invocation
+landing approval:
+
+```powershell
+npm run ai:contribution:land -- `
+  --manifest .wyrmgrid-local\hm-20260718-001.manifest.json `
+  --config .wyrmgrid-local\github-app.json `
+  --expected-manifest-sha256 <reviewed-manifest-sha256> `
+  --expected-head-sha <exact-bot-commit-sha> `
+  --pr <pull-request-number> `
+  --approve-once
+```
+
+The guard supplies the complete squash message rather than accepting GitHub's
+default, binds the merge to the exact bot head, never uses an administrative
+bypass, and reads the resulting merge commit back from GitHub to verify every
+provenance trailer. The App remains unable to review or merge; this command uses
+the human maintainer's GitHub CLI identity.
+
 ## Fail-closed broker controls
 
 `scripts/optional-ai-contribution.mjs` rejects:
@@ -137,6 +174,11 @@ checks, or send the patch back to a model.
   release automation, or the optional-AI governance and broker itself;
 - private keys and common high-confidence credential patterns in the patch or
   resulting files.
+
+`scripts/optional-ai-landing.mjs` independently rejects a changed manifest,
+non-human GitHub actor, wrong repository/base/branch/head, multiple commits,
+spoofed App identity, altered bot message, draft or unclean PR, missing fresh
+approval, and any merged squash message that loses provenance.
 
 Sanitized schema fixtures remain eligible, but schema definitions remain
 protected. A blocked patch is not automatically weakened or retried: a person

@@ -255,6 +255,14 @@
   administer, modify workflows, access secrets, or start and rerun Actions. A
   person runs normal local gates, preserves provenance trailers in the one-task/
   one-squash merge unit, and makes every landing decision;
+- generated-contribution landing is a separate human-authenticated operation.
+  The local guard revalidates the reviewed manifest hash, repository, base,
+  identity-bound branch, exact one-commit head, App-bot attribution and commit
+  message, and clean protected merge state. It requires fresh one-invocation
+  approval, uses exact-head matching without administrative bypass, supplies a
+  deterministic squash message containing the input, output, metrics, bot-
+  commit, PR, review, and authority trailers, and verifies that GitHub retained
+  that message on the resulting merge commit before reporting success;
 - platform build jobs are read-only and stage packages internally; one final job
   with narrowly scoped write and identity-token permissions generates SHA-256
   checksums and GitHub build-provenance attestations before creating a draft;

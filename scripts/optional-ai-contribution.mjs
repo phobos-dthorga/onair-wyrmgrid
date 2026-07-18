@@ -575,7 +575,7 @@ export function validateGitHubAppConfig(
   });
 }
 
-function isPrivateLocalPath(path, root = repositoryRoot) {
+export function isPrivateLocalPath(path, root = repositoryRoot) {
   const target = resolve(path);
   const relativeTarget = relative(resolve(root), target);
   return (
