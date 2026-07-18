@@ -169,16 +169,18 @@
   negotiated capability and explicit user action;
 - deny-by-default plugin capabilities persisted separately from manifests; the
   current runtime starts only after every requested capability is approved and
-  implements only sanitized fleet and simulator reads plus data-only Atlas
-  publication. Once grants are consumed by one privileged launch, session
+  implements sanitized fleet and simulator reads, data-only Atlas publication,
+  and bounded weather requests to declared HTTPS origins. Once grants are
+  consumed by one privileged launch, session
   grants remain only in process memory, and standing grants alone persist;
 - plugin directories, manifests, and entry points are bounded and canonicalized;
   symlinked folders/files, path escape, malformed metadata, and unsupported
   runtimes or capabilities are rejected;
 - plugin protocol v1 uses a 1 MiB length-prefixed JSON ceiling, independent
   monotonic sequences, a three-second identity/version handshake, bounded text
-  and WGS84 validation, at most 16 layers per plugin, and at most 10,000 points
-  per layer;
+  and WGS84 validation, at most 16 map layers per plugin, at most 10,000 points
+  per map layer, and separate station, model-grid, PNG tile, decoded-byte, and
+  request-correlation bounds for weather products;
 - Python launches in isolated mode with a scrubbed environment and receives only
   translated stable domain snapshots; the host does not place the OnAir key,
   raw OnAir JSON, provider credentials, Sentry settings, or another plugin's
@@ -439,17 +441,25 @@ is encrypted, deleted with that recording, and remains excluded from plugins
 and Sentry. Clearing Dispatch prevents future association without rewriting an
 existing recording's historical context.
 
-The AviationWeather.gov adapter accepts at most ten normalized four-character
+The AviationWeather.gov provider plugin accepts at most ten normalized four-character
 station identifiers, follows no redirects, bounds each streamed JSON product to
 512 KiB, uses a 15-second timeout, and translates only allowlisted METAR and TAF
 fields into a validated `WeatherSnapshot`. Dispatch sends no account reference,
 route, fleet record, or OnAir credential. Concurrent refreshes are coalesced,
 successful data is reused for ten minutes, failed attempts have a one-minute
-retry floor, response bodies and URLs never cross safe errors, and weather is
-excluded from plugins and Sentry.
+retry floor, and response bodies and URLs never cross safe errors. Only the
+approved provider plugin receives the station identifiers; translated weather
+remains excluded from other plugins and Sentry.
 
-Atlas receives a host-built airport-weather projection rather than raw weather
-payloads or arbitrary provider map resources. Missing reports remain unknown,
+The Open-Meteo plugin receives only an 84-point host-selected global grid and
+publishes bounded numeric samples. The RainViewer plugin receives four
+host-selected zoom-one addresses and publishes validated PNG bytes rather than
+remote URLs. Both refresh in the background, preserve the last valid layer on a
+provider failure, and are independently stoppable. Neither receives a plan,
+OnAir fact, account reference, or credential.
+
+Atlas receives host-built weather projections rather than raw weather payloads
+or arbitrary provider map resources. Missing reports remain unknown,
 and missing coordinates remain unplotted. Future external radar frames,
 simulator-selected weather mode, and ambient simulator observations are three
 distinct evidence classes: none may impersonate or silently overwrite another.

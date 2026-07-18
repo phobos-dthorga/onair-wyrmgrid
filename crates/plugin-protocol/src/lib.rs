@@ -5,7 +5,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::io::{Read, Write};
 use thiserror::Error;
-use wyrmgrid_domain::{AircraftSummary, Coordinates, Provenance, SimulatorTelemetrySnapshot};
+use wyrmgrid_domain::{
+    AircraftSummary, Coordinates, GlobalWeatherLayerSnapshot, Provenance,
+    SimulatorTelemetrySnapshot, WeatherSnapshot,
+};
 
 pub const PLUGIN_API_VERSION: u32 = 1;
 pub const PLUGIN_PROTOCOL_VERSION: u32 = 1;
@@ -15,6 +18,10 @@ pub const MAX_CHART_POINTS_PER_SERIES: usize = 10_000;
 pub const MAX_FRAME_BYTES: usize = 1024 * 1024;
 pub const MAX_MAP_LAYERS_PER_PLUGIN: usize = 16;
 pub const MAX_MAP_POINTS_PER_LAYER: usize = 10_000;
+pub const MAX_WEATHER_REQUEST_STATIONS: usize = 10;
+pub const MAX_WEATHER_REQUEST_GRID_POINTS: usize = 512;
+pub const MAX_WEATHER_REQUEST_TILES: usize = 16;
+pub const MAX_PLUGIN_NETWORK_ORIGINS: usize = 8;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -29,6 +36,7 @@ pub enum Permission {
     PluginStorage,
     SimulatorTelemetryRead,
     ExternalNetwork,
+    WeatherDataPublish,
 }
 
 impl Permission {
@@ -44,6 +52,7 @@ impl Permission {
             Self::PluginStorage => "plugin_storage",
             Self::SimulatorTelemetryRead => "simulator_telemetry_read",
             Self::ExternalNetwork => "external_network",
+            Self::WeatherDataPublish => "weather_data_publish",
         }
     }
 
@@ -59,6 +68,7 @@ impl Permission {
             "plugin_storage" => Some(Self::PluginStorage),
             "simulator_telemetry_read" => Some(Self::SimulatorTelemetryRead),
             "external_network" => Some(Self::ExternalNetwork),
+            "weather_data_publish" => Some(Self::WeatherDataPublish),
             _ => None,
         }
     }
@@ -115,6 +125,10 @@ pub enum HostMessage {
         host_version: String,
         plugin_id: String,
         granted_permissions: Vec<Permission>,
+        #[serde(default)]
+        weather_capabilities: Vec<WeatherCapability>,
+        #[serde(default)]
+        network_origins: Vec<String>,
     },
     FleetSnapshot {
         snapshot: PluginFleetSnapshot,
@@ -122,14 +136,214 @@ pub enum HostMessage {
     SimulatorTelemetrySnapshot {
         snapshot: Box<SimulatorTelemetrySnapshot>,
     },
+    WeatherRequest {
+        request: WeatherRequest,
+    },
     Shutdown,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum PluginMessage {
-    Ready { plugin_id: String, api_version: u32 },
-    PublishMapLayer { layer: MapLayerSpec },
+    Ready {
+        plugin_id: String,
+        api_version: u32,
+    },
+    PublishMapLayer {
+        layer: MapLayerSpec,
+    },
+    PublishWeather {
+        request_id: String,
+        response: PluginWeatherResponse,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WeatherCapability {
+    AirportReports,
+    ForecastGrid,
+    RadarTiles,
+}
+
+impl WeatherCapability {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::AirportReports => "airport_reports",
+            Self::ForecastGrid => "forecast_grid",
+            Self::RadarTiles => "radar_tiles",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WeatherRequest {
+    pub id: String,
+    pub query: WeatherQuery,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum WeatherQuery {
+    AirportReports {
+        stations: Vec<String>,
+    },
+    ForecastGrid {
+        points: Vec<WeatherGridRequestPoint>,
+    },
+    RadarTiles {
+        tiles: Vec<WeatherTileAddress>,
+    },
+}
+
+impl WeatherQuery {
+    pub const fn capability(&self) -> WeatherCapability {
+        match self {
+            Self::AirportReports { .. } => WeatherCapability::AirportReports,
+            Self::ForecastGrid { .. } => WeatherCapability::ForecastGrid,
+            Self::RadarTiles { .. } => WeatherCapability::RadarTiles,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WeatherGridRequestPoint {
+    pub id: String,
+    pub location: Coordinates,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct WeatherTileAddress {
+    pub zoom: u8,
+    pub x: u32,
+    pub y: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub enum PluginWeatherResponse {
+    Complete { product: PluginWeatherProduct },
+    Unavailable { code: WeatherUnavailableCode },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum PluginWeatherProduct {
+    AirportReports { snapshot: WeatherSnapshot },
+    GlobalLayer { layer: GlobalWeatherLayerSnapshot },
+}
+
+impl PluginWeatherProduct {
+    pub const fn capability(&self) -> WeatherCapability {
+        match self {
+            Self::AirportReports { .. } => WeatherCapability::AirportReports,
+            Self::GlobalLayer { layer } => match &layer.data {
+                wyrmgrid_domain::GlobalWeatherLayerData::Grid { .. } => {
+                    WeatherCapability::ForecastGrid
+                }
+                wyrmgrid_domain::GlobalWeatherLayerData::RasterTiles { .. } => {
+                    WeatherCapability::RadarTiles
+                }
+            },
+        }
+    }
+
+    pub fn validate(&self) -> bool {
+        match self {
+            Self::AirportReports { snapshot } => snapshot.validate().is_ok(),
+            Self::GlobalLayer { layer } => layer.validate().is_ok(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WeatherUnavailableCode {
+    Offline,
+    TimedOut,
+    RateLimited,
+    ProviderUnavailable,
+    InvalidResponse,
+    NoData,
+}
+
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum WeatherRequestError {
+    #[error("weather request id is invalid")]
+    InvalidId,
+    #[error("weather request contains an invalid or duplicate station")]
+    InvalidStation,
+    #[error("weather request exceeds its station, point, or tile limit")]
+    TooManyItems,
+    #[error("weather request must contain at least one item")]
+    Empty,
+    #[error("weather request contains an invalid or duplicate grid point")]
+    InvalidGridPoint,
+    #[error("weather request contains an invalid or duplicate tile address")]
+    InvalidTile,
+}
+
+impl WeatherRequest {
+    pub fn validate(&self) -> Result<(), WeatherRequestError> {
+        if !valid_identifier(&self.id) {
+            return Err(WeatherRequestError::InvalidId);
+        }
+        match &self.query {
+            WeatherQuery::AirportReports { stations } => {
+                if stations.is_empty() {
+                    return Err(WeatherRequestError::Empty);
+                }
+                if stations.len() > MAX_WEATHER_REQUEST_STATIONS {
+                    return Err(WeatherRequestError::TooManyItems);
+                }
+                let mut unique = HashSet::with_capacity(stations.len());
+                if stations.iter().any(|station| {
+                    station.len() != 4
+                        || station != &station.to_ascii_uppercase()
+                        || !station
+                            .chars()
+                            .all(|character| character.is_ascii_alphanumeric())
+                        || !unique.insert(station.as_str())
+                }) {
+                    return Err(WeatherRequestError::InvalidStation);
+                }
+            }
+            WeatherQuery::ForecastGrid { points } => {
+                if points.is_empty() {
+                    return Err(WeatherRequestError::Empty);
+                }
+                if points.len() > MAX_WEATHER_REQUEST_GRID_POINTS {
+                    return Err(WeatherRequestError::TooManyItems);
+                }
+                let mut unique = HashSet::with_capacity(points.len());
+                if points.iter().any(|point| {
+                    !valid_identifier(&point.id)
+                        || !unique.insert(point.id.as_str())
+                        || !point.location.is_valid()
+                }) {
+                    return Err(WeatherRequestError::InvalidGridPoint);
+                }
+            }
+            WeatherQuery::RadarTiles { tiles } => {
+                if tiles.is_empty() {
+                    return Err(WeatherRequestError::Empty);
+                }
+                if tiles.len() > MAX_WEATHER_REQUEST_TILES {
+                    return Err(WeatherRequestError::TooManyItems);
+                }
+                let mut unique = HashSet::with_capacity(tiles.len());
+                if tiles.iter().any(|tile| {
+                    let maximum = 1_u32.checked_shl(u32::from(tile.zoom));
+                    tile.zoom > wyrmgrid_domain::MAX_GLOBAL_WEATHER_TILE_ZOOM
+                        || maximum.is_none_or(|maximum| tile.x >= maximum || tile.y >= maximum)
+                        || !unique.insert(*tile)
+                }) {
+                    return Err(WeatherRequestError::InvalidTile);
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -426,6 +640,10 @@ pub struct PluginManifest {
     pub entry_point: String,
     #[serde(default)]
     pub permissions: Vec<Permission>,
+    #[serde(default)]
+    pub weather_capabilities: Vec<WeatherCapability>,
+    #[serde(default)]
+    pub network_origins: Vec<String>,
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -440,6 +658,12 @@ pub enum ManifestError {
     UnsafeEntryPoint,
     #[error("plugin permissions must not contain duplicates")]
     DuplicatePermissions,
+    #[error("plugin weather capabilities must not contain duplicates")]
+    DuplicateWeatherCapabilities,
+    #[error("plugin weather permissions and capabilities are inconsistent")]
+    InvalidWeatherCapabilities,
+    #[error("plugin network origins must be unique, bounded HTTPS origins")]
+    InvalidNetworkOrigins,
 }
 
 impl PluginManifest {
@@ -498,8 +722,61 @@ impl PluginManifest {
             return Err(ManifestError::DuplicatePermissions);
         }
 
+        if self
+            .weather_capabilities
+            .iter()
+            .collect::<HashSet<_>>()
+            .len()
+            != self.weather_capabilities.len()
+        {
+            return Err(ManifestError::DuplicateWeatherCapabilities);
+        }
+        let publishes_weather = self.permissions.contains(&Permission::WeatherDataPublish);
+        if publishes_weather != !self.weather_capabilities.is_empty() {
+            return Err(ManifestError::InvalidWeatherCapabilities);
+        }
+
+        let uses_network = self.permissions.contains(&Permission::ExternalNetwork);
+        if uses_network != !self.network_origins.is_empty()
+            || (uses_network && !publishes_weather)
+            || self.network_origins.len() > MAX_PLUGIN_NETWORK_ORIGINS
+        {
+            return Err(ManifestError::InvalidNetworkOrigins);
+        }
+        let normalized_origins = self
+            .network_origins
+            .iter()
+            .map(|origin| normalized_https_origin(origin))
+            .collect::<Option<HashSet<_>>>()
+            .ok_or(ManifestError::InvalidNetworkOrigins)?;
+        if normalized_origins.len() != self.network_origins.len() {
+            return Err(ManifestError::InvalidNetworkOrigins);
+        }
+
         Ok(())
     }
+}
+
+fn normalized_https_origin(value: &str) -> Option<String> {
+    if value.is_empty() || value.len() > 200 || value.trim() != value {
+        return None;
+    }
+    let parsed = url::Url::parse(value).ok()?;
+    if parsed.scheme() != "https"
+        || parsed.host_str().is_none()
+        || !parsed.username().is_empty()
+        || parsed.password().is_some()
+        || !matches!(parsed.path(), "" | "/")
+        || parsed.query().is_some()
+        || parsed.fragment().is_some()
+    {
+        return None;
+    }
+    let normalized = parsed.origin().ascii_serialization();
+    if value != normalized && value != format!("{normalized}/") {
+        return None;
+    }
+    Some(normalized)
 }
 
 #[cfg(test)]

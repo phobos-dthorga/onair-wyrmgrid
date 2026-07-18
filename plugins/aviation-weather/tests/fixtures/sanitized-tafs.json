@@ -4,7 +4,8 @@
     "issueTime": "2026-07-13T23:24:00.000Z",
     "validTimeFrom": 1783987200,
     "validTimeTo": 1784095200,
-    "rawTAF": "TAF YSSY 132324Z 1400/1506 32014KT CAVOK FM140200 26018KT CAVOK FM140700 26010KT CAVOK"
+    "rawTAF": "TAF YSSY 132324Z 1400/1506 32014KT CAVOK FM140200 26018KT CAVOK FM140700 26010KT CAVOK",
+    "privateCanary": "must-not-cross-the-boundary"
   },
   {
     "icaoId": "NZAA",

@@ -6,8 +6,16 @@ use wyrmgrid_domain::{
     ProvenanceKind,
 };
 
+fn plugin_view<'a>(status: &'a PluginHostView, plugin_id: &str) -> &'a PluginView {
+    status
+        .plugins
+        .iter()
+        .find(|plugin| plugin.id == plugin_id)
+        .expect("bundled plugin should be visible")
+}
+
 #[test]
-fn installs_the_bundled_plugin_with_no_implicit_grants() {
+fn installs_all_bundled_plugins_with_no_implicit_grants() {
     let directory = tempfile::tempdir().expect("temporary directory should open");
     let store = Store::open_in_memory().expect("store should open");
     let service = PluginService::new(
@@ -19,10 +27,20 @@ fn installs_the_bundled_plugin_with_no_implicit_grants() {
 
     let status = service.status().expect("plugin status should load");
     assert!(status.available);
-    assert_eq!(status.plugins.len(), 1);
-    assert_eq!(status.plugins[0].id, BUNDLED_PLUGIN_ID);
-    assert!(status.plugins[0].granted_permissions.is_empty());
-    assert_eq!(status.plugins[0].state, PluginProcessState::Stopped);
+    assert_eq!(status.plugins.len(), 4);
+    let bundled = plugin_view(&status, BUNDLED_PLUGIN_ID);
+    assert!(bundled.granted_permissions.is_empty());
+    assert_eq!(bundled.state, PluginProcessState::Stopped);
+    for provider_id in [
+        OPEN_METEO_PLUGIN_ID,
+        AVIATION_WEATHER_PLUGIN_ID,
+        RAINVIEWER_PLUGIN_ID,
+    ] {
+        let provider = plugin_view(&status, provider_id);
+        assert!(provider.granted_permissions.is_empty());
+        assert!(!provider.weather_capabilities.is_empty());
+        assert!(!provider.network_origins.is_empty());
+    }
     assert!(matches!(
         service.start(BUNDLED_PLUGIN_ID),
         Err(PluginError::PermissionRequired)
@@ -43,12 +61,21 @@ fn persists_and_revokes_only_the_requested_capabilities() {
     let approved = service
         .approve_requested_permissions(BUNDLED_PLUGIN_ID)
         .expect("permissions should approve");
-    assert_eq!(approved.plugins[0].granted_permissions.len(), 2);
+    assert_eq!(
+        plugin_view(&approved, BUNDLED_PLUGIN_ID)
+            .granted_permissions
+            .len(),
+        2
+    );
 
     let revoked = service
         .revoke_permissions(BUNDLED_PLUGIN_ID)
         .expect("permissions should revoke");
-    assert!(revoked.plugins[0].granted_permissions.is_empty());
+    assert!(
+        plugin_view(&revoked, BUNDLED_PLUGIN_ID)
+            .granted_permissions
+            .is_empty()
+    );
 }
 
 #[test]
@@ -80,7 +107,11 @@ fn plugin_version_changes_require_a_fresh_permission_review() {
     let status = service
         .status()
         .expect("updated plugin should remain visible");
-    assert!(status.plugins[0].granted_permissions.is_empty());
+    assert!(
+        plugin_view(&status, BUNDLED_PLUGIN_ID)
+            .granted_permissions
+            .is_empty()
+    );
     assert!(matches!(
         service.start(BUNDLED_PLUGIN_ID),
         Err(PluginError::PermissionRequired)
@@ -106,10 +137,16 @@ fn completes_the_out_of_process_handshake_when_python_is_available() {
         Err(PluginError::RuntimeUnavailable) => return,
         Err(error) => panic!("plugin should start: {error}"),
     };
-    assert_eq!(started.plugins[0].state, PluginProcessState::Running);
+    assert_eq!(
+        plugin_view(&started, BUNDLED_PLUGIN_ID).state,
+        PluginProcessState::Running
+    );
 
     let stopped = service.stop(BUNDLED_PLUGIN_ID).expect("plugin should stop");
-    assert_eq!(stopped.plugins[0].state, PluginProcessState::Stopped);
+    assert_eq!(
+        plugin_view(&stopped, BUNDLED_PLUGIN_ID).state,
+        PluginProcessState::Stopped
+    );
 }
 
 #[test]
@@ -135,13 +172,14 @@ fn one_launch_permission_is_not_shown_as_active_after_the_plugin_stops() {
         Err(error) => panic!("plugin should start once: {error}"),
     };
     assert_eq!(
-        started.plugins[0].grant_lifetime,
+        plugin_view(&started, BUNDLED_PLUGIN_ID).grant_lifetime,
         Some(AuthorizationGrantLifetime::Once)
     );
 
     let stopped = service.stop(BUNDLED_PLUGIN_ID).expect("plugin should stop");
-    assert!(stopped.plugins[0].granted_permissions.is_empty());
-    assert_eq!(stopped.plugins[0].grant_lifetime, None);
+    let bundled = plugin_view(&stopped, BUNDLED_PLUGIN_ID);
+    assert!(bundled.granted_permissions.is_empty());
+    assert_eq!(bundled.grant_lifetime, None);
     assert!(matches!(
         service.start(BUNDLED_PLUGIN_ID),
         Err(PluginError::PermissionRequired)
@@ -224,4 +262,120 @@ fn publishes_a_host_validated_layer_from_a_sanitized_fleet_snapshot() {
     );
     assert_eq!(published.layer.provenance.kind, ProvenanceKind::Calculated);
     service.stop(BUNDLED_PLUGIN_ID).expect("plugin should stop");
+}
+
+#[test]
+fn weather_products_must_match_the_exact_host_request() {
+    let request: ProtocolEnvelope<HostMessage> = serde_json::from_str(include_str!(
+        "../../../../schemas/fixtures/plugin-weather-request-v1.json"
+    ))
+    .expect("request fixture should parse");
+    let response: ProtocolEnvelope<PluginMessage> = serde_json::from_str(include_str!(
+        "../../../../schemas/fixtures/plugin-weather-layer-v1.json"
+    ))
+    .expect("response fixture should parse");
+    let HostMessage::WeatherRequest { request } = request.payload else {
+        panic!("fixture should contain a request");
+    };
+    let PluginMessage::PublishWeather { mut response, .. } = response.payload else {
+        panic!("fixture should contain a response");
+    };
+    assert!(weather_response_matches_request(&response, &request.query));
+
+    let PluginWeatherResponse::Complete {
+        product: PluginWeatherProduct::GlobalLayer { layer },
+    } = &mut response
+    else {
+        panic!("fixture should contain a global layer");
+    };
+    let wyrmgrid_domain::GlobalWeatherLayerData::Grid { points } = &mut layer.data else {
+        panic!("fixture should contain grid points");
+    };
+    points[0].location.longitude = 0.0;
+    assert!(!weather_response_matches_request(&response, &request.query));
+}
+
+#[test]
+fn provider_origin_or_product_changes_require_fresh_review() {
+    let mut manifest: PluginManifest =
+        serde_json::from_str(OPEN_METEO_MANIFEST).expect("provider manifest should parse");
+    let original = plugin_scope_revision(&manifest);
+    manifest.network_origins = vec!["https://customer-api.open-meteo.com".into()];
+    assert_ne!(plugin_scope_revision(&manifest), original);
+    manifest.network_origins = vec!["https://api.open-meteo.com".into()];
+    manifest.weather_capabilities = vec![WeatherCapability::RadarTiles];
+    assert_ne!(plugin_scope_revision(&manifest), original);
+}
+
+#[test]
+fn dispatch_can_request_airport_weather_from_a_supervised_plugin() {
+    const PLUGIN_ID: &str = "org.wyrmgrid.test.airport-weather";
+    let directory = tempfile::tempdir().expect("temporary directory should open");
+    let store = Store::open_in_memory().expect("store should open");
+    let service = PluginService::new(
+        Some(directory.path().to_path_buf()),
+        store.clone(),
+        OnAirSession::with_default_store(store),
+        SimulatorBridgeService::new(Vec::new()),
+    );
+    let plugin_root = directory.path().join(PLUGIN_ID);
+    let source_root = plugin_root.join("src");
+    let sdk_root = source_root.join("wyrmgrid_sdk");
+    std::fs::create_dir_all(&sdk_root).expect("test plugin directory should create");
+    std::fs::write(
+        plugin_root.join("plugin.json"),
+        r#"{
+          "id":"org.wyrmgrid.test.airport-weather",
+          "name":"Test Airport Weather",
+          "version":"0.1.0",
+          "api_version":1,
+          "author":"WyrmGrid tests",
+          "runtime":"python",
+          "entry_point":"src/main.py",
+          "permissions":["external_network","weather_data_publish"],
+          "weather_capabilities":["airport_reports"],
+          "network_origins":["https://example.test"]
+        }"#,
+    )
+    .expect("test manifest should write");
+    std::fs::write(sdk_root.join("__init__.py"), BUNDLED_PYTHON_SDK)
+        .expect("test SDK should write");
+    std::fs::write(
+        source_root.join("main.py"),
+        r#"from wyrmgrid_sdk import Plugin
+
+def reports(request, _http):
+    stations = request["query"]["stations"]
+    return {
+        "kind": "airport_reports",
+        "snapshot": {
+            "schema_version": 1,
+            "id": "00000000-0000-0000-0000-000000000000",
+            "airports": [{"station_icao": station} for station in stations],
+        },
+    }
+
+Plugin(
+    plugin_id="org.wyrmgrid.test.airport-weather",
+    on_weather_request=reports,
+).run()
+"#,
+    )
+    .expect("test plugin should write");
+
+    service
+        .approve_requested_permissions(PLUGIN_ID)
+        .expect("test provider permissions should approve");
+    match service.start(PLUGIN_ID) {
+        Ok(_) => {}
+        Err(PluginError::RuntimeUnavailable) => return,
+        Err(error) => panic!("test provider should start: {error}"),
+    }
+    let snapshot = service
+        .request_airport_weather(&["YSSY".into(), "NZAA".into()])
+        .expect("airport weather should return");
+    assert_eq!(snapshot.airports.len(), 2);
+    assert_eq!(snapshot.airports[0].station_icao, "YSSY");
+    assert_eq!(snapshot.airports[1].station_icao, "NZAA");
+    service.stop(PLUGIN_ID).expect("test provider should stop");
 }

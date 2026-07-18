@@ -12,8 +12,8 @@ use wyrmgrid_domain::{
     AircraftSummary, CompanyId, Coordinates, FlightPlanAirport, FlightPlanSnapshot, JobSummary,
     Mass, MassUnit, OperationalProvenance, ProvenanceKind, SnapshotFreshness, WeatherSnapshot,
 };
+use wyrmgrid_plugin_protocol::WeatherCapability;
 use wyrmgrid_simbrief_api::{ClientError, SimBriefClient, UserReference, UserReferenceKind};
-use wyrmgrid_weather_api::{AviationWeatherClient, ClientError as WeatherClientError};
 
 use crate::{FleetSnapshotView, SnapshotAvailability};
 
@@ -237,13 +237,29 @@ pub enum DispatchError {
     #[error(transparent)]
     Provider(#[from] ClientError),
     #[error(transparent)]
-    WeatherProvider(#[from] WeatherClientError),
+    WeatherProvider(#[from] WeatherProviderError),
+}
+
+#[derive(Debug, Error, Clone, Copy, PartialEq, Eq)]
+pub enum WeatherProviderError {
+    #[error("The requested airport weather stations are invalid.")]
+    InvalidStations,
+    #[error("The weather provider is rate-limiting requests.")]
+    RateLimited,
+    #[error("The weather request timed out.")]
+    TimedOut,
+    #[error("The weather provider is offline.")]
+    Offline,
+    #[error("The weather provider is unavailable.")]
+    ProviderUnavailable,
+    #[error("The weather provider returned an invalid response.")]
+    InvalidResponse,
 }
 
 type ProviderFuture<'a> =
     Pin<Box<dyn Future<Output = Result<FlightPlanSnapshot, ClientError>> + Send + 'a>>;
 type WeatherProviderFuture<'a> =
-    Pin<Box<dyn Future<Output = Result<WeatherSnapshot, WeatherClientError>> + Send + 'a>>;
+    Pin<Box<dyn Future<Output = Result<WeatherSnapshot, WeatherProviderError>> + Send + 'a>>;
 
 trait FlightPlanProvider: Send + Sync {
     fn fetch_latest<'a>(
@@ -254,6 +270,7 @@ trait FlightPlanProvider: Send + Sync {
 }
 
 trait WeatherProvider: Send + Sync {
+    fn is_available(&self) -> bool;
     fn fetch_airports<'a>(&'a self, stations: &'a [String]) -> WeatherProviderFuture<'a>;
 }
 
@@ -270,9 +287,21 @@ impl FlightPlanProvider for SimBriefClient {
     }
 }
 
-impl WeatherProvider for AviationWeatherClient {
+impl WeatherProvider for crate::PluginService {
+    fn is_available(&self) -> bool {
+        self.weather_capability_available(WeatherCapability::AirportReports)
+            .unwrap_or(false)
+    }
+
     fn fetch_airports<'a>(&'a self, stations: &'a [String]) -> WeatherProviderFuture<'a> {
-        Box::pin(AviationWeatherClient::fetch_airports(self, stations))
+        let service = self.clone();
+        let stations = stations.to_vec();
+        Box::pin(async move {
+            tokio::task::spawn_blocking(move || service.request_airport_weather(&stations))
+                .await
+                .map_err(|_| WeatherProviderError::ProviderUnavailable)?
+                .map_err(plugin_weather_provider_error)
+        })
     }
 }
 
@@ -303,10 +332,14 @@ impl DispatchSession {
         let provider = SimBriefClient::new()
             .ok()
             .map(|provider| Arc::new(provider) as Arc<dyn FlightPlanProvider>);
-        let weather_provider = AviationWeatherClient::new()
+        Self::with_providers(provider, None)
+    }
+
+    pub fn with_plugin_weather_provider(plugins: crate::PluginService) -> Self {
+        let provider = SimBriefClient::new()
             .ok()
-            .map(|provider| Arc::new(provider) as Arc<dyn WeatherProvider>);
-        Self::with_providers(provider, weather_provider)
+            .map(|provider| Arc::new(provider) as Arc<dyn FlightPlanProvider>);
+        Self::with_providers(provider, Some(Arc::new(plugins)))
     }
 
     fn with_providers(
@@ -428,6 +461,9 @@ impl DispatchSession {
             .as_ref()
             .ok_or(DispatchError::WeatherProviderUnavailable)?
             .clone();
+        if !provider.is_available() {
+            return Err(DispatchError::WeatherProviderUnavailable);
+        }
         let stations = self.weather_stations()?;
         if let Some(snapshot) = self.fresh_cached_weather(&stations)? {
             return Ok(snapshot);
@@ -459,7 +495,7 @@ impl DispatchSession {
         let snapshot = provider.fetch_airports(&stations).await?;
         snapshot
             .validate()
-            .map_err(|_| DispatchError::WeatherProvider(WeatherClientError::MalformedWeather))?;
+            .map_err(|_| DispatchError::WeatherProvider(WeatherProviderError::InvalidResponse))?;
         *self
             .inner
             .weather
@@ -560,7 +596,11 @@ impl DispatchSession {
                     (state, Some(cached.snapshot.clone()))
                 });
         Ok(DispatchWeatherStatus {
-            provider_available: self.inner.weather_provider.is_some(),
+            provider_available: self
+                .inner
+                .weather_provider
+                .as_ref()
+                .is_some_and(|provider| provider.is_available()),
             availability: if snapshot.is_some() {
                 DispatchWeatherAvailability::Ready
             } else {
@@ -584,6 +624,19 @@ impl DispatchSession {
             .lock()
             .map_err(|_| DispatchError::StateUnavailable)? = None;
         Ok(())
+    }
+}
+
+fn plugin_weather_provider_error(error: crate::PluginWeatherError) -> WeatherProviderError {
+    match error {
+        crate::PluginWeatherError::Offline => WeatherProviderError::Offline,
+        crate::PluginWeatherError::TimedOut => WeatherProviderError::TimedOut,
+        crate::PluginWeatherError::RateLimited => WeatherProviderError::RateLimited,
+        crate::PluginWeatherError::ProviderUnavailable
+        | crate::PluginWeatherError::StateUnavailable => WeatherProviderError::ProviderUnavailable,
+        crate::PluginWeatherError::InvalidResponse | crate::PluginWeatherError::NoData => {
+            WeatherProviderError::InvalidResponse
+        }
     }
 }
 

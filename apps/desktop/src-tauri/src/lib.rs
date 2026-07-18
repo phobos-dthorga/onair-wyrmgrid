@@ -775,7 +775,6 @@ pub fn run() {
                 credential_store::PlatformOnAirSecretStore,
                 onair.clone(),
             );
-            let dispatch = wyrmgrid_application::DispatchSession::with_default_provider();
             let flight_operations =
                 wyrmgrid_application::FlightOperationService::new(store.clone());
             let simulator_provider =
@@ -801,6 +800,9 @@ pub fn run() {
                 onair.clone(),
                 simulator.clone(),
                 authorization_runtime,
+            );
+            let dispatch = wyrmgrid_application::DispatchSession::with_plugin_weather_provider(
+                plugins.clone(),
             );
 
             app.manage(DesktopState {

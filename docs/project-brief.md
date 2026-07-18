@@ -43,8 +43,10 @@ ID or username can be remembered independently while the imported plan remains
 session-only. Dispatch also produces explainable aircraft identity, model, and
 position findings against the observed OnAir fleet and explicitly identifies
 payload and deadline facts that the current OnAir slice cannot compare. A
-bounded AviationWeather.gov adapter supplies explicitly requested, session-
-cached METAR and TAF context for plan airports. Authenticated SimBrief live-field
-certification remains outstanding; route-weather advisories, SayIntentions.AI,
-MSFS 2024, online networks, and additional navigation sources follow the same
-provider-neutral boundary.
+bounded AviationWeather.gov provider plugin supplies explicitly requested,
+session-cached METAR and TAF context for plan airports. Independently approved
+Open-Meteo and RainViewer plugins provide coarse global model samples and
+current radar tiles through the same host-owned weather contract. Authenticated
+SimBrief live-field certification remains outstanding; route-weather
+advisories, SayIntentions.AI, MSFS 2024, online networks, and additional
+navigation sources follow the same provider-neutral boundary.

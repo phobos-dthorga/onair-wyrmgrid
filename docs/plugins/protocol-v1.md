@@ -21,6 +21,15 @@ request `simulator_telemetry_read` never receive the message. Existing plugins
 therefore remain compatible. Raw provider payloads and simulator writes are not
 part of plugin protocol version 1.
 
+The weather-provider boundary is also additive within version one. Manifests
+may declare `weather_data_publish`, one or more product capabilities, and exact
+HTTPS origins. The host sends `weather_request` only to a running, approved
+provider with the matching capability, and accepts `publish_weather` only for
+an outstanding request. Plugins using the earlier message set do not request
+these permissions, receive no weather requests, and remain compatible. The
+host-selected station, grid-point, or tile set is part of the request contract;
+a response that widens or substitutes it is rejected.
+
 The canonical manifest schema is `schemas/plugin-manifest.schema.json`. The
 envelope schema and accepted examples are
 `schemas/plugin-protocol-envelope.schema.json` and `schemas/fixtures/plugin-*-v1.json`.
@@ -59,7 +68,8 @@ sequences stop the plugin.
 2. The user approves every requested capability in Forge.
 3. WyrmGrid starts Python 3 in isolated mode with a scrubbed environment and
    piped standard input/output.
-4. The host sends `hello` with the expected plugin ID and exact grants.
+4. The host sends `hello` with the expected plugin ID, exact grants, declared
+   weather capabilities, and approved HTTPS origins.
 5. The plugin has three seconds to return a matching `ready` message with plugin
    API version 1.
 6. For each granted read capability, the host sends the latest stable fleet or
@@ -82,6 +92,8 @@ not relayed to the UI, logs, or telemetry.
   aircraft, position, motion, fuel/weight, lifecycle flags, and source
   provenance. Optional facts remain absent when the provider cannot establish
   them.
+- `weather_request`: a correlated, bounded request for up to ten airport
+  reports, 512 host-selected model samples, or 16 host-selected raster tiles.
 - `shutdown`: request for an orderly exit.
 
 Snapshots never contain the OnAir API key, raw OnAir JSON, raw SimConnect
@@ -92,6 +104,9 @@ are translated into stable WyrmGrid domain summaries before this adapter.
 
 - `ready`: exact plugin ID and supported plugin API version.
 - `publish_map_layer`: one host-rendered point layer.
+- `publish_weather`: a correlated normalized weather product or one safe
+  unavailable code. Raw bodies, remote URLs, styles, scripts, and provider
+  error text are not accepted.
 
 The map contract contains an ID, title, bounded points, and provenance. Each
 point contains a unique ID, a label, and valid WGS84 coordinates. Plugins cannot
@@ -110,6 +125,12 @@ provide MapLibre styles, JavaScript, markup, URLs, callbacks, or theme values.
 | Layer/point identifiers          |          96 bytes |
 | Layer title                      |         120 bytes |
 | Point label                      |         200 bytes |
+| Weather stations per request     |                10 |
+| Model grid points per request    |               512 |
+| Raster tiles per request         |                16 |
+| Decoded bytes per raster tile    |           192 KiB |
+| Decoded raster bytes per layer   |           640 KiB |
+| Declared HTTPS origins           |                 8 |
 
 Map coordinates must be finite and inside latitude `[-90, 90]` and longitude
 `[-180, 180]`. Duplicate IDs and empty/control-character text are rejected.
@@ -117,10 +138,12 @@ Map coordinates must be finite and inside latitude `[-90, 90]` and longitude
 ## Python SDK proof
 
 `sdk/python/wyrmgrid_sdk` uses only the Python standard library. The bundled
-`Fleet Locations` plugin demonstrates the public boundary by converting known
-aircraft or current-airport coordinates into a calculated Atlas layer. It does
-not claim that an aircraft is idle because the current stable snapshot does not
-establish that fact.
+`Fleet Locations` plugin demonstrates stable snapshot consumption. Three
+first-party providers demonstrate weather publication: Open-Meteo model grid,
+AviationWeather.gov airport reports, and RainViewer PNG radar tiles. The SDK's
+HTTPS helper allows only approved exact origins, rejects redirects, applies a
+15-second timeout, checks content type, and reads no more than the requested
+byte ceiling.
 
 ## Deferred hardening
 

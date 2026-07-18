@@ -35,6 +35,10 @@ struct FakeWeatherProvider {
 }
 
 impl WeatherProvider for FakeWeatherProvider {
+    fn is_available(&self) -> bool {
+        true
+    }
+
     fn fetch_airports<'a>(&'a self, _stations: &'a [String]) -> WeatherProviderFuture<'a> {
         Box::pin(async move {
             self.calls.fetch_add(1, Ordering::AcqRel);
@@ -48,10 +52,14 @@ struct FailingWeatherProvider {
 }
 
 impl WeatherProvider for FailingWeatherProvider {
+    fn is_available(&self) -> bool {
+        true
+    }
+
     fn fetch_airports<'a>(&'a self, _stations: &'a [String]) -> WeatherProviderFuture<'a> {
         Box::pin(async move {
             self.calls.fetch_add(1, Ordering::AcqRel);
-            Err(WeatherClientError::Offline)
+            Err(WeatherProviderError::Offline)
         })
     }
 }
@@ -441,7 +449,9 @@ async fn rate_protects_retries_after_a_failed_weather_request() {
 
     assert!(matches!(
         session.refresh_weather().await,
-        Err(DispatchError::WeatherProvider(WeatherClientError::Offline))
+        Err(DispatchError::WeatherProvider(
+            WeatherProviderError::Offline
+        ))
     ));
     assert_eq!(
         session.refresh_weather().await,

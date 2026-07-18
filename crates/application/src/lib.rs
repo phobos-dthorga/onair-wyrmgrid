@@ -1134,24 +1134,20 @@ impl From<DispatchError> for OperationError {
                 | wyrmgrid_simbrief_api::ClientError::InvalidContentType
                 | wyrmgrid_simbrief_api::ClientError::MalformedPlan,
             ) => ("simbrief.invalid_response", false, true),
-            DispatchError::WeatherProvider(wyrmgrid_weather_api::ClientError::InvalidStations) => {
+            DispatchError::WeatherProvider(WeatherProviderError::InvalidStations) => {
                 ("weather.invalid_stations", false, false)
             }
-            DispatchError::WeatherProvider(wyrmgrid_weather_api::ClientError::RateLimited) => {
+            DispatchError::WeatherProvider(WeatherProviderError::RateLimited) => {
                 ("weather.rate_limited", true, false)
             }
             DispatchError::WeatherProvider(
-                wyrmgrid_weather_api::ClientError::TimedOut
-                | wyrmgrid_weather_api::ClientError::Offline
-                | wyrmgrid_weather_api::ClientError::ProviderUnavailable,
+                WeatherProviderError::TimedOut
+                | WeatherProviderError::Offline
+                | WeatherProviderError::ProviderUnavailable,
             ) => ("weather.unavailable", true, false),
-            DispatchError::WeatherProvider(
-                wyrmgrid_weather_api::ClientError::ConfigurationUnavailable
-                | wyrmgrid_weather_api::ClientError::UnexpectedResponse
-                | wyrmgrid_weather_api::ClientError::ResponseTooLarge
-                | wyrmgrid_weather_api::ClientError::InvalidContentType
-                | wyrmgrid_weather_api::ClientError::MalformedWeather,
-            ) => ("weather.invalid_response", false, true),
+            DispatchError::WeatherProvider(WeatherProviderError::InvalidResponse) => {
+                ("weather.invalid_response", false, true)
+            }
         };
         Self {
             code,

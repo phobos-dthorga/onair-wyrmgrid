@@ -2,9 +2,10 @@
 
 WyrmGrid plugins are separate processes. Protocol version 1 uses length-prefixed
 JSON messages over standard input and output, a versioned startup handshake,
-monotonic message sequences, and a supervised shutdown. The host—not the
-plugin—owns rendering, credentials, provider adapters, permission persistence,
-and process state.
+monotonic message sequences, and a supervised shutdown. The host owns
+rendering, credentials, stable provider contracts, permission persistence, and
+process state. A weather provider plugin owns only request URL construction and
+translation of its raw response into those stable contracts.
 
 `plugin.json` declares identity, compatibility, entry point, and requested
 permissions. The host validates it before launch. A manifest is not a sandbox:
@@ -22,7 +23,10 @@ started. The executable Python proof is
 Forge presents each plugin's requested and granted capabilities. Grants are
 empty by default and stored locally; the current proof requires every requested
 capability to be approved before launch. `on_air_fleet_read`,
-`simulator_telemetry_read`, and `map_layers_publish` execute in this slice. A
+`simulator_telemetry_read`, `map_layers_publish`, `external_network`, and
+`weather_data_publish` execute in this slice. The two weather permissions are
+accepted only together with a declared product capability and exact HTTPS
+origin. A
 plugin receives only the stable translated snapshots it was granted and
 publishes data-only point layers that Atlas renders using the active host theme.
 
@@ -51,11 +55,11 @@ plugins do not need to request the new permission or emit chart messages.
 
 ## External integration capabilities
 
-Provider adapters belong to the host. Plugins consume only stable, sanitized
-operational snapshots after the corresponding public capability is specified.
-They do not receive raw SimBrief, SayIntentions.AI, weather, VATSIM, IVAO,
-Navigraph, OnAir, or simulator payloads and cannot borrow the host's provider
-credentials.
+Stable provider contracts, validation, scheduling, caching, and presentation
+belong to the host. Weather provider plugins may fetch only for a correlated
+host request and publish a normalized airport snapshot, numeric grid, or PNG
+tile layer. They do not receive raw SimBrief, SayIntentions.AI, VATSIM, IVAO,
+Navigraph, OnAir, or simulator payloads and cannot borrow host credentials.
 
 SayIntentions reads and actions are not covered by `external_network`,
 `notifications_create`, or `simulator_telemetry_read`. A future capability must
@@ -70,9 +74,11 @@ FSUIPC access, arbitrary dataref access, or historical tracks. Those require
 separate capabilities and protocol reviews.
 
 The version-one `external_network` name must not be interpreted as unrestricted
-internet access or a host endpoint proxy. The host does not implement or grant
-it. The current Python developer preview is also not an operating-system
-sandbox: a process may retain ambient access available to the user's account.
+internet access or a host endpoint proxy. WyrmGrid grants it in this slice only
+to a weather plugin that declares bounded product capabilities and exact HTTPS
+origins. The bundled SDK enforces those origins, but the current Python
+developer preview is not an operating-system sandbox: a process may retain
+ambient access available to the user's account.
 Only trusted plugin code should be run. Before community distribution, the
 project must add reviewed OS isolation or define a destination- and
 operation-scoped broker, and should supersede this broad name with narrower
@@ -87,6 +93,18 @@ See the [external integrations programme](../integrations/README.md) for planned
 provider boundaries and
 [simulator provider authoring](../integrations/simulator-provider-authoring.md)
 for the distinction between providers and ordinary plugins.
+
+## First-party weather providers
+
+The independently installable providers in `plugins/` are:
+
+- Open-Meteo for a coarse, host-selected global model grid;
+- AviationWeather.gov for explicit plan-airport METAR and TAF requests; and
+- RainViewer for a small host-selected current global radar tile set.
+
+They share the same SDK and stable core weather models. Provider failures are
+independent, the last valid global layer remains visible when a refresh fails,
+and stopping a plugin removes its active contribution.
 
 ## Planned first-party demonstrations
 

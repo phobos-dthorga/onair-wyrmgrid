@@ -1,9 +1,8 @@
 # Aviation weather integration plan
 
-Weather is a first-party external-facts adapter. The initial source is the
-public AviationWeather.gov Data API because it provides a documented,
-machine-readable boundary for worldwide METAR and TAF data plus several route
-hazard products.
+Weather uses stable, provider-neutral core contracts with three independent
+first-party provider plugins: AviationWeather.gov airport reports, Open-Meteo
+global model samples, and RainViewer radar tiles.
 
 WyrmGrid weather is for flight-simulation planning. It must not be presented as
 a real-world briefing or as evidence that a flight is operationally safe.
@@ -13,8 +12,9 @@ a real-world briefing or as evidence that a flight is operationally safe.
 The first read-only increment is implemented behind WyrmGrid Dispatch:
 
 - the user explicitly requests weather after importing a plan;
-- `wyrmgrid-weather-api` sends one bounded JSON request each to the documented
-  METAR and TAF endpoints for at most ten normalized plan-airport identifiers;
+- the AviationWeather.gov plugin sends one bounded JSON request each to the
+  documented METAR and TAF endpoints for at most ten normalized plan-airport
+  identifiers;
 - the adapter follows no redirects, uses a custom WyrmGrid user agent, enforces
   a 15-second timeout and 512 KiB streaming limit per product, returns safe error
   categories, and keeps raw JSON private;
@@ -29,7 +29,7 @@ The first read-only increment is implemented behind WyrmGrid Dispatch:
   validated plan, allowing Dispatch to open the complete weather layer or one
   airport directly in Atlas without reparsing provider data in Svelte.
 
-The sanitized fixtures follow the official OpenAPI field contract and public
+The sanitized fixtures follow the official field contracts and public
 responses captured on 2026-07-14. No provider credentials or private operational
 identifiers are present. The cache is currently process-memory only; persistent
 offline weather and route hazard products remain future increments.
@@ -50,9 +50,9 @@ does not prove safe or clear conditions.
 
 ## Adapter and data model
 
-- Make requests from Rust. AviationWeather.gov currently does not permit CORS,
-  so the Svelte interface must not call it directly.
-- Keep raw JSON, GeoJSON, XML, or text private to a cohesive weather adapter.
+- Make requests from the approved out-of-process provider through the bounded
+  Python SDK client. The Svelte interface must not call providers directly.
+- Keep raw JSON, GeoJSON, XML, or text private to its provider plugin.
 - Translate into immutable observations and advisories with source, issue time,
   observation time, validity interval, retrieval time, location or geometry,
   raw-versus-decoded status, and freshness.
@@ -139,9 +139,9 @@ source-shaped rendering rule lives in the
 - threat-model coverage for hostile text, oversized geometry, and decompression
   limits if bulk gzip files are adopted.
 
-WIFS, graphical forecast imagery, radar tiles, and commercial weather sources
-are deferred. Each introduces authentication, licensing, rendering, volume, or
-coverage questions beyond the initial airport and route-weather slice.
+WIFS, hazard geometry, radar animation/history, higher-resolution model grids,
+and commercial weather sources remain deferred. Each introduces authentication,
+licensing, rendering, volume, or coverage questions beyond this initial slice.
 
 The specific radar source and rendering gates are defined in the
 [weather radar integration contract](radar.md).
@@ -154,3 +154,6 @@ rendering profile, and optional GPU-enhanced presentation are defined in the
 
 - [AviationWeather.gov Data API](https://aviationweather.gov/data/api/)
 - [AviationWeather.gov WIFS](https://aviationweather.gov/wifs/)
+- [Open-Meteo Forecast API](https://open-meteo.com/en/docs)
+- [Open-Meteo licence and attribution](https://open-meteo.com/en/license)
+- [RainViewer Weather Maps API](https://www.rainviewer.com/api/weather-maps-api.html)

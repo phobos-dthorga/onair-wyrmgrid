@@ -10,6 +10,8 @@ fn manifest() -> PluginManifest {
         runtime: Some(PluginRuntime::Python),
         entry_point: "src/main.py".into(),
         permissions: vec![Permission::OnAirFleetRead, Permission::MapLayersPublish],
+        weather_capabilities: Vec::new(),
+        network_origins: Vec::new(),
     }
 }
 
@@ -59,6 +61,8 @@ fn round_trips_a_bounded_protocol_frame() {
             host_version: "0.1.0".into(),
             plugin_id: manifest().id,
             granted_permissions: vec![Permission::OnAirFleetRead, Permission::MapLayersPublish],
+            weather_capabilities: Vec::new(),
+            network_origins: Vec::new(),
         },
     );
     let mut bytes = Vec::new();
@@ -68,6 +72,48 @@ fn round_trips_a_bounded_protocol_frame() {
 
     assert_eq!(decoded, message);
     assert_eq!(decoded.validate_header(), Ok(()));
+}
+
+#[test]
+fn validates_weather_manifest_scope_and_bounded_requests() {
+    let mut candidate = manifest();
+    candidate.permissions = vec![Permission::ExternalNetwork, Permission::WeatherDataPublish];
+    candidate.weather_capabilities = vec![WeatherCapability::ForecastGrid];
+    candidate.network_origins = vec!["https://api.open-meteo.com".into()];
+    assert_eq!(candidate.validate(), Ok(()));
+
+    let request = WeatherRequest {
+        id: "open-meteo-1".into(),
+        query: WeatherQuery::ForecastGrid {
+            points: vec![WeatherGridRequestPoint {
+                id: "grid-0".into(),
+                location: Coordinates {
+                    latitude: -33.86,
+                    longitude: 151.20,
+                },
+            }],
+        },
+    };
+    assert_eq!(request.validate(), Ok(()));
+    assert_eq!(request.query.capability(), WeatherCapability::ForecastGrid);
+}
+
+#[test]
+fn rejects_weather_scope_widening_without_matching_permissions() {
+    let mut candidate = manifest();
+    candidate.weather_capabilities = vec![WeatherCapability::RadarTiles];
+    assert_eq!(
+        candidate.validate(),
+        Err(ManifestError::InvalidWeatherCapabilities)
+    );
+
+    candidate.weather_capabilities.clear();
+    candidate.network_origins = vec!["https://tilecache.rainviewer.com/path".into()];
+    candidate.permissions = vec![Permission::ExternalNetwork];
+    assert_eq!(
+        candidate.validate(),
+        Err(ManifestError::InvalidNetworkOrigins)
+    );
 }
 
 #[test]
@@ -152,6 +198,29 @@ fn validates_the_protocol_version_one_fixtures() {
             .validate()
             .expect("simulator telemetry should validate"),
         _ => panic!("fixture should contain simulator telemetry"),
+    }
+
+    let request: ProtocolEnvelope<HostMessage> = serde_json::from_str(include_str!(
+        "../../../../schemas/fixtures/plugin-weather-request-v1.json"
+    ))
+    .expect("weather request fixture should deserialize");
+    match request.payload {
+        HostMessage::WeatherRequest { request } => {
+            request.validate().expect("weather request should validate");
+        }
+        _ => panic!("fixture should contain a weather request"),
+    }
+
+    let response: ProtocolEnvelope<PluginMessage> = serde_json::from_str(include_str!(
+        "../../../../schemas/fixtures/plugin-weather-layer-v1.json"
+    ))
+    .expect("weather response fixture should deserialize");
+    match response.payload {
+        PluginMessage::PublishWeather {
+            response: PluginWeatherResponse::Complete { product },
+            ..
+        } => assert!(product.validate()),
+        _ => panic!("fixture should contain a complete weather product"),
     }
 }
 
