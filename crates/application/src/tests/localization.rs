@@ -42,6 +42,16 @@ fn rejects_protected_unknown_and_incompatible_messages() {
 }
 
 #[test]
+fn rejects_a_pack_targeting_an_older_source_catalogue() {
+    let mut manifest: LanguagePackManifest = serde_json::from_str(COMMUNITY_FIXTURE).unwrap();
+    manifest.source_catalog_version = SOURCE_CATALOG_VERSION - 1;
+    assert_eq!(
+        validate_manifest(&manifest, PackValidationMode::Community),
+        Err(LanguageSettingsError::UnsupportedVersion)
+    );
+}
+
+#[test]
 fn community_packs_cannot_relabel_security_centre_authority() {
     let mut manifest: LanguagePackManifest = serde_json::from_str(COMMUNITY_FIXTURE).unwrap();
     manifest

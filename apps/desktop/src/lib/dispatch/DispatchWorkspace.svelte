@@ -15,6 +15,7 @@
     SimBriefReferenceKind,
   } from "$lib/dispatch/types";
   import type { FlightOperationStage } from "$lib/flightOperation/types";
+  import { dispatchFindingMessageKeys } from "./localization";
 
   let {
     status,
@@ -461,6 +462,7 @@
           {#if comparison}
             <ol class="dispatch-finding-list">
               {#each comparison.findings as finding}
+                {@const messageKeys = dispatchFindingMessageKeys[finding.message_key]}
                 <li
                   class={`dispatch-finding-${finding.status} responsive-surface`}
                 >
@@ -469,18 +471,18 @@
                     <b>{finding.status}</b>
                   </div>
                   <strong
-                    >{$translation(
-                      `${finding.message_key}-title`,
-                      {},
-                      finding.title,
-                    )}</strong
+                    >{messageKeys
+                      ? $translation(messageKeys.title, {}, finding.title)
+                      : finding.title}</strong
                   >
                   <p>
-                    {$translation(
-                      `${finding.message_key}-explanation`,
-                      {},
-                      finding.explanation,
-                    )}
+                    {messageKeys
+                      ? $translation(
+                          messageKeys.explanation,
+                          {},
+                          finding.explanation,
+                        )
+                      : finding.explanation}
                   </p>
                   {#if finding.plan_value || finding.onair_value}
                     <dl>

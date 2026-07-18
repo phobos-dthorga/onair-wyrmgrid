@@ -5,6 +5,7 @@ import {
   matchesQuery,
   uniqueReportedValues,
 } from "$lib/exploration/collection";
+import type { TranslationKey } from "$lib/i18n/catalog";
 import type {
   SimulatorCaptureMode,
   SimulatorRecordingStatus,
@@ -32,6 +33,12 @@ export const defaultRecordingFilters: RecordingFilters = {
   pinned: "all",
   sort: "newest",
 };
+
+export const recordingStatusMessageKeys = {
+  active: "simulator-recording-status-active",
+  completed: "simulator-recording-status-completed",
+  interrupted: "simulator-recording-status-interrupted",
+} as const satisfies Record<SimulatorRecordingStatus, TranslationKey>;
 
 export function recordingFilterOptions(
   sessions: readonly SimulatorSessionSummary[],

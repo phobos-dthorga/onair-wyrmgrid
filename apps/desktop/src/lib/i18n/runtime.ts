@@ -1,11 +1,12 @@
 import { FluentBundle, FluentResource } from "@fluent/bundle";
 import { writable } from "svelte/store";
 import { sourceLanguagePack } from "./catalog";
+import type { TranslationKey } from "./catalog";
 import type { LanguagePackManifest } from "./types";
 
 export type TranslationArguments = Record<string, string | number | Date>;
 export type Translator = (
-  messageId: string,
+  messageId: TranslationKey,
   arguments_?: TranslationArguments,
   fallback?: string,
 ) => string;

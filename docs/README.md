@@ -2,6 +2,7 @@
 
 - [Project brief](project-brief.md)
 - [Architecture overview](architecture/overview.md)
+- [July 2026 codebase structure audit](architecture/codebase-structure-audit-2026-07.md)
 - [Reusable presentation and data exploration](architecture/reusable-presentation-and-exploration.md)
 - [First vertical slice](architecture/vertical-slice.md)
 - [Architecture decisions](architecture/decisions/README.md)
