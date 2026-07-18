@@ -5,7 +5,6 @@
     StaffMemberSummary,
     StaffSnapshotView,
   } from "$lib/atlas/types";
-  import { responsiveSurface } from "$lib/accessibility/responsiveSurface";
   import ExplorationSummary from "$lib/exploration/ExplorationSummary.svelte";
   import ExplorationTabs from "$lib/exploration/ExplorationTabs.svelte";
   import { selectedOrFirst } from "$lib/exploration/collection";
@@ -26,13 +25,11 @@
     view,
     busy = false,
     errorMessage = "",
-    responsiveSurfaces = true,
     onsynchronize,
   }: {
     view: StaffSnapshotView | null;
     busy?: boolean;
     errorMessage?: string;
-    responsiveSurfaces?: boolean;
     onsynchronize: () => void;
   } = $props();
 
@@ -70,10 +67,7 @@
   }
 
   function observationLabel(value: string | undefined): string {
-    const observed = formatLocalDateTime(
-      value,
-      "Observation time unavailable",
-    );
+    const observed = formatLocalDateTime(value, "Observation time unavailable");
     return observed === "Observation time unavailable"
       ? observed
       : `Observed ${observed}`;
@@ -123,7 +117,8 @@
     <details class="staff-filter-panel">
       <summary>
         <span>Filter and sort</span>
-        {#if activeFilterCount > 0}<strong>{activeFilterCount} active</strong>{/if}
+        {#if activeFilterCount > 0}<strong>{activeFilterCount} active</strong
+          >{/if}
       </summary>
       <div class="staff-filter-grid">
         <label>
@@ -135,7 +130,8 @@
           >
             <option value="">All reported categories</option>
             {#each options.categoryCodes as code}
-              <option value={code}>{providerCodeLabel("category", code)}</option>
+              <option value={code}>{providerCodeLabel("category", code)}</option
+              >
             {/each}
           </select>
         </label>
@@ -202,14 +198,15 @@
       onclear={resetFilters}
     />
 
-    {#if errorMessage}<p class="staff-error" role="alert">{errorMessage}</p>{/if}
+    {#if errorMessage}<p class="staff-error" role="alert">
+        {errorMessage}
+      </p>{/if}
 
     <div class="staff-roster" aria-label="Staff roster">
       {#each filteredMembers as member (member.id)}
         <button
           class="responsive-surface"
           class:active={selectedMember?.id === member.id}
-          use:responsiveSurface={{ enabled: responsiveSurfaces }}
           type="button"
           onclick={() => (selectedMemberId = member.id)}
         >
@@ -263,10 +260,7 @@
             class="staff-metrics"
             role="tabpanel"
           >
-            <article
-              class="responsive-surface"
-              use:responsiveSurface={{ enabled: responsiveSurfaces }}
-            >
+            <article class="responsive-surface">
               <span>Provider category</span>
               <strong
                 >{providerCodeLabel(
@@ -274,49 +268,41 @@
                   selectedMember.category_code,
                 )}</strong
               >
-              <small>Numeric provider code; WyrmGrid does not guess its label.</small>
+              <small
+                >Numeric provider code; WyrmGrid does not guess its label.</small
+              >
             </article>
-            <article
-              class="responsive-surface"
-              use:responsiveSurface={{ enabled: responsiveSurfaces }}
-            >
+            <article class="responsive-surface">
               <span>Provider status</span>
               <strong
-                >{providerCodeLabel("status", selectedMember.status_code)}</strong
+                >{providerCodeLabel(
+                  "status",
+                  selectedMember.status_code,
+                )}</strong
               >
-              <small>Numeric provider code; WyrmGrid does not guess its label.</small>
+              <small
+                >Numeric provider code; WyrmGrid does not guess its label.</small
+              >
             </article>
-            <article
-              class="responsive-surface"
-              use:responsiveSurface={{ enabled: responsiveSurfaces }}
-            >
+            <article class="responsive-surface">
               <span>Current airport</span>
               <strong>{airportLabel(selectedMember.current_airport)}</strong>
               {#if selectedMember.current_airport?.name}
                 <small>{selectedMember.current_airport.name}</small>
               {/if}
             </article>
-            <article
-              class="responsive-surface"
-              use:responsiveSurface={{ enabled: responsiveSurfaces }}
-            >
+            <article class="responsive-surface">
               <span>Home airport</span>
               <strong>{airportLabel(selectedMember.home_airport)}</strong>
               {#if selectedMember.home_airport?.name}
                 <small>{selectedMember.home_airport.name}</small>
               {/if}
             </article>
-            <article
-              class="responsive-surface"
-              use:responsiveSurface={{ enabled: responsiveSurfaces }}
-            >
+            <article class="responsive-surface">
               <span>Busy until</span>
               <strong>{formatDate(selectedMember.busy_until)}</strong>
             </article>
-            <article
-              class="responsive-surface"
-              use:responsiveSurface={{ enabled: responsiveSurfaces }}
-            >
+            <article class="responsive-surface">
               <span>Provider presence</span>
               <strong>{onlineLabel(selectedMember.is_online)}</strong>
             </article>
@@ -332,16 +318,15 @@
               <h3>Aircraft classes</h3>
             </div>
             {#each selectedMember.class_qualifications as qualification (qualification.id)}
-              <article
-                class="responsive-surface"
-                use:responsiveSurface={{ enabled: responsiveSurfaces }}
-              >
+              <article class="responsive-surface">
                 <strong
                   >{qualification.short_name ??
                     qualification.name ??
                     "Unnamed class"}</strong
                 >
-                <span>{qualification.name ?? "Full class name not reported"}</span>
+                <span
+                  >{qualification.name ?? "Full class name not reported"}</span
+                >
                 <small>
                   {qualification.last_validated_at
                     ? `Last validated ${formatDate(qualification.last_validated_at)}`
@@ -360,10 +345,7 @@
             class="staff-evidence"
             role="tabpanel"
           >
-            <article
-              class="responsive-surface"
-              use:responsiveSurface={{ enabled: responsiveSurfaces }}
-            >
+            <article class="responsive-surface">
               <span>Avatar artwork</span>
               <strong
                 >{selectedMember.avatar_reference
@@ -375,18 +357,12 @@
                 WyrmGrid will not construct one or substitute invented artwork.
               </p>
             </article>
-            <article
-              class="responsive-surface"
-              use:responsiveSurface={{ enabled: responsiveSurfaces }}
-            >
+            <article class="responsive-surface">
               <span>Snapshot provenance</span>
               <strong>{view?.snapshot.provenance.kind ?? "Unavailable"}</strong>
               <p>{view?.snapshot.provenance.source ?? "Source unavailable"}</p>
             </article>
-            <article
-              class="responsive-surface"
-              use:responsiveSurface={{ enabled: responsiveSurfaces }}
-            >
+            <article class="responsive-surface">
               <span>Unavailable staff facts</span>
               <strong>Preserved as unavailable</strong>
               <p>

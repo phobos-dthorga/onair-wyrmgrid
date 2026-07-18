@@ -5954,7 +5954,6 @@ dependencies = [
  "wyrmgrid-plugin-protocol",
  "wyrmgrid-simbrief-api",
  "wyrmgrid-storage",
- "wyrmgrid-weather-api",
  "zeroize",
 ]
 
@@ -5994,6 +5993,7 @@ dependencies = [
 name = "wyrmgrid-domain"
 version = "0.2.0"
 dependencies = [
+ "base64 0.22.1",
  "chrono",
  "serde",
  "serde_json",
@@ -6023,6 +6023,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+ "url",
  "wyrmgrid-domain",
 ]
 
@@ -6060,20 +6061,6 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "zeroize",
-]
-
-[[package]]
-name = "wyrmgrid-weather-api"
-version = "0.2.0"
-dependencies = [
- "chrono",
- "reqwest 0.12.28",
- "serde_json",
- "thiserror 2.0.18",
- "tokio",
- "url",
- "uuid",
- "wyrmgrid-domain",
 ]
 
 [[package]]

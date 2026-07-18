@@ -1,0 +1,17 @@
+{
+  "$schema": "../../schemas/optional-ai-task-profile-v1.schema.json",
+  "schema_version": 1,
+  "id": "local-ollama-task-assistant",
+  "display_name": "Local Ollama Task Assistant (Optional)",
+  "provider": "ollama-chat",
+  "endpoint": "http://127.0.0.1:11434",
+  "model": "qwen3-coder:30b",
+  "system_prompt_file": "../../docs/optional-ai/base-system-prompt-v1.md",
+  "parameters": {
+    "context_length": 8192,
+    "temperature": 0.2,
+    "seed": 42,
+    "think": false,
+    "max_output_tokens": 3000
+  }
+}

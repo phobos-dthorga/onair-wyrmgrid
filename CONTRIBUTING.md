@@ -37,5 +37,19 @@ prerequisites installed.
 - Use conventional commit-style subjects where practical: `feat:`, `fix:`,
   `docs:`, `refactor:`, `test:`, `build:`, or `chore:`.
 
+## AI is optional
+
+No AI assistant is required to build, test, document, contribute to, or release
+WyrmGrid. Hoardmind is a private maintainer tool and is not a WyrmGrid service,
+dependency, contributor requirement, or privileged source of project truth.
+Human-authored work follows exactly the same review and quality gates.
+
+Contributors who independently choose an AI assistant remain responsible for
+verifying its output and for keeping credentials, personal data, raw provider
+payloads, and other private material out of prompts and contributions. The
+repository's optional development-task runner is local-only, profile-driven,
+review-only, and limited to built-in versioned contracts; using it is never a
+condition of contribution.
+
 By contributing, you agree that your contribution is licensed under this
 repository's MIT License.

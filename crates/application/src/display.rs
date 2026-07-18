@@ -38,12 +38,20 @@ pub enum FuelUnit {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WeatherRenderingProfile {
+    Compatibility,
+    Enhanced,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DisplayPreferences {
     pub altitude_unit: AltitudeUnit,
     pub speed_unit: SpeedUnit,
     pub weight_unit: WeightUnit,
     pub fuel_unit: FuelUnit,
     pub responsive_surfaces: bool,
+    pub weather_rendering_profile: WeatherRenderingProfile,
 }
 
 impl Default for DisplayPreferences {
@@ -54,6 +62,7 @@ impl Default for DisplayPreferences {
             weight_unit: WeightUnit::Pounds,
             fuel_unit: FuelUnit::Pounds,
             responsive_surfaces: true,
+            weather_rendering_profile: WeatherRenderingProfile::Enhanced,
         }
     }
 }
@@ -87,7 +96,7 @@ impl DisplayPreferencesRepository for Store {
 pub enum DisplaySettingsError {
     #[error("WyrmGrid could not read or save its local display settings.")]
     StorageUnavailable,
-    #[error("The saved measurement units are not supported by this WyrmGrid version.")]
+    #[error("The saved display preferences are not supported by this WyrmGrid version.")]
     UnsupportedUnit,
 }
 
@@ -144,6 +153,11 @@ fn preferences_to_record(preferences: DisplayPreferences) -> DisplayPreferencesR
         }
         .to_owned(),
         responsive_surfaces: preferences.responsive_surfaces,
+        weather_rendering_profile: match preferences.weather_rendering_profile {
+            WeatherRenderingProfile::Compatibility => "compatibility",
+            WeatherRenderingProfile::Enhanced => "enhanced",
+        }
+        .to_owned(),
     }
 }
 
@@ -156,6 +170,7 @@ fn record_to_preferences(
         weight_unit: parse_unit(&record.weight_unit)?,
         fuel_unit: parse_unit(&record.fuel_unit)?,
         responsive_surfaces: record.responsive_surfaces,
+        weather_rendering_profile: parse_unit(&record.weather_rendering_profile)?,
     })
 }
 

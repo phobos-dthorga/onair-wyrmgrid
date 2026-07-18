@@ -99,12 +99,19 @@ in changed business logic during local review.
    Dispatch import, Hoard history selection, language packs, and plugin
    permission review.
 
-## Local AI-agent work
+## Optional AI-assisted test work
 
-A smaller local agent is well suited to adding table-driven boundary cases,
-fixture variants, regression tests for an already-understood defect, and test
-documentation. Give it one named behaviour and the command that proves success.
-Its changes still require human review and the same locally executed gates.
+No AI is required for WyrmGrid development or testing. A contributor who elects
+to use a private assistant may find it useful for adding table-driven boundary
+cases, fixture variants, regression tests for an already-understood defect, and
+test documentation. Give it one named behaviour and the command that proves
+success. Its changes still require human review and the same locally executed
+gates.
+
+The optional [test-matrix and fixture-variant task contracts](optional-ai/README.md)
+produce review-only drafts from approved rules and sanitized inputs. They do not
+write tests or fixtures, change production code, or claim validation. Run the
+named deterministic validator or test command after reconciling a draft.
 
 Do not delegate interpretation of live provider behaviour, security or privacy
 boundaries, protocol compatibility decisions, or assertions that could

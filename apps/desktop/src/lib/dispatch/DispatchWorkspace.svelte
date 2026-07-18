@@ -1,5 +1,6 @@
 <script lang="ts">
   import "./dispatch.css";
+  import FlightOperationCard from "$lib/flightOperation/FlightOperationCard.svelte";
   import FlightOperationJourney from "$lib/flightOperation/FlightOperationJourney.svelte";
   import { translation } from "$lib/i18n/runtime";
   import {
@@ -13,6 +14,7 @@
     SimBriefAccountPreference,
     SimBriefReferenceKind,
   } from "$lib/dispatch/types";
+  import type { FlightOperationStage } from "$lib/flightOperation/types";
 
   let {
     status,
@@ -22,6 +24,8 @@
     onimport,
     onweather,
     onclear,
+    onoperation,
+    onjourney,
     onviewweatheratlas,
     onviewroute,
     onviewfeature,
@@ -37,6 +41,8 @@
     ) => void;
     onweather: () => void;
     onclear: () => void;
+    onoperation: (action: "start" | "revise") => void;
+    onjourney: (stage: FlightOperationStage) => void;
     onviewweatheratlas: (stationId?: string) => void;
     onviewroute: () => void;
     onviewfeature: (featureId: string) => void;
@@ -65,6 +71,7 @@
   const comparison = $derived(status.comparison);
   const weather = $derived(status.weather.snapshot);
   const atlasWeather = $derived(status.atlas_weather);
+  const operation = $derived(status.operation);
   function atlasWeatherStationId(stationIcao: string): string | undefined {
     return atlasWeather?.stations.find(
       (station) => station.station_icao === stationIcao,
@@ -76,6 +83,21 @@
       .getElementById("dispatch-weather")
       ?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
+
+  function openJourneyStage(stage: FlightOperationStage): void {
+    if (stage === "weather") {
+      scrollWeatherIntoView();
+      return;
+    }
+    if (stage === "manifest" || stage === "review") {
+      document
+        .getElementById("dispatch-operation")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    onjourney(stage);
+  }
+
   const atlasRoute = $derived(status.atlas_route);
   const originRouteFeature = $derived(
     atlasRoute?.features.find((feature) => feature.kind === "origin"),
@@ -84,7 +106,8 @@
     atlasRoute?.features.find((feature) => feature.kind === "destination"),
   );
   const alternateRouteFeatures = $derived(
-    atlasRoute?.features.filter((feature) => feature.kind === "alternate") ?? [],
+    atlasRoute?.features.filter((feature) => feature.kind === "alternate") ??
+      [],
   );
 
   function formatDate(value: string | undefined): string {
@@ -124,7 +147,6 @@
         feature.kind === "route_fix" && feature.sequence === sequence,
     );
   }
-
 </script>
 
 <section class="dispatch-workspace" aria-label="Dispatch flight plan workspace">
@@ -139,11 +161,17 @@
     </div>
 
     {#if selectedJob}
-      <article class="dispatch-selected-job">
+      <article class="dispatch-selected-job responsive-surface">
         <span class="eyebrow">Selected OnAir job</span>
         <strong>{selectedJob.mission_type ?? "Pending job"}</strong>
         <span>{selectedJobRoute()}</span>
-        <small>Read-only Hoard observation</small>
+        <small>
+          Read-only Hoard observation · {status.selected_job?.availability ??
+            "unavailable"}
+        </small>
+        <button type="button" onclick={() => onjourney("jobs")}
+          >Choose another job</button
+        >
       </article>
     {/if}
 
@@ -210,7 +238,7 @@
         >
         <span>
           {rememberReference
-            ? "The reference is retained locally; imported plans remain session-only in this preview."
+            ? "The reference is retained locally; a plan is persisted only when accepted into an operation or associated with a recording."
             : "The account reference and imported plan are cleared when WyrmGrid closes."}
         </span>
       </div>
@@ -229,7 +257,7 @@
     {#if plan && airports}
       <header class="dispatch-route-header">
         <button
-          class="dispatch-airport dispatch-atlas-link"
+          class="dispatch-airport dispatch-atlas-link responsive-surface"
           type="button"
           disabled={!originRouteFeature}
           onclick={() =>
@@ -241,7 +269,7 @@
           <i>{airports.origin.planned_runway ?? "RWY —"}</i>
         </button>
         <button
-          class="dispatch-route-line dispatch-atlas-link"
+          class="dispatch-route-line dispatch-atlas-link responsive-surface"
           type="button"
           disabled={!atlasRoute}
           aria-label="View the complete Dispatch route in Atlas"
@@ -251,11 +279,12 @@
           <small>{route?.distance_nm?.toFixed(0) ?? "—"} NM</small>
         </button>
         <button
-          class="dispatch-airport dispatch-airport-arrival dispatch-atlas-link"
+          class="dispatch-airport dispatch-airport-arrival dispatch-atlas-link responsive-surface"
           type="button"
           disabled={!destinationRouteFeature}
           onclick={() =>
-            destinationRouteFeature && onviewfeature(destinationRouteFeature.id)}
+            destinationRouteFeature &&
+            onviewfeature(destinationRouteFeature.id)}
         >
           <span>Destination</span>
           <strong>{airports.destination.icao}</strong>
@@ -265,7 +294,7 @@
       </header>
 
       <div class="dispatch-summary-strip">
-        <article>
+        <article class="responsive-surface">
           <span>Aircraft</span><strong>{aircraft?.icao_type ?? "—"}</strong
           ><small
             >{aircraft?.registration ??
@@ -273,24 +302,24 @@
               "Not supplied"}</small
           >
         </article>
-        <article>
+        <article class="responsive-surface">
           <span>Block out</span><strong
             >{formatTime(schedule?.scheduled_out)}</strong
           ><small>{formatDate(schedule?.scheduled_out)}</small>
         </article>
-        <article>
+        <article class="responsive-surface">
           <span>Enroute</span><strong
             >{formatDuration(schedule?.estimated_enroute_seconds)}</strong
           ><small>Planned duration</small>
         </article>
-        <article>
+        <article class="responsive-surface">
           <span>Initial level</span><strong
             >{route?.initial_altitude_ft
               ? `FL${Math.round(route.initial_altitude_ft / 100)}`
               : "—"}</strong
           ><small>SimBrief calculation</small>
         </article>
-        <article>
+        <article class="responsive-surface">
           <span>AIRAC</span><strong>{plan.identity.value.airac ?? "—"}</strong
           ><small>Provider revision</small>
         </article>
@@ -298,12 +327,19 @@
 
       <FlightOperationJourney
         journey={status.journey}
-        onweather={scrollWeatherIntoView}
-        onatlas={onviewroute}
+        onstage={openJourneyStage}
+      />
+
+      <FlightOperationCard
+        {operation}
+        operationChange={status.operation_change}
+        jobSelection={status.selected_job}
+        {busy}
+        {onoperation}
       />
 
       <div class="dispatch-plan-grid">
-        <article class="dispatch-card dispatch-route-card">
+        <article class="dispatch-card dispatch-route-card responsive-surface">
           <div class="dispatch-card-heading">
             <div>
               <span class="eyebrow">Route spine</span>
@@ -328,7 +364,8 @@
                     type="button"
                     disabled={!atlasFeature}
                     aria-label={`${leg.ident}${atlasFeature?.availability === "location_unavailable" ? ", location unavailable" : ", view in Atlas"}`}
-                    onclick={() => atlasFeature && onviewfeature(atlasFeature.id)}
+                    onclick={() =>
+                      atlasFeature && onviewfeature(atlasFeature.id)}
                   >
                     <span>{leg.sequence + 1}</span><strong>{leg.ident}</strong>
                     <small>{leg.airway ?? "DCT"}</small>
@@ -350,7 +387,7 @@
           {/if}
         </article>
 
-        <article class="dispatch-card">
+        <article class="dispatch-card responsive-surface">
           <div class="dispatch-card-heading">
             <div>
               <span class="eyebrow">Mass plan</span>
@@ -377,7 +414,7 @@
           </dl>
         </article>
 
-        <article class="dispatch-card">
+        <article class="dispatch-card responsive-surface">
           <div class="dispatch-card-heading">
             <div>
               <span class="eyebrow">Fuel plan</span>
@@ -424,7 +461,9 @@
           {#if comparison}
             <ol class="dispatch-finding-list">
               {#each comparison.findings as finding}
-                <li class={`dispatch-finding-${finding.status}`}>
+                <li
+                  class={`dispatch-finding-${finding.status} responsive-surface`}
+                >
                   <div class="dispatch-finding-heading">
                     <span>{formatFindingCategory(finding.category)}</span>
                     <b>{finding.status}</b>
@@ -504,7 +543,7 @@
           {#if weather}
             <div class="dispatch-weather-grid">
               {#each weather.airports as airport}
-                <section class="dispatch-weather-station">
+                <section class="dispatch-weather-station responsive-surface">
                   <header>
                     <strong>{airport.station_icao}</strong>
                     <div class="dispatch-weather-station-actions">
@@ -523,7 +562,7 @@
                       >
                         {airport.metar?.value.flight_category?.toUpperCase() ??
                           "NO METAR"}
-                        </span>
+                      </span>
                     </div>
                   </header>
                   {#if airport.metar}
@@ -595,6 +634,25 @@
           {/if}
         </article>
       </div>
+    {:else if operation}
+      <div class="dispatch-persisted-operation">
+        <FlightOperationJourney
+          journey={status.journey}
+          onstage={openJourneyStage}
+        />
+        <FlightOperationCard
+          {operation}
+          operationChange={status.operation_change}
+          jobSelection={status.selected_job}
+          {busy}
+          {onoperation}
+        />
+        <p>
+          This accepted revision remains available after restart. Import a
+          current plan to compare or revise it; the stored revision is not
+          silently replaced.
+        </p>
+      </div>
     {:else}
       <div class="dispatch-empty-state">
         <div class="dispatch-runway" aria-hidden="true">
@@ -618,22 +676,22 @@
       <p>External operational calculation</p>
 
       <div class="dispatch-inspector-stack">
-        <article>
+        <article class="responsive-surface">
           <span>Provider</span><strong>SimBrief</strong><small
             >Read-only latest OFP</small
           >
         </article>
-        <article>
+        <article class="responsive-surface">
           <span>Generated</span><strong
             >{formatDate(plan.identity.provenance.generated_at)}</strong
           >
         </article>
-        <article>
+        <article class="responsive-surface">
           <span>Retrieved</span><strong
             >{formatDate(plan.identity.provenance.retrieved_at)}</strong
           >
         </article>
-        <article>
+        <article class="responsive-surface">
           <span>Alternates</span>
           {#if alternateRouteFeatures.length}
             <div class="dispatch-alternate-links">
@@ -649,7 +707,7 @@
             <strong>None supplied</strong>
           {/if}
         </article>
-        <article>
+        <article class="responsive-surface">
           <span>OnAir aircraft</span><strong
             >{comparison?.matched_aircraft?.registration ??
               "No deterministic match"}</strong
@@ -658,7 +716,7 @@
               "Comparison is evidence-bound"}</small
           >
         </article>
-        <article>
+        <article class="responsive-surface">
           <span>Airport weather</span><strong
             >{status.weather.availability === "ready"
               ? `${weather?.airports.length ?? 0} stations`

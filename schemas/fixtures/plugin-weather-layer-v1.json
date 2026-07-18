@@ -1,0 +1,40 @@
+{
+  "protocol_version": 1,
+  "sequence": 2,
+  "payload": {
+    "type": "publish_weather",
+    "request_id": "weather-1",
+    "response": {
+      "status": "complete",
+      "product": {
+        "kind": "global_layer",
+        "layer": {
+          "schema_version": 1,
+          "id": "open-meteo-global",
+          "title": "Global model weather",
+          "data": {
+            "kind": "grid",
+            "points": [
+              {
+                "id": "global-0-0",
+                "location": { "latitude": -75.0, "longitude": -165.0 },
+                "condition": "snow",
+                "temperature_c": -22.5,
+                "provider_weather_code": 71
+              }
+            ]
+          },
+          "provenance": {
+            "kind": "external_calculation",
+            "provider": "open-meteo.com",
+            "provider_revision": "forecast-api-v1",
+            "generated_at": "2026-07-17T12:00:00Z",
+            "retrieved_at": "2026-07-17T12:02:00Z",
+            "transformation_version": 1,
+            "freshness": "current"
+          }
+        }
+      }
+    }
+  }
+}

@@ -100,7 +100,8 @@ not replace completion of the current vertical slice.
   route, reported cargo, and expiry comparison with unavailable evidence exposed
   instead of inferred (implemented for the current read-only contracts)
 - Explicitly requested, ten-minute session-cached AviationWeather.gov METAR and
-  TAF airport context with raw coded text and provenance (implemented)
+  TAF airport context through its independent provider plugin, with raw coded
+  text and provenance (implemented)
 - Host-owned plan-airport weather projection, linked Dispatch/Atlas station
   selection, explicit unknown/no-report rendering, and an initial
   Plan-to-Atlas journey rail (implemented)
@@ -112,8 +113,9 @@ not replace completion of the current vertical slice.
   waits for navigation and AIRAC resolution
 - Live and Hoard-historical Atlas weather with a default Compatibility renderer,
   opt-in GPU-enhanced effects, and identical facts across rendering profiles
-- Approved regional/global radar adapters with visible coverage and no-data
-  masks; bounded live animation precedes any licensed historical retention
+- Independently approved Open-Meteo global model and RainViewer current-radar
+  plugins with host-owned GPU rendering (coarse static layers implemented;
+  visible no-data masks and bounded animation remain)
 - SimBrief generation only after Navigraph approves the desktop flow and any
   required hosted-secret boundary receives a separate decision
 
@@ -167,11 +169,13 @@ not replace completion of the current vertical slice.
 
 - Host-owned flight-operation identity, revision semantics, and a non-blocking
   Plan -> Weather -> Jobs -> Manifest -> Fleet -> Staff -> Review -> Atlas
-  journey rail (schema-1 host-derived Plan/Weather/Atlas summaries implemented;
-  persistent identity and revisions remain)
+  journey rail (schema-1 persistent identity, append-only revisions, current
+  stage availability, and restart-safe active-operation view implemented)
 - A per-leg manifest that distinguishes passengers, company personnel,
   positioning staff, the player avatar, and freight without double-counting
-  people who operate one leg and travel on another
+  people who operate one leg and travel on another (aggregate OnAir passenger
+  counts, freight weights, and explicit missing facts implemented as the first
+  evidence-derived slice; identities and roles remain)
 - Explainable reconciliation across jobs, load, seats, payload, aircraft and
   staff location, sourced qualifications, weather, schedule, and plan evidence
 - Explicit invalidation and user-reviewed revisions instead of silent cascading

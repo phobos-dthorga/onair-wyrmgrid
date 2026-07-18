@@ -100,3 +100,97 @@ fn validates_the_version_one_json_fixture() {
     .unwrap();
     assert_eq!(snapshot.validate(), Ok(()));
 }
+
+#[test]
+fn validates_the_global_weather_layer_version_one_fixture() {
+    let layer: GlobalWeatherLayerSnapshot = serde_json::from_str(include_str!(
+        "../../../../schemas/fixtures/global-weather-layer-v1.json"
+    ))
+    .unwrap();
+    assert_eq!(layer.validate(), Ok(()));
+}
+
+#[test]
+fn validates_a_provider_neutral_global_grid() {
+    let at = DateTime::from_timestamp(1_784_243_200, 0).unwrap();
+    let layer = GlobalWeatherLayerSnapshot {
+        schema_version: GLOBAL_WEATHER_LAYER_SCHEMA_VERSION,
+        id: "open-meteo-global".into(),
+        title: "Global model weather".into(),
+        data: GlobalWeatherLayerData::Grid {
+            points: vec![GlobalWeatherGridPoint {
+                id: "grid-0".into(),
+                location: crate::Coordinates {
+                    latitude: -33.86,
+                    longitude: 151.20,
+                },
+                condition: WeatherCondition::Rain,
+                temperature_c: Some(16.0),
+                precipitation_mm: Some(2.5),
+                cloud_cover_percent: Some(91.0),
+                wind_direction_degrees: Some(180.0),
+                wind_speed_kt: Some(17.0),
+                provider_weather_code: Some(61),
+            }],
+        },
+        provenance: OperationalProvenance {
+            kind: ProvenanceKind::ExternalCalculation,
+            provider: "open-meteo.com".into(),
+            provider_revision: Some("forecast-api-v1".into()),
+            generated_at: Some(at),
+            retrieved_at: at,
+            transformation_version: 1,
+            freshness: SnapshotFreshness::Current,
+        },
+    };
+
+    assert_eq!(layer.validate(), Ok(()));
+}
+
+#[test]
+fn rejects_non_png_and_duplicate_global_raster_tiles() {
+    let at = DateTime::from_timestamp(1_784_243_200, 0).unwrap();
+    let mut layer = GlobalWeatherLayerSnapshot {
+        schema_version: GLOBAL_WEATHER_LAYER_SCHEMA_VERSION,
+        id: "rainviewer-radar".into(),
+        title: "Global precipitation radar".into(),
+        data: GlobalWeatherLayerData::RasterTiles {
+            frame_time: at,
+            tiles: vec![GlobalWeatherRasterTile {
+                zoom: 1,
+                x: 0,
+                y: 0,
+                png_base64: BASE64_STANDARD.encode(b"not a PNG"),
+            }],
+        },
+        provenance: OperationalProvenance {
+            kind: ProvenanceKind::ExternalFact,
+            provider: "rainviewer.com".into(),
+            provider_revision: None,
+            generated_at: Some(at),
+            retrieved_at: at,
+            transformation_version: 1,
+            freshness: SnapshotFreshness::Current,
+        },
+    };
+
+    assert_eq!(
+        layer.validate(),
+        Err(GlobalWeatherValidationError::InvalidRasterTile)
+    );
+
+    if let GlobalWeatherLayerData::RasterTiles { tiles, .. } = &mut layer.data {
+        let mut png = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR".to_vec();
+        png.extend_from_slice(&256_u32.to_be_bytes());
+        png.extend_from_slice(&256_u32.to_be_bytes());
+        png.extend_from_slice(&[8, 6, 0, 0, 0]);
+        png.extend_from_slice(&[0, 0, 0, 0]);
+        png.extend_from_slice(b"\0\0\0\0IEND\0\0\0\0");
+        tiles[0].png_base64 = BASE64_STANDARD.encode(png);
+        tiles.push(tiles[0].clone());
+    }
+    assert_eq!(
+        layer.validate(),
+        Err(GlobalWeatherValidationError::InvalidRasterTile)
+    );
+}

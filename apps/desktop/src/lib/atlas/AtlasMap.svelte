@@ -2,20 +2,30 @@
   import type {
     ExpressionSpecification,
     GeoJSONSource,
-    Map,
+    ImageSource,
+    Map as MapLibreMap,
   } from "maplibre-gl";
   import "maplibre-gl/dist/maplibre-gl.css";
   import { onMount } from "svelte";
   import type { AtlasRouteView } from "$lib/dispatch/types";
-  import type { PublishedPluginLayer } from "$lib/forge/types";
+  import type {
+    PublishedPluginLayer,
+    PublishedPluginWeatherLayer,
+  } from "$lib/forge/types";
   import { activeTheme } from "$lib/theme/runtime";
   import {
     weatherFitCoordinates,
     weatherMapSignature,
     weatherPointCoordinates,
     weatherStationFeatures,
+    weatherWindFeatures,
   } from "$lib/weather/atlasWeather";
   import type { FlightWeatherMapView } from "$lib/weather/types";
+  import {
+    pluginRadarFrames,
+    pluginWeatherGridFeatures,
+  } from "$lib/weather/pluginWeather";
+  import { ATLAS_HOME_CENTER, balancedOverviewCoordinates } from "./camera";
   import {
     ADMINISTRATIVE_REGION_LABEL_BANDS,
     administrativeRegionFromMapFeature,
@@ -48,9 +58,12 @@
     fboVisible,
     pluginLayers,
     pluginLayersVisible,
+    pluginWeatherLayers,
+    pluginWeatherVisible,
     flightRoute,
     weather,
     weatherVisible,
+    enhancedWeather,
     regionsVisible,
     lowResource,
     selectedRegionId,
@@ -76,9 +89,12 @@
     fboVisible: boolean;
     pluginLayers: PublishedPluginLayer[];
     pluginLayersVisible: boolean;
+    pluginWeatherLayers: PublishedPluginWeatherLayer[];
+    pluginWeatherVisible: boolean;
     flightRoute?: AtlasFlightRoute;
     weather?: FlightWeatherMapView;
     weatherVisible: boolean;
+    enhancedWeather: boolean;
     regionsVisible: boolean;
     lowResource: boolean;
     selectedRegionId?: string;
@@ -117,6 +133,11 @@
   const PLUGIN_SOURCE_ID = "wyrmgrid-plugin-layers";
   const PLUGIN_LAYER_ID = "wyrmgrid-plugin-points";
   const PLUGIN_LABEL_LAYER_ID = "wyrmgrid-plugin-labels";
+  const PLUGIN_WEATHER_GRID_SOURCE_ID = "wyrmgrid-plugin-weather-grid";
+  const PLUGIN_WEATHER_ATMOSPHERE_LAYER_ID =
+    "wyrmgrid-plugin-weather-atmosphere";
+  const PLUGIN_WEATHER_GRID_LAYER_ID = "wyrmgrid-plugin-weather-grid-points";
+  const PLUGIN_RADAR_PREFIX = "wyrmgrid-plugin-radar";
   const ROUTE_SOURCE_ID = "wyrmgrid-flight-routes";
   const ROUTE_MARKER_SOURCE_ID = "wyrmgrid-flight-route-markers";
   const PLANNED_ROUTE_LAYER_ID = "wyrmgrid-planned-flight-route";
@@ -124,6 +145,11 @@
   const ROUTE_MARKER_LAYER_ID = "wyrmgrid-flight-route-markers";
   const ROUTE_LABEL_LAYER_ID = "wyrmgrid-flight-route-labels";
   const WEATHER_SOURCE_ID = "wyrmgrid-flight-weather";
+  const WEATHER_WIND_SOURCE_ID = "wyrmgrid-flight-weather-wind";
+  const WEATHER_ATMOSPHERE_LAYER_ID = "wyrmgrid-flight-weather-atmosphere";
+  const WEATHER_EFFECT_LAYER_ID = "wyrmgrid-flight-weather-effects";
+  const WEATHER_WIND_LAYER_ID = "wyrmgrid-flight-weather-wind-paths";
+  const WEATHER_WIND_TIP_LAYER_ID = "wyrmgrid-flight-weather-wind-tips";
   const WEATHER_LAYER_ID = "wyrmgrid-flight-weather-stations";
   const WEATHER_LABEL_LAYER_ID = "wyrmgrid-flight-weather-labels";
   const DISPATCH_ROUTE_SOURCE_ID = "wyrmgrid-dispatch-route";
@@ -132,12 +158,29 @@
   const DISPATCH_ROUTE_LABEL_LAYER_ID = "wyrmgrid-dispatch-route-labels";
 
   let mapContainer: HTMLDivElement;
-  let map: Map | undefined;
+  let map: MapLibreMap | undefined;
   let mapReady = $state(false);
   let fittedAtlasSignature = "";
   let hoveredRegionFeatureId: string | number | undefined;
   let selectedRegionFeatureId: string | number | undefined;
   let prefersReducedMotion = $state(false);
+  let weatherAnimationFrame: number | undefined;
+  let weatherAnimationTime = 0;
+  let pluginRadarLayerIds = new Set<string>();
+  let pluginRadarFrameVersions = new Map<string, string>();
+  const plottedWeatherStationCount = $derived(
+    weatherStationFeatures(weather).features.length,
+  );
+  const plottedWeatherWindCount = $derived(
+    weatherWindFeatures(weather).features.filter(
+      ({ properties }) => properties.feature_type === "wind_path",
+    ).length,
+  );
+  const activeWeatherEffectCount = $derived(
+    weatherStationFeatures(weather).features.filter(
+      ({ properties }) => properties.effect !== "none",
+    ).length,
+  );
 
   const regionHovered: ExpressionSpecification = [
     "boolean",
@@ -174,6 +217,69 @@
 
   function regionMotionDuration(): number {
     return lowResource || prefersReducedMotion ? 0 : 160;
+  }
+
+  function weatherEffectRadius(pulse: number): ExpressionSpecification {
+    return [
+      "interpolate",
+      ["linear"],
+      ["zoom"],
+      1,
+      14 + pulse * 6,
+      8,
+      38 + pulse * 18,
+    ];
+  }
+
+  function stopWeatherAnimation(): void {
+    if (weatherAnimationFrame !== undefined) {
+      window.cancelAnimationFrame(weatherAnimationFrame);
+      weatherAnimationFrame = undefined;
+    }
+  }
+
+  function applyStaticWeatherEffect(): void {
+    if (!map?.getLayer(WEATHER_EFFECT_LAYER_ID)) return;
+    map.setPaintProperty(
+      WEATHER_EFFECT_LAYER_ID,
+      "circle-radius",
+      weatherEffectRadius(0.35),
+    );
+    map.setPaintProperty(WEATHER_EFFECT_LAYER_ID, "circle-opacity", 0.26);
+  }
+
+  function updateWeatherAnimation(hasWeatherEffects: boolean): void {
+    if (
+      !map ||
+      !weatherVisible ||
+      !enhancedWeather ||
+      lowResource ||
+      prefersReducedMotion ||
+      !hasWeatherEffects
+    ) {
+      stopWeatherAnimation();
+      applyStaticWeatherEffect();
+      return;
+    }
+    if (weatherAnimationFrame !== undefined) return;
+
+    const animate = (time: number) => {
+      weatherAnimationFrame = window.requestAnimationFrame(animate);
+      if (!map || time - weatherAnimationTime < 1000 / 24) return;
+      weatherAnimationTime = time;
+      const pulse = (Math.sin(time / 620) + 1) / 2;
+      map.setPaintProperty(
+        WEATHER_EFFECT_LAYER_ID,
+        "circle-radius",
+        weatherEffectRadius(pulse),
+      );
+      map.setPaintProperty(
+        WEATHER_EFFECT_LAYER_ID,
+        "circle-opacity",
+        0.16 + pulse * 0.2,
+      );
+    };
+    weatherAnimationFrame = window.requestAnimationFrame(animate);
   }
 
   function clearHoveredRegion(): void {
@@ -322,6 +428,80 @@
     };
   }
 
+  function pluginWeatherColor(): ExpressionSpecification {
+    return [
+      "match",
+      ["get", "condition"],
+      "clear",
+      $activeTheme.colors.success,
+      "cloud",
+      $activeTheme.colors.text_muted,
+      "rain",
+      $activeTheme.colors.highlight,
+      "snow",
+      $activeTheme.colors.text,
+      "convective",
+      $activeTheme.colors.danger,
+      "obscuration",
+      $activeTheme.colors.accent,
+      $activeTheme.colors.line,
+    ];
+  }
+
+  function pluginRadarMapId(frameId: string): string {
+    return `${PLUGIN_RADAR_PREFIX}-${frameId.replaceAll(/[^A-Za-z0-9_-]/g, "-")}`;
+  }
+
+  function syncPluginRadarFrames(): void {
+    if (!map || !mapReady) return;
+    const frames = pluginRadarFrames(pluginWeatherLayers);
+    const nextLayerIds = new Set<string>();
+    const nextFrameVersions = new Map<string, string>();
+    for (const frame of frames) {
+      const mapId = pluginRadarMapId(frame.id);
+      const sourceId = `${mapId}-source`;
+      const layerId = `${mapId}-layer`;
+      nextLayerIds.add(layerId);
+      nextFrameVersions.set(layerId, frame.frame_time);
+      const image = map.getSource(sourceId) as ImageSource | undefined;
+      if (image && pluginRadarFrameVersions.get(layerId) !== frame.frame_time) {
+        image.updateImage({ url: frame.url, coordinates: frame.coordinates });
+      } else if (!image) {
+        map.addSource(sourceId, {
+          type: "image",
+          url: frame.url,
+          coordinates: frame.coordinates,
+        });
+        map.addLayer(
+          {
+            id: layerId,
+            type: "raster",
+            source: sourceId,
+            layout: { visibility: pluginWeatherVisible ? "visible" : "none" },
+            paint: {
+              "raster-opacity": lowResource ? 0.42 : 0.58,
+              "raster-fade-duration": prefersReducedMotion ? 0 : 300,
+            },
+          },
+          PLUGIN_WEATHER_ATMOSPHERE_LAYER_ID,
+        );
+      }
+      map.setLayoutProperty(
+        layerId,
+        "visibility",
+        pluginWeatherVisible ? "visible" : "none",
+      );
+    }
+    for (const layerId of pluginRadarLayerIds) {
+      if (nextLayerIds.has(layerId)) continue;
+      const sourceId = `${layerId.slice(0, -"-layer".length)}-source`;
+      if (map.getLayer(layerId)) map.removeLayer(layerId);
+      if (map.getSource(sourceId)) map.removeSource(sourceId);
+    }
+    pluginRadarLayerIds = nextLayerIds;
+    pluginRadarFrameVersions = nextFrameVersions;
+  }
+
   function updateAtlas(): void {
     if (!map || !mapReady) return;
 
@@ -375,9 +555,11 @@
     const fleet = fleetFeatures();
     const fboNetwork = fboFeatures();
     const pluginData = pluginFeatures();
+    const pluginWeatherData = pluginWeatherGridFeatures(pluginWeatherLayers);
     const routes = routeLineFeatures(flightRoute);
     const routeMarkers = routeMarkerFeatures(flightRoute);
     const weatherStations = weatherStationFeatures(weather);
+    const weatherWinds = weatherWindFeatures(weather);
     const dispatchRouteData = atlasRouteGeoJson(route);
     (map.getSource(FLEET_SOURCE_ID) as GeoJSONSource | undefined)?.setData(
       fleet,
@@ -388,6 +570,10 @@
     (map.getSource(PLUGIN_SOURCE_ID) as GeoJSONSource | undefined)?.setData(
       pluginData,
     );
+    (
+      map.getSource(PLUGIN_WEATHER_GRID_SOURCE_ID) as GeoJSONSource | undefined
+    )?.setData(pluginWeatherData);
+    syncPluginRadarFrames();
     (map.getSource(ROUTE_SOURCE_ID) as GeoJSONSource | undefined)?.setData(
       routes,
     );
@@ -397,6 +583,9 @@
     (map.getSource(WEATHER_SOURCE_ID) as GeoJSONSource | undefined)?.setData(
       weatherStations,
     );
+    (
+      map.getSource(WEATHER_WIND_SOURCE_ID) as GeoJSONSource | undefined
+    )?.setData(weatherWinds);
     (
       map.getSource(DISPATCH_ROUTE_SOURCE_ID) as GeoJSONSource | undefined
     )?.setData(dispatchRouteData);
@@ -414,7 +603,42 @@
       "visibility",
       pluginVisibility,
     );
+    const pluginWeatherVisibility = pluginWeatherVisible ? "visible" : "none";
+    map.setLayoutProperty(
+      PLUGIN_WEATHER_GRID_LAYER_ID,
+      "visibility",
+      pluginWeatherVisibility,
+    );
+    map.setLayoutProperty(
+      PLUGIN_WEATHER_ATMOSPHERE_LAYER_ID,
+      "visibility",
+      pluginWeatherVisible && enhancedWeather && !lowResource
+        ? "visible"
+        : "none",
+    );
     const weatherVisibility = weatherVisible ? "visible" : "none";
+    const gpuWeatherVisibility =
+      weatherVisible && enhancedWeather && !lowResource ? "visible" : "none";
+    map.setLayoutProperty(
+      WEATHER_ATMOSPHERE_LAYER_ID,
+      "visibility",
+      gpuWeatherVisibility,
+    );
+    map.setLayoutProperty(
+      WEATHER_EFFECT_LAYER_ID,
+      "visibility",
+      gpuWeatherVisibility,
+    );
+    map.setLayoutProperty(
+      WEATHER_WIND_LAYER_ID,
+      "visibility",
+      gpuWeatherVisibility,
+    );
+    map.setLayoutProperty(
+      WEATHER_WIND_TIP_LAYER_ID,
+      "visibility",
+      gpuWeatherVisibility,
+    );
     map.setLayoutProperty(WEATHER_LAYER_ID, "visibility", weatherVisibility);
     map.setLayoutProperty(
       WEATHER_LABEL_LAYER_ID,
@@ -488,6 +712,21 @@
       PLUGIN_LAYER_ID,
       "circle-stroke-color",
       $activeTheme.colors.highlight,
+    );
+    map.setPaintProperty(
+      PLUGIN_WEATHER_ATMOSPHERE_LAYER_ID,
+      "circle-color",
+      pluginWeatherColor(),
+    );
+    map.setPaintProperty(
+      PLUGIN_WEATHER_GRID_LAYER_ID,
+      "circle-color",
+      pluginWeatherColor(),
+    );
+    map.setPaintProperty(
+      PLUGIN_WEATHER_GRID_LAYER_ID,
+      "circle-stroke-color",
+      $activeTheme.colors.map_halo,
     );
     map.setPaintProperty(
       PLUGIN_LABEL_LAYER_ID,
@@ -589,6 +828,69 @@
       "text-halo-color",
       $activeTheme.colors.map_halo,
     );
+    map.setPaintProperty(WEATHER_ATMOSPHERE_LAYER_ID, "heatmap-color", [
+      "interpolate",
+      ["linear"],
+      ["heatmap-density"],
+      0,
+      "rgba(0, 0, 0, 0)",
+      0.15,
+      $activeTheme.colors.success,
+      0.42,
+      $activeTheme.colors.highlight,
+      0.72,
+      $activeTheme.colors.accent,
+      1,
+      $activeTheme.colors.danger,
+    ]);
+    map.setPaintProperty(WEATHER_EFFECT_LAYER_ID, "circle-color", [
+      "match",
+      ["get", "effect"],
+      "rain",
+      $activeTheme.colors.highlight,
+      "snow",
+      $activeTheme.colors.map_label,
+      "convective",
+      $activeTheme.colors.danger,
+      "obscuration",
+      $activeTheme.colors.text_muted,
+      $activeTheme.colors.accent,
+    ]);
+    map.setPaintProperty(WEATHER_EFFECT_LAYER_ID, "circle-stroke-color", [
+      "match",
+      ["get", "effect"],
+      "convective",
+      $activeTheme.colors.danger,
+      $activeTheme.colors.highlight,
+    ]);
+    map.setPaintProperty(WEATHER_WIND_LAYER_ID, "line-color", [
+      "interpolate",
+      ["linear"],
+      ["get", "wind_speed_kt"],
+      0,
+      $activeTheme.colors.success,
+      20,
+      $activeTheme.colors.highlight,
+      40,
+      $activeTheme.colors.accent,
+      60,
+      $activeTheme.colors.danger,
+    ]);
+    map.setPaintProperty(
+      WEATHER_WIND_TIP_LAYER_ID,
+      "text-color",
+      $activeTheme.colors.highlight,
+    );
+    map.setPaintProperty(
+      WEATHER_WIND_TIP_LAYER_ID,
+      "text-halo-color",
+      $activeTheme.colors.map_halo,
+    );
+    updateWeatherAnimation(
+      weatherStations.features.some(
+        ({ properties }) => properties.effect !== "none",
+      ),
+    );
 
     const routeSignature = flightRouteSignature(flightRoute);
     const weatherSignature = weatherVisible ? weatherMapSignature(weather) : "";
@@ -649,11 +951,12 @@
     if (!signature || signature === fittedAtlasSignature) return;
 
     fittedAtlasSignature = signature;
-    const bounds = visibleCoordinates.reduce(
+    const overviewCoordinates = balancedOverviewCoordinates(visibleCoordinates);
+    const bounds = overviewCoordinates.reduce(
       (current, coordinate) => current.extend(coordinate),
       new maplibregl.LngLatBounds(
-        visibleCoordinates[0],
-        visibleCoordinates[0],
+        overviewCoordinates[0],
+        overviewCoordinates[0],
       ),
     );
     map.fitBounds(bounds, { padding: 90, maxZoom: 6, duration: 700 });
@@ -697,9 +1000,12 @@
     fboVisible;
     pluginLayers;
     pluginLayersVisible;
+    pluginWeatherLayers;
+    pluginWeatherVisible;
     flightRoute;
     weather;
     weatherVisible;
+    enhancedWeather;
     regionsVisible;
     lowResource;
     selectedRegionId;
@@ -738,7 +1044,7 @@
       const atlasMap = new maplibregl.Map({
         container: mapContainer,
         style: "https://demotiles.maplibre.org/globe.json",
-        center: [18, 22],
+        center: ATLAS_HOME_CENTER,
         zoom: 1.25,
         attributionControl: false,
       });
@@ -782,6 +1088,76 @@
         atlasMap.addSource(WEATHER_SOURCE_ID, {
           type: "geojson",
           data: weatherStationFeatures(weather),
+        });
+        atlasMap.addSource(WEATHER_WIND_SOURCE_ID, {
+          type: "geojson",
+          data: weatherWindFeatures(weather),
+        });
+        atlasMap.addSource(PLUGIN_WEATHER_GRID_SOURCE_ID, {
+          type: "geojson",
+          data: pluginWeatherGridFeatures(pluginWeatherLayers),
+        });
+        atlasMap.addLayer({
+          id: PLUGIN_WEATHER_ATMOSPHERE_LAYER_ID,
+          type: "circle",
+          source: PLUGIN_WEATHER_GRID_SOURCE_ID,
+          layout: {
+            visibility:
+              pluginWeatherVisible && enhancedWeather && !lowResource
+                ? "visible"
+                : "none",
+          },
+          paint: {
+            "circle-radius": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              1,
+              [
+                "+",
+                24,
+                [
+                  "*",
+                  2,
+                  ["min", 8, ["coalesce", ["get", "precipitation_mm"], 0]],
+                ],
+              ],
+              6,
+              [
+                "+",
+                70,
+                [
+                  "*",
+                  5,
+                  ["min", 8, ["coalesce", ["get", "precipitation_mm"], 0]],
+                ],
+              ],
+            ],
+            "circle-color": pluginWeatherColor(),
+            "circle-opacity": [
+              "interpolate",
+              ["linear"],
+              ["coalesce", ["get", "cloud_cover_percent"], 0],
+              0,
+              0.04,
+              100,
+              0.2,
+            ],
+            "circle-blur": 0.8,
+          },
+        });
+        atlasMap.addLayer({
+          id: PLUGIN_WEATHER_GRID_LAYER_ID,
+          type: "circle",
+          source: PLUGIN_WEATHER_GRID_SOURCE_ID,
+          layout: { visibility: pluginWeatherVisible ? "visible" : "none" },
+          paint: {
+            "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, 3, 6, 8],
+            "circle-color": pluginWeatherColor(),
+            "circle-opacity": 0.8,
+            "circle-stroke-color": $activeTheme.colors.map_halo,
+            "circle-stroke-width": 1.5,
+          },
         });
         atlasMap.addLayer({
           id: REGION_FILL_LAYER_ID,
@@ -881,11 +1257,7 @@
               "text-max-width": 9,
               "text-padding": band.text_padding,
               "text-allow-overlap": false,
-              "symbol-sort-key": [
-                "coalesce",
-                ["get", "label_rank"],
-                99,
-              ],
+              "symbol-sort-key": ["coalesce", ["get", "label_rank"], 99],
             },
             paint: {
               "text-color": $activeTheme.colors.map_label,
@@ -898,6 +1270,158 @@
             },
           });
         }
+        atlasMap.addLayer({
+          id: WEATHER_ATMOSPHERE_LAYER_ID,
+          type: "heatmap",
+          source: WEATHER_SOURCE_ID,
+          filter: ["==", ["get", "has_metar"], true],
+          layout: {
+            visibility:
+              weatherVisible && enhancedWeather && !lowResource
+                ? "visible"
+                : "none",
+          },
+          paint: {
+            "heatmap-weight": [
+              "interpolate",
+              ["linear"],
+              ["get", "severity"],
+              0,
+              0.08,
+              1,
+              1,
+            ],
+            "heatmap-intensity": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              1,
+              0.7,
+              8,
+              1.25,
+            ],
+            "heatmap-radius": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              1,
+              28,
+              8,
+              78,
+            ],
+            "heatmap-opacity": 0.68,
+            "heatmap-color": [
+              "interpolate",
+              ["linear"],
+              ["heatmap-density"],
+              0,
+              "rgba(0, 0, 0, 0)",
+              0.15,
+              $activeTheme.colors.success,
+              0.42,
+              $activeTheme.colors.highlight,
+              0.72,
+              $activeTheme.colors.accent,
+              1,
+              $activeTheme.colors.danger,
+            ],
+          },
+        });
+        atlasMap.addLayer({
+          id: WEATHER_EFFECT_LAYER_ID,
+          type: "circle",
+          source: WEATHER_SOURCE_ID,
+          filter: ["!=", ["get", "effect"], "none"],
+          layout: {
+            visibility:
+              weatherVisible && enhancedWeather && !lowResource
+                ? "visible"
+                : "none",
+          },
+          paint: {
+            "circle-radius": weatherEffectRadius(0.35),
+            "circle-color": [
+              "match",
+              ["get", "effect"],
+              "rain",
+              $activeTheme.colors.highlight,
+              "snow",
+              $activeTheme.colors.map_label,
+              "convective",
+              $activeTheme.colors.danger,
+              "obscuration",
+              $activeTheme.colors.text_muted,
+              $activeTheme.colors.accent,
+            ],
+            "circle-opacity": 0.26,
+            "circle-blur": 0.5,
+            "circle-stroke-color": $activeTheme.colors.highlight,
+            "circle-stroke-width": 1.5,
+            "circle-stroke-opacity": 0.72,
+          },
+        });
+        atlasMap.addLayer({
+          id: WEATHER_WIND_LAYER_ID,
+          type: "line",
+          source: WEATHER_WIND_SOURCE_ID,
+          filter: ["==", ["get", "feature_type"], "wind_path"],
+          layout: {
+            visibility:
+              weatherVisible && enhancedWeather && !lowResource
+                ? "visible"
+                : "none",
+          },
+          paint: {
+            "line-color": [
+              "interpolate",
+              ["linear"],
+              ["get", "wind_speed_kt"],
+              0,
+              $activeTheme.colors.success,
+              20,
+              $activeTheme.colors.highlight,
+              40,
+              $activeTheme.colors.accent,
+              60,
+              $activeTheme.colors.danger,
+            ],
+            "line-width": [
+              "interpolate",
+              ["linear"],
+              ["get", "wind_speed_kt"],
+              1,
+              1.5,
+              50,
+              4,
+            ],
+            "line-opacity": 0.82,
+            "line-blur": 0.5,
+            "line-dasharray": [1.4, 1],
+          },
+        });
+        atlasMap.addLayer({
+          id: WEATHER_WIND_TIP_LAYER_ID,
+          type: "symbol",
+          source: WEATHER_WIND_SOURCE_ID,
+          filter: ["==", ["get", "feature_type"], "wind_tip"],
+          layout: {
+            visibility:
+              weatherVisible && enhancedWeather && !lowResource
+                ? "visible"
+                : "none",
+            "text-field": "▲",
+            "text-size": 11,
+            "text-rotate": ["get", "bearing"],
+            "text-rotation-alignment": "map",
+            "text-pitch-alignment": "map",
+            "text-allow-overlap": true,
+          },
+          paint: {
+            "text-color": $activeTheme.colors.highlight,
+            "text-halo-color": $activeTheme.colors.map_halo,
+            "text-halo-width": 1.25,
+          },
+        });
         atlasMap.addLayer({
           id: WEATHER_LAYER_ID,
           type: "circle",
@@ -1227,6 +1751,7 @@
     return () => {
       cancelled = true;
       motionQuery.removeEventListener("change", updateMotionPreference);
+      stopWeatherAnimation();
       clearHoveredRegion();
       map?.remove();
     };
@@ -1234,3 +1759,95 @@
 </script>
 
 <div bind:this={mapContainer} class="map" aria-label="Atlas map"></div>
+
+{#if weatherVisible && plottedWeatherStationCount > 0}
+  <div class="weather-render-status" role="status">
+    <span
+      >{lowResource || !enhancedWeather
+        ? "Weather fallback"
+        : "GPU weather"}</span
+    >
+    <strong>
+      {plottedWeatherStationCount} sourced
+      {plottedWeatherStationCount === 1 ? "station" : "stations"}
+    </strong>
+    <small>
+      {#if lowResource}
+        Markers only · low-resource mode
+      {:else if !enhancedWeather}
+        Markers only · compatibility preference
+      {:else if prefersReducedMotion}
+        Static motion-safe atmosphere · {plottedWeatherWindCount} wind vectors
+      {:else}
+        {plottedWeatherWindCount} wind vectors · {activeWeatherEffectCount}
+        condition cells
+      {/if}
+    </small>
+    <em>METAR-local only · no interpolated weather</em>
+  </div>
+{/if}
+
+<style>
+  .weather-render-status {
+    pointer-events: none;
+    position: absolute;
+    z-index: 3;
+    right: 22px;
+    bottom: 22px;
+    width: max-content;
+    max-width: min(430px, calc(100% - 40px));
+    border: 1px solid var(--color-highlight-border);
+    border-radius: 4px;
+    padding: 9px 13px;
+    color: var(--color-text);
+    background: var(--color-surface-translucent);
+    box-shadow: 0 12px 28px var(--color-shadow);
+    text-align: center;
+    backdrop-filter: blur(9px);
+  }
+
+  .weather-render-status span,
+  .weather-render-status small,
+  .weather-render-status em {
+    display: block;
+  }
+
+  .weather-render-status span {
+    color: var(--color-highlight);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+  }
+
+  .weather-render-status strong {
+    display: block;
+    margin: 3px 0;
+    font-family: Georgia, serif;
+    font-size: 15px;
+    font-weight: 400;
+  }
+
+  .weather-render-status small,
+  .weather-render-status em {
+    color: var(--color-text-muted);
+    font-size: 9px;
+    font-style: normal;
+    line-height: 1.45;
+  }
+
+  .weather-render-status em {
+    margin-top: 2px;
+    color: var(--color-highlight);
+  }
+
+  @media (max-width: 760px) {
+    .weather-render-status {
+      top: 12px;
+      right: 12px;
+      bottom: auto;
+      max-width: calc(100% - 24px);
+      padding: 7px 10px;
+    }
+  }
+</style>

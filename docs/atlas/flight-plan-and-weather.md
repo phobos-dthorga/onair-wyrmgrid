@@ -218,17 +218,23 @@ Display size is not a performance proxy. A handheld or low-resolution laptop
 may have a capable GPU, while a large remote-desktop window may not. Atlas uses
 an explicit rendering preference plus capability probing.
 
-| Profile                | Default | Intended presentation                                                                                                        |
-| ---------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Compatibility          | Yes     | Airport symbols, bounded vector advisory shapes, static contours, reduced animation, conservative texture and memory budgets |
-| Enhanced               | No      | GPU-instanced particles, animated wind fields, smoother time interpolation, higher-resolution approved imagery               |
-| Experimental cinematic | No      | Sourced volumetric or three-dimensional effects behind explicit feature flags and measured budgets                           |
+| Profile                | Default | Intended presentation                                                                                     |
+| ---------------------- | ------- | --------------------------------------------------------------------------------------------------------- |
+| Compatibility          | No      | Airport symbols and labels with conservative texture, animation, and memory budgets                       |
+| Enhanced               | Yes     | GPU heatmap atmosphere, sourced wind vectors, and gentle condition motion around reporting airports       |
+| Experimental cinematic | No      | Future sourced volumetric or three-dimensional effects behind explicit feature flags and measured budgets |
 
-The user-facing preference should initially read **Prefer compatibility weather
-rendering** and be enabled by default. A user can opt into Enhanced rendering
-after WyrmGrid reports the detected graphics API and estimated cost. The
-`--low-resource` launch switch always forces Compatibility for that run; it does
-not rewrite the persisted preference.
+The user-facing **Enhanced GPU weather** preference is enabled by default and
+can be disabled for conservative static markers. The `--low-resource` launch
+switch always forces Compatibility for that run; it does not rewrite the
+persisted preference. Reduced Motion keeps the Enhanced atmosphere static.
+
+The implemented Enhanced profile remains deliberately station-shaped. It uses
+only structured wind and explicit METAR present-weather/category fields,
+labels the display **METAR-local only**, and does not interpolate between
+airports. Radar, satellite imagery, forecast animation, lightning, cloud
+volumes, GPU capability reporting, measured frame budgets, and device-loss
+telemetry remain future source and renderer work.
 
 Every profile must preserve facts, timestamps, selected time, hazards, and
 accessibility. Lower profiles reduce rendering cost, never data correctness.
@@ -271,8 +277,9 @@ warning effects may flash, while the runtime control prevents or reduces them.
    The airport projection and linked inspector are implemented; route hazards
    remain later work.
 5. Add append-only bounded weather persistence and Hoard historical playback.
-6. Add Compatibility/Enhanced settings, GPU capability reporting, budgets, and
-   device-loss fallback before high-detail effects.
+6. Add Compatibility/Enhanced settings and a truthful first GPU airport-weather
+   treatment. **Implemented.** Capability reporting, measured budgets, and
+   device-loss telemetry remain future work.
 
 Tests must cover route order, unresolved legs, duplicate identifiers, procedure
 classification, AIRAC mismatch, full-route bounds, antimeridian crossing,

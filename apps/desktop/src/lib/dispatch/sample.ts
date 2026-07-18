@@ -86,6 +86,7 @@ export const dispatchPreviewEmpty: DispatchStatus = {
   availability: "empty",
   persistence: "session_only",
   importing: false,
+  operation_change: "none",
   journey: {
     schema_version: 1,
     stages: [
@@ -112,6 +113,7 @@ export const dispatchPreviewReady: DispatchStatus = {
   availability: "ready",
   persistence: "session_only",
   importing: false,
+  operation_change: "none",
   atlas_plan: previewAtlasPlan,
   journey: {
     schema_version: 1,
@@ -415,15 +417,17 @@ export const dispatchPreviewReady: DispatchStatus = {
           metar: {
             value: {
               observed_at: "2026-07-14T01:30:00Z",
-              raw_text: "METAR NZAA 140130Z AUTO 32007KT 9999 NCD 18/12 Q1024",
+              raw_text:
+                "METAR NZAA 140130Z AUTO 32007KT 8000 -SHRA SCT020 BKN030 18/12 Q1024",
               report_type: "METAR",
-              flight_category: "vfr",
+              flight_category: "mvfr",
               wind_direction: { kind: "degrees", value: 320 },
               wind_speed_kt: 7,
-              visibility_sm: "6+",
+              visibility_sm: "5",
               temperature_c: 18,
               dewpoint_c: 12,
               altimeter_hpa: 1024,
+              present_weather: "-SHRA",
             },
             provenance: {
               ...provenance,
@@ -458,16 +462,17 @@ export const dispatchPreviewReady: DispatchStatus = {
             value: {
               observed_at: "2026-07-14T01:30:00Z",
               raw_text:
-                "METAR NZWN 140130Z AUTO 35018G28KT 9999 BKN018 15/11 Q1019",
+                "METAR NZWN 140130Z AUTO 35018G28KT 4000 BR BKN008 15/11 Q1019",
               report_type: "METAR",
-              flight_category: "mvfr",
+              flight_category: "ifr",
               wind_direction: { kind: "degrees", value: 350 },
               wind_speed_kt: 18,
               wind_gust_kt: 28,
-              visibility_sm: "6+",
+              visibility_sm: "2.5",
               temperature_c: 15,
               dewpoint_c: 11,
               altimeter_hpa: 1019,
+              present_weather: "BR",
             },
             provenance: {
               ...provenance,

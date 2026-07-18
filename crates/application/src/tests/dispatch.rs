@@ -35,6 +35,10 @@ struct FakeWeatherProvider {
 }
 
 impl WeatherProvider for FakeWeatherProvider {
+    fn is_available(&self) -> bool {
+        true
+    }
+
     fn fetch_airports<'a>(&'a self, _stations: &'a [String]) -> WeatherProviderFuture<'a> {
         Box::pin(async move {
             self.calls.fetch_add(1, Ordering::AcqRel);
@@ -48,10 +52,14 @@ struct FailingWeatherProvider {
 }
 
 impl WeatherProvider for FailingWeatherProvider {
+    fn is_available(&self) -> bool {
+        true
+    }
+
     fn fetch_airports<'a>(&'a self, _stations: &'a [String]) -> WeatherProviderFuture<'a> {
         Box::pin(async move {
             self.calls.fetch_add(1, Ordering::AcqRel);
-            Err(WeatherClientError::Offline)
+            Err(WeatherProviderError::Offline)
         })
     }
 }
@@ -281,6 +289,7 @@ async fn compares_a_selected_read_only_job_with_the_imported_plan() {
     .unwrap();
     session
         .select_job(DispatchJobSelection {
+            company_id: wyrmgrid_domain::CompanyId(Uuid::new_v4()),
             job: jobs.jobs[0].clone(),
             observed_at: Utc::now(),
             availability: SnapshotAvailability::Cached,
@@ -337,6 +346,7 @@ fn compares_job_payload_units_and_deadlines_without_inference() {
         &plan,
         None,
         Some(&DispatchJobSelection {
+            company_id: wyrmgrid_domain::CompanyId(Uuid::new_v4()),
             job: job.clone(),
             observed_at: Utc::now(),
             availability: SnapshotAvailability::Cached,
@@ -362,6 +372,7 @@ fn compares_job_payload_units_and_deadlines_without_inference() {
         &plan,
         None,
         Some(&DispatchJobSelection {
+            company_id: wyrmgrid_domain::CompanyId(Uuid::new_v4()),
             job: job.clone(),
             observed_at: Utc::now(),
             availability: SnapshotAvailability::Cached,
@@ -438,7 +449,9 @@ async fn rate_protects_retries_after_a_failed_weather_request() {
 
     assert!(matches!(
         session.refresh_weather().await,
-        Err(DispatchError::WeatherProvider(WeatherClientError::Offline))
+        Err(DispatchError::WeatherProvider(
+            WeatherProviderError::Offline
+        ))
     ));
     assert_eq!(
         session.refresh_weather().await,

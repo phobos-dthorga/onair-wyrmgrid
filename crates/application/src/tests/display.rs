@@ -30,7 +30,12 @@ impl DisplayPreferencesRepository for MemoryDisplayPreferences {
 fn defaults_to_the_existing_aviation_presentation() {
     let service = DisplaySettingsService::new(MemoryDisplayPreferences::default());
 
-    assert_eq!(service.status().unwrap(), DisplayPreferences::default());
+    let preferences = service.status().unwrap();
+    assert_eq!(preferences, DisplayPreferences::default());
+    assert_eq!(
+        preferences.weather_rendering_profile,
+        WeatherRenderingProfile::Enhanced
+    );
 }
 
 #[test]
@@ -42,6 +47,7 @@ fn persists_each_measurement_category_independently() {
         weight_unit: WeightUnit::Kilograms,
         fuel_unit: FuelUnit::Litres,
         responsive_surfaces: false,
+        weather_rendering_profile: WeatherRenderingProfile::Compatibility,
     };
 
     assert_eq!(service.update(preferences).unwrap(), preferences);

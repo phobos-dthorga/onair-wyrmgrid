@@ -19,6 +19,8 @@
   restores, rollback databases, and backup-format metadata;
 - selected language, imported community language-pack content, translator
   metadata, and the integrity of security-sensitive interface wording;
+- accepted flight-operation identities and revisions, sanitized plans, selected
+  jobs, and aggregate passenger or freight manifests;
 - update integrity and release artifacts.
 
 ## Primary threats
@@ -49,6 +51,11 @@
   leaking through persistence, plugins, support output, or diagnostics;
 - staff names, airport presence, availability, or qualifications leaking through
   raw provider retention, plugins, diagnostics, exports, or misleading UI labels;
+- accepted plans, selected jobs, aggregate passenger/freight facts, or revision
+  history leaking through diagnostics, plugins, public map requests, backups,
+  screenshots, or support material;
+- a provider refresh or interface action silently replacing accepted operation
+  evidence, or a malformed stored manifest diverging from its retained job;
 - undocumented staff avatar references being converted into attacker-controlled
   URLs, remote tracking requests, oversized media, or misleading portraits;
 - embedded desktop application secrets being extracted and abused;
@@ -58,6 +65,9 @@
 - dependency or release-pipeline compromise;
 - a release tag packaging untested code, a commit outside `main`, or application
   metadata whose version does not match the advertised release;
+- incomplete or misleading release notes hiding a removed capability or
+  compatibility break, including untrusted commit text influencing a local
+  model-assisted changelog draft;
 - sensitive data escaping through diagnostic payloads, attachments, replay,
   logs, traces, or crash dumps;
 - network collection beginning before disclosure or continuing after the user
@@ -162,16 +172,18 @@
   negotiated capability and explicit user action;
 - deny-by-default plugin capabilities persisted separately from manifests; the
   current runtime starts only after every requested capability is approved and
-  implements only sanitized fleet and simulator reads plus data-only Atlas
-  publication. Once grants are consumed by one privileged launch, session
+  implements sanitized fleet and simulator reads, data-only Atlas publication,
+  and bounded weather requests to declared HTTPS origins. Once grants are
+  consumed by one privileged launch, session
   grants remain only in process memory, and standing grants alone persist;
 - plugin directories, manifests, and entry points are bounded and canonicalized;
   symlinked folders/files, path escape, malformed metadata, and unsupported
   runtimes or capabilities are rejected;
 - plugin protocol v1 uses a 1 MiB length-prefixed JSON ceiling, independent
   monotonic sequences, a three-second identity/version handshake, bounded text
-  and WGS84 validation, at most 16 layers per plugin, and at most 10,000 points
-  per layer;
+  and WGS84 validation, at most 16 map layers per plugin, at most 10,000 points
+  per map layer, and separate station, model-grid, PNG tile, decoded-byte, and
+  request-correlation bounds for weather products;
 - Python launches in isolated mode with a scrubbed environment and receives only
   translated stable domain snapshots; the host does not place the OnAir key,
   raw OnAir JSON, provider credentials, Sentry settings, or another plugin's
@@ -187,6 +199,35 @@
   gates run against the exact release tag before packaging, release tags must
   identify a commit on `main`, and every checked-in application version must
   equal the tag version;
+- the checked-in changelog is the sole GitHub release-note source; tooling
+  requires explicit feature, change, removal, and breaking-change lists and
+  rejects declared breaking changes outside a new major-version line. Rebuilds
+  reuse the exact tagged text rather than regenerating it;
+- AI-assisted development tasks are optional and outside the WyrmGrid product.
+  Hoardmind is the maintainer's private local assistant rather than a bundled
+  component or required service. Change-impact, test-matrix, documentation-sync,
+  synthetic-fixture, sanitized failure-triage, and release-curation tasks each
+  use an explicit versioned packet and output contract with no tools, repository
+  access, durable memory, or change authority. Diffs, logs, schemas, fixtures,
+  documentation, and commit text remain untrusted evidence; sensitive provider
+  or user data is excluded, and a person or coordinating reviewer reconciles
+  every draft against the repository and deterministic tools. Model drafts are
+  never chained automatically. GitHub CI performs no model call and receives no
+  inference credential;
+- the optional local-AI measurement wrapper uses a versioned profile and accepts
+  only unauthenticated loopback Ollama or OpenAI-compatible chat origins in
+  schema version 1. It pins the advertised and returned model, requires
+  one-invocation approval, refuses CI, bounds packet size, checks common
+  credential signatures, validates the selected boundary prompt, and rejects
+  missing, duplicated, or reordered packet and response headings. The
+  compatibility adapter sends no authorization header or tools and refuses a
+  response without internally consistent exact token usage. Its metrics exclude
+  prompt and response content; non-portable timings, RAM/VRAM observations, and
+  unload state remain explicitly unreported. Plaintext packets, profiles, and
+  drafts remain private temporary artifacts outside the product and receive no
+  automatic retention or publication. LAN, authenticated, or hosted adapters
+  remain unsupported pending a separate privacy, authentication, data-flow, and
+  threat-model decision;
 - platform build jobs are read-only and stage packages internally; one final job
   with narrowly scoped write and identity-token permissions generates SHA-256
   checksums and GitHub build-provenance attestations before creating a draft;
@@ -234,6 +275,21 @@
 - Dispatch job selection carries only a validated Hoard observation. It exposes
   no OnAir acceptance command, and route, payload, and expiry findings remain
   calculated comparisons rather than OnAir instructions or guarantees.
+- flight-operation schema 1 is created only by an explicit user action and
+  stores a sanitized plan, optional validated OnAir job observation, and a
+  deterministic aggregate per-leg manifest in SQLCipher. Attached jobs retain
+  their originating company identity so a later account change cannot silently
+  reattribute them. Missing passenger or freight fields remain explicit gaps.
+  Domain validation recomputes the manifest from its retained job evidence and
+  rejects any divergence;
+- operation changes are append-only and user-reviewed. A changed plan, selected
+  job, or same-identity job fact produces a context-change notice instead of
+  mutating the accepted revision. The webview never supplies operation IDs,
+  revision numbers, timestamps, manifest values, or persistence SQL;
+- operation data is not exposed to current plugin capabilities, Sentry,
+  diagnostics, or public Atlas tile requests. Migration 13 stores one active
+  pointer and immutable revision rows; it contains no provider credential or raw
+  response;
 - Hoard stores stable domain snapshots rather than raw API payloads, never stores
   credentials, applies bounded retention, and visibly distinguishes live,
   cached, offline, preview, and memory-only data.
@@ -366,7 +422,8 @@ The exact implemented boundary and deferred hardening are recorded in
 ## Residual Hoard risks
 
 The local SQLCipher database contains company identifiers, company names,
-aircraft and FBO details, locations, observation history, and other local state.
+aircraft and FBO details, locations, observation history, accepted
+flight-operation plans, selected jobs, aggregate manifests, and other local state.
 At-rest encryption reduces exposure from a copied file but does not protect
 against a process or logged-in account that can retrieve the device key, memory
 inspection, crash dumps, screenshots, or deliberate export. A user must still
@@ -376,7 +433,9 @@ reports unless they intentionally mean to disclose their contents.
 Retention limits intraday growth but deliberately preserves one daily
 historical record, so sensitive operational history remains inside encrypted
 storage until the user deletes the database or a future data-management feature
-removes it. Portable backups are complete, user-controlled copies: WyrmGrid
+removes it. The first flight-operation foundation likewise has no individual
+archive or deletion control, so accepted revisions follow that database-level
+retention boundary. Portable backups are complete, user-controlled copies: WyrmGrid
 cannot rotate, revoke, erase, or recover their passwords. Filesystem snapshots,
 cloud services, and deleted-file recovery may retain both databases and backups.
 Loss of the operating-system credential entry without a usable portable backup
@@ -414,17 +473,25 @@ is encrypted, deleted with that recording, and remains excluded from plugins
 and Sentry. Clearing Dispatch prevents future association without rewriting an
 existing recording's historical context.
 
-The AviationWeather.gov adapter accepts at most ten normalized four-character
+The AviationWeather.gov provider plugin accepts at most ten normalized four-character
 station identifiers, follows no redirects, bounds each streamed JSON product to
 512 KiB, uses a 15-second timeout, and translates only allowlisted METAR and TAF
 fields into a validated `WeatherSnapshot`. Dispatch sends no account reference,
 route, fleet record, or OnAir credential. Concurrent refreshes are coalesced,
 successful data is reused for ten minutes, failed attempts have a one-minute
-retry floor, response bodies and URLs never cross safe errors, and weather is
-excluded from plugins and Sentry.
+retry floor, and response bodies and URLs never cross safe errors. Only the
+approved provider plugin receives the station identifiers; translated weather
+remains excluded from other plugins and Sentry.
 
-Atlas receives a host-built airport-weather projection rather than raw weather
-payloads or arbitrary provider map resources. Missing reports remain unknown,
+The Open-Meteo plugin receives only an 84-point host-selected global grid and
+publishes bounded numeric samples. The RainViewer plugin receives four
+host-selected zoom-one addresses and publishes validated PNG bytes rather than
+remote URLs. Both refresh in the background, preserve the last valid layer on a
+provider failure, and are independently stoppable. Neither receives a plan,
+OnAir fact, account reference, or credential.
+
+Atlas receives host-built weather projections rather than raw weather payloads
+or arbitrary provider map resources. Missing reports remain unknown,
 and missing coordinates remain unplotted. Future external radar frames,
 simulator-selected weather mode, and ambient simulator observations are three
 distinct evidence classes: none may impersonate or silently overwrite another.

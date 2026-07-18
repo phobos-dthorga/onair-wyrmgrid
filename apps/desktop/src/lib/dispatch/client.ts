@@ -9,6 +9,14 @@ export function loadDispatchStatus(): Promise<DispatchStatus> {
   return invokeDesktop<DispatchStatus>("dispatch_status");
 }
 
+export function startFlightOperation(): Promise<DispatchStatus> {
+  return invokeDesktop<DispatchStatus>("start_flight_operation");
+}
+
+export function reviseFlightOperation(): Promise<DispatchStatus> {
+  return invokeDesktop<DispatchStatus>("revise_flight_operation");
+}
+
 export function importLatestSimBriefPlan(
   referenceKind: SimBriefReferenceKind,
   reference: string,

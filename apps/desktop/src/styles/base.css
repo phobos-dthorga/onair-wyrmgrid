@@ -13,6 +13,24 @@
 
 * {
   box-sizing: border-box;
+  scrollbar-color: var(--color-line) transparent;
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 99px;
+  background: var(--color-line);
+  background-clip: padding-box;
 }
 
 html,

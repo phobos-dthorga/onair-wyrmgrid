@@ -9,6 +9,7 @@ export const capabilityTranslationKeys: Readonly<Record<string, string>> = {
   plugin_storage: "security-capability-plugin-storage",
   simulator_telemetry_read: "security-capability-simulator-read",
   external_network: "security-capability-external-network",
+  weather_data_publish: "security-capability-weather-publish",
 };
 
 export function capabilityTranslationKey(capability: string): string | null {

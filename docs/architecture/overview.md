@@ -27,6 +27,27 @@ The dependency direction points inward. Interface and infrastructure adapters
 depend on application-owned domain contracts; domain code does not depend on
 Tauri, SQLite, HTTP, MapLibre, or a plugin language.
 
+## Development-assistance boundary
+
+AI assistants are outside the WyrmGrid product architecture. WyrmGrid has no AI
+runtime, build, test, contribution, plugin-protocol, CI, or release-publication
+dependency. Hoardmind is the maintainer's private local assistant; it is not a
+WyrmGrid module, service, bundled sidecar, supported integration, or source of
+project authority.
+
+Development and release work can be performed entirely by a person. A
+contributor may instead choose the repository's versioned, profile-driven local
+helper for bounded change-impact, test-matrix, documentation-sync, synthetic
+fixture, sanitized failure-triage, or release-curation drafts. Its adapters
+support user-selected Ollama models and unauthenticated local servers that
+implement the OpenAI-compatible model-list and chat-completion endpoints, all
+restricted to that machine's loopback interface. Drafts remain untrusted input
+for normal review, are never autonomously chained, and profiles and temporary
+artifacts remain outside the application. LAN, authenticated, or hosted AI
+providers are intentionally not interchangeable with this local boundary;
+supporting one would require a separate privacy, authentication, data-flow, and
+threat-model decision.
+
 ## Localization boundary
 
 Domain models remain language-neutral. Application services return semantic

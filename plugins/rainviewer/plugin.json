@@ -1,0 +1,15 @@
+{
+  "id": "org.wyrmgrid.provider.rainviewer",
+  "name": "RainViewer Global Radar",
+  "version": "0.1.0",
+  "api_version": 1,
+  "author": "WyrmGrid contributors",
+  "runtime": "python",
+  "entry_point": "src/main.py",
+  "permissions": ["external_network", "weather_data_publish"],
+  "weather_capabilities": ["radar_tiles"],
+  "network_origins": [
+    "https://api.rainviewer.com",
+    "https://tilecache.rainviewer.com"
+  ]
+}

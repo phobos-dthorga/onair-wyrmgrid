@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/phobos-dthorga/onair-wyrmgrid/schemas/optional-ai-task-profile-v1.schema.json",
+  "title": "Optional local-AI task profile version 1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "id",
+    "display_name",
+    "provider",
+    "endpoint",
+    "model",
+    "system_prompt_file",
+    "parameters"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "display_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "provider": {
+      "enum": ["ollama-chat", "openai-compatible-chat"]
+    },
+    "endpoint": {
+      "type": "string",
+      "pattern": "^http://(?:127\\.0\\.0\\.1|localhost|\\[::1\\])(?::[0-9]{1,5})?$"
+    },
+    "model": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "system_prompt_file": {
+      "type": "string",
+      "minLength": 1
+    },
+    "parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["temperature", "seed", "max_output_tokens"],
+      "properties": {
+        "context_length": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 131072
+        },
+        "temperature": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2
+        },
+        "seed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "think": {
+          "type": "boolean"
+        },
+        "max_output_tokens": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8192
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "provider": {
+            "const": "ollama-chat"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "parameters": {
+            "required": ["context_length", "think"]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "provider": {
+            "const": "openai-compatible-chat"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "parameters": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": ["context_length"]
+                },
+                {
+                  "required": ["think"]
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  ]
+}

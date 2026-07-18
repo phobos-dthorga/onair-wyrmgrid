@@ -1,7 +1,8 @@
 # Flight operation lifecycle
 
-Status: staged implementation; schema-1 journey summary implemented for Plan,
-Weather, and Atlas.
+Status: staged implementation; schema-1 persistent operation identity,
+append-only revisions, job-derived aggregate manifest, and journey summary
+implemented.
 
 This document defines the long-term WyrmGrid journey from an attributed flight
 plan to a recorded and reviewed operation. It joins plan, weather, OnAir work,
@@ -39,11 +40,19 @@ flowchart LR
 
 ## Core ownership
 
-The Rust application layer now owns a versioned
-`FlightOperationJourneyView` schema 1 for host-derived stage summaries. The
-larger persistent `FlightOperation` aggregate remains conceptual until its
-first storage schema is implemented; the journey view does not reserve a
-public plugin, simulator, or database version.
+The Rust domain and application layers now own versioned
+`FlightOperationRevision`, `FlightManifest`, and `FlightOperationJourneyView`
+schema-1 contracts. Append-only database migration 13 stores immutable revision
+snapshots under a stable operation identity and points to one active operation.
+These domain schemas, database migration number, Bridge protocol, and plugin
+protocol are independent compatibility markers.
+
+The implemented manifest is deliberately narrow: it deterministically copies
+per-leg aggregate passenger counts and freight weights from the explicitly
+selected validated OnAir job. Missing source fields are retained as unavailable.
+It does not yet represent individual people, roles, baggage, or consignments.
+The domain rejects a stored manifest that differs from its retained job
+evidence.
 
 A flight operation references attributed source snapshots and explicit user
 selections. It should contain, when available:
@@ -210,12 +219,14 @@ report one of a small set of host-derived states:
 - stale; or
 - unavailable.
 
-Schema 1 implements exactly those six states. Rust currently derives Plan,
-Weather, and Atlas from provider, snapshot, freshness, and map-view evidence;
-future stages remain `not_started`. Svelte displays the state and delegates
-actions; it does not calculate readiness. Experienced users may jump directly
-to any available workspace, and returning from a nested view should preserve
-the operation and navigation context.
+Schema 1 implements exactly those six states. Rust derives Plan, Weather, Jobs,
+Manifest, Fleet, Staff, Review, and Atlas state from the active operation,
+current Dispatch context, retained source gaps, and available host snapshots.
+Fleet and Staff become available workspaces when relevant observations exist;
+that does not imply an assignment or successful reconciliation. Svelte displays
+the state and delegates actions; it does not calculate readiness. Experienced
+users may jump directly to any available workspace, and returning from a nested
+view preserves the operation and navigation context.
 
 ## Revision and invalidation rules
 
@@ -291,11 +302,17 @@ not alter that boundary:
 
 ## Staged implementation
 
-1. **Core contract and journey rail** — host-owned schema-1 stage summaries and
-   Plan/Weather/Atlas links are implemented from current facts. A persistent
-   operation identity and revision semantics remain for the next storage slice.
-2. **Jobs and manifest** — attach read-only job evidence and model passengers,
-   company travellers, avatar presence, freight, per-leg roles, and unknowns.
+1. **Core contract and journey rail** — implemented: host-owned schema-1 stage
+   summaries, stable operation identity, explicit append-only revisions, and
+   navigation to the current Plan/Weather/Jobs/Manifest/Fleet/Staff/Review/Atlas
+   surfaces.
+2. **Jobs and manifest** — foundation implemented: the SimBrief journey opens
+   Jobs with an editable exact-route presentation filter; no-match handling
+   never substitutes unrelated work. A selected read-only OnAir job returns to
+   an explicit job-to-manifest handoff, and only Begin/Revise retains its
+   per-leg aggregate passenger/freight facts. Source gaps remain explicit.
+   Individual people, company travellers, avatar presence, consignments, and
+   per-leg roles remain future evidence-gated work.
 3. **Fleet reconciliation** — compare the manifest and route with observed
    aircraft capacity, location, configuration, and availability.
 4. **Staff reconciliation** — add only live-contract staff facts proven by

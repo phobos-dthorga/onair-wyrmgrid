@@ -1,32 +1,161 @@
 # Release process
 
-1. Update the application version in the root and desktop `package.json` files,
-   `Cargo.toml`, and `apps/desktop/src-tauri/tauri.conf.json`. Update release
-   notes, compatibility notes, and relevant protocol or database documentation.
-2. Run `npm run test:tooling`,
+1. Keep user- and developer-visible work curated under `[Unreleased]` in the
+   root `CHANGELOG.md` throughout development. Every entry retains explicit New
+   features, Changes, Removed, and 🚨 Breaking changes sections.
+2. After the maintainer authorizes a version, curate the release manually or
+   optionally give a user-selected local assistant a bounded, review-only
+   packet containing the prior release tag, candidate commit range, file-level
+   change summary, and current `[Unreleased]` text. Do not include credentials,
+   raw provider payloads, personal data, or unrelated source context.
+3. Reconcile the draft against the actual diff, tests, compatibility decisions,
+   and documentation. Move the reviewed `[Unreleased]` content into a dated
+   `[X.Y.Z]` entry and create a fresh empty `[Unreleased]` entry. AI output, when
+   used, is untrusted assistance rather than release authority.
+4. Update the application version in the root and desktop `package.json` files,
+   `Cargo.toml`, and `apps/desktop/src-tauri/tauri.conf.json`. Update extended
+   compatibility, protocol, database, or migration documentation when needed;
+   `CHANGELOG.md` remains the canonical GitHub release-note source.
+5. Run `npm run test:tooling`,
    `node scripts/verify-release-version.mjs <version>`, and
-   `node scripts/verify-installer-contract.mjs`, then complete the normal local
-   checks on the maintainer's development machine.
-3. Create and push an annotated `vX.Y.Z` tag from a commit on `main`. Supported
+   `node scripts/verify-installer-contract.mjs`. Preview and validate the exact
+   GitHub text with
+   `node scripts/prepare-release-notes.mjs <version> --previous <version>`, then
+   complete the normal local checks on the maintainer's development machine.
+6. Create and push an annotated `vX.Y.Z` tag from a commit on `main`. Supported
    prerelease suffixes such as `v0.2.0-rc.1` are also accepted; build metadata is
    deliberately excluded from installer versions.
-4. The release workflow reuses the complete CI and security workflows against
+7. The release workflow reuses the complete CI and security workflows against
    that exact tag. Packaging cannot begin until every required job passes.
-5. GitHub-hosted runners build the Windows NSIS setup executable, Linux AppImage
+8. GitHub-hosted runners build the Windows NSIS setup executable, Linux AppImage
    and Debian package, and macOS DMG. The Windows runner silently installs the
    NSIS output and verifies that both the desktop executable and SimConnect
    provider sidecar are present. After the first release, it installs the
    closest older published setup first, installs the new setup over it, and
    verifies that existing application data survives.
-6. A single least-privilege publication job downloads the platform outputs,
-   produces `SHA256SUMS.txt`, records GitHub artifact provenance, and attaches
-   the files to a draft prerelease.
-7. Verify artifact installation, startup, licence notices, checksums, and basic
-   offline behaviour on every supported platform. Publish the GitHub release
-   only after manual verification.
+9. A single least-privilege publication job downloads the platform outputs,
+   produces `SHA256SUMS.txt`, records GitHub artifact provenance, extracts the
+   matching reviewed changelog entry, and attaches the files and notes to a
+   draft prerelease.
+10. Verify artifact installation, startup, licence notices, checksums, release
+    notes, and basic
+    offline behaviour on every supported platform. Publish the GitHub release
+    only after manual verification.
 
 Early releases stay prereleases. Platform signing and updater signing must be
 documented and tested before automatic updates or stable releases are enabled.
+
+## Changelog and breaking-change policy
+
+The checked-in changelog is the single editorial source for release summaries.
+The maintainer or release agent checks every claim against repository evidence
+before the entry can reach `main`, whether the first draft was written manually
+or with optional local assistance. GitHub Actions does not ask a model to infer
+release content from commits, so a tagged build remains reproducible,
+reviewable, and free of model credentials or inference costs.
+
+Each release entry must list:
+
+- new user- or developer-facing features;
+- changed behaviour, architecture, or operational requirements;
+- removed capabilities, including an explicit `- None.` when applicable; and
+- 🚨 breaking changes, again with an explicit `- None.` when applicable.
+
+If the breaking-change list is not empty, release policy requires a new
+`X.0.0` major line. The same prominent warning may continue through prereleases
+of that exact major version. A minor or patch release that declares a breaking
+change fails before packaging, as does a tag without a complete matching
+changelog entry. The generated GitHub body adds a caution banner above an
+actual breaking-change release and an explicit no-breaking-change notice for
+all others.
+
+## Optional local-AI curation and efficiency capture
+
+This step is entirely optional. WyrmGrid users and contributors do not need an
+AI assistant, local model server, profile, or this runner. Hoardmind is the
+maintainer's private local configuration and is neither invoked nor named by the
+generic tool. Any user may copy an example profile, choose their own local model
+and boundary prompt, and keep that private configuration under
+`.wyrmgrid-local/`.
+
+Copy the
+[release-curation handoff template](optional-ai/templates/release-curation-v1.md)
+to a temporary Markdown file outside the repository and complete only its
+bounded fields. It should contain only the previous tag, candidate commit,
+bounded commit and file summaries, compatibility decisions, and current
+`[Unreleased]` text needed for the curation pass. Copy and adapt either the
+[Ollama profile](../examples/optional-ai/local-ollama-profile-v1.json) or
+[OpenAI-compatible profile](../examples/optional-ai/openai-compatible-local-profile-v1.json).
+When the copy lives in `.wyrmgrid-local/`, set its
+`system_prompt_file` to
+`../docs/optional-ai/base-system-prompt-v1.md`; profile-relative paths
+make the private file portable without embedding a maintainer-specific absolute
+path. Then run:
+
+```powershell
+$profilePath = '.wyrmgrid-local\release-curation-profile.json'
+$reportRoot = Join-Path $env:TEMP 'wyrmgrid-optional-ai-release'
+
+npm run ai:release-curation -- `
+  --packet (Join-Path $env:TEMP 'wyrmgrid-release-handoff.md') `
+  --profile $profilePath `
+  --output $reportRoot `
+  --approve-once
+```
+
+The version-1 [profile schema](../schemas/optional-ai-task-profile-v1.schema.json)
+lets the user select a model, safe boundary prompt, output limit, temperature,
+and deterministic seed. Ollama profiles additionally select context size and
+thinking mode. Both adapters accept only an unauthenticated HTTP origin on
+`127.0.0.1`, `localhost`, or `::1`; LAN, authenticated, and hosted providers
+need a separate privacy and security design before support is added. The runner
+refuses CI, requires one-invocation approval, rejects common credential
+signatures and packets over 64 KiB, validates the selected boundary prompt, and
+rejects silent model substitution.
+
+The adapters are deliberately small:
+
+- `ollama-chat` uses Ollama's native chat, version, and loaded-model endpoints.
+  It requests zero keep-alive, samples model allocation while the request runs,
+  and verifies that the model unloads afterward.
+- `openai-compatible-chat` uses unauthenticated `GET /v1/models` and
+  non-streaming `POST /v1/chat/completions`. It sends no tools or authorization
+  header, verifies the selected model before and after inference, and requires
+  exact, internally consistent `usage` token counts. This covers the local APIs
+  documented by [LM Studio](https://lmstudio.ai/docs/developer/core/server),
+  [LocalAI](https://localai.io/basics/getting_started/index.html), and
+  [llama.cpp](https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md).
+
+The broader [optional local-AI task guide](optional-ai/README.md) documents the
+other bounded development tasks. Release curation remains its own versioned
+contract and never consumes another task's draft without explicit review.
+
+Each run writes three timestamped local artifacts:
+
+- `*-draft.md` contains the optional assistant's draft for human reconciliation;
+- `*-metrics.json` contains schema-version 1 structured measurements without
+  the packet, system prompt, or response content; and
+- `*-efficiency.md` presents the measurements in a release-ready table.
+
+Both adapters retain exact server-reported prompt, generated, and total token
+counts plus client-observed request duration. Ollama also supplies model-load,
+prompt-evaluation, generation, throughput, version, and sampled RAM/VRAM data.
+Some OpenAI-compatible servers, notably llama.cpp, add non-standard timing
+fields which the report captures when present. The compatibility standard does
+not portably expose runtime version, RAM/VRAM allocation, or model-unload
+control, so the report marks those measurements `Not reported` or `Not
+observable` instead of presenting zeros. Advertised model-file, training-context,
+and parameter metadata from `/v1/models` is retained separately when supplied.
+A sampling error is counted explicitly rather than converted into zero-cost
+success.
+
+These measurements show work performed locally. They do not by themselves
+prove how many OpenAI or other hosted tokens were avoided, because a
+coordinating agent may still prepare or review the packet. Report hosted token
+or monetary savings only when separate hosted usage data provides a defensible
+comparison. Keep the temporary packet and generated draft private, review the
+draft against repository evidence, and remove local temporary artifacts when
+they are no longer useful.
 
 ## Installing a newer setup
 

@@ -10,7 +10,7 @@ const releaseWorkflow = await readFile(
   "utf8",
 );
 
-test("publishes without relying on a checked-out Git repository", () => {
+test("publishes against the explicit GitHub repository identity", () => {
   assert.match(releaseWorkflow, /GH_REPO: \$\{\{ github\.repository \}\}/);
 });
 
@@ -25,4 +25,31 @@ test("generates checksums before adding the checksum list to release assets", ()
 
 test("normalizes package names before checksumming and GitHub upload", () => {
   assert.match(releaseWorkflow, /name="\$\{name\/\/ \/\.\}"/);
+});
+
+test("validates the curated changelog against the previous release tag", () => {
+  assert.match(
+    releaseWorkflow,
+    /git tag --list 'v\*' --merged origin\/main[\s\S]*select-previous-release\.mjs "\$RELEASE_VERSION" --tag-lines/,
+  );
+  assert.match(
+    releaseWorkflow,
+    /node scripts\/prepare-release-notes\.mjs "\$\{release_notes_args\[@\]\}"/,
+  );
+});
+
+test("uses curated release notes for new and rebuilt GitHub releases", () => {
+  assert.match(
+    releaseWorkflow,
+    /gh release edit "\$RELEASE_TAG"[\s\S]*--notes-file "\$RELEASE_NOTES"/,
+  );
+  assert.match(
+    releaseWorkflow,
+    /gh release create "\$RELEASE_TAG"[\s\S]*--notes-file "\$RELEASE_NOTES"/,
+  );
+  assert.doesNotMatch(releaseWorkflow, /--notes "CI-built platform packages/);
+  assert.doesNotMatch(
+    releaseWorkflow,
+    /hoardmind|ollama|openai-compatible|optional-ai|api\/chat|chat\/completions|model api/i,
+  );
 });

@@ -54,6 +54,8 @@ export function filterForgePlugins(
         plugin.state,
         plugin.last_error,
         ...plugin.requested_permissions,
+        ...plugin.weather_capabilities,
+        ...plugin.network_origins,
       ])
     ) {
       return false;

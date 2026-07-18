@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
+  import { responsiveSurfaceGroup } from "$lib/accessibility/responsiveSurface";
   import AtlasMap from "$lib/atlas/AtlasMap.svelte";
   import { administrativeRegionContext } from "$lib/atlas/regions";
   import AtlasSearch from "$lib/atlas/AtlasSearch.svelte";
@@ -52,7 +53,9 @@
     loadDispatchStatus,
     loadSimBriefAccountPreference,
     refreshDispatchWeather,
+    reviseFlightOperation,
     selectDispatchJob,
+    startFlightOperation,
   } from "$lib/dispatch/client";
   import DispatchWorkspace from "$lib/dispatch/DispatchWorkspace.svelte";
   import {
@@ -66,7 +69,10 @@
     SimBriefReferenceKind,
   } from "$lib/dispatch/types";
   import type { FlightWeatherMapView } from "$lib/weather/types";
+  import { pluginWeatherItemCount } from "$lib/weather/pluginWeather";
+  import type { FlightOperationStage } from "$lib/flightOperation/types";
   import JobsWorkspace from "$lib/jobs/JobsWorkspace.svelte";
+  import { jobRouteLabel } from "$lib/jobs/presentation";
   import LaunchScreen from "$lib/launch/LaunchScreen.svelte";
   import {
     remainingLaunchDisplayTime,
@@ -234,6 +240,7 @@
 
   const AUTOMATIC_SYNC_STORAGE_KEY = "wyrmgrid.atlas.automatic-sync-minutes";
   const AUTOMATIC_SYNC_OPTIONS = [0, 15, 30, 60, 120] as const;
+  const PLUGIN_STATUS_POLL_INTERVAL_MS = 5_000;
   const launchStartedAt = Date.now();
 
   let status = $state<PlatformStatus>({
@@ -254,6 +261,7 @@
   let fleetView = $state<FleetSnapshotView | null>(null);
   let fboView = $state<FboSnapshotView | null>(null);
   let jobView = $state<JobSnapshotView | null>(null);
+  let jobRouteContext = $state<string | null>(null);
   let staffView = $state<StaffSnapshotView | null>(null);
   let fleetLoadState = $state<FleetLoadState>("idle");
   let fleetError = $state("");
@@ -339,9 +347,12 @@
   let timelineError = $state("");
   let pluginHost = $state<PluginHostView>(forgePreviewStopped);
   let pluginLayersVisible = $state(true);
+  let pluginWeatherVisible = $state(true);
   let pluginBusy = $state(false);
   let pluginError = $state("");
   let workspaceInitialized = false;
+  let responsiveSurfaceController:
+    ReturnType<typeof responsiveSurfaceGroup> | undefined;
 
   const showSettingsDialog = $derived(
     isDialogSurface(dialogNavigation, "settings"),
@@ -515,6 +526,9 @@
       0,
     ),
   );
+  const pluginWeatherCount = $derived(
+    pluginWeatherItemCount(pluginHost.weather_layers),
+  );
   const pluginProcessActive = $derived(
     pluginHost.plugins.some((plugin) =>
       ["starting", "running", "stopping"].includes(plugin.state),
@@ -560,6 +574,13 @@
       count: plottedWeatherStationCount,
       active: weatherVisible && plottedWeatherStationCount > 0,
       available: plottedWeatherStationCount > 0,
+    },
+    {
+      id: "global-weather",
+      name: "Global weather",
+      count: pluginWeatherCount,
+      active: pluginWeatherVisible && pluginWeatherCount > 0,
+      available: pluginWeatherCount > 0,
     },
     {
       id: "jobs",
@@ -619,9 +640,7 @@
     return item.registration ?? "Unknown registration";
   }
 
-  function formatRouteFeatureKind(
-    feature: AtlasRouteFeature,
-  ): string {
+  function formatRouteFeatureKind(feature: AtlasRouteFeature): string {
     if (feature.kind === "route_fix") return "Route fix";
     return feature.kind[0].toUpperCase() + feature.kind.slice(1);
   }
@@ -1336,6 +1355,66 @@
     }
   }
 
+  async function runFlightOperationAction(
+    action: "start" | "revise",
+  ): Promise<void> {
+    if (dispatchBusy || !isDesktopRuntime()) return;
+    dispatchBusy = true;
+    dispatchError = "";
+    try {
+      acceptDispatchStatus(
+        action === "start"
+          ? await startFlightOperation()
+          : await reviseFlightOperation(),
+      );
+    } catch (error) {
+      dispatchError = operationErrorMessage(
+        error,
+        action === "start"
+          ? "WyrmGrid could not begin this flight operation."
+          : "WyrmGrid could not create the reviewed operation revision.",
+      );
+      await refreshDispatchStatus();
+    } finally {
+      dispatchBusy = false;
+    }
+  }
+
+  function openFlightOperationStage(stage: FlightOperationStage): void {
+    if (stage === "jobs") {
+      const airports = dispatchStatus.snapshot?.airports.value;
+      jobRouteContext = jobRouteLabel(
+        airports?.origin.icao,
+        airports?.destination.icao,
+      );
+      activeWorkspace = "jobs";
+      return;
+    }
+    if (stage === "staff") {
+      activeWorkspace = "staff";
+      return;
+    }
+    if (stage === "fleet") {
+      fleetVisible = true;
+      activeWorkspace = "atlas";
+      return;
+    }
+    if (stage === "atlas") {
+      requestAtlasRouteFocus();
+      return;
+    }
+    activeWorkspace = "dispatch";
+  }
+
+  function openJobsWorkspace(): void {
+    jobRouteContext = null;
+    activeWorkspace = "jobs";
+  }
+
+  function returnToDispatchPlan(): void {
+    activeWorkspace = "dispatch";
+  }
+
   async function importDispatchPlan(
     kind: SimBriefReferenceKind,
     reference: string,
@@ -1373,9 +1452,7 @@
     dispatchError = "";
     try {
       acceptDispatchStatus(
-        isDesktopRuntime()
-          ? await clearDispatchPlan()
-          : dispatchPreviewEmpty,
+        isDesktopRuntime() ? await clearDispatchPlan() : dispatchPreviewEmpty,
       );
       if (atlasFlightRoute?.context === "dispatch_plan") clearAtlasRoute();
     } catch (error) {
@@ -1397,6 +1474,10 @@
         acceptDispatchStatus(await selectDispatchJob(jobId));
       }
       activeWorkspace = "dispatch";
+      await tick();
+      const operationCard = document.getElementById("dispatch-operation");
+      operationCard?.scrollIntoView({ behavior: "smooth", block: "start" });
+      operationCard?.focus({ preventScroll: true });
     } catch (error) {
       dispatchError = operationErrorMessage(
         error,
@@ -1858,6 +1939,14 @@
   });
 
   $effect(() => {
+    const enabled = displayPreferences.responsive_surfaces;
+    responsiveSurfaceController?.update({ enabled });
+    if (typeof document !== "undefined") {
+      document.body.classList.toggle("responsive-surfaces", enabled);
+    }
+  });
+
+  $effect(() => {
     if (
       typeof window === "undefined" ||
       !isDesktopRuntime() ||
@@ -1884,7 +1973,10 @@
     ) {
       return;
     }
-    const timer = window.setInterval(() => void refreshPluginHost(), 1000);
+    const timer = window.setInterval(
+      () => void refreshPluginHost(),
+      PLUGIN_STATUS_POLL_INTERVAL_MS,
+    );
     return () => window.clearInterval(timer);
   });
 
@@ -1912,6 +2004,21 @@
 
     void initializeApplication();
     return () => window.removeEventListener("resize", updateViewportMode);
+  });
+
+  onMount(() => {
+    responsiveSurfaceController = responsiveSurfaceGroup(document.body, {
+      enabled: displayPreferences.responsive_surfaces,
+    });
+    document.body.classList.toggle(
+      "responsive-surfaces",
+      displayPreferences.responsive_surfaces,
+    );
+    return () => {
+      responsiveSurfaceController?.destroy();
+      responsiveSurfaceController = undefined;
+      document.body.classList.remove("responsive-surfaces");
+    };
   });
 </script>
 
@@ -1984,8 +2091,7 @@
           class="nav-item"
           class:active={activeWorkspace === "jobs"}
           type="button"
-          onclick={() => (activeWorkspace = "jobs")}
-          >{$translation("nav-jobs")}</button
+          onclick={openJobsWorkspace}>{$translation("nav-jobs")}</button
         >
         <button
           class="nav-item"
@@ -2077,7 +2183,7 @@
             </div>
           </div>
 
-          <div class="sync-controls">
+          <div class="sync-controls responsive-surface">
             <button
               class="sync-button"
               class:refreshing={fleetLoadState === "loading"}
@@ -2112,7 +2218,7 @@
             {#each layers as layer}
               <button
                 class:muted={!layer.active}
-                class="layer-row"
+                class="layer-row responsive-surface"
                 aria-pressed={layer.active}
                 disabled={!layer.available}
                 title={layer.available
@@ -2124,7 +2230,9 @@
                   if (layer.id === "fbos") fboVisible = !fboVisible;
                   if (layer.id === "regions") regionsVisible = !regionsVisible;
                   if (layer.id === "weather") weatherVisible = !weatherVisible;
-                  if (layer.id === "jobs") activeWorkspace = "jobs";
+                  if (layer.id === "global-weather")
+                    pluginWeatherVisible = !pluginWeatherVisible;
+                  if (layer.id === "jobs") openJobsWorkspace();
                   if (layer.id === "plugins")
                     pluginLayersVisible = !pluginLayersVisible;
                 }}
@@ -2136,8 +2244,33 @@
             {/each}
           </div>
 
+          {#if pluginWeatherVisible && pluginHost.weather_layers.length > 0}
+            <div class="sidebar-note responsive-surface">
+              <span class="note-icon">◌</span>
+              <p>
+                <strong>External global weather</strong><br />
+                Simulation context only · sourced layers are never a real-world operational
+                briefing.<br />
+                {#if pluginHost.weather_layers.some((published) => published.layer.provenance.provider === "open-meteo.com")}
+                  <a
+                    href="https://open-meteo.com/"
+                    target="_blank"
+                    rel="noreferrer">Weather data by Open-Meteo.com</a
+                  ><br />
+                {/if}
+                {#if pluginHost.weather_layers.some((published) => published.layer.provenance.provider === "rainviewer.com")}
+                  <a
+                    href="https://www.rainviewer.com/"
+                    target="_blank"
+                    rel="noreferrer">Radar data by RainViewer</a
+                  >
+                {/if}
+              </p>
+            </div>
+          {/if}
+
           {#if regionsVisible}
-            <div class="sidebar-note regional-lens-note">
+            <div class="sidebar-note regional-lens-note responsive-surface">
               <span class="note-icon">⌖</span>
               <p>
                 <strong>Regional lens</strong><br />
@@ -2148,7 +2281,7 @@
           {/if}
 
           {#if atlasFlightRoute}
-            <div class="sidebar-note route-note">
+            <div class="sidebar-note route-note responsive-surface">
               <span class="note-icon">↝</span>
               <p>
                 <strong
@@ -2176,7 +2309,6 @@
             {fbos}
             {selectedAircraftId}
             {selectedFboId}
-            responsiveSurfaces={displayPreferences.responsive_surfaces}
             onselectaircraft={(aircraftId) => {
               selectedAircraftId = aircraftId;
               selectedFboId = null;
@@ -2190,7 +2322,7 @@
           />
 
           <div
-            class="sidebar-note"
+            class="sidebar-note responsive-surface"
             class:error-note={fleetLoadState === "error"}
           >
             <span class="note-icon"
@@ -2237,9 +2369,13 @@
             {fboVisible}
             pluginLayers={pluginHost.layers}
             {pluginLayersVisible}
+            pluginWeatherLayers={pluginHost.weather_layers}
+            {pluginWeatherVisible}
             flightRoute={atlasFlightRoute}
             weather={atlasWeather}
             {weatherVisible}
+            enhancedWeather={displayPreferences.weather_rendering_profile ===
+              "enhanced"}
             {regionsVisible}
             lowResource={startupOptions.low_resource}
             selectedRegionId={selectedAdministrativeRegion?.id}
@@ -2320,7 +2456,7 @@
               </span>
             {/if}
           </div>
-          <div class="readiness-card">
+          <div class="readiness-card responsive-surface">
             <span class="eyebrow">Atlas readiness</span>
             <div class="readiness-value">
               {activeFleetView || activeFboView
@@ -2353,10 +2489,13 @@
           <span class="eyebrow">Inspector</span>
           {#if selectedRouteFeature}
             <h2>{selectedRouteFeature.ident}</h2>
-            <p>{formatRouteFeatureKind(selectedRouteFeature)} from the current Dispatch plan</p>
+            <p>
+              {formatRouteFeatureKind(selectedRouteFeature)} from the current Dispatch
+              plan
+            </p>
 
             <div class="selection-details">
-              <article>
+              <article class="responsive-surface">
                 <span>Location</span>
                 <strong
                   >{selectedRouteFeature.location
@@ -2369,20 +2508,27 @@
                     : "WyrmGrid has not inferred a coordinate for this item"}
                 </small>
               </article>
-              <article>
+              <article class="responsive-surface">
                 <span>Route evidence</span>
-                <strong>{selectedRouteFeature.airway ?? "No airway reported"}</strong>
+                <strong
+                  >{selectedRouteFeature.airway ?? "No airway reported"}</strong
+                >
                 <small>
                   {selectedRouteFeature.sequence === undefined
-                    ? selectedRouteFeature.name ?? "No additional label supplied"
+                    ? (selectedRouteFeature.name ??
+                      "No additional label supplied")
                     : `Ordered fix ${selectedRouteFeature.sequence + 1}`}
                 </small>
               </article>
-              <article>
+              <article class="responsive-surface">
                 <span>Provenance</span>
-                <strong>{atlasRoute?.provenance.provider ?? "Not available"}</strong>
+                <strong
+                  >{atlasRoute?.provenance.provider ?? "Not available"}</strong
+                >
                 <small>
-                  {atlasRoute?.airac ? `AIRAC ${atlasRoute.airac}` : "AIRAC not reported"}
+                  {atlasRoute?.airac
+                    ? `AIRAC ${atlasRoute.airac}`
+                    : "AIRAC not reported"}
                 </small>
               </article>
             </div>
@@ -2391,7 +2537,7 @@
             <p>{selectedAircraft.model ?? "Aircraft type unavailable"}</p>
 
             <div class="selection-details">
-              <article>
+              <article class="responsive-surface">
                 <span>Current airport</span>
                 <strong
                   >{selectedAircraft.current_airport?.icao ||
@@ -2401,11 +2547,11 @@
                   <small>{selectedAircraft.current_airport.name}</small>
                 {/if}
               </article>
-              <article>
+              <article class="responsive-surface">
                 <span>Coordinates</span>
                 <strong>{formatCoordinates(selectedAircraft)}</strong>
               </article>
-              <article>
+              <article class="responsive-surface">
                 <span>Provenance</span>
                 <strong>{fleetSourceLabel}</strong>
                 <small
@@ -2420,18 +2566,18 @@
             <p>Company FBO network location</p>
 
             <div class="selection-details">
-              <article>
+              <article class="responsive-surface">
                 <span>Airport</span>
                 <strong>{selectedFbo.airport?.icao || "Not reported"}</strong>
                 {#if selectedFbo.airport?.name}<small
                     >{selectedFbo.airport.name}</small
                   >{/if}
               </article>
-              <article>
+              <article class="responsive-surface">
                 <span>Coordinates</span>
                 <strong>{formatFboCoordinates(selectedFbo)}</strong>
               </article>
-              <article>
+              <article class="responsive-surface">
                 <span>Provenance</span>
                 <strong>{fboSourceLabel}</strong>
                 <small
@@ -2450,7 +2596,7 @@
             </p>
 
             <div class="selection-details">
-              <article>
+              <article class="responsive-surface">
                 <span>Administrative tier</span>
                 <strong
                   >{selectedAdministrativeRegion.level === "ADM1"
@@ -2462,7 +2608,7 @@
                     "Local classification unavailable"}</small
                 >
               </article>
-              <article>
+              <article class="responsive-surface">
                 <span>Regional code</span>
                 <strong
                   >{selectedAdministrativeRegion.subdivision_code ??
@@ -2474,12 +2620,12 @@
                 >
               </article>
               {#if selectedAdministrativeRegion.name_local && selectedAdministrativeRegion.name_local !== selectedAdministrativeRegion.name}
-                <article>
+                <article class="responsive-surface">
                   <span>Local name</span>
                   <strong>{selectedAdministrativeRegion.name_local}</strong>
                 </article>
               {/if}
-              <article>
+              <article class="responsive-surface">
                 <span>Boundary source</span>
                 <strong
                   >{selectedAdministrativeRegion.source} v{selectedAdministrativeRegion.source_version}</strong
@@ -2497,7 +2643,7 @@
             </p>
 
             <div class="selection-details">
-              <article>
+              <article class="responsive-surface">
                 <span>Flight category</span>
                 <strong
                   >{selectedWeatherStation.metar?.value.flight_category?.toUpperCase() ??
@@ -2509,7 +2655,7 @@
                     : "No METAR was returned; WyrmGrid does not infer clear conditions."}</small
                 >
               </article>
-              <article>
+              <article class="responsive-surface">
                 <span>Wind and visibility</span>
                 <strong>
                   {selectedWeatherStation.metar?.value.wind_direction?.kind ===
@@ -2530,7 +2676,7 @@
                     "not reported"}</small
                 >
               </article>
-              <article>
+              <article class="responsive-surface">
                 <span>Station location</span>
                 <strong
                   >{selectedWeatherStation.location
@@ -2543,7 +2689,7 @@
                     : "The report remains visible as evidence but is not plotted."}</small
                 >
               </article>
-              <article>
+              <article class="responsive-surface">
                 <span>METAR source</span>
                 <strong
                   >{selectedWeatherStation.metar?.provenance.provider ??
@@ -2555,14 +2701,14 @@
                     : "Unavailable in this snapshot"}</small
                 >
               </article>
-              <article>
+              <article class="responsive-surface">
                 <span>Raw METAR</span>
                 <strong
                   >{selectedWeatherStation.metar?.value.raw_text ??
                     "No METAR returned"}</strong
                 >
               </article>
-              <article>
+              <article class="responsive-surface">
                 <span>TAF</span>
                 <strong
                   >{selectedWeatherStation.taf
@@ -2582,7 +2728,7 @@
             </p>
 
             <div class="selection-details">
-              <article>
+              <article class="responsive-surface">
                 <span>Location</span>
                 <strong
                   >{selectedRoutePoint.location
@@ -2595,7 +2741,7 @@
                     : "No coordinates were supplied, so Atlas does not plot or infer this fix."}</small
                 >
               </article>
-              <article>
+              <article class="responsive-surface">
                 <span>Route context</span>
                 <strong
                   >{selectedRoutePoint.airway ?? "Direct / airport"}</strong
@@ -2606,7 +2752,7 @@
                     : "Alternate airport; not joined to the filed route"}</small
                 >
               </article>
-              <article>
+              <article class="responsive-surface">
                 <span>Provenance</span>
                 <strong>{atlasFlightRoute.planned.provenance.provider}</strong>
                 <small
@@ -2630,7 +2776,7 @@
 
             <div class="selection-details">
               {#if atlasFlightRoute.recorded}
-                <article>
+                <article class="responsive-surface">
                   <span>Recorded path</span>
                   <strong
                     >{atlasFlightRoute.recorded.represented_point_count.toLocaleString()}
@@ -2644,7 +2790,7 @@
                   >
                 </article>
               {/if}
-              <article>
+              <article class="responsive-surface">
                 <span>Planned path</span>
                 <strong
                   >{atlasFlightRoute.planned?.points
@@ -2656,7 +2802,7 @@
                     .provider ?? "no plan provider"}</small
                 >
               </article>
-              <article>
+              <article class="responsive-surface">
                 <span>Unresolved plan legs</span>
                 <strong
                   >{atlasFlightRoute.planned?.points
@@ -2674,16 +2820,20 @@
               from the current plan.
             </p>
             <div class="selection-details">
-              <article>
+              <article class="responsive-surface">
                 <span>Source</span>
                 <strong>{atlasRoute.provenance.provider}</strong>
                 <small>
-                  {atlasRoute.airac ? `AIRAC ${atlasRoute.airac}` : "AIRAC not reported"}
+                  {atlasRoute.airac
+                    ? `AIRAC ${atlasRoute.airac}`
+                    : "AIRAC not reported"}
                 </small>
               </article>
-              <article>
+              <article class="responsive-surface">
                 <span>Projection</span>
-                <strong>Coordinate-only route v{atlasRoute.projection_version}</strong>
+                <strong
+                  >Coordinate-only route v{atlasRoute.projection_version}</strong
+                >
                 <small>Unresolved fixes remain visible in Dispatch</small>
               </article>
             </div>
@@ -2706,22 +2856,22 @@
           {/if}
 
           <div class="status-grid">
-            <article>
+            <article class="responsive-surface">
               <span>OnAir</span><strong
                 >{connection.connected ? "Connected" : "Not connected"}</strong
               >
             </article>
-            <article>
+            <article class="responsive-surface">
               <span>Fleet</span><strong>{fleetResourceAvailabilityLabel}</strong
               >
             </article>
-            <article>
+            <article class="responsive-surface">
               <span>FBOs</span><strong>{fboAvailabilityLabel}</strong>
             </article>
-            <article>
+            <article class="responsive-surface">
               <span>Storage</span><strong>{fleetStorageLabel}</strong>
             </article>
-            <article>
+            <article class="responsive-surface">
               <span>Dispatch route</span><strong
                 >{atlasRoute
                   ? `${atlasRoute.mapped_route_feature_count} mapped`
@@ -2748,7 +2898,6 @@
 
       <StaffWorkspace
         view={staffView}
-        responsiveSurfaces={displayPreferences.responsive_surfaces}
         busy={fleetLoadState === "loading"}
         errorMessage={fleetError}
         onsynchronize={() => void synchronizeCompanyData("manual")}
@@ -2767,11 +2916,12 @@
 
       <JobsWorkspace
         view={jobView}
-        responsiveSurfaces={displayPreferences.responsive_surfaces}
-        busy={fleetLoadState === "loading"}
-        errorMessage={fleetError}
+        routeContext={jobRouteContext}
+        busy={fleetLoadState === "loading" || dispatchBusy}
+        errorMessage={dispatchError || fleetError}
         onsynchronize={() => void synchronizeCompanyData("manual")}
         ondispatch={(jobId) => void openJobInDispatch(jobId)}
+        onreturn={returnToDispatchPlan}
       />
     {:else}
       <section class="time-mode-bar dispatch-mode-bar">
@@ -2797,6 +2947,8 @@
           void importDispatchPlan(kind, reference, rememberReference)}
         onweather={() => void refreshCurrentDispatchWeather()}
         onclear={() => void clearCurrentDispatchPlan()}
+        onoperation={(action) => void runFlightOperationAction(action)}
+        onjourney={openFlightOperationStage}
         onviewweatheratlas={openDispatchWeatherInAtlas}
         onviewroute={() => requestAtlasRouteFocus()}
         onviewfeature={(featureId) => requestAtlasRouteFocus(featureId)}

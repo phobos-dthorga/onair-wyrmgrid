@@ -8,7 +8,6 @@ members = [
     "crates/plugin-protocol",
     "crates/simbrief-api",
     "crates/storage",
-    "crates/weather-api",
     "providers/msfs2024-simconnect",
 ]
 resolver = "2"
@@ -22,6 +21,7 @@ license = "MIT"
 repository = "https://github.com/phobos-dthorga/onair-wyrmgrid"
 
 [workspace.dependencies]
+base64 = "0.22.1"
 chrono = { version = "0.4.41", default-features = false, features = ["clock", "serde"] }
 fluent-syntax = "0.12.0"
 getrandom = "0.4.3"

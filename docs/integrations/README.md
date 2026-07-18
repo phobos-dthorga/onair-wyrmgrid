@@ -29,20 +29,20 @@ Online networks --------------------------+--> Atlas overlays     |
 
 ## Planned integrations
 
-| Area               | Initial target                           | Product position                                    | Account or approval                                       |
-| ------------------ | ---------------------------------------- | --------------------------------------------------- | --------------------------------------------------------- |
-| Flight planning    | SimBrief latest OFP                      | First-party core adapter                            | SimBrief account; generation needs developer approval     |
-| Weather            | AviationWeather.gov                      | First-party core adapter                            | No account for the public Data API                        |
-| AI ATC and crew    | SayIntentions.AI                         | Optional first-party account adapter                | Subscribed pilot account; SAPI is currently preview       |
-| Online networks    | VATSIM and IVAO                          | Optional Atlas providers, later plugin capabilities | Public feeds need no user login; private APIs differ      |
-| Simulator          | MSFS 2024 through SimConnect             | Primary WyrmGrid Bridge provider                    | Local simulator installation                              |
-| Simulator          | MSFS 2020 and FSUIPC                     | Compatibility providers                             | Local installation; FSUIPC may be separately licensed     |
-| Simulator          | X-Plane 12 Web API                       | Second simulator family                             | Local X-Plane 12.1.1 or later                             |
-| Navigation         | Navigraph Navdata                        | Optional approved adapter                           | Developer approval and user subscription for current data |
-| Airport baseline   | OurAirports                              | Offline reference import                            | No account; public-domain dataset                         |
-| Plan interchange   | MSFS, X-Plane, and Little Navmap formats | First-party import/export adapters                  | No account                                                |
-| Reminders          | OS notifications and iCalendar export    | Local core capability                               | No account                                                |
-| Community delivery | Discord or other messaging               | Deny-by-default plugin                              | User-selected service credentials                         |
+| Area               | Initial target                              | Product position                                    | Account or approval                                       |
+| ------------------ | ------------------------------------------- | --------------------------------------------------- | --------------------------------------------------------- |
+| Flight planning    | SimBrief latest OFP                         | First-party core adapter                            | SimBrief account; generation needs developer approval     |
+| Weather            | AviationWeather.gov, Open-Meteo, RainViewer | Independent first-party provider plugins            | No account for the initial public endpoints               |
+| AI ATC and crew    | SayIntentions.AI                            | Optional first-party account adapter                | Subscribed pilot account; SAPI is currently preview       |
+| Online networks    | VATSIM and IVAO                             | Optional Atlas providers, later plugin capabilities | Public feeds need no user login; private APIs differ      |
+| Simulator          | MSFS 2024 through SimConnect                | Primary WyrmGrid Bridge provider                    | Local simulator installation                              |
+| Simulator          | MSFS 2020 and FSUIPC                        | Compatibility providers                             | Local installation; FSUIPC may be separately licensed     |
+| Simulator          | X-Plane 12 Web API                          | Second simulator family                             | Local X-Plane 12.1.1 or later                             |
+| Navigation         | Navigraph Navdata                           | Optional approved adapter                           | Developer approval and user subscription for current data |
+| Airport baseline   | OurAirports                                 | Offline reference import                            | No account; public-domain dataset                         |
+| Plan interchange   | MSFS, X-Plane, and Little Navmap formats    | First-party import/export adapters                  | No account                                                |
+| Reminders          | OS notifications and iCalendar export       | Local core capability                               | No account                                                |
+| Community delivery | Discord or other messaging                  | Deny-by-default plugin                              | User-selected service credentials                         |
 
 ## Delivery sequence
 
@@ -79,10 +79,11 @@ require a sanitized captured response or an outside-repository integration test.
 
 ## Shared requirements
 
-- Rust performs network and filesystem access; the Svelte interface remains
-  presentational.
-- Each adapter owns rate limiting, caching, timeouts, retry policy, raw schemas,
-  and provider-specific error classification.
+- Rust core adapters and explicitly approved provider-plugin SDK clients perform
+  network and filesystem access; the Svelte interface remains presentational.
+- Each provider plugin owns raw schemas, endpoint construction, and
+  provider-specific translation. Core owns request selection, scheduling,
+  caching, retry policy, validation, and safe error categories.
 - The application exposes freshness and degraded state rather than substituting
   old data silently.
 - Units are explicit at boundaries and normalized only in domain services.

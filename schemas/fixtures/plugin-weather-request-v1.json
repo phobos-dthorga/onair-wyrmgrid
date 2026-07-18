@@ -1,0 +1,19 @@
+{
+  "protocol_version": 1,
+  "sequence": 2,
+  "payload": {
+    "type": "weather_request",
+    "request": {
+      "id": "weather-1",
+      "query": {
+        "kind": "forecast_grid",
+        "points": [
+          {
+            "id": "global-0-0",
+            "location": { "latitude": -75.0, "longitude": -165.0 }
+          }
+        ]
+      }
+    }
+  }
+}

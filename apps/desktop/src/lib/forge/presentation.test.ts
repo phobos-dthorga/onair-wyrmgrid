@@ -14,10 +14,13 @@ const plugins: PluginView[] = [
     version: "1.0.0",
     author: "Example",
     runtime: "python",
+    weather_capabilities: [],
+    network_origins: [],
     requested_permissions: ["map_layers_publish"],
     granted_permissions: ["map_layers_publish"],
     state: "running",
     published_layer_count: 1,
+    published_weather_layer_count: 0,
   },
   {
     id: "org.example.review",
@@ -25,10 +28,13 @@ const plugins: PluginView[] = [
     version: "1.0.0",
     author: "Example",
     runtime: null,
+    weather_capabilities: [],
+    network_origins: [],
     requested_permissions: ["on_air_fleet_read"],
     granted_permissions: [],
     state: "stopped",
     published_layer_count: 0,
+    published_weather_layer_count: 0,
   },
 ];
 

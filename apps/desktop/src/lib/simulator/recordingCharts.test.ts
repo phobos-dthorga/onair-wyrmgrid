@@ -15,6 +15,7 @@ const preferences: DisplayPreferences = {
   weight_unit: "kilograms",
   fuel_unit: "litres",
   responsive_surfaces: true,
+  weather_rendering_profile: "enhanced",
 };
 
 const session: SimulatorSessionView = {

@@ -228,5 +228,6 @@ fn preferences(altitude_unit: &str, fuel_unit: &str) -> DisplayPreferencesRecord
         weight_unit: "kilograms".into(),
         fuel_unit: fuel_unit.into(),
         responsive_surfaces: true,
+        weather_rendering_profile: "enhanced".into(),
     }
 }

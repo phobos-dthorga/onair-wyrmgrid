@@ -1134,24 +1134,50 @@ impl From<DispatchError> for OperationError {
                 | wyrmgrid_simbrief_api::ClientError::InvalidContentType
                 | wyrmgrid_simbrief_api::ClientError::MalformedPlan,
             ) => ("simbrief.invalid_response", false, true),
-            DispatchError::WeatherProvider(wyrmgrid_weather_api::ClientError::InvalidStations) => {
+            DispatchError::WeatherProvider(WeatherProviderError::InvalidStations) => {
                 ("weather.invalid_stations", false, false)
             }
-            DispatchError::WeatherProvider(wyrmgrid_weather_api::ClientError::RateLimited) => {
+            DispatchError::WeatherProvider(WeatherProviderError::RateLimited) => {
                 ("weather.rate_limited", true, false)
             }
             DispatchError::WeatherProvider(
-                wyrmgrid_weather_api::ClientError::TimedOut
-                | wyrmgrid_weather_api::ClientError::Offline
-                | wyrmgrid_weather_api::ClientError::ProviderUnavailable,
+                WeatherProviderError::TimedOut
+                | WeatherProviderError::Offline
+                | WeatherProviderError::ProviderUnavailable,
             ) => ("weather.unavailable", true, false),
-            DispatchError::WeatherProvider(
-                wyrmgrid_weather_api::ClientError::ConfigurationUnavailable
-                | wyrmgrid_weather_api::ClientError::UnexpectedResponse
-                | wyrmgrid_weather_api::ClientError::ResponseTooLarge
-                | wyrmgrid_weather_api::ClientError::InvalidContentType
-                | wyrmgrid_weather_api::ClientError::MalformedWeather,
-            ) => ("weather.invalid_response", false, true),
+            DispatchError::WeatherProvider(WeatherProviderError::InvalidResponse) => {
+                ("weather.invalid_response", false, true)
+            }
+        };
+        Self {
+            code,
+            message: error.to_string(),
+            retryable,
+            reportable,
+            report_id: None,
+        }
+    }
+}
+
+impl From<FlightOperationError> for OperationError {
+    fn from(error: FlightOperationError) -> Self {
+        let (code, retryable, reportable) = match error {
+            FlightOperationError::PlanRequired => ("operation.plan_required", false, false),
+            FlightOperationError::ActiveOperationExists => {
+                ("operation.active_exists", false, false)
+            }
+            FlightOperationError::NoActiveOperation => {
+                ("operation.no_active_operation", false, false)
+            }
+            FlightOperationError::NoRevisionChange => {
+                ("operation.no_revision_change", false, false)
+            }
+            FlightOperationError::InvalidStoredOperation => {
+                ("operation.invalid_stored_state", false, true)
+            }
+            FlightOperationError::StorageUnavailable => {
+                ("operation.storage_unavailable", true, true)
+            }
         };
         Self {
             code,
@@ -1715,6 +1741,13 @@ impl OnAirSession {
 
     pub fn job_for_dispatch(&self, job_id: &str) -> Result<DispatchJobSelection, ConnectionError> {
         let job_id = Uuid::parse_str(job_id).map_err(|_| ConnectionError::JobUnavailable)?;
+        let company_id = self
+            .inner
+            .read()
+            .map_err(|_| ConnectionError::StateUnavailable)?
+            .as_ref()
+            .map(|session| session.company.id.clone())
+            .ok_or(ConnectionError::JobUnavailable)?;
         let jobs = self
             .jobs
             .read()
@@ -1729,6 +1762,7 @@ impl OnAirSession {
             .cloned()
             .ok_or(ConnectionError::JobUnavailable)?;
         Ok(DispatchJobSelection {
+            company_id,
             job,
             observed_at: view.snapshot.provenance.observed_at,
             availability: view.availability,

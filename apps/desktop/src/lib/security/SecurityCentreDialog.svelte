@@ -135,32 +135,35 @@
           class="summary-grid"
           aria-label={$translation("security-summary")}
         >
-        <article>
-          <span>{$translation("security-active-actors")}</span>
-          <strong>{status.active_grants.length}</strong>
-          <small>{$translation("security-active-actors-detail")}</small>
-        </article>
-        <article>
-          <span>{$translation("security-legal-status")}</span>
-          <strong
-            >{status.legal.acknowledged
-              ? $translation("security-current")
-              : $translation("security-review-required")}</strong
-          >
-          <small>{$translation("security-legal-detail")}</small>
-        </article>
-        <article>
-          <span>{$translation("security-diagnostics")}</span>
-          <strong
-            >{status.legal.telemetry_enabled
-              ? $translation("security-enabled")
-              : $translation("security-disabled")}</strong
-          >
-          <small>{$translation("security-diagnostics-detail")}</small>
-        </article>
+          <article class="responsive-surface">
+            <span>{$translation("security-active-actors")}</span>
+            <strong>{status.active_grants.length}</strong>
+            <small>{$translation("security-active-actors-detail")}</small>
+          </article>
+          <article class="responsive-surface">
+            <span>{$translation("security-legal-status")}</span>
+            <strong
+              >{status.legal.acknowledged
+                ? $translation("security-current")
+                : $translation("security-review-required")}</strong
+            >
+            <small>{$translation("security-legal-detail")}</small>
+          </article>
+          <article class="responsive-surface">
+            <span>{$translation("security-diagnostics")}</span>
+            <strong
+              >{status.legal.telemetry_enabled
+                ? $translation("security-enabled")
+                : $translation("security-disabled")}</strong
+            >
+            <small>{$translation("security-diagnostics-detail")}</small>
+          </article>
         </section>
 
-        <section class="security-explorer" aria-label="Security record exploration">
+        <section
+          class="security-explorer"
+          aria-label="Security record exploration"
+        >
           <ExplorationTabs
             tabs={securityTabs}
             bind:selected={activeSection}
@@ -174,7 +177,9 @@
           <details class="security-filter-panel">
             <summary>
               <span>Filter and sort</span>
-              {#if activeFilterCount > 0}<strong>{activeFilterCount} active</strong>{/if}
+              {#if activeFilterCount > 0}<strong
+                  >{activeFilterCount} active</strong
+                >{/if}
             </summary>
             <div class="security-filter-grid">
               {#if activeSection === "access"}
@@ -183,7 +188,8 @@
                   <select bind:value={filters.lifetime}>
                     <option value="all">Any current lifetime</option>
                     {#each filterOptions.lifetimes as lifetime}
-                      <option value={lifetime}>{lifetimeLabel(lifetime)}</option>
+                      <option value={lifetime}>{lifetimeLabel(lifetime)}</option
+                      >
                     {/each}
                   </select>
                 </label>
@@ -196,7 +202,9 @@
                   >
                     <option value="">Any current capability</option>
                     {#each filterOptions.capabilities as capability}
-                      <option value={capability}>{capabilityLabel(capability)}</option>
+                      <option value={capability}
+                        >{capabilityLabel(capability)}</option
+                      >
                     {/each}
                   </select>
                 </label>
@@ -237,10 +245,16 @@
         </section>
 
         {#if activeSection === "access"}
-          <section id="security-panel-access" class="security-section" role="tabpanel">
+          <section
+            id="security-panel-access"
+            class="security-section"
+            role="tabpanel"
+          >
             <div class="section-heading">
               <div>
-                <span class="eyebrow">{$translation("security-access-eyebrow")}</span>
+                <span class="eyebrow"
+                  >{$translation("security-access-eyebrow")}</span
+                >
                 <h3>{$translation("security-access-title")}</h3>
               </div>
               <button type="button" disabled={busy} onclick={onrefresh}
@@ -264,7 +278,7 @@
             {:else}
               <div class="grant-list">
                 {#each visibleGrants as grant}
-                  <article class="grant-card">
+                  <article class="grant-card responsive-surface">
                     <div class="grant-heading">
                       <div>
                         <span class="subject-kind">{subjectLabel(grant)}</span>
@@ -289,7 +303,9 @@
                       {/each}
                     </ul>
                     <details>
-                      <summary>{$translation("security-scope-revision")}</summary>
+                      <summary
+                        >{$translation("security-scope-revision")}</summary
+                      >
                       <code>{grant.scope_revision}</code>
                     </details>
                   </article>
@@ -298,10 +314,16 @@
             {/if}
           </section>
         {:else}
-          <section id="security-panel-history" class="security-section" role="tabpanel">
+          <section
+            id="security-panel-history"
+            class="security-section"
+            role="tabpanel"
+          >
             <div class="section-heading">
               <div>
-                <span class="eyebrow">{$translation("security-history-eyebrow")}</span>
+                <span class="eyebrow"
+                  >{$translation("security-history-eyebrow")}</span
+                >
                 <h3>{$translation("security-history-title")}</h3>
               </div>
               <small

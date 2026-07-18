@@ -257,7 +257,8 @@
       <details class="recording-filter-panel">
         <summary>
           <span>Filter and sort</span>
-          {#if activeFilterCount > 0}<strong>{activeFilterCount} active</strong>{/if}
+          {#if activeFilterCount > 0}<strong>{activeFilterCount} active</strong
+            >{/if}
         </summary>
         <div class="recording-filter-grid">
           <label>
@@ -323,7 +324,10 @@
   {:else}
     <div class="recording-sessions">
       {#each visibleSessions as recording}
-        <article class:active={recording.id === status.active_session_id}>
+        <article
+          class="responsive-surface"
+          class:active={recording.id === status.active_session_id}
+        >
           <button
             class="recording-select"
             type="button"
@@ -401,254 +405,272 @@
   {/if}
 
   {#if detailSection === "debrief"}
-  {#if debrief}
-    <section class="whole-flight-debrief">
-      <div class="debrief-heading">
-        <div>
-          <span class="eyebrow"
-            >{$translation("simulator-debrief-eyebrow")}</span
-          >
-          <h4>{$translation("simulator-debrief-title")}</h4>
-          <p>
-            {$translation("simulator-debrief-summary", {
-              samples: debrief.source_sample_count.toLocaleString(),
+    {#if debrief}
+      <section class="whole-flight-debrief">
+        <div class="debrief-heading">
+          <div>
+            <span class="eyebrow"
+              >{$translation("simulator-debrief-eyebrow")}</span
+            >
+            <h4>{$translation("simulator-debrief-title")}</h4>
+            <p>
+              {$translation("simulator-debrief-summary", {
+                samples: debrief.source_sample_count.toLocaleString(),
+              })}
+            </p>
+          </div>
+          {#if routePointCount > 0}
+            <button
+              class="atlas-route-button"
+              type="button"
+              disabled={busy}
+              onclick={() => onviewatlas(debrief.route)}
+              >{$translation("simulator-debrief-open-atlas")}</button
+            >
+          {/if}
+        </div>
+
+        {#if unresolvedPlanPoints.length}
+          <p class="debrief-notice">
+            {$translation("simulator-debrief-unresolved-route", {
+              count: unresolvedPlanPoints.length,
             })}
+            {unresolvedPlanPoints.map((point) => point.label).join(" · ")}
           </p>
-        </div>
-        {#if routePointCount > 0}
-          <button
-            class="atlas-route-button"
-            type="button"
-            disabled={busy}
-            onclick={() => onviewatlas(debrief.route)}
-            >{$translation("simulator-debrief-open-atlas")}</button
-          >
         {/if}
-      </div>
 
-      {#if unresolvedPlanPoints.length}
-        <p class="debrief-notice">
-          {$translation("simulator-debrief-unresolved-route", {
-            count: unresolvedPlanPoints.length,
-          })}
-          {unresolvedPlanPoints.map((point) => point.label).join(" · ")}
-        </p>
-      {/if}
-
-      <div class="debrief-charts">
-        <WyrmChart
-          spec={altitudeDebriefChart(debrief, displayPreferences)}
-          eyebrow="WyrmChart flight debrief"
-          height="230px"
-        />
-        <WyrmChart
-          spec={speedDebriefChart(debrief, displayPreferences)}
-          eyebrow="WyrmChart flight debrief"
-          height="230px"
-        />
-        <WyrmChart
-          spec={fuelWeightDebriefChart(debrief, displayPreferences)}
-          eyebrow="WyrmChart flight debrief"
-          height="230px"
-        />
-        <WyrmChart
-          spec={attitudeDebriefChart(debrief)}
-          eyebrow="WyrmChart flight debrief"
-          height="230px"
-        />
-      </div>
-    </section>
-  {/if}
-
-  {#if comparison}
-    <section class="plan-comparison">
-      <div class="comparison-heading">
-        <div>
-          <span class="eyebrow"
-            >{$translation("simulator-recording-comparison-version", {
-              version: comparison.association.correlation_version,
-            })}</span
-          >
-          <h4>
-            {comparison.association.origin_icao} → {comparison.association
-              .destination_icao}
-          </h4>
+        <div class="debrief-charts">
+          <WyrmChart
+            spec={altitudeDebriefChart(debrief, displayPreferences)}
+            eyebrow="WyrmChart flight debrief"
+            height="230px"
+          />
+          <WyrmChart
+            spec={speedDebriefChart(debrief, displayPreferences)}
+            eyebrow="WyrmChart flight debrief"
+            height="230px"
+          />
+          <WyrmChart
+            spec={fuelWeightDebriefChart(debrief, displayPreferences)}
+            eyebrow="WyrmChart flight debrief"
+            height="230px"
+          />
+          <WyrmChart
+            spec={attitudeDebriefChart(debrief)}
+            eyebrow="WyrmChart flight debrief"
+            height="230px"
+          />
         </div>
-        <small>{$translation("simulator-recording-comparison-boundary")}</small>
-      </div>
-      <div class="comparison-grid">
-        <article>
-          <span>{$translation("simulator-recording-comparison-time")}</span
-          ><strong
-            >{comparisonValue(comparison.planned_enroute_seconds, " s")} / {comparisonValue(
-              comparison.recorded_seconds,
-              " s",
-            )}</strong
-          ><small
-            >{comparisonDelta(comparison.duration_delta_seconds, " s")}</small
+      </section>
+    {/if}
+
+    {#if comparison}
+      <section class="plan-comparison">
+        <div class="comparison-heading">
+          <div>
+            <span class="eyebrow"
+              >{$translation("simulator-recording-comparison-version", {
+                version: comparison.association.correlation_version,
+              })}</span
+            >
+            <h4>
+              {comparison.association.origin_icao} → {comparison.association
+                .destination_icao}
+            </h4>
+          </div>
+          <small
+            >{$translation("simulator-recording-comparison-boundary")}</small
           >
-        </article>
-        <article>
-          <span>{$translation("simulator-recording-comparison-distance")}</span
-          ><strong
-            >{comparisonValue(comparison.planned_distance_nm, " nm")} / {comparisonValue(
-              comparison.recorded_track_distance_nm,
-              " nm",
-            )}</strong
-          ><small>{comparisonDelta(comparison.distance_delta_nm, " nm")}</small>
-        </article>
-        <article>
-          <span>{$translation("simulator-recording-comparison-altitude")}</span
-          ><strong
-            >{altitudeValue(comparison.planned_initial_altitude_ft)} / {altitudeValue(
-              comparison.recorded_peak_altitude_ft,
-            )}</strong
-          ><small>{altitudeValue(comparison.altitude_delta_ft)}</small>
-        </article>
-        <article>
-          <span
-            >{$translation("simulator-recording-comparison-takeoff-fuel")}</span
-          ><strong
-            >{fuelWeightValue(comparison.planned_takeoff_fuel_pounds)} / {fuelWeightValue(
-              comparison.recorded_start_fuel_pounds,
-            )}</strong
-          ><small>{fuelWeightValue(comparison.takeoff_fuel_delta_pounds)}</small
-          >
-        </article>
-        <article>
-          <span
-            >{$translation("simulator-recording-comparison-landing-fuel")}</span
-          ><strong
-            >{fuelWeightValue(comparison.planned_landing_fuel_pounds)} / {fuelWeightValue(
-              comparison.recorded_end_fuel_pounds,
-            )}</strong
-          ><small>{fuelWeightValue(comparison.landing_fuel_delta_pounds)}</small
-          >
-        </article>
-        <article>
-          <span>{$translation("simulator-recording-comparison-fuel-used")}</span
-          ><strong
-            >{fuelWeightValue(comparison.recorded_fuel_used_pounds)}</strong
-          >
-        </article>
-        <article>
-          <span>{$translation("simulator-recording-comparison-origin")}</span
-          ><strong
-            >{comparisonValue(comparison.origin_proximity_nm, " nm")}</strong
-          >
-        </article>
-        <article>
-          <span
-            >{$translation("simulator-recording-comparison-destination")}</span
-          ><strong
-            >{comparisonValue(
-              comparison.destination_proximity_nm,
-              " nm",
-            )}</strong
-          >
-        </article>
-        <article>
-          <span
-            >{$translation("simulator-recording-comparison-registration")}</span
-          ><strong>{matchValue(comparison.registration_matches)}</strong>
-        </article>
-      </div>
-      {#if !comparison.analysis_complete}
-        <p>{$translation("simulator-recording-analysis-withheld")}</p>
-      {/if}
-    </section>
-  {/if}
+        </div>
+        <div class="comparison-grid">
+          <article class="responsive-surface">
+            <span>{$translation("simulator-recording-comparison-time")}</span
+            ><strong
+              >{comparisonValue(comparison.planned_enroute_seconds, " s")} / {comparisonValue(
+                comparison.recorded_seconds,
+                " s",
+              )}</strong
+            ><small
+              >{comparisonDelta(comparison.duration_delta_seconds, " s")}</small
+            >
+          </article>
+          <article class="responsive-surface">
+            <span
+              >{$translation("simulator-recording-comparison-distance")}</span
+            ><strong
+              >{comparisonValue(comparison.planned_distance_nm, " nm")} / {comparisonValue(
+                comparison.recorded_track_distance_nm,
+                " nm",
+              )}</strong
+            ><small
+              >{comparisonDelta(comparison.distance_delta_nm, " nm")}</small
+            >
+          </article>
+          <article class="responsive-surface">
+            <span
+              >{$translation("simulator-recording-comparison-altitude")}</span
+            ><strong
+              >{altitudeValue(comparison.planned_initial_altitude_ft)} / {altitudeValue(
+                comparison.recorded_peak_altitude_ft,
+              )}</strong
+            ><small>{altitudeValue(comparison.altitude_delta_ft)}</small>
+          </article>
+          <article class="responsive-surface">
+            <span
+              >{$translation(
+                "simulator-recording-comparison-takeoff-fuel",
+              )}</span
+            ><strong
+              >{fuelWeightValue(comparison.planned_takeoff_fuel_pounds)} / {fuelWeightValue(
+                comparison.recorded_start_fuel_pounds,
+              )}</strong
+            ><small
+              >{fuelWeightValue(comparison.takeoff_fuel_delta_pounds)}</small
+            >
+          </article>
+          <article class="responsive-surface">
+            <span
+              >{$translation(
+                "simulator-recording-comparison-landing-fuel",
+              )}</span
+            ><strong
+              >{fuelWeightValue(comparison.planned_landing_fuel_pounds)} / {fuelWeightValue(
+                comparison.recorded_end_fuel_pounds,
+              )}</strong
+            ><small
+              >{fuelWeightValue(comparison.landing_fuel_delta_pounds)}</small
+            >
+          </article>
+          <article class="responsive-surface">
+            <span
+              >{$translation("simulator-recording-comparison-fuel-used")}</span
+            ><strong
+              >{fuelWeightValue(comparison.recorded_fuel_used_pounds)}</strong
+            >
+          </article>
+          <article class="responsive-surface">
+            <span>{$translation("simulator-recording-comparison-origin")}</span
+            ><strong
+              >{comparisonValue(comparison.origin_proximity_nm, " nm")}</strong
+            >
+          </article>
+          <article class="responsive-surface">
+            <span
+              >{$translation(
+                "simulator-recording-comparison-destination",
+              )}</span
+            ><strong
+              >{comparisonValue(
+                comparison.destination_proximity_nm,
+                " nm",
+              )}</strong
+            >
+          </article>
+          <article class="responsive-surface">
+            <span
+              >{$translation(
+                "simulator-recording-comparison-registration",
+              )}</span
+            ><strong>{matchValue(comparison.registration_matches)}</strong>
+          </article>
+        </div>
+        {#if !comparison.analysis_complete}
+          <p>{$translation("simulator-recording-analysis-withheld")}</p>
+        {/if}
+      </section>
+    {/if}
   {:else if detailSection === "samples"}
-  {#if session && session.samples.length > 0}
-    <details class="exact-window">
-      <summary>{$translation("simulator-recording-exact-window-title")}</summary
-      >
-      <p>{$translation("simulator-recording-exact-window-detail")}</p>
-      <div class="recording-window-actions">
-        <button
-          type="button"
-          disabled={busy || !session.has_older_samples}
-          onclick={() =>
-            onpage(
-              session.session.id,
-              session.sample_window_offset + session.sample_window_limit,
-            )}>{$translation("simulator-recording-older-samples")}</button
+    {#if session && session.samples.length > 0}
+      <details class="exact-window">
+        <summary
+          >{$translation("simulator-recording-exact-window-title")}</summary
         >
-        <span>
-          {$translation("simulator-recording-window", {
-            first: (session.sample_window_offset + 1).toLocaleString(),
-            last: (
-              session.sample_window_offset + session.samples.length
-            ).toLocaleString(),
-          })}
-        </span>
-        <button
-          type="button"
-          disabled={busy || !session.has_newer_samples}
-          onclick={() =>
-            onpage(
-              session.session.id,
-              Math.max(
-                0,
-                session.sample_window_offset - session.sample_window_limit,
-              ),
-            )}>{$translation("simulator-recording-newer-samples")}</button
-        >
-      </div>
-      <div class="recording-charts">
-        <WyrmChart
-          spec={altitudeRecordingChart(session, displayPreferences)}
-          eyebrow="WyrmChart telemetry"
-          height="210px"
-        />
-        <WyrmChart
-          spec={speedRecordingChart(session, displayPreferences)}
-          eyebrow="WyrmChart telemetry"
-          height="210px"
-        />
-      </div>
-    </details>
-  {/if}
+        <p>{$translation("simulator-recording-exact-window-detail")}</p>
+        <div class="recording-window-actions">
+          <button
+            type="button"
+            disabled={busy || !session.has_older_samples}
+            onclick={() =>
+              onpage(
+                session.session.id,
+                session.sample_window_offset + session.sample_window_limit,
+              )}>{$translation("simulator-recording-older-samples")}</button
+          >
+          <span>
+            {$translation("simulator-recording-window", {
+              first: (session.sample_window_offset + 1).toLocaleString(),
+              last: (
+                session.sample_window_offset + session.samples.length
+              ).toLocaleString(),
+            })}
+          </span>
+          <button
+            type="button"
+            disabled={busy || !session.has_newer_samples}
+            onclick={() =>
+              onpage(
+                session.session.id,
+                Math.max(
+                  0,
+                  session.sample_window_offset - session.sample_window_limit,
+                ),
+              )}>{$translation("simulator-recording-newer-samples")}</button
+          >
+        </div>
+        <div class="recording-charts">
+          <WyrmChart
+            spec={altitudeRecordingChart(session, displayPreferences)}
+            eyebrow="WyrmChart telemetry"
+            height="210px"
+          />
+          <WyrmChart
+            spec={speedRecordingChart(session, displayPreferences)}
+            eyebrow="WyrmChart telemetry"
+            height="210px"
+          />
+        </div>
+      </details>
+    {/if}
   {:else if detailSection === "events"}
-  {#if session && session.samples.length > 0}
-    <section class="recording-evidence">
-      <div class="comparison-heading">
-        <div>
-          <span class="eyebrow"
-            >{$translation("simulator-recording-evidence-eyebrow")}</span
-          >
-          <h4>{$translation("simulator-recording-events-title")}</h4>
+    {#if session && session.samples.length > 0}
+      <section class="recording-evidence">
+        <div class="comparison-heading">
+          <div>
+            <span class="eyebrow"
+              >{$translation("simulator-recording-evidence-eyebrow")}</span
+            >
+            <h4>{$translation("simulator-recording-events-title")}</h4>
+          </div>
+          <div class="export-actions">
+            <button
+              type="button"
+              disabled={busy}
+              onclick={() => onexport(session.session.id, "json")}
+              >{$translation("simulator-recording-export-json")}</button
+            >
+            <button
+              type="button"
+              disabled={busy}
+              onclick={() => onexport(session.session.id, "csv")}
+              >{$translation("simulator-recording-export-csv")}</button
+            >
+          </div>
         </div>
-        <div class="export-actions">
-          <button
-            type="button"
-            disabled={busy}
-            onclick={() => onexport(session.session.id, "json")}
-            >{$translation("simulator-recording-export-json")}</button
-          >
-          <button
-            type="button"
-            disabled={busy}
-            onclick={() => onexport(session.session.id, "csv")}
-            >{$translation("simulator-recording-export-csv")}</button
-          >
-        </div>
-      </div>
-      {#if session.events.length === 0}
-        <p>{$translation("simulator-recording-events-empty")}</p>
-      {:else}
-        <ol>
-          {#each session.events as event}
-            <li>
-              <strong>{eventLabel(event.event_kind)}</strong><time
-                >{formatTime(event.observed_at)}</time
-              >
-            </li>
-          {/each}
-        </ol>
-      {/if}
-    </section>
-  {/if}
+        {#if session.events.length === 0}
+          <p>{$translation("simulator-recording-events-empty")}</p>
+        {:else}
+          <ol>
+            {#each session.events as event}
+              <li>
+                <strong>{eventLabel(event.event_kind)}</strong><time
+                  >{formatTime(event.observed_at)}</time
+                >
+              </li>
+            {/each}
+          </ol>
+        {/if}
+      </section>
+    {/if}
   {/if}
 </section>
 

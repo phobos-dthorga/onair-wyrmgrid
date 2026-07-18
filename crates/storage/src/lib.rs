@@ -28,7 +28,10 @@ const SIMULATOR_EVIDENCE_SCHEMA: &str = include_str!("../migrations/0010_simulat
 const PROVIDER_ACCOUNTS_SCHEMA: &str = include_str!("../migrations/0011_provider_accounts.sql");
 const INTERACTION_PREFERENCES_SCHEMA: &str =
     include_str!("../migrations/0012_interaction_preferences.sql");
-pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 12;
+const FLIGHT_OPERATIONS_SCHEMA: &str = include_str!("../migrations/0013_flight_operations.sql");
+const ATLAS_RENDERING_PREFERENCES_SCHEMA: &str =
+    include_str!("../migrations/0014_atlas_rendering_preferences.sql");
+pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 14;
 
 #[derive(Debug, Error)]
 pub enum StorageError {
@@ -108,6 +111,7 @@ pub struct DisplayPreferencesRecord {
     pub weight_unit: String,
     pub fuel_unit: String,
     pub responsive_surfaces: bool,
+    pub weather_rendering_profile: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -134,6 +138,29 @@ pub struct OnAirAccountPreferencesRecord {
 pub struct SimBriefAccountPreferencesRecord {
     pub reference_kind: String,
     pub reference: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FlightOperationRevisionRecord {
+    pub operation_id: String,
+    pub operation_created_at: String,
+    pub revision: u32,
+    pub reason: String,
+    pub revision_created_at: String,
+    pub snapshot_json: String,
+}
+
+fn flight_operation_record_from_row(
+    row: &rusqlite::Row<'_>,
+) -> rusqlite::Result<FlightOperationRevisionRecord> {
+    Ok(FlightOperationRevisionRecord {
+        operation_id: row.get(0)?,
+        operation_created_at: row.get(1)?,
+        revision: row.get(2)?,
+        reason: row.get(3)?,
+        revision_created_at: row.get(4)?,
+        snapshot_json: row.get(5)?,
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -235,6 +262,8 @@ impl Store {
         connection.execute_batch(SIMULATOR_EVIDENCE_SCHEMA)?;
         connection.execute_batch(PROVIDER_ACCOUNTS_SCHEMA)?;
         connection.execute_batch(INTERACTION_PREFERENCES_SCHEMA)?;
+        connection.execute_batch(FLIGHT_OPERATIONS_SCHEMA)?;
+        connection.execute_batch(ATLAS_RENDERING_PREFERENCES_SCHEMA)?;
         if path.is_some() {
             data_protection::mark_wyrmgrid_database(&connection)?;
         }
@@ -247,6 +276,138 @@ impl Store {
 
     pub fn is_persistent(&self) -> bool {
         self.persistent
+    }
+
+    pub fn load_active_flight_operation_revision_record(
+        &self,
+    ) -> Result<Option<FlightOperationRevisionRecord>, StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection
+            .query_row(
+                "SELECT operation.operation_id,
+                        operation.created_at,
+                        operation.current_revision,
+                        revision.reason,
+                        revision.created_at,
+                        revision.snapshot_json
+                 FROM active_flight_operation AS active
+                 JOIN flight_operations AS operation
+                   ON operation.operation_id = active.operation_id
+                 JOIN flight_operation_revisions AS revision
+                   ON revision.operation_id = operation.operation_id
+                  AND revision.revision = operation.current_revision
+                 WHERE active.singleton_id = 1",
+                [],
+                flight_operation_record_from_row,
+            )
+            .optional()
+            .map_err(StorageError::from)
+    }
+
+    pub fn create_flight_operation_record(
+        &self,
+        record: &FlightOperationRevisionRecord,
+    ) -> Result<(), StorageError> {
+        if record.revision != 1 {
+            return Err(StorageError::InvalidRecord);
+        }
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        let transaction = connection.transaction()?;
+        if transaction
+            .query_row(
+                "SELECT operation_id FROM active_flight_operation WHERE singleton_id = 1",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?
+            .is_some()
+        {
+            return Err(StorageError::InvalidRecord);
+        }
+        transaction.execute(
+            "INSERT INTO flight_operations (
+                operation_id, created_at, current_revision, updated_at
+             ) VALUES (?1, ?2, 1, ?3)",
+            params![
+                record.operation_id,
+                record.operation_created_at,
+                record.revision_created_at
+            ],
+        )?;
+        transaction.execute(
+            "INSERT INTO flight_operation_revisions (
+                operation_id, revision, reason, created_at, snapshot_json
+             ) VALUES (?1, 1, ?2, ?3, ?4)",
+            params![
+                record.operation_id,
+                record.reason,
+                record.revision_created_at,
+                record.snapshot_json
+            ],
+        )?;
+        transaction.execute(
+            "INSERT INTO active_flight_operation (singleton_id, operation_id) VALUES (1, ?1)",
+            [&record.operation_id],
+        )?;
+        transaction.commit().map_err(StorageError::from)
+    }
+
+    pub fn append_flight_operation_revision_record(
+        &self,
+        expected_revision: u32,
+        record: &FlightOperationRevisionRecord,
+    ) -> Result<(), StorageError> {
+        if record.revision != expected_revision.saturating_add(1) {
+            return Err(StorageError::InvalidRecord);
+        }
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        let transaction = connection.transaction()?;
+        let current_revision = transaction
+            .query_row(
+                "SELECT current_revision FROM flight_operations WHERE operation_id = ?1",
+                [&record.operation_id],
+                |row| row.get::<_, u32>(0),
+            )
+            .optional()?;
+        if current_revision != Some(expected_revision) {
+            return Err(StorageError::InvalidRecord);
+        }
+        transaction.execute(
+            "INSERT INTO flight_operation_revisions (
+                operation_id, revision, reason, created_at, snapshot_json
+             ) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                record.operation_id,
+                record.revision,
+                record.reason,
+                record.revision_created_at,
+                record.snapshot_json
+            ],
+        )?;
+        if transaction.execute(
+            "UPDATE flight_operations
+             SET current_revision = ?1, updated_at = ?2
+             WHERE operation_id = ?3 AND current_revision = ?4",
+            params![
+                record.revision,
+                record.revision_created_at,
+                record.operation_id,
+                expected_revision
+            ],
+        )? != 1
+        {
+            return Err(StorageError::InvalidRecord);
+        }
+        transaction.commit().map_err(StorageError::from)
     }
 
     pub fn load_onair_account_preferences_record(
@@ -382,10 +543,13 @@ impl Store {
                         display.speed_unit,
                         display.weight_unit,
                         display.fuel_unit,
-                        COALESCE(interaction.responsive_surfaces, 1)
+                        COALESCE(interaction.responsive_surfaces, 1),
+                        COALESCE(atlas.weather_rendering_profile, 'enhanced')
                  FROM display_preferences AS display
                  LEFT JOIN interaction_preferences AS interaction
                    ON interaction.singleton_id = display.singleton_id
+                 LEFT JOIN atlas_rendering_preferences AS atlas
+                   ON atlas.singleton_id = display.singleton_id
                  WHERE display.singleton_id = 1",
                 [],
                 |row| {
@@ -395,6 +559,7 @@ impl Store {
                         weight_unit: row.get(2)?,
                         fuel_unit: row.get(3)?,
                         responsive_surfaces: row.get(4)?,
+                        weather_rendering_profile: row.get(5)?,
                     })
                 },
             )
@@ -437,6 +602,15 @@ impl Store {
                 responsive_surfaces = excluded.responsive_surfaces,
                 updated_at = CURRENT_TIMESTAMP",
             params![preferences.responsive_surfaces],
+        )?;
+        transaction.execute(
+            "INSERT INTO atlas_rendering_preferences (
+                singleton_id, weather_rendering_profile
+             ) VALUES (1, ?1)
+             ON CONFLICT(singleton_id) DO UPDATE SET
+                weather_rendering_profile = excluded.weather_rendering_profile,
+                updated_at = CURRENT_TIMESTAMP",
+            params![preferences.weather_rendering_profile],
         )?;
         transaction.commit().map_err(StorageError::from)
     }

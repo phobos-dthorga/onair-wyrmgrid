@@ -1,0 +1,15 @@
+{
+  "$schema": "../../schemas/optional-ai-task-profile-v1.schema.json",
+  "schema_version": 1,
+  "id": "openai-compatible-local-task-assistant",
+  "display_name": "OpenAI-Compatible Local Task Assistant (Optional)",
+  "provider": "openai-compatible-chat",
+  "endpoint": "http://127.0.0.1:1234",
+  "model": "replace-with-the-exact-local-model-id",
+  "system_prompt_file": "../../docs/optional-ai/base-system-prompt-v1.md",
+  "parameters": {
+    "temperature": 0.2,
+    "seed": 42,
+    "max_output_tokens": 3000
+  }
+}

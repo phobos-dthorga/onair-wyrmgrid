@@ -10,10 +10,13 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 use thiserror::Error;
+use wyrmgrid_domain::{GlobalWeatherLayerSnapshot, WeatherSnapshot};
 use wyrmgrid_plugin_protocol::{
     HostMessage, MAX_MAP_LAYERS_PER_PLUGIN, MapLayerSpec, PLUGIN_API_VERSION, Permission,
     PluginCompany, PluginFleetSnapshot, PluginManifest, PluginMessage, PluginRuntime,
-    PluginSnapshotAvailability, ProtocolEnvelope, read_frame, write_frame,
+    PluginSnapshotAvailability, PluginWeatherProduct, PluginWeatherResponse, ProtocolEnvelope,
+    WeatherCapability, WeatherGridRequestPoint, WeatherQuery, WeatherRequest, WeatherTileAddress,
+    WeatherUnavailableCode, read_frame, write_frame,
 };
 use wyrmgrid_storage::Store;
 
@@ -27,7 +30,15 @@ const MAX_MANIFEST_BYTES: u64 = 64 * 1024;
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(3);
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_millis(750);
 const SNAPSHOT_POLL_INTERVAL: Duration = Duration::from_secs(1);
+const MODEL_WEATHER_REFRESH_INTERVAL: Duration = Duration::from_secs(15 * 60);
+const RADAR_WEATHER_REFRESH_INTERVAL: Duration = Duration::from_secs(5 * 60);
+const AIRPORT_WEATHER_RESPONSE_TIMEOUT: Duration = Duration::from_secs(20);
+const GLOBAL_WEATHER_RESPONSE_TIMEOUT: Duration = Duration::from_secs(90);
+const MAX_WEATHER_LAYERS_PER_PLUGIN: usize = 4;
 const BUNDLED_PLUGIN_ID: &str = "org.wyrmgrid.example.fleet-locations";
+const OPEN_METEO_PLUGIN_ID: &str = "org.wyrmgrid.provider.open-meteo";
+const AVIATION_WEATHER_PLUGIN_ID: &str = "org.wyrmgrid.provider.aviation-weather";
+const RAINVIEWER_PLUGIN_ID: &str = "org.wyrmgrid.provider.rainviewer";
 const PYTHON_BOOTSTRAP: &str = "import runpy,sys;sys.path.insert(0,sys.argv[1]);runpy.run_path(sys.argv[2],run_name='__main__')";
 
 const BUNDLED_MANIFEST: &str =
@@ -35,6 +46,14 @@ const BUNDLED_MANIFEST: &str =
 const BUNDLED_ENTRY_POINT: &str =
     include_str!("../../../examples/plugins/fleet-locations/src/main.py");
 const BUNDLED_PYTHON_SDK: &str = include_str!("../../../sdk/python/wyrmgrid_sdk/__init__.py");
+const OPEN_METEO_MANIFEST: &str = include_str!("../../../plugins/open-meteo/plugin.json");
+const OPEN_METEO_ENTRY_POINT: &str = include_str!("../../../plugins/open-meteo/src/main.py");
+const AVIATION_WEATHER_MANIFEST: &str =
+    include_str!("../../../plugins/aviation-weather/plugin.json");
+const AVIATION_WEATHER_ENTRY_POINT: &str =
+    include_str!("../../../plugins/aviation-weather/src/main.py");
+const RAINVIEWER_MANIFEST: &str = include_str!("../../../plugins/rainviewer/plugin.json");
+const RAINVIEWER_ENTRY_POINT: &str = include_str!("../../../plugins/rainviewer/src/main.py");
 
 #[derive(Debug, Error, Clone, Copy, PartialEq, Eq)]
 pub enum PluginError {
@@ -68,6 +87,24 @@ pub enum PluginError {
     StateUnavailable,
 }
 
+#[derive(Debug, Error, Clone, Copy, PartialEq, Eq)]
+pub enum PluginWeatherError {
+    #[error("No running plugin provides that weather product.")]
+    ProviderUnavailable,
+    #[error("The weather provider is offline.")]
+    Offline,
+    #[error("The weather provider request timed out.")]
+    TimedOut,
+    #[error("The weather provider is rate-limiting requests.")]
+    RateLimited,
+    #[error("The weather provider returned an invalid response.")]
+    InvalidResponse,
+    #[error("The weather provider has no data for this request.")]
+    NoData,
+    #[error("The plugin weather service is unavailable.")]
+    StateUnavailable,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PluginProcessState {
@@ -91,12 +128,15 @@ pub struct PluginView {
     pub version: String,
     pub author: String,
     pub runtime: Option<PluginRuntime>,
+    pub weather_capabilities: Vec<WeatherCapability>,
+    pub network_origins: Vec<String>,
     pub requested_permissions: Vec<Permission>,
     pub granted_permissions: Vec<Permission>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub grant_lifetime: Option<AuthorizationGrantLifetime>,
     pub state: PluginProcessState,
     pub published_layer_count: usize,
+    pub published_weather_layer_count: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_error: Option<String>,
 }
@@ -109,12 +149,20 @@ pub struct PublishedPluginLayer {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct PublishedPluginWeatherLayer {
+    pub plugin_id: String,
+    pub plugin_name: String,
+    pub layer: GlobalWeatherLayerSnapshot,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct PluginHostView {
     pub available: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub notice: Option<String>,
     pub plugins: Vec<PluginView>,
     pub layers: Vec<PublishedPluginLayer>,
+    pub weather_layers: Vec<PublishedPluginWeatherLayer>,
 }
 
 #[derive(Clone)]
@@ -137,11 +185,23 @@ struct RunningPlugin {
     state: Mutex<PluginProcessState>,
     last_error: Mutex<Option<String>>,
     layers: Mutex<BTreeMap<String, MapLayerSpec>>,
+    weather_layers: Mutex<BTreeMap<String, GlobalWeatherLayerSnapshot>>,
+    pending_weather: Mutex<BTreeMap<String, PendingWeatherRequest>>,
+    last_weather_requests: Mutex<BTreeMap<WeatherCapability, Instant>>,
+    weather_request_sequence: Mutex<u64>,
     outgoing_sequence: Mutex<u64>,
     last_fleet_observation: Mutex<Option<String>>,
     last_simulator_snapshot: Mutex<Option<(String, u64)>>,
     granted_permissions: BTreeSet<Permission>,
+    weather_capabilities: BTreeSet<WeatherCapability>,
     grant_lifetime: AuthorizationGrantLifetime,
+}
+
+struct PendingWeatherRequest {
+    capability: WeatherCapability,
+    query: WeatherQuery,
+    queued_at: Instant,
+    response_sender: Option<Sender<PluginWeatherResponse>>,
 }
 
 struct InstalledPlugin {
@@ -205,6 +265,7 @@ impl PluginService {
                 notice: self.inner.initialization_error.clone(),
                 plugins: Vec::new(),
                 layers: Vec::new(),
+                weather_layers: Vec::new(),
             });
         };
 
@@ -216,11 +277,12 @@ impl PluginService {
             .map_err(|_| PluginError::StateUnavailable)?;
         let mut plugins = Vec::with_capacity(installed.len());
         let mut published_layers = Vec::new();
+        let mut published_weather_layers = Vec::new();
         for plugin in installed {
             let stored_granted_permissions = self.grants_for(&plugin.manifest)?;
             let stored_grant_lifetime = self.grant_lifetime_for(&plugin.manifest)?;
             let runtime = runtimes.get(&plugin.manifest.id);
-            let (state, last_error, layer_count) = match runtime {
+            let (state, last_error, layer_count, weather_layer_count) = match runtime {
                 Some(runtime) => (
                     *runtime
                         .state
@@ -236,8 +298,13 @@ impl PluginService {
                         .lock()
                         .map_err(|_| PluginError::StateUnavailable)?
                         .len(),
+                    runtime
+                        .weather_layers
+                        .lock()
+                        .map_err(|_| PluginError::StateUnavailable)?
+                        .len(),
                 ),
-                None => (PluginProcessState::Stopped, None, 0),
+                None => (PluginProcessState::Stopped, None, 0, 0),
             };
             let granted_permissions = runtime
                 .filter(|_| state.is_active())
@@ -260,6 +327,18 @@ impl PluginService {
                         layer: layer.clone(),
                     });
                 }
+                for layer in runtime
+                    .weather_layers
+                    .lock()
+                    .map_err(|_| PluginError::StateUnavailable)?
+                    .values()
+                {
+                    published_weather_layers.push(PublishedPluginWeatherLayer {
+                        plugin_id: plugin.manifest.id.clone(),
+                        plugin_name: plugin.manifest.name.clone(),
+                        layer: layer.clone(),
+                    });
+                }
             }
             plugins.push(PluginView {
                 id: plugin.manifest.id,
@@ -267,11 +346,14 @@ impl PluginService {
                 version: plugin.manifest.version,
                 author: plugin.manifest.author,
                 runtime: plugin.manifest.runtime,
+                weather_capabilities: plugin.manifest.weather_capabilities,
+                network_origins: plugin.manifest.network_origins,
                 requested_permissions: plugin.manifest.permissions,
                 granted_permissions: granted_permissions.iter().copied().collect(),
                 grant_lifetime,
                 state,
                 published_layer_count: layer_count,
+                published_weather_layer_count: weather_layer_count,
                 last_error,
             });
         }
@@ -282,6 +364,7 @@ impl PluginService {
                 .then(|| "One or more invalid plugin folders were ignored.".to_owned()),
             plugins,
             layers: published_layers,
+            weather_layers: published_weather_layers,
         })
     }
 
@@ -355,10 +438,20 @@ impl PluginService {
             state: Mutex::new(PluginProcessState::Starting),
             last_error: Mutex::new(None),
             layers: Mutex::new(BTreeMap::new()),
+            weather_layers: Mutex::new(BTreeMap::new()),
+            pending_weather: Mutex::new(BTreeMap::new()),
+            last_weather_requests: Mutex::new(BTreeMap::new()),
+            weather_request_sequence: Mutex::new(1),
             outgoing_sequence: Mutex::new(1),
             last_fleet_observation: Mutex::new(None),
             last_simulator_snapshot: Mutex::new(None),
             granted_permissions: granted.clone(),
+            weather_capabilities: plugin
+                .manifest
+                .weather_capabilities
+                .iter()
+                .copied()
+                .collect(),
             grant_lifetime,
         });
         self.inner
@@ -371,6 +464,12 @@ impl PluginService {
         spawn_plugin_reader(
             plugin.manifest.id.clone(),
             requested.clone(),
+            plugin
+                .manifest
+                .weather_capabilities
+                .iter()
+                .copied()
+                .collect(),
             stdout,
             Arc::clone(&runtime),
             ready_sender,
@@ -381,6 +480,16 @@ impl PluginService {
                 host_version: env!("CARGO_PKG_VERSION").to_owned(),
                 plugin_id: plugin.manifest.id.clone(),
                 granted_permissions: granted.iter().copied().collect(),
+                weather_capabilities: if granted.contains(&Permission::WeatherDataPublish) {
+                    plugin.manifest.weather_capabilities.clone()
+                } else {
+                    Vec::new()
+                },
+                network_origins: if granted.contains(&Permission::ExternalNetwork) {
+                    plugin.manifest.network_origins.clone()
+                } else {
+                    Vec::new()
+                },
             },
         )?;
 
@@ -397,6 +506,7 @@ impl PluginService {
             .map_err(|_| PluginError::StateUnavailable)? = PluginProcessState::Running;
         self.send_fleet_if_changed(&runtime)?;
         self.send_simulator_if_changed(&runtime)?;
+        self.send_global_weather_if_due(&runtime)?;
         self.spawn_snapshot_poller(runtime);
         self.status()
     }
@@ -425,11 +535,73 @@ impl PluginService {
             .lock()
             .map_err(|_| PluginError::StateUnavailable)?
             .clear();
+        runtime
+            .weather_layers
+            .lock()
+            .map_err(|_| PluginError::StateUnavailable)?
+            .clear();
+        notify_pending_weather(&runtime, WeatherUnavailableCode::ProviderUnavailable);
         *runtime
             .state
             .lock()
             .map_err(|_| PluginError::StateUnavailable)? = PluginProcessState::Stopped;
         self.status()
+    }
+
+    pub fn weather_capability_available(
+        &self,
+        capability: WeatherCapability,
+    ) -> Result<bool, PluginWeatherError> {
+        let runtimes = self
+            .inner
+            .runtimes
+            .lock()
+            .map_err(|_| PluginWeatherError::StateUnavailable)?;
+        for runtime in runtimes.values() {
+            if runtime.weather_capabilities.contains(&capability)
+                && runtime_state(runtime) == Ok(PluginProcessState::Running)
+            {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    pub fn request_airport_weather(
+        &self,
+        stations: &[String],
+    ) -> Result<WeatherSnapshot, PluginWeatherError> {
+        let runtime = self.weather_runtime(WeatherCapability::AirportReports)?;
+        let request = WeatherRequest {
+            id: self.next_weather_request_id(&runtime)?,
+            query: WeatherQuery::AirportReports {
+                stations: stations.to_vec(),
+            },
+        };
+        request
+            .validate()
+            .map_err(|_| PluginWeatherError::InvalidResponse)?;
+        let request_id = request.id.clone();
+        let (sender, receiver) = mpsc::channel();
+        self.queue_weather_request(&runtime, request, Some(sender))
+            .map_err(plugin_weather_service_error)?;
+
+        let response = match receiver.recv_timeout(AIRPORT_WEATHER_RESPONSE_TIMEOUT) {
+            Ok(response) => response,
+            Err(_) => {
+                if let Ok(mut pending) = runtime.pending_weather.lock() {
+                    pending.remove(&request_id);
+                }
+                return Err(PluginWeatherError::TimedOut);
+            }
+        };
+        match response {
+            PluginWeatherResponse::Complete {
+                product: PluginWeatherProduct::AirportReports { snapshot },
+            } => Ok(snapshot),
+            PluginWeatherResponse::Complete { .. } => Err(PluginWeatherError::InvalidResponse),
+            PluginWeatherResponse::Unavailable { code } => Err(weather_unavailable_error(code)),
+        }
     }
 
     fn find_plugin(&self, plugin_id: &str) -> Result<InstalledPlugin, PluginError> {
@@ -581,6 +753,149 @@ impl PluginService {
         Ok(())
     }
 
+    fn weather_runtime(
+        &self,
+        capability: WeatherCapability,
+    ) -> Result<Arc<RunningPlugin>, PluginWeatherError> {
+        let runtimes = self
+            .inner
+            .runtimes
+            .lock()
+            .map_err(|_| PluginWeatherError::StateUnavailable)?;
+        runtimes
+            .values()
+            .find(|runtime| {
+                runtime.weather_capabilities.contains(&capability)
+                    && runtime_state(runtime) == Ok(PluginProcessState::Running)
+            })
+            .cloned()
+            .ok_or(PluginWeatherError::ProviderUnavailable)
+    }
+
+    fn next_weather_request_id(
+        &self,
+        runtime: &Arc<RunningPlugin>,
+    ) -> Result<String, PluginWeatherError> {
+        let mut sequence = runtime
+            .weather_request_sequence
+            .lock()
+            .map_err(|_| PluginWeatherError::StateUnavailable)?;
+        let request_id = format!("weather-{sequence}");
+        *sequence = sequence.saturating_add(1);
+        Ok(request_id)
+    }
+
+    fn queue_weather_request(
+        &self,
+        runtime: &Arc<RunningPlugin>,
+        request: WeatherRequest,
+        response_sender: Option<Sender<PluginWeatherResponse>>,
+    ) -> Result<(), PluginError> {
+        request
+            .validate()
+            .map_err(|_| PluginError::ProtocolViolation)?;
+        let capability = request.query.capability();
+        if !runtime
+            .granted_permissions
+            .contains(&Permission::WeatherDataPublish)
+            || !runtime.weather_capabilities.contains(&capability)
+        {
+            return Err(PluginError::UnsupportedCapability);
+        }
+        let request_id = request.id.clone();
+        {
+            let mut pending = runtime
+                .pending_weather
+                .lock()
+                .map_err(|_| PluginError::StateUnavailable)?;
+            if pending.contains_key(&request_id) {
+                return Err(PluginError::ProtocolViolation);
+            }
+            pending.insert(
+                request_id.clone(),
+                PendingWeatherRequest {
+                    capability,
+                    query: request.query.clone(),
+                    queued_at: Instant::now(),
+                    response_sender,
+                },
+            );
+        }
+        if let Err(error) = self.send_message(runtime, HostMessage::WeatherRequest { request }) {
+            if let Ok(mut pending) = runtime.pending_weather.lock() {
+                pending.remove(&request_id);
+            }
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    fn send_global_weather_if_due(&self, runtime: &Arc<RunningPlugin>) -> Result<(), PluginError> {
+        let weather_request_expired = runtime
+            .pending_weather
+            .lock()
+            .map_err(|_| PluginError::StateUnavailable)?
+            .values()
+            .any(|pending| pending.queued_at.elapsed() >= GLOBAL_WEATHER_RESPONSE_TIMEOUT);
+        if weather_request_expired {
+            fail_runtime(runtime, "The plugin weather request exceeded its deadline.");
+            return Err(PluginError::ProtocolViolation);
+        }
+        for capability in [
+            WeatherCapability::ForecastGrid,
+            WeatherCapability::RadarTiles,
+        ] {
+            if !runtime.weather_capabilities.contains(&capability) {
+                continue;
+            }
+            let has_pending = runtime
+                .pending_weather
+                .lock()
+                .map_err(|_| PluginError::StateUnavailable)?
+                .values()
+                .any(|pending| pending.capability == capability);
+            if has_pending {
+                continue;
+            }
+            let refresh_interval = match capability {
+                WeatherCapability::ForecastGrid => MODEL_WEATHER_REFRESH_INTERVAL,
+                WeatherCapability::RadarTiles => RADAR_WEATHER_REFRESH_INTERVAL,
+                WeatherCapability::AirportReports => continue,
+            };
+            let due = runtime
+                .last_weather_requests
+                .lock()
+                .map_err(|_| PluginError::StateUnavailable)?
+                .get(&capability)
+                .is_none_or(|last_request| last_request.elapsed() >= refresh_interval);
+            if !due {
+                continue;
+            }
+            let query = match capability {
+                WeatherCapability::ForecastGrid => default_global_weather_grid(),
+                WeatherCapability::RadarTiles => default_global_radar_tiles(),
+                WeatherCapability::AirportReports => continue,
+            };
+            let request_id = self
+                .next_weather_request_id(runtime)
+                .map_err(plugin_weather_error_to_plugin_error)?;
+            self.queue_weather_request(
+                runtime,
+                WeatherRequest {
+                    id: request_id,
+                    query,
+                },
+                None,
+            )?;
+            runtime
+                .last_weather_requests
+                .lock()
+                .map_err(|_| PluginError::StateUnavailable)?
+                .insert(capability, Instant::now());
+        }
+        Ok(())
+    }
+
     fn spawn_snapshot_poller(&self, runtime: Arc<RunningPlugin>) {
         let service = Arc::downgrade(&self.inner);
         thread::spawn(move || {
@@ -595,6 +910,7 @@ impl PluginService {
                 let service = PluginService { inner };
                 if service.send_fleet_if_changed(&runtime).is_err()
                     || service.send_simulator_if_changed(&runtime).is_err()
+                    || service.send_global_weather_if_due(&runtime).is_err()
                 {
                     return;
                 }
@@ -615,12 +931,44 @@ impl Drop for PluginServiceInner {
 
 fn initialize_plugin_root(root: &Path) -> Result<(), io::Error> {
     fs::create_dir_all(root)?;
-    let plugin_root = root.join(BUNDLED_PLUGIN_ID);
+    install_bundled_python_plugin(
+        root,
+        BUNDLED_PLUGIN_ID,
+        BUNDLED_MANIFEST,
+        BUNDLED_ENTRY_POINT,
+    )?;
+    install_bundled_python_plugin(
+        root,
+        OPEN_METEO_PLUGIN_ID,
+        OPEN_METEO_MANIFEST,
+        OPEN_METEO_ENTRY_POINT,
+    )?;
+    install_bundled_python_plugin(
+        root,
+        AVIATION_WEATHER_PLUGIN_ID,
+        AVIATION_WEATHER_MANIFEST,
+        AVIATION_WEATHER_ENTRY_POINT,
+    )?;
+    install_bundled_python_plugin(
+        root,
+        RAINVIEWER_PLUGIN_ID,
+        RAINVIEWER_MANIFEST,
+        RAINVIEWER_ENTRY_POINT,
+    )
+}
+
+fn install_bundled_python_plugin(
+    root: &Path,
+    plugin_id: &str,
+    manifest: &str,
+    entry_point: &str,
+) -> Result<(), io::Error> {
+    let plugin_root = root.join(plugin_id);
     let source_root = plugin_root.join("src");
     let sdk_root = source_root.join("wyrmgrid_sdk");
     fs::create_dir_all(&sdk_root)?;
-    write_bundled_file(&plugin_root.join("plugin.json"), BUNDLED_MANIFEST)?;
-    write_bundled_file(&source_root.join("main.py"), BUNDLED_ENTRY_POINT)?;
+    write_bundled_file(&plugin_root.join("plugin.json"), manifest)?;
+    write_bundled_file(&source_root.join("main.py"), entry_point)?;
     write_bundled_file(&sdk_root.join("__init__.py"), BUNDLED_PYTHON_SDK)
 }
 
@@ -703,16 +1051,19 @@ fn read_installed_plugin(root: &Path, directory: &Path) -> Result<InstalledPlugi
 }
 
 fn ensure_supported_permissions(permissions: &[Permission]) -> Result<(), PluginError> {
-    permissions
-        .iter()
-        .all(|permission| {
-            matches!(
-                permission,
-                Permission::OnAirFleetRead
-                    | Permission::MapLayersPublish
-                    | Permission::SimulatorTelemetryRead
-            )
-        })
+    let supported = permissions.iter().all(|permission| {
+        matches!(
+            permission,
+            Permission::OnAirFleetRead
+                | Permission::MapLayersPublish
+                | Permission::SimulatorTelemetryRead
+                | Permission::ExternalNetwork
+                | Permission::WeatherDataPublish
+        )
+    });
+    let weather_network_pair = permissions.contains(&Permission::ExternalNetwork)
+        == permissions.contains(&Permission::WeatherDataPublish);
+    (supported && weather_network_pair)
         .then_some(())
         .ok_or(PluginError::UnsupportedCapability)
 }
@@ -739,7 +1090,101 @@ fn plugin_scope_revision(manifest: &PluginManifest) -> String {
     } else {
         capabilities.into_iter().collect::<Vec<_>>().join("|")
     };
-    format!("plugin:{}:{capability_revision}", manifest.version)
+    let weather_revision = if manifest.weather_capabilities.is_empty() {
+        "none".to_owned()
+    } else {
+        manifest
+            .weather_capabilities
+            .iter()
+            .map(|capability| capability.as_str())
+            .collect::<Vec<_>>()
+            .join("|")
+    };
+    let network_revision = if manifest.network_origins.is_empty() {
+        "none".to_owned()
+    } else {
+        manifest.network_origins.join("|")
+    };
+    format!(
+        "plugin:{}:{capability_revision}:weather={weather_revision}:network={network_revision}",
+        manifest.version
+    )
+}
+
+fn default_global_weather_grid() -> WeatherQuery {
+    let latitudes = [-75.0, -50.0, -25.0, 0.0, 25.0, 50.0, 75.0];
+    let longitudes = [
+        -165.0, -135.0, -105.0, -75.0, -45.0, -15.0, 15.0, 45.0, 75.0, 105.0, 135.0, 165.0,
+    ];
+    let mut points = Vec::with_capacity(latitudes.len() * longitudes.len());
+    for (row, latitude) in latitudes.into_iter().enumerate() {
+        for (column, longitude) in longitudes.into_iter().enumerate() {
+            points.push(WeatherGridRequestPoint {
+                id: format!("global-{row}-{column}"),
+                location: wyrmgrid_domain::Coordinates {
+                    latitude,
+                    longitude,
+                },
+            });
+        }
+    }
+    WeatherQuery::ForecastGrid { points }
+}
+
+fn default_global_radar_tiles() -> WeatherQuery {
+    WeatherQuery::RadarTiles {
+        tiles: vec![
+            WeatherTileAddress {
+                zoom: 1,
+                x: 0,
+                y: 0,
+            },
+            WeatherTileAddress {
+                zoom: 1,
+                x: 1,
+                y: 0,
+            },
+            WeatherTileAddress {
+                zoom: 1,
+                x: 0,
+                y: 1,
+            },
+            WeatherTileAddress {
+                zoom: 1,
+                x: 1,
+                y: 1,
+            },
+        ],
+    }
+}
+
+fn weather_unavailable_error(code: WeatherUnavailableCode) -> PluginWeatherError {
+    match code {
+        WeatherUnavailableCode::Offline => PluginWeatherError::Offline,
+        WeatherUnavailableCode::TimedOut => PluginWeatherError::TimedOut,
+        WeatherUnavailableCode::RateLimited => PluginWeatherError::RateLimited,
+        WeatherUnavailableCode::ProviderUnavailable => PluginWeatherError::ProviderUnavailable,
+        WeatherUnavailableCode::InvalidResponse => PluginWeatherError::InvalidResponse,
+        WeatherUnavailableCode::NoData => PluginWeatherError::NoData,
+    }
+}
+
+fn plugin_weather_service_error(error: PluginError) -> PluginWeatherError {
+    match error {
+        PluginError::StateUnavailable | PluginError::StorageUnavailable => {
+            PluginWeatherError::StateUnavailable
+        }
+        PluginError::ProtocolViolation => PluginWeatherError::InvalidResponse,
+        _ => PluginWeatherError::ProviderUnavailable,
+    }
+}
+
+fn plugin_weather_error_to_plugin_error(error: PluginWeatherError) -> PluginError {
+    match error {
+        PluginWeatherError::StateUnavailable => PluginError::StateUnavailable,
+        PluginWeatherError::InvalidResponse => PluginError::ProtocolViolation,
+        _ => PluginError::UnsupportedCapability,
+    }
 }
 
 fn plugin_authorization_error(error: AuthorizationError) -> PluginError {
@@ -811,6 +1256,7 @@ fn spawn_python(plugin: &InstalledPlugin) -> Result<Child, PluginError> {
 fn spawn_plugin_reader(
     expected_plugin_id: String,
     granted_permissions: BTreeSet<Permission>,
+    weather_capabilities: BTreeSet<WeatherCapability>,
     mut stdout: std::process::ChildStdout,
     runtime: Arc<RunningPlugin>,
     ready_sender: Sender<bool>,
@@ -876,6 +1322,51 @@ fn spawn_plugin_reader(
                     }
                     layers.insert(layer.id.clone(), layer);
                 }
+                PluginMessage::PublishWeather {
+                    request_id,
+                    response,
+                } if ready && granted_permissions.contains(&Permission::WeatherDataPublish) => {
+                    let pending = match runtime.pending_weather.lock() {
+                        Ok(mut pending) => pending.remove(&request_id),
+                        Err(_) => {
+                            fail_runtime(&runtime, "The plugin supervisor became unavailable.");
+                            return;
+                        }
+                    };
+                    let Some(pending) = pending else {
+                        fail_runtime(&runtime, "The plugin answered an unknown weather request.");
+                        return;
+                    };
+                    if !weather_capabilities.contains(&pending.capability)
+                        || !weather_response_matches_request(&response, &pending.query)
+                    {
+                        fail_runtime(&runtime, "The plugin published an invalid weather product.");
+                        return;
+                    }
+                    if let PluginWeatherResponse::Complete {
+                        product: PluginWeatherProduct::GlobalLayer { layer },
+                    } = &response
+                    {
+                        let mut layers = match runtime.weather_layers.lock() {
+                            Ok(layers) => layers,
+                            Err(_) => {
+                                fail_runtime(&runtime, "The plugin supervisor became unavailable.");
+                                return;
+                            }
+                        };
+                        if !layers.contains_key(&layer.id)
+                            && layers.len() >= MAX_WEATHER_LAYERS_PER_PLUGIN
+                        {
+                            drop(layers);
+                            fail_runtime(&runtime, "The plugin published too many weather layers.");
+                            return;
+                        }
+                        layers.insert(layer.id.clone(), layer.clone());
+                    }
+                    if let Some(sender) = pending.response_sender {
+                        let _ = sender.send(response);
+                    }
+                }
                 _ => {
                     fail_runtime(
                         &runtime,
@@ -889,6 +1380,66 @@ fn spawn_plugin_reader(
             }
         }
     });
+}
+
+fn weather_response_matches_request(
+    response: &PluginWeatherResponse,
+    query: &WeatherQuery,
+) -> bool {
+    let PluginWeatherResponse::Complete { product } = response else {
+        return true;
+    };
+    if !product.validate() || product.capability() != query.capability() {
+        return false;
+    }
+    match (product, query) {
+        (
+            PluginWeatherProduct::AirportReports { snapshot },
+            WeatherQuery::AirportReports { stations },
+        ) => {
+            let mut actual = snapshot
+                .airports
+                .iter()
+                .map(|airport| airport.station_icao.as_str())
+                .collect::<Vec<_>>();
+            let mut expected = stations.iter().map(String::as_str).collect::<Vec<_>>();
+            actual.sort_unstable();
+            expected.sort_unstable();
+            actual == expected
+        }
+        (PluginWeatherProduct::GlobalLayer { layer }, WeatherQuery::ForecastGrid { points }) => {
+            let wyrmgrid_domain::GlobalWeatherLayerData::Grid {
+                points: actual_points,
+            } = &layer.data
+            else {
+                return false;
+            };
+            actual_points.len() == points.len()
+                && points.iter().all(|expected| {
+                    actual_points.iter().any(|actual| {
+                        actual.id == expected.id && actual.location == expected.location
+                    })
+                })
+        }
+        (PluginWeatherProduct::GlobalLayer { layer }, WeatherQuery::RadarTiles { tiles }) => {
+            let wyrmgrid_domain::GlobalWeatherLayerData::RasterTiles {
+                tiles: actual_tiles,
+                ..
+            } = &layer.data
+            else {
+                return false;
+            };
+            actual_tiles.len() == tiles.len()
+                && tiles.iter().all(|expected| {
+                    actual_tiles.iter().any(|actual| {
+                        actual.zoom == expected.zoom
+                            && actual.x == expected.x
+                            && actual.y == expected.y
+                    })
+                })
+        }
+        _ => false,
+    }
 }
 
 fn runtime_state(runtime: &Arc<RunningPlugin>) -> Result<PluginProcessState, PluginError> {
@@ -909,9 +1460,26 @@ fn fail_runtime(runtime: &Arc<RunningPlugin>, message: &str) {
     if let Ok(mut layers) = runtime.layers.lock() {
         layers.clear();
     }
+    if let Ok(mut layers) = runtime.weather_layers.lock() {
+        layers.clear();
+    }
+    notify_pending_weather(runtime, WeatherUnavailableCode::ProviderUnavailable);
     if let Ok(mut child) = runtime.child.lock() {
         let _ = child.kill();
         let _ = child.wait();
+    }
+}
+
+fn notify_pending_weather(runtime: &Arc<RunningPlugin>, code: WeatherUnavailableCode) {
+    let pending = runtime
+        .pending_weather
+        .lock()
+        .map(|mut pending| std::mem::take(&mut *pending))
+        .unwrap_or_default();
+    for request in pending.into_values() {
+        if let Some(sender) = request.response_sender {
+            let _ = sender.send(PluginWeatherResponse::Unavailable { code });
+        }
     }
 }
 

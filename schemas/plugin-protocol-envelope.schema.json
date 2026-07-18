@@ -13,9 +13,11 @@
         { "$ref": "#/$defs/hello" },
         { "$ref": "#/$defs/fleetSnapshot" },
         { "$ref": "#/$defs/simulatorTelemetrySnapshot" },
+        { "$ref": "#/$defs/weatherRequest" },
         { "$ref": "#/$defs/shutdown" },
         { "$ref": "#/$defs/ready" },
-        { "$ref": "#/$defs/publishMapLayer" }
+        { "$ref": "#/$defs/publishMapLayer" },
+        { "$ref": "#/$defs/publishWeather" }
       ]
     }
   },
@@ -31,8 +33,12 @@
         "notifications_create",
         "plugin_storage",
         "simulator_telemetry_read",
-        "external_network"
+        "external_network",
+        "weather_data_publish"
       ]
+    },
+    "weatherCapability": {
+      "enum": ["airport_reports", "forecast_grid", "radar_tiles"]
     },
     "coordinates": {
       "type": "object",
@@ -73,6 +79,17 @@
           "type": "array",
           "uniqueItems": true,
           "items": { "$ref": "#/$defs/permission" }
+        },
+        "weather_capabilities": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/weatherCapability" }
+        },
+        "network_origins": {
+          "type": "array",
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^https://[^/?#]+/?$" }
         }
       }
     },
@@ -93,6 +110,89 @@
         "type": { "const": "simulator_telemetry_snapshot" },
         "snapshot": {
           "$ref": "simulator-telemetry-snapshot-v1.schema.json"
+        }
+      }
+    },
+    "weatherGridRequestPoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "location"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 96 },
+        "location": { "$ref": "#/$defs/coordinates" }
+      }
+    },
+    "weatherTileAddress": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["zoom", "x", "y"],
+      "properties": {
+        "zoom": { "type": "integer", "minimum": 0, "maximum": 8 },
+        "x": { "type": "integer", "minimum": 0 },
+        "y": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "weatherQuery": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "stations"],
+          "properties": {
+            "kind": { "const": "airport_reports" },
+            "stations": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 10,
+              "uniqueItems": true,
+              "items": { "type": "string", "pattern": "^[A-Z0-9]{4}$" }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "points"],
+          "properties": {
+            "kind": { "const": "forecast_grid" },
+            "points": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 512,
+              "items": { "$ref": "#/$defs/weatherGridRequestPoint" }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "tiles"],
+          "properties": {
+            "kind": { "const": "radar_tiles" },
+            "tiles": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 16,
+              "items": { "$ref": "#/$defs/weatherTileAddress" }
+            }
+          }
+        }
+      ]
+    },
+    "weatherRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "request"],
+      "properties": {
+        "type": { "const": "weather_request" },
+        "request": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "query"],
+          "properties": {
+            "id": { "type": "string", "minLength": 1, "maxLength": 96 },
+            "query": { "$ref": "#/$defs/weatherQuery" }
+          }
         }
       }
     },
@@ -142,6 +242,71 @@
             },
             "provenance": { "$ref": "#/$defs/provenance" }
           }
+        }
+      }
+    },
+    "publishWeather": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "request_id", "response"],
+      "properties": {
+        "type": { "const": "publish_weather" },
+        "request_id": { "type": "string", "minLength": 1, "maxLength": 96 },
+        "response": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["status", "code"],
+              "properties": {
+                "status": { "const": "unavailable" },
+                "code": {
+                  "enum": [
+                    "offline",
+                    "timed_out",
+                    "rate_limited",
+                    "provider_unavailable",
+                    "invalid_response",
+                    "no_data"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["status", "product"],
+              "properties": {
+                "status": { "const": "complete" },
+                "product": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["kind", "snapshot"],
+                      "properties": {
+                        "kind": { "const": "airport_reports" },
+                        "snapshot": {
+                          "$ref": "weather-snapshot-v1.schema.json"
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["kind", "layer"],
+                      "properties": {
+                        "kind": { "const": "global_layer" },
+                        "layer": {
+                          "$ref": "global-weather-layer-v1.schema.json"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          ]
         }
       }
     }

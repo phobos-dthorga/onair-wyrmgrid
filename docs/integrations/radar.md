@@ -1,7 +1,8 @@
 # Weather radar integration
 
-Status: architecture and provider-evaluation contract; no radar feed is
-implemented yet.
+Status: bounded RainViewer current-frame preview implemented through an
+independent provider plugin; animation, history, and higher-resolution products
+remain deferred.
 
 Radar is a time-varying spatial weather product, not a larger METAR symbol.
 Atlas will eventually place validated radar frames beneath route, airport, and
@@ -42,8 +43,9 @@ immutable application product. Every frame must carry:
 - freshness, attribution, and licence/caching constraints; and
 - checksums or equivalent stable identity for cache integrity.
 
-Rust owns fetching, decoding, validation, bounds, caching, and as-of selection.
-Svelte and MapLibre receive only a host-built render projection. Remote styles,
+The provider plugin owns URL construction and raw-response translation. Rust
+owns product validation, bounds, scheduling, caching, request correlation, and
+as-of selection. Svelte and MapLibre receive only a host-built render projection. Remote styles,
 scripts, arbitrary tile URLs, and provider credentials never enter the browser
 contract.
 
@@ -74,16 +76,18 @@ licensing, storage, deletion, offline-use, and backup implications are approved.
 
 No source is approved merely because it can be displayed in a browser.
 
-| Candidate                        | Useful evidence                                                | Current decision                                                                                                                                   |
-| -------------------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| AviationWeather.gov Data API     | Worldwide aviation reports and advisories                      | Current public product list does not establish a radar imagery feed; do not fabricate radar from station reports.                                  |
-| NOAA/NCEI NEXRAD                 | High-quality near-real-time and historical U.S. radar evidence | Strong U.S. candidate, but not global; delivery, redistribution, attribution, volume, and derived-product details need a dedicated adapter review. |
-| Australian Bureau of Meteorology | Australian radar imagery and supported data services           | Anonymous-feed and commercial/republication conditions vary by product; adopt only a specifically licensed service, not scraped public imagery.    |
-| MetService New Zealand           | Some radar imagery is described through its data-access policy | Exact product/API access, reuse, cache, attribution, and commercial terms need written confirmation before implementation.                         |
-| MSFS MapView weather radar       | Documented in-simulator presentation capability                | It does not establish a raw, redistributable desktop radar feed and cannot stand in for external observations.                                     |
+| Candidate                        | Useful evidence                                                | Current decision                                                                                                                                                    |
+| -------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AviationWeather.gov Data API     | Worldwide aviation reports and advisories                      | Current public product list does not establish a radar imagery feed; do not fabricate radar from station reports.                                                   |
+| NOAA/NCEI NEXRAD                 | High-quality near-real-time and historical U.S. radar evidence | Strong U.S. candidate, but not global; delivery, redistribution, attribution, volume, and derived-product details need a dedicated adapter review.                  |
+| Australian Bureau of Meteorology | Australian radar imagery and supported data services           | Anonymous-feed and commercial/republication conditions vary by product; adopt only a specifically licensed service, not scraped public imagery.                     |
+| MetService New Zealand           | Some radar imagery is described through its data-access policy | Exact product/API access, reuse, cache, attribution, and commercial terms need written confirmation before implementation.                                          |
+| MSFS MapView weather radar       | Documented in-simulator presentation capability                | It does not establish a raw, redistributable desktop radar feed and cannot stand in for external observations.                                                      |
+| RainViewer                       | Global composite tile timeline                                 | Adopted for the initial simulation-only preview: latest past frame, four host-selected zoom-one PNG tiles, five-minute refresh, no remote tile URLs in the webview. |
 
 Official starting points:
 
+- [RainViewer Weather Maps API](https://www.rainviewer.com/api/weather-maps-api.html)
 - [AviationWeather.gov Data API](https://aviationweather.gov/data/api/)
 - [NOAA/NCEI NEXRAD](https://www.ncei.noaa.gov/products/radar/next-generation-weather-radar)
 - [Bureau of Meteorology data feeds](https://www.bom.gov.au/catalogue/data-feeds.shtml)

@@ -6,8 +6,85 @@ fn initializes_the_database_schema() {
     let store = Store::open_in_memory().expect("in-memory database should open");
     assert_eq!(
         store.schema_version().expect("version should be readable"),
-        12
+        14
     );
+}
+
+#[test]
+fn flight_operation_revisions_are_append_only_and_active() {
+    let store = Store::open_in_memory().expect("store should initialize");
+    let initial = FlightOperationRevisionRecord {
+        operation_id: "operation-a".into(),
+        operation_created_at: "2026-07-17T06:00:00Z".into(),
+        revision: 1,
+        reason: "initial".into(),
+        revision_created_at: "2026-07-17T06:00:00Z".into(),
+        snapshot_json: "{\"revision\":1}".into(),
+    };
+    store.create_flight_operation_record(&initial).unwrap();
+    let competing = FlightOperationRevisionRecord {
+        operation_id: "operation-b".into(),
+        ..initial.clone()
+    };
+    assert!(store.create_flight_operation_record(&competing).is_err());
+    assert_eq!(
+        store
+            .load_active_flight_operation_revision_record()
+            .unwrap(),
+        Some(initial.clone())
+    );
+
+    let revised = FlightOperationRevisionRecord {
+        revision: 2,
+        reason: "job_changed".into(),
+        revision_created_at: "2026-07-17T06:05:00Z".into(),
+        snapshot_json: "{\"revision\":2}".into(),
+        ..initial.clone()
+    };
+    store
+        .append_flight_operation_revision_record(1, &revised)
+        .unwrap();
+    assert_eq!(
+        store
+            .load_active_flight_operation_revision_record()
+            .unwrap(),
+        Some(revised)
+    );
+
+    let connection = store.connection.lock().unwrap();
+    let revision_count: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM flight_operation_revisions WHERE operation_id = ?1",
+            ["operation-a"],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(revision_count, 2);
+}
+
+#[test]
+fn flight_operation_revision_rejects_a_stale_expected_revision() {
+    let store = Store::open_in_memory().expect("store should initialize");
+    let initial = FlightOperationRevisionRecord {
+        operation_id: "operation-a".into(),
+        operation_created_at: "2026-07-17T06:00:00Z".into(),
+        revision: 1,
+        reason: "initial".into(),
+        revision_created_at: "2026-07-17T06:00:00Z".into(),
+        snapshot_json: "{}".into(),
+    };
+    store.create_flight_operation_record(&initial).unwrap();
+
+    let stale = FlightOperationRevisionRecord {
+        revision: 3,
+        reason: "plan_changed".into(),
+        revision_created_at: "2026-07-17T06:10:00Z".into(),
+        ..initial
+    };
+    assert!(matches!(
+        store.append_flight_operation_revision_record(2, &stale),
+        Err(StorageError::InvalidRecord)
+    ));
 }
 
 #[test]
@@ -106,6 +183,7 @@ fn persists_independent_display_preferences() {
         weight_unit: "kilograms".into(),
         fuel_unit: "litres".into(),
         responsive_surfaces: false,
+        weather_rendering_profile: "compatibility".into(),
     };
     store
         .save_display_preferences_record(&preferences)

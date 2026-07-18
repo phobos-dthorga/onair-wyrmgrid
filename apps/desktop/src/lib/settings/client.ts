@@ -29,32 +29,47 @@ export async function saveDisplayPreferences(
   return validated;
 }
 
-function validatePreferences(value: unknown): DisplayPreferences {
+export function validatePreferences(value: unknown): DisplayPreferences {
   if (!value || typeof value !== "object") return aviationDisplayPreferences;
   const candidate = value as Partial<DisplayPreferences>;
+  const altitudeUnit = candidate.altitude_unit;
+  const speedUnit = candidate.speed_unit;
+  const weightUnit = candidate.weight_unit;
+  const fuelUnit = candidate.fuel_unit;
   const responsiveSurfaces = candidate.responsive_surfaces ?? true;
+  const weatherRenderingProfile =
+    candidate.weather_rendering_profile ?? "enhanced";
   if (
-    !["feet", "metres"].includes(candidate.altitude_unit ?? "") ||
+    !altitudeUnit ||
+    !["feet", "metres"].includes(altitudeUnit) ||
+    !speedUnit ||
     ![
       "knots",
       "miles_per_hour",
       "kilometres_per_hour",
       "metres_per_second",
-    ].includes(candidate.speed_unit ?? "") ||
-    !["pounds", "kilograms"].includes(candidate.weight_unit ?? "") ||
+    ].includes(speedUnit) ||
+    !weightUnit ||
+    !["pounds", "kilograms"].includes(weightUnit) ||
+    !fuelUnit ||
     ![
       "pounds",
       "kilograms",
       "us_gallons",
       "imperial_gallons",
       "litres",
-    ].includes(candidate.fuel_unit ?? "") ||
-    typeof responsiveSurfaces !== "boolean"
+    ].includes(fuelUnit) ||
+    typeof responsiveSurfaces !== "boolean" ||
+    !["compatibility", "enhanced"].includes(weatherRenderingProfile)
   ) {
     return aviationDisplayPreferences;
   }
   return {
-    ...(candidate as Omit<DisplayPreferences, "responsive_surfaces">),
+    altitude_unit: altitudeUnit,
+    speed_unit: speedUnit,
+    weight_unit: weightUnit,
+    fuel_unit: fuelUnit,
     responsive_surfaces: responsiveSurfaces,
+    weather_rendering_profile: weatherRenderingProfile,
   };
 }

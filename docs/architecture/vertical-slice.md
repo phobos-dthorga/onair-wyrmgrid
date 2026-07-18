@@ -55,8 +55,9 @@ The first operational-provider increment adds canonical `FlightPlanSnapshot`
 version 1 and a session-only, read-only SimBrief latest-OFP developer preview in
 Dispatch. The next increment compares observed OnAir registration, model, and
 aircraft position without collapsing either source and adds an explicitly requested
-ten-minute session cache of AviationWeather.gov METAR and TAF facts for plan
-airports. The pending-job increment adds a bounded, retained read-only job
+ten-minute session cache of AviationWeather.gov METAR and TAF facts delivered
+through its independently approved provider plugin for plan airports. The
+pending-job increment adds a bounded, retained read-only job
 snapshot and an explicit Jobs-to-Dispatch handoff; Dispatch compares endpoint
 route, reported cargo weight, and expiry without accepting or changing OnAir
 work. Route advisories, online-network, navigation, simulator, and persistent

@@ -118,7 +118,7 @@
               you request airport weather.
             </p>
             <div class="summary-grid">
-              <article>
+              <article class="responsive-surface">
                 <strong>Flight recordings</strong>
                 <span
                   >Manual recording or an optional default-off automatic setting
@@ -126,7 +126,7 @@
                   be retained with that recording for later comparison.</span
                 >
               </article>
-              <article>
+              <article class="responsive-surface">
                 <strong>OnAir credentials</strong>
                 <span
                   >Session-only unless you ask Windows Credential Manager to
@@ -134,17 +134,17 @@
                   the Company ID and startup choice.</span
                 >
               </article>
-              <article>
+              <article class="responsive-surface">
                 <strong>Staff roster</strong>
                 <span
                   >Reported names, airport presence, availability, provider
                   codes, aircraft-class qualifications, and an opaque avatar
-                  reference may be kept in the encrypted Hoard. No avatar URL
-                  or portrait artwork is retained; other unused fields are
+                  reference may be kept in the encrypted Hoard. No avatar URL or
+                  portrait artwork is retained; other unused fields are
                   discarded.</span
                 >
               </article>
-              <article>
+              <article class="responsive-surface">
                 <strong>SimBrief Pilot ID</strong>
                 <span
                   >May be remembered in WyrmGrid's encrypted database at your
@@ -152,35 +152,44 @@
                   password.</span
                 >
               </article>
-              <article>
+              <article class="responsive-surface">
+                <strong>Accepted flight operations</strong>
+                <span
+                  >Beginning an operation stores its sanitized plan, selected
+                  read-only OnAir job, and aggregate passenger or freight facts
+                  as immutable revisions in the encrypted local database.
+                  Missing facts stay unavailable.</span
+                >
+              </article>
+              <article class="responsive-surface">
                 <strong>Map requests</strong>
                 <span
                   >The map provider receives ordinary connection metadata such
                   as your IP address.</span
                 >
               </article>
-              <article>
+              <article class="responsive-surface">
                 <strong>Error diagnostics</strong>
                 <span
                   >Privacy-filtered Sentry reports are optional and off by
                   default.</span
                 >
               </article>
-              <article>
+              <article class="responsive-surface">
                 <strong>Independent providers</strong>
                 <span
                   >OnAir, SimBrief, AviationWeather.gov, Sentry, map services,
                   and community plugins operate under their own terms.</span
                 >
               </article>
-              <article>
+              <article class="responsive-surface">
                 <strong>Local customisation</strong>
                 <span
                   >Imported themes and language packs remain in WyrmGrid's local
                   database and are not sent to translation services.</span
                 >
               </article>
-              <article>
+              <article class="responsive-surface">
                 <strong>Encrypted local data</strong>
                 <span
                   >SQLCipher protects WyrmGrid's database at rest. Portable
@@ -188,7 +197,7 @@
                   you choose and WyrmGrid cannot recover.</span
                 >
               </article>
-              <article>
+              <article class="responsive-surface">
                 <strong>Photosensitivity</strong>
                 <span
                   >Future weather and warning effects may include lightning or

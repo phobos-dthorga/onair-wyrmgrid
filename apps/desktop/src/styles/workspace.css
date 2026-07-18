@@ -204,9 +204,14 @@ nav {
 }
 .sidebar,
 .inspector {
+  min-width: 0;
+  min-height: 0;
   padding: 22px 18px;
   background: var(--color-surface-translucent);
   z-index: 3;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 .sidebar {
   border-right: 1px solid var(--color-line-faint);
@@ -377,6 +382,7 @@ nav {
 .map-stage {
   position: relative;
   min-width: 0;
+  min-height: 0;
   overflow: hidden;
 }
 .map {
@@ -475,6 +481,9 @@ nav {
   background: var(--color-surface-translucent);
   box-shadow: 0 18px 50px var(--color-shadow);
   backdrop-filter: blur(10px);
+}
+.readiness-card.responsive-surface {
+  position: absolute;
 }
 .readiness-value {
   margin: 7px 0 14px;

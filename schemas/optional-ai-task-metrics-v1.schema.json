@@ -1,0 +1,333 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/phobos-dthorga/onair-wyrmgrid/schemas/optional-ai-task-metrics-v1.schema.json",
+  "title": "Optional local-AI task metrics version 1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "collected_at",
+    "task",
+    "profile",
+    "model",
+    "runtime",
+    "endpoint",
+    "request",
+    "tokens",
+    "duration_ms",
+    "resources",
+    "completion",
+    "privacy"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "kind": {
+      "const": "optional-ai-task-metrics"
+    },
+    "collected_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "display_name"],
+      "properties": {
+        "id": {
+          "enum": [
+            "release-curation-v1",
+            "change-impact-v1",
+            "test-matrix-v1",
+            "docs-sync-v1",
+            "fixture-variants-v1",
+            "failure-triage-v1"
+          ]
+        },
+        "display_name": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "display_name", "provider"],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "provider": {
+          "enum": ["ollama-chat", "openai-compatible-chat"]
+        }
+      }
+    },
+    "model": {
+      "type": "string"
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "version"],
+      "properties": {
+        "protocol": {
+          "enum": ["ollama-chat", "openai-compatible-chat"]
+        },
+        "version": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "endpoint": {
+      "type": "string"
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "packet_characters",
+        "system_prompt_characters",
+        "response_characters",
+        "context_length",
+        "temperature",
+        "seed",
+        "thinking_enabled",
+        "maximum_output_tokens"
+      ],
+      "properties": {
+        "packet_characters": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "system_prompt_characters": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "response_characters": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "context_length": {
+          "type": ["integer", "null"]
+        },
+        "temperature": {
+          "type": "number"
+        },
+        "seed": {
+          "type": "integer"
+        },
+        "thinking_enabled": {
+          "type": ["boolean", "null"]
+        },
+        "maximum_output_tokens": {
+          "type": "integer"
+        }
+      }
+    },
+    "tokens": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "prompt",
+        "generated",
+        "local_total",
+        "prompt_per_second",
+        "generated_per_second",
+        "hosted_tokens_saved"
+      ],
+      "properties": {
+        "prompt": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "generated": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "local_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "prompt_per_second": {
+          "type": ["number", "null"],
+          "minimum": 0
+        },
+        "generated_per_second": {
+          "type": ["number", "null"],
+          "minimum": 0
+        },
+        "hosted_tokens_saved": {
+          "const": "not-measured"
+        }
+      }
+    },
+    "duration_ms": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "client_observed_total",
+        "server_reported_total",
+        "model_load",
+        "prompt_evaluation",
+        "generation"
+      ],
+      "properties": {
+        "client_observed_total": {
+          "type": ["number", "null"],
+          "minimum": 0
+        },
+        "server_reported_total": {
+          "type": ["number", "null"],
+          "minimum": 0
+        },
+        "model_load": {
+          "type": ["number", "null"],
+          "minimum": 0
+        },
+        "prompt_evaluation": {
+          "type": ["number", "null"],
+          "minimum": 0
+        },
+        "generation": {
+          "type": ["number", "null"],
+          "minimum": 0
+        }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "measurement_status",
+        "samples",
+        "sampling_errors",
+        "peak_loaded_model_bytes",
+        "peak_vram_bytes",
+        "estimated_peak_system_ram_bytes",
+        "maximum_context_length",
+        "model_loaded_after_run",
+        "parameter_size",
+        "quantization_level",
+        "advertised_model_file_bytes",
+        "advertised_training_context_length",
+        "advertised_parameter_count"
+      ],
+      "properties": {
+        "measurement_status": {
+          "enum": [
+            "sampled-through-ollama-api",
+            "not-exposed-by-openai-compatible-api"
+          ]
+        },
+        "samples": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sampling_errors": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "peak_loaded_model_bytes": {
+          "type": ["number", "null"],
+          "minimum": 0
+        },
+        "peak_vram_bytes": {
+          "type": ["number", "null"],
+          "minimum": 0
+        },
+        "estimated_peak_system_ram_bytes": {
+          "type": ["number", "null"],
+          "minimum": 0
+        },
+        "maximum_context_length": {
+          "type": ["number", "null"],
+          "minimum": 0
+        },
+        "model_loaded_after_run": {
+          "type": ["boolean", "null"]
+        },
+        "parameter_size": {
+          "type": ["string", "null"]
+        },
+        "quantization_level": {
+          "type": ["string", "null"]
+        },
+        "advertised_model_file_bytes": {
+          "type": ["number", "null"],
+          "minimum": 0
+        },
+        "advertised_training_context_length": {
+          "type": ["number", "null"],
+          "minimum": 0
+        },
+        "advertised_parameter_count": {
+          "type": ["number", "null"],
+          "minimum": 0
+        }
+      }
+    },
+    "completion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["created_at", "done_reason"],
+      "properties": {
+        "created_at": {
+          "type": ["string", "null"]
+        },
+        "done_reason": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "loopback_only",
+        "ai_required_for_wyrmgrid",
+        "wyrmgrid_runtime_integration",
+        "packet_persisted",
+        "system_prompt_persisted",
+        "response_content_in_metrics",
+        "durable_memory_created",
+        "ci_execution",
+        "model_unload_requested"
+      ],
+      "properties": {
+        "loopback_only": {
+          "const": true
+        },
+        "ai_required_for_wyrmgrid": {
+          "const": false
+        },
+        "wyrmgrid_runtime_integration": {
+          "const": false
+        },
+        "packet_persisted": {
+          "const": false
+        },
+        "system_prompt_persisted": {
+          "const": false
+        },
+        "response_content_in_metrics": {
+          "const": false
+        },
+        "durable_memory_created": {
+          "const": false
+        },
+        "ci_execution": {
+          "const": false
+        },
+        "model_unload_requested": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

@@ -31,8 +31,26 @@
           "notifications_create",
           "plugin_storage",
           "simulator_telemetry_read",
-          "external_network"
+          "external_network",
+          "weather_data_publish"
         ]
+      }
+    },
+    "weather_capabilities": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": ["airport_reports", "forecast_grid", "radar_tiles"]
+      }
+    },
+    "network_origins": {
+      "type": "array",
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "maxLength": 200,
+        "pattern": "^https://[^/?#]+/?$"
       }
     }
   }

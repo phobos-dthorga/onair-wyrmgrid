@@ -6,6 +6,7 @@ import {
   filterAndSortJobs,
   jobFilterOptions,
   jobPayloadKind,
+  jobRouteLabel,
 } from "./presentation";
 
 function airport(id: string) {
@@ -50,6 +51,7 @@ describe("job exploration", () => {
     expect(jobFilterOptions([passengerJob, cargoJob])).toEqual({
       missionTypes: ["Cargo", "Passengers"],
       payloadKinds: ["passengers", "cargo"],
+      routes: ["NZAA → NZWN", "YSSY → YMML"],
     });
   });
 
@@ -72,6 +74,48 @@ describe("job exploration", () => {
       filterAndSortJobs([cargoJob, passengerJob], filters).map((job) => job.id),
     ).toEqual(["passengers", "cargo"]);
     expect(activeJobFilterCount(filters)).toBe(1);
+  });
+
+  it("restricts plan drilldown to the exact reported route", () => {
+    const sameOrigin: JobSummary = {
+      ...passengerJob,
+      id: "same-origin",
+      legs: [
+        {
+          ...passengerJob.legs[0],
+          id: "same-origin-leg",
+          departure: airport("YSSY"),
+        },
+      ],
+    };
+    const unavailableRoute: JobSummary = {
+      ...passengerJob,
+      id: "unavailable-route",
+      legs: [{ ...passengerJob.legs[0], departure: null, destination: null }],
+    };
+    const filters = {
+      ...defaultJobFilters,
+      route: "YSSY → YMML",
+    };
+
+    expect(
+      filterAndSortJobs([sameOrigin, unavailableRoute, cargoJob], filters),
+    ).toEqual([cargoJob]);
+    expect(activeJobFilterCount(filters)).toBe(1);
+  });
+
+  it("normalizes a plan route before applying the filter", () => {
+    expect(jobRouteLabel("  enhv", "efku  ")).toBe("ENHV → EFKU");
+    expect(jobRouteLabel("ENHV", undefined)).toBeNull();
+  });
+
+  it("does not substitute unrelated jobs when a plan route has no match", () => {
+    expect(
+      filterAndSortJobs([passengerJob, cargoJob], {
+        ...defaultJobFilters,
+        route: "ENHV → EFKU",
+      }),
+    ).toEqual([]);
   });
 
   it("does not manufacture payload classifications", () => {
