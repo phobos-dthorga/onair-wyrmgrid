@@ -47,6 +47,40 @@
 
 - Use semantic versioning for the application and separately version the plugin
   protocol, schema, and database migrations.
+- Keep `CHANGELOG.md` as the canonical source for GitHub release notes. Curate
+  user- and developer-visible work under `[Unreleased]` using the required New
+  features, Changes, Removed, and 🚨 Breaking changes sections; use an
+  explicit `- None.` rather than omitting an empty category.
+- Release-note and changelog curation may be entirely manual. Optional local-AI
+  assistance must use one of the built-in versioned task contracts with a
+  bounded, review-only handoff. Change-impact, test-matrix, documentation-sync,
+  fixture-variant, failure-triage, and release-curation drafts remain untrusted
+  evidence. Reconcile every draft against source, deterministic tools, and tests
+  before using it.
+- Hoardmind is the current maintainer's private local assistant, not a WyrmGrid
+  component or requirement. Never assume it exists on another contributor's
+  machine. WyrmGrid must remain usable, buildable, testable, contributable, and
+  releasable without Hoardmind or any other AI.
+- Never send credentials, raw provider payloads, personal data, or unrelated
+  source context in an AI release-curation packet. Do not run an opaque
+  model call on a GitHub release runner; CI validates and publishes the reviewed
+  checked-in changelog entry deterministically.
+- Run the approved local handoff through
+  `scripts/run-optional-ai-task.mjs` with an explicitly selected task and
+  versioned profile so exact server-reported tokens and available timing or
+  model-allocation metadata are retained outside the repository. Never
+  automatically chain model output into another task; a reviewer must select
+  confirmed evidence for each new packet. Schema version 1 supports
+  unauthenticated loopback Ollama and OpenAI-compatible chat servers; the latter
+  must report exact token usage, while non-portable timing, resource, and unload
+  fields remain explicitly unavailable. A LAN, authenticated, or hosted adapter
+  requires a separate privacy and security decision. Do not relabel local tokens
+  as hosted tokens saved unless separate hosted usage data supports that
+  calculation.
+- A declared application breaking change requires a new `X.0.0` major release
+  line and must remain prominently identified in the changelog and generated
+  GitHub notes. Minor and patch release tags containing a breaking-change entry
+  must fail release policy.
 - CI produces release artifacts. Do not hand-assemble published binaries.
 - Run routine compilation, tests, formatting, linting, and dependency checks on
   the maintainer's local development machine. Reserve hosted CI/CD for an

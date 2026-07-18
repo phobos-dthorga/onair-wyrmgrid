@@ -29,6 +29,7 @@ jobs:
       release_tag: ${{ steps.policy.outputs.release_tag }}
       release_version: ${{ steps.policy.outputs.release_version }}
       release_commit: ${{ steps.policy.outputs.release_commit }}
+      previous_version: ${{ steps.policy.outputs.previous_version }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
@@ -71,9 +72,18 @@ jobs:
             exit 1
           fi
 
+          PREVIOUS_TAG="$(git tag --list 'v*' --merged origin/main | node scripts/select-previous-release.mjs "$RELEASE_VERSION" --tag-lines)"
+          PREVIOUS_VERSION="${PREVIOUS_TAG#v}"
+          release_notes_args=("$RELEASE_VERSION")
+          if [[ -n "$PREVIOUS_VERSION" ]]; then
+            release_notes_args+=(--previous "$PREVIOUS_VERSION")
+          fi
+          node scripts/prepare-release-notes.mjs "${release_notes_args[@]}"
+
           echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
           echo "release_version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
           echo "release_commit=$RELEASE_COMMIT" >> "$GITHUB_OUTPUT"
+          echo "previous_version=$PREVIOUS_VERSION" >> "$GITHUB_OUTPUT"
 
   verify:
     name: Required tests
@@ -206,6 +216,9 @@ jobs:
       id-token: write
       attestations: write
     steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          ref: ${{ needs.policy.outputs.release_tag }}
       - name: Download platform packages
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
@@ -242,22 +255,38 @@ jobs:
         uses: actions/attest@f6bf1532d7d6793fce74eac584813a8eee607999 # v4
         with:
           subject-path: release-assets/*
+      - name: Prepare curated release notes
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ needs.policy.outputs.release_version }}
+          PREVIOUS_VERSION: ${{ needs.policy.outputs.previous_version }}
+        run: |
+          set -euo pipefail
+          release_notes_args=("$RELEASE_VERSION" --output "$RUNNER_TEMP/release-notes.md")
+          if [[ -n "$PREVIOUS_VERSION" ]]; then
+            release_notes_args+=(--previous "$PREVIOUS_VERSION")
+          fi
+          node scripts/prepare-release-notes.mjs "${release_notes_args[@]}"
       - name: Create or update the draft prerelease
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ needs.policy.outputs.release_tag }}
+          RELEASE_NOTES: ${{ runner.temp }}/release-notes.md
         run: |
           set -euo pipefail
           mapfile -d '' assets < <(find release-assets -type f -print0)
 
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" \
+              --title "OnAir WyrmGrid $RELEASE_TAG" \
+              --notes-file "$RELEASE_NOTES"
             gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
           else
             gh release create "$RELEASE_TAG" "${assets[@]}" \
               --draft \
               --prerelease \
               --title "OnAir WyrmGrid $RELEASE_TAG" \
-              --notes "CI-built platform packages, SHA-256 checksums, and GitHub build provenance. Verify installation and startup on every supported platform before publishing."
+              --notes-file "$RELEASE_NOTES"
           fi

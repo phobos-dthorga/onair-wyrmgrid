@@ -132,6 +132,20 @@ installers. Every intentional semantic-version tag (`vX.Y.Z`, including
 supported prereleases) runs the complete CI and security gates before GitHub
 builds platform packages and an NSIS setup executable. CI publishes checksums
 and build provenance into a draft prerelease for manual installation review.
+The matching reviewed [changelog](CHANGELOG.md) entry supplies the GitHub
+release notes, including explicit new-feature, change, removal, and breaking-
+change lists.
+
+The WyrmGrid application does not contain, connect to, or require Hoardmind or
+any other AI assistant. Hoardmind is the maintainer's private local helper,
+outside the application and its release infrastructure. Contributors may work
+entirely by hand or, if they choose, use the optional bounded development-task
+helpers with their own loopback Ollama or OpenAI-compatible local server. Those
+review-only helpers cover change impact, test matrices, documentation sync,
+synthetic fixtures, sanitized failure triage, and release curation without
+entering the application. GitHub CI reads only reviewed, checked-in content and
+never calls an AI service.
+
 Newer NSIS setups install over the existing per-user application and preserve
 its encrypted data; release CI verifies that path against the closest older
 published setup.

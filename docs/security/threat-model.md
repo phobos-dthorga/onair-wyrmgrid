@@ -65,6 +65,9 @@
 - dependency or release-pipeline compromise;
 - a release tag packaging untested code, a commit outside `main`, or application
   metadata whose version does not match the advertised release;
+- incomplete or misleading release notes hiding a removed capability or
+  compatibility break, including untrusted commit text influencing a local
+  model-assisted changelog draft;
 - sensitive data escaping through diagnostic payloads, attachments, replay,
   logs, traces, or crash dumps;
 - network collection beginning before disclosure or continuing after the user
@@ -196,6 +199,35 @@
   gates run against the exact release tag before packaging, release tags must
   identify a commit on `main`, and every checked-in application version must
   equal the tag version;
+- the checked-in changelog is the sole GitHub release-note source; tooling
+  requires explicit feature, change, removal, and breaking-change lists and
+  rejects declared breaking changes outside a new major-version line. Rebuilds
+  reuse the exact tagged text rather than regenerating it;
+- AI-assisted development tasks are optional and outside the WyrmGrid product.
+  Hoardmind is the maintainer's private local assistant rather than a bundled
+  component or required service. Change-impact, test-matrix, documentation-sync,
+  synthetic-fixture, sanitized failure-triage, and release-curation tasks each
+  use an explicit versioned packet and output contract with no tools, repository
+  access, durable memory, or change authority. Diffs, logs, schemas, fixtures,
+  documentation, and commit text remain untrusted evidence; sensitive provider
+  or user data is excluded, and a person or coordinating reviewer reconciles
+  every draft against the repository and deterministic tools. Model drafts are
+  never chained automatically. GitHub CI performs no model call and receives no
+  inference credential;
+- the optional local-AI measurement wrapper uses a versioned profile and accepts
+  only unauthenticated loopback Ollama or OpenAI-compatible chat origins in
+  schema version 1. It pins the advertised and returned model, requires
+  one-invocation approval, refuses CI, bounds packet size, checks common
+  credential signatures, validates the selected boundary prompt, and rejects
+  missing, duplicated, or reordered packet and response headings. The
+  compatibility adapter sends no authorization header or tools and refuses a
+  response without internally consistent exact token usage. Its metrics exclude
+  prompt and response content; non-portable timings, RAM/VRAM observations, and
+  unload state remain explicitly unreported. Plaintext packets, profiles, and
+  drafts remain private temporary artifacts outside the product and receive no
+  automatic retention or publication. LAN, authenticated, or hosted adapters
+  remain unsupported pending a separate privacy, authentication, data-flow, and
+  threat-model decision;
 - platform build jobs are read-only and stage packages internally; one final job
   with narrowly scoped write and identity-token permissions generates SHA-256
   checksums and GitHub build-provenance attestations before creating a draft;
