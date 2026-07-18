@@ -175,6 +175,12 @@ the human maintainer's GitHub CLI identity.
 - private keys and common high-confidence credential patterns in the patch or
   resulting files.
 
+The broker permits Git's deterministic hunk recounting so incorrect numeric
+line counts from a generated unified diff cannot become a manual rewrite. It
+does not infer or alter source content: canonical paths and file markers,
+reviewed scopes, textual hunks, the applied result, credentials, and all other
+controls remain enforced.
+
 `scripts/optional-ai-landing.mjs` independently rejects a changed manifest,
 non-human GitHub actor, wrong repository/base/branch/head, multiple commits,
 spoofed App identity, altered bot message, draft or unclean PR, missing fresh

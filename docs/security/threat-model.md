@@ -244,6 +244,8 @@
   deletions, renames, copies, mode changes, path traversal, binary data,
   credential signatures, dependency manifests, migrations, `.github`, legal,
   security, protocol/schema, release, and optional-AI governance paths. The
+  broker may deterministically recount generated hunk line metadata but never
+  infer or rewrite source content. The
   assistant never receives the App private key or installation token. The key
   must remain outside the repository, the App slug is pinned, and the requested
   installation token is narrowed to Contents on this repository. A `main`
