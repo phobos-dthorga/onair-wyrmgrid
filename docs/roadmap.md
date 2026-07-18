@@ -155,6 +155,15 @@ not replace completion of the current vertical slice.
 - Explicit `.pln` export and flight-plan load after read-only telemetry is proven
 - MSFS 2020 and FSUIPC compatibility providers
 - X-Plane 12 Web API provider after the MSFS 2024 slice
+- Separately consented simulator-synchronised audio with Opus working tracks,
+  encrypted segmented external media, metadata-only SQLite records, storage
+  budgets, deletion, playback, and explicit export
+- Windows/MSFS microphone and capability-labelled application, endpoint, or
+  mixed-output capture; SimConnect COM facts remain metadata rather than
+  isolated radio audio
+- Cross-platform X-Plane microphone and mixed-output capture after the Web API
+  telemetry provider, followed by isolated COM1/COM2 or pilot/copilot tracks
+  only if the thin audio-tap stability and licensing spike succeeds
 
 ### Navigation, networks, and automation
 

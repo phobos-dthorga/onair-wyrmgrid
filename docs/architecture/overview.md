@@ -1,26 +1,26 @@
 # Architecture overview
 
 ```text
-External providers       Simulator sidecars
-    |                           |
-    v                           v
-Rust provider adapters   WyrmGrid Bridge
-    |                           |
-    +--------> application <----+
-                    |
-          +---------+---------+
-          |                   |
- SQLCipher SQLite         plugin broker
-     (Hoard)                   |
-          |              external plugins
-          v
-      Tauri commands
-          |
-          v
-  Svelte presentation <--- Fluent catalogue + data-only language pack
-     |          |
- MapLibre    WyrmChart
-  (Atlas)    (ECharts)
+External providers    Simulator sidecars    Audio sidecars (planned)
+        |                      |                       |
+        v                      v                       v
+ Rust provider adapters  WyrmGrid Bridge    Audio capture boundary
+        |                      |                       |
+        +--------------------> application <----------+
+                                  |
+                        +---------+---------+
+                        |                   |
+               SQLCipher SQLite         plugin broker
+                   (Hoard)                   |
+                        |              external plugins
+                        v
+                    Tauri commands
+                        |
+                        v
+            Svelte presentation <--- Fluent catalogue + data-only language pack
+                        |          |
+                    MapLibre    WyrmChart
+                     (Atlas)    (ECharts)
 ```
 
 The dependency direction points inward. Interface and infrastructure adapters
@@ -42,11 +42,14 @@ fixture, bounded implementation-patch, sanitized failure-triage, or release-
 curation drafts. Its adapters support user-selected Ollama models and
 unauthenticated local servers that implement the OpenAI-compatible model-list
 and chat-completion endpoints, all restricted to that machine's loopback
-interface. Drafts remain untrusted input for normal review, are never
-autonomously chained, and profiles and temporary artifacts remain outside the
-application. LAN, authenticated, or hosted AI providers are intentionally not
-interchangeable with this local boundary; supporting one would require a
-separate privacy, authentication, data-flow, and threat-model decision.
+interface. Drafts remain untrusted input, but independent Codex semantic review
+is reserved for high-benefit or critical work. Valid lower-benefit output still
+passes deterministic gates without spending frontier-model review resources.
+Drafts are never autonomously chained, and profiles and temporary artifacts
+remain outside the application. LAN, authenticated, or hosted AI providers are
+intentionally not interchangeable with this local boundary; supporting one
+would require a separate privacy, authentication, data-flow, and threat-model
+decision.
 
 Generated-contribution attribution is a separate maintainer-side control plane.
 A local broker may exchange an App JWT for a short-lived, repository-scoped
@@ -117,6 +120,22 @@ SayIntentions context ---------------+
 See [ADR-0008](decisions/0008-provider-adapters-and-operational-snapshots.md)
 and [ADR-0011](decisions/0011-core-simulator-capability-provider-sidecars.md),
 plus the [external integrations programme](../integrations/README.md).
+
+## Planned simulator-audio boundary
+
+Simulator-synchronised audio is adjacent to Bridge telemetry rather than part
+of Bridge protocol version 1. The application owns separate default-off audio
+consent, session correlation, retention, deletion, and presentation. A
+separately supervised Audio Capture Provider supplies capability-labelled Opus
+tracks; SQLite stores metadata while encrypted media remains in bounded
+external segments. Audio, device labels, and communications are unavailable to
+ordinary plugins and observability.
+
+MSFS 2024 capture is Windows-specific. X-Plane 12 provides the cross-platform
+Windows, macOS, and supported Linux target, while its named COM audio groups
+remain a feasibility candidate until a thin non-blocking tap is proven. See
+[ADR-0017](decisions/0017-simulator-synchronised-audio-recording.md) and the
+[audio-recording plan](../integrations/simulator-audio-recording.md).
 
 ## Extension boundary
 

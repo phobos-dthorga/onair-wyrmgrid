@@ -19,3 +19,4 @@ record rather than silently rewriting history.
 - [ADR-0014: Optional OS-protected provider accounts](0014-optional-os-protected-provider-accounts.md)
 - [ADR-0015: Persistent flight-operation revisions and evidence-derived manifests](0015-persistent-flight-operation-revisions.md)
 - [ADR-0016: Out-of-process weather provider plugins](0016-out-of-process-weather-provider-plugins.md)
+- [ADR-0017: Simulator-synchronised audio recording through capability providers](0017-simulator-synchronised-audio-recording.md)

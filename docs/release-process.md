@@ -129,6 +129,9 @@ The adapters are deliberately small:
 The broader [optional local-AI task guide](optional-ai/README.md) documents the
 other bounded development tasks. Release curation remains its own versioned
 contract and never consumes another task's draft without explicit review.
+Release content, compatibility, semantic versioning, tags, and publication are
+critical boundaries under the local-AI review budget, so every release-curation
+draft still receives full reconciliation regardless of its apparent size.
 
 Each run writes three timestamped local artifacts:
 

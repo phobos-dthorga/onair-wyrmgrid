@@ -31,6 +31,15 @@ major application version.
 
 ### Changes
 
+- Reserved Codex semantic review of valid Hoardmind output for high-benefit or
+  critical work. Lower-benefit drafts now avoid redundant frontier-model review
+  while deterministic gates and mandatory human release or generated-
+  contribution approvals remain unchanged.
+- Documented the accepted future simulator-synchronised audio architecture:
+  Opus working tracks, capability-labelled MSFS and X-Plane sources, separate
+  audio consent, encrypted external media, metadata-only SQLite records, and an
+  independently versioned provider boundary. No audio capture implementation is
+  included yet.
 - Generated-contribution squash landing now uses a human-authenticated,
   exact-head guard that verifies the App-bot commit and clean protected PR,
   supplies every provenance trailer explicitly, forbids administrative bypass,

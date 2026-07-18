@@ -38,6 +38,7 @@ Online networks --------------------------+--> Atlas overlays     |
 | Simulator          | MSFS 2024 through SimConnect                | Primary WyrmGrid Bridge provider                    | Local simulator installation                              |
 | Simulator          | MSFS 2020 and FSUIPC                        | Compatibility providers                             | Local installation; FSUIPC may be separately licensed     |
 | Simulator          | X-Plane 12 Web API                          | Second simulator family                             | Local X-Plane 12.1.1 or later                             |
+| Simulator audio    | MSFS 2024 and X-Plane 12                    | Optional capability-driven Opus recording           | Separate microphone or communications approval            |
 | Navigation         | Navigraph Navdata                           | Optional approved adapter                           | Developer approval and user subscription for current data |
 | Airport baseline   | OurAirports                                 | Offline reference import                            | No account; public-domain dataset                         |
 | Plan interchange   | MSFS, X-Plane, and Little Navmap formats    | First-party import/export adapters                  | No account                                                |
@@ -71,6 +72,10 @@ Online networks --------------------------+--> Atlas overlays     |
    detail, and AI ATC context remain.)
 9. Add VATSIM and IVAO Atlas layers, followed by X-Plane and approved Navigraph
    features.
+10. Add separately consented Opus audio aligned to simulator sessions, beginning
+    with capability-labelled Windows/MSFS sources. Extend capture to X-Plane's
+    supported desktop systems and isolated radio groups only after their
+    platform and plugin feasibility gates pass.
 
 Provider work does not bypass the quality gates. Each protocol or schema change
 needs sanitized fixtures, bounded validation tests, documentation, and an
@@ -91,6 +96,9 @@ require a sanitized captured response or an outside-repository integration test.
   until a narrower classification is proven.
 - Sentry receives stable operation and error codes, never credentials, plan
   contents, routes, coordinates, callsigns, user IDs, or raw provider failures.
+- Continuous audio never travels through Bridge's bounded JSON protocol.
+  Microphones, communications, device labels, and external media remain behind
+  a separate default-off capture and storage boundary.
 - Plugins request specific capabilities. There is no `internet_access` or
   `provider_proxy` shortcut.
 - External data is for simulation and planning assistance, not real-world
@@ -107,6 +115,7 @@ require a sanitized captured response or an outside-repository integration test.
 - [WyrmGrid Bridge and simulator providers](wyrmgrid-bridge.md)
 - [Simulator provider authoring and FSUIPC path](simulator-provider-authoring.md)
 - [Simulator connection, recording, in-game control, and graphs](simulator-experience-roadmap.md)
+- [Simulator-synchronised audio recording](simulator-audio-recording.md)
 - [Telemetry lifecycle and SimBrief correlation](telemetry-plan-correlation.md)
 
 ## Local automation and community handoff
