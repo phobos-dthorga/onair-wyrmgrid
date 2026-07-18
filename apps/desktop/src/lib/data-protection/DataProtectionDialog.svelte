@@ -136,9 +136,7 @@
         <section class="data-protection-loading" aria-live="polite">
           <strong
             >{$translation(
-              busy
-                ? "data-protection-loading"
-                : "data-protection-unavailable",
+              busy ? "data-protection-loading" : "data-protection-unavailable",
             )}</strong
           >
           {#if !busy && desktopRuntime}
@@ -152,7 +150,7 @@
           class="protection-summary"
           aria-label={$translation("data-protection-summary")}
         >
-          <article>
+          <article class="responsive-surface">
             <span>{$translation("data-protection-database")}</span>
             <strong
               >{$translation(
@@ -163,7 +161,7 @@
             >
             <small>{$translation("data-protection-database-detail")}</small>
           </article>
-          <article>
+          <article class="responsive-surface">
             <span>{$translation("data-protection-device-key")}</span>
             <strong
               >{$translation(
@@ -174,7 +172,7 @@
             >
             <small>{$translation("data-protection-device-key-detail")}</small>
           </article>
-          <article>
+          <article class="responsive-surface">
             <span>{$translation("data-protection-format")}</span>
             <strong>v{status.portable_backup_format_version}</strong>
             <small>{$translation("data-protection-format-detail")}</small>
@@ -241,11 +239,7 @@
                 backupPassword.length < 12 ||
                 backupConfirmation.length < 12}
               onclick={() =>
-                onbackup(
-                  backupDestination,
-                  backupPassword,
-                  backupConfirmation,
-                )}
+                onbackup(backupDestination, backupPassword, backupConfirmation)}
             >
               {$translation("data-protection-create-backup")}
             </button>
@@ -297,11 +291,7 @@
                 restorePassword.length < 12 ||
                 !replacementConfirmed}
               onclick={() =>
-                onrestore(
-                  restoreSource,
-                  restorePassword,
-                  replacementConfirmed,
-                )}
+                onrestore(restoreSource, restorePassword, replacementConfirmed)}
             >
               {$translation("data-protection-prepare-restore")}
             </button>

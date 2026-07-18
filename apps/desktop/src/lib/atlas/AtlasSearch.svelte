@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { responsiveSurface } from "$lib/accessibility/responsiveSurface";
   import ExplorationSummary from "$lib/exploration/ExplorationSummary.svelte";
   import {
     activeAtlasFilterCount,
@@ -16,7 +15,6 @@
     fbos,
     selectedAircraftId,
     selectedFboId,
-    responsiveSurfaces = true,
     onselectaircraft,
     onselectfbo,
   }: {
@@ -24,7 +22,6 @@
     fbos: FboSummary[];
     selectedAircraftId: string | null;
     selectedFboId: string | null;
-    responsiveSurfaces?: boolean;
     onselectaircraft: (id: string) => void;
     onselectfbo: (id: string) => void;
   } = $props();
@@ -53,7 +50,8 @@
     <details>
       <summary>
         <span>Filter and sort</span>
-        {#if activeFilterCount > 0}<strong>{activeFilterCount} active</strong>{/if}
+        {#if activeFilterCount > 0}<strong>{activeFilterCount} active</strong
+          >{/if}
       </summary>
       <div class="atlas-filter-grid">
         <label>
@@ -97,7 +95,6 @@
             ? item.id === selectedAircraftId
             : item.id === selectedFboId}
           type="button"
-          use:responsiveSurface={{ enabled: responsiveSurfaces }}
           onclick={() => select(item)}
         >
           <span>{item.kind === "aircraft" ? "Aircraft" : "FBO"}</span>

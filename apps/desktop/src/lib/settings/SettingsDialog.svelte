@@ -69,6 +69,7 @@
     draft = {
       ...displayPresets[preset],
       responsive_surfaces: draft.responsive_surfaces,
+      weather_rendering_profile: draft.weather_rendering_profile,
     };
   }
 
@@ -186,7 +187,7 @@
               <option value="litres">{$translation("unit-litres")}</option>
             </select>
           </label>
-          <label class="settings-toggle">
+          <label class="settings-toggle responsive-surface">
             <input
               type="checkbox"
               disabled={busy}
@@ -194,10 +195,12 @@
             />
             <span>
               <strong>{$translation("settings-recording-auto-start")}</strong>
-              <small>{$translation("settings-recording-auto-start-detail")}</small>
+              <small
+                >{$translation("settings-recording-auto-start-detail")}</small
+              >
             </span>
           </label>
-          <label class="settings-toggle">
+          <label class="settings-toggle responsive-surface">
             <input
               type="checkbox"
               disabled={busy || !recordingDraft.automatic_start}
@@ -205,19 +208,31 @@
             />
             <span>
               <strong>{$translation("settings-recording-auto-stop")}</strong>
-              <small>{$translation("settings-recording-auto-stop-detail")}</small>
+              <small
+                >{$translation("settings-recording-auto-stop-detail")}</small
+              >
             </span>
           </label>
           <label>
             <span>{$translation("settings-recording-settle")}</span>
             <select
-              disabled={busy || !recordingDraft.automatic_start || !recordingDraft.automatic_stop}
+              disabled={busy ||
+                !recordingDraft.automatic_start ||
+                !recordingDraft.automatic_stop}
               bind:value={recordingDraft.landing_settle_seconds}
             >
-              <option value={15}>{$translation("settings-recording-settle-15")}</option>
-              <option value={30}>{$translation("settings-recording-settle-30")}</option>
-              <option value={60}>{$translation("settings-recording-settle-60")}</option>
-              <option value={120}>{$translation("settings-recording-settle-120")}</option>
+              <option value={15}
+                >{$translation("settings-recording-settle-15")}</option
+              >
+              <option value={30}
+                >{$translation("settings-recording-settle-30")}</option
+              >
+              <option value={60}
+                >{$translation("settings-recording-settle-60")}</option
+              >
+              <option value={120}
+                >{$translation("settings-recording-settle-120")}</option
+              >
             </select>
           </label>
         </div>
@@ -236,7 +251,9 @@
           <p>{$translation("settings-accessibility-detail")}</p>
         </div>
 
-        <label class="settings-toggle settings-motion-toggle">
+        <label
+          class="settings-toggle settings-motion-toggle responsive-surface"
+        >
           <input
             type="checkbox"
             disabled={busy}
@@ -244,9 +261,25 @@
           />
           <span>
             <strong>{$translation("settings-responsive-surfaces")}</strong>
-            <small
-              >{$translation("settings-responsive-surfaces-detail")}</small
-            >
+            <small>{$translation("settings-responsive-surfaces-detail")}</small>
+          </span>
+        </label>
+
+        <label
+          class="settings-toggle settings-motion-toggle responsive-surface"
+        >
+          <input
+            type="checkbox"
+            disabled={busy}
+            checked={draft.weather_rendering_profile === "enhanced"}
+            onchange={(event) =>
+              (draft.weather_rendering_profile = event.currentTarget.checked
+                ? "enhanced"
+                : "compatibility")}
+          />
+          <span>
+            <strong>{$translation("settings-enhanced-weather")}</strong>
+            <small>{$translation("settings-enhanced-weather-detail")}</small>
           </span>
         </label>
 
@@ -257,7 +290,9 @@
 
       <section class="settings-section">
         <div class="section-copy">
-          <span class="eyebrow">{$translation("settings-simulator-eyebrow")}</span>
+          <span class="eyebrow"
+            >{$translation("settings-simulator-eyebrow")}</span
+          >
           <h3>{$translation("settings-simulator-title")}</h3>
           <p>{$translation("settings-simulator-detail")}</p>
         </div>
@@ -275,7 +310,9 @@
                 })}
             >
               {#if simulatorProviders.length === 0}
-                <option value="">{$translation("simulator-no-providers")}</option>
+                <option value=""
+                  >{$translation("simulator-no-providers")}</option
+                >
               {/if}
               {#each simulatorProviders as provider}
                 <option value={provider.id}>{provider.name}</option>
@@ -283,7 +320,7 @@
             </select>
           </label>
 
-          <label class="settings-toggle">
+          <label class="settings-toggle responsive-surface">
             <input
               type="checkbox"
               disabled={busy || !simulatorDraft.selected_provider_id}
@@ -291,16 +328,28 @@
             />
             <span>
               <strong>{$translation("settings-simulator-auto-start")}</strong>
-              <small>{$translation("settings-simulator-auto-start-detail")}</small>
+              <small
+                >{$translation("settings-simulator-auto-start-detail")}</small
+              >
             </span>
           </label>
           <label>
             <span>{$translation("settings-simulator-retention")}</span>
             <select disabled={busy} bind:value={recordingDraft.retention_days}>
-              <option value={7}>{$translation("settings-retention-days", { days: 7 })}</option>
-              <option value={30}>{$translation("settings-retention-days", { days: 30 })}</option>
-              <option value={90}>{$translation("settings-retention-days", { days: 90 })}</option>
-              <option value={365}>{$translation("settings-retention-days", { days: 365 })}</option>
+              <option value={7}
+                >{$translation("settings-retention-days", { days: 7 })}</option
+              >
+              <option value={30}
+                >{$translation("settings-retention-days", { days: 30 })}</option
+              >
+              <option value={90}
+                >{$translation("settings-retention-days", { days: 90 })}</option
+              >
+              <option value={365}
+                >{$translation("settings-retention-days", {
+                  days: 365,
+                })}</option
+              >
             </select>
           </label>
         </div>
@@ -316,29 +365,65 @@
           <h3>{$translation("settings-more-title")}</h3>
         </div>
         <div class="settings-links">
-          <button type="button" disabled={busy} onclick={onappearance}>
+          <button
+            class="responsive-surface"
+            type="button"
+            disabled={busy}
+            onclick={onappearance}
+          >
             <strong>{$translation("settings-theme")}</strong>
             <span>{$translation("settings-theme-detail")}</span>
           </button>
-          <button type="button" disabled={busy} onclick={onlanguage}>
+          <button
+            class="responsive-surface"
+            type="button"
+            disabled={busy}
+            onclick={onlanguage}
+          >
             <strong>{$translation("settings-language")}</strong>
             <span>{$translation("settings-language-detail")}</span>
           </button>
-          <button type="button" disabled={busy} onclick={onprivacy}>
+          <button
+            class="responsive-surface"
+            type="button"
+            disabled={busy}
+            onclick={onprivacy}
+          >
             <strong>{$translation("settings-privacy-terms")}</strong>
             <span>{$translation("settings-privacy-detail")}</span>
           </button>
-          <button type="button" disabled={busy} onclick={onsecurity}>
+          <button
+            class="responsive-surface"
+            type="button"
+            disabled={busy}
+            onclick={onsecurity}
+          >
             <strong>{$translation("security-settings-link-title")}</strong>
             <span>{$translation("security-settings-link-detail")}</span>
           </button>
-          <button type="button" disabled={busy} onclick={ondataprotection}>
-            <strong>{$translation("data-protection-settings-link-title")}</strong>
+          <button
+            class="responsive-surface"
+            type="button"
+            disabled={busy}
+            onclick={ondataprotection}
+          >
+            <strong
+              >{$translation("data-protection-settings-link-title")}</strong
+            >
             <span>{$translation("data-protection-settings-link-detail")}</span>
           </button>
-          <button type="button" disabled={busy} onclick={onlicenses}>
-            <strong>{$translation("data-protection-licences-settings-title")}</strong>
-            <span>{$translation("data-protection-licences-settings-detail")}</span>
+          <button
+            class="responsive-surface"
+            type="button"
+            disabled={busy}
+            onclick={onlicenses}
+          >
+            <strong
+              >{$translation("data-protection-licences-settings-title")}</strong
+            >
+            <span
+              >{$translation("data-protection-licences-settings-detail")}</span
+            >
           </button>
         </div>
       </section>
@@ -356,11 +441,7 @@
           type="button"
           disabled={busy}
           onclick={() =>
-            onsave(
-              { ...draft },
-              { ...simulatorDraft },
-              { ...recordingDraft },
-            )}
+            onsave({ ...draft }, { ...simulatorDraft }, { ...recordingDraft })}
         >
           {busy
             ? $translation("settings-saving")

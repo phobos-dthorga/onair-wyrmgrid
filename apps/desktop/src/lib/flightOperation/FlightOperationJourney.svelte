@@ -54,6 +54,7 @@
     {#each journey.stages as item, index}
       <li class={`flight-journey-${item.state}`}>
         <button
+          class="responsive-surface"
           type="button"
           disabled={!isActionable(item.state)}
           onclick={() => openStage(item.stage)}

@@ -85,7 +85,10 @@
         </p>{/if}
 
       {#if log.entries.length > 0}
-        <section class="diagnostics-explorer" aria-label="Diagnostic log exploration">
+        <section
+          class="diagnostics-explorer"
+          aria-label="Diagnostic log exploration"
+        >
           <label class="diagnostics-search">
             <span>Find a code, operation, level, or message</span>
             <input type="search" bind:value={filters.query} />
@@ -93,7 +96,9 @@
           <details class="diagnostics-filter-panel">
             <summary>
               <span>Filter and sort</span>
-              {#if activeFilterCount > 0}<strong>{activeFilterCount} active</strong>{/if}
+              {#if activeFilterCount > 0}<strong
+                  >{activeFilterCount} active</strong
+                >{/if}
             </summary>
             <div class="diagnostics-filter-grid">
               <label>
@@ -145,7 +150,10 @@
 
       <div class="diagnostics-list" aria-label="Diagnostic entries">
         {#each entries as entry, index (`${entry.occurred_at}-${entry.code}-${entry.operation}-${index}`)}
-          <article class:error={entry.level === "error"}>
+          <article
+            class="responsive-surface"
+            class:error={entry.level === "error"}
+          >
             <div class="diagnostics-entry-heading">
               <code>{entry.code}</code>
               <time datetime={entry.occurred_at}
@@ -159,10 +167,13 @@
           <div class="diagnostics-empty">
             {#if log.entries.length === 0}
               <strong>No diagnostic entries</strong>
-              <span>WyrmGrid has not recorded a failure in this local log.</span>
+              <span>WyrmGrid has not recorded a failure in this local log.</span
+              >
             {:else}
               <strong>No entries match these controls</strong>
-              <span>Clear the presentation filters to review the retained log.</span>
+              <span
+                >Clear the presentation filters to review the retained log.</span
+              >
             {/if}
           </div>
         {/each}

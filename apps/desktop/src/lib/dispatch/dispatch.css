@@ -35,6 +35,18 @@
   color: var(--color-text-muted);
 }
 
+.dispatch-selected-job button {
+  justify-self: start;
+  border: 1px solid var(--color-accent-border);
+  margin-top: 0.35rem;
+  padding: 0.4rem 0.55rem;
+  color: var(--color-accent);
+  background: transparent;
+  font: inherit;
+  font-size: 0.65rem;
+  cursor: pointer;
+}
+
 .dispatch-import-panel {
   border-right: 1px solid var(--color-line-faint);
 }
@@ -414,6 +426,10 @@
   margin-top: 16px;
   scroll-margin-top: 96px;
 }
+.dispatch-operation-card:focus {
+  outline: 1px solid var(--color-accent);
+  outline-offset: 3px;
+}
 .dispatch-operation-card > .dispatch-card-heading > strong {
   color: var(--color-highlight);
   font-size: 9px;
@@ -441,6 +457,56 @@
   text-overflow: ellipsis;
   text-transform: none;
   white-space: nowrap;
+}
+.dispatch-manifest-handoff {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  border: 1px solid var(--color-highlight-border);
+  border-left: 3px solid var(--color-highlight);
+  padding: 12px;
+  background: var(--color-highlight-soft);
+}
+.dispatch-manifest-handoff-staged_revision {
+  border-color: var(--color-accent-border);
+  border-left-color: var(--color-accent);
+  background: var(--color-accent-soft);
+}
+.dispatch-manifest-handoff > div:first-child {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.dispatch-manifest-handoff > div:first-child > strong {
+  font-size: 10px;
+}
+.dispatch-manifest-handoff p {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 9px;
+  line-height: 1.5;
+}
+.dispatch-manifest-handoff dl {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+.dispatch-manifest-handoff dl div {
+  min-width: 0;
+  border-top: 1px solid var(--color-line-faint);
+  padding-top: 7px;
+}
+.dispatch-manifest-handoff dt {
+  color: var(--color-text-muted);
+  font-size: 7px;
+  text-transform: uppercase;
+}
+.dispatch-manifest-handoff dd {
+  margin: 3px 0 0;
+  font-size: 9px;
+  overflow-wrap: anywhere;
 }
 .dispatch-operation-revision {
   display: flex;
@@ -1128,6 +1194,7 @@
     grid-template-columns: repeat(2, minmax(110px, 1fr));
   }
   .dispatch-operation-summary,
+  .dispatch-manifest-handoff dl,
   .dispatch-manifest-list > li {
     grid-template-columns: 1fr;
   }

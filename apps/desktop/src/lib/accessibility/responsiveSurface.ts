@@ -53,49 +53,60 @@ function clearReaction(node: HTMLElement): void {
   node.style.removeProperty("--surface-glow-y");
 }
 
-export function responsiveSurface(
+/**
+ * Delegates pointer tracking for every responsive surface in a UI subtree.
+ * New cards only need the shared class; they do not each need their own action.
+ */
+export function responsiveSurfaceGroup(
   node: HTMLElement,
   options: { enabled: boolean },
 ): { update: (next: { enabled: boolean }) => void; destroy: () => void } {
   let enabled = options.enabled;
+  let activeSurface: HTMLElement | null = null;
   let animationFrame: number | undefined;
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-
-  function canReact(event?: PointerEvent): boolean {
-    return (
-      enabled &&
-      !reducedMotion.matches &&
-      event?.pointerType !== "touch" &&
-      event?.pointerType !== "pen"
-    );
-  }
 
   function reset(): void {
     if (animationFrame !== undefined) {
       window.cancelAnimationFrame(animationFrame);
       animationFrame = undefined;
     }
-    clearReaction(node);
+    if (activeSurface) clearReaction(activeSurface);
+    activeSurface = null;
   }
 
   function handlePointerMove(event: PointerEvent): void {
-    if (!canReact(event)) {
+    const target = event.target;
+    const surface =
+      target instanceof Element
+        ? target.closest<HTMLElement>(".responsive-surface")
+        : null;
+    if (
+      !enabled ||
+      reducedMotion.matches ||
+      event.pointerType === "touch" ||
+      event.pointerType === "pen" ||
+      !surface ||
+      !node.contains(surface)
+    ) {
       reset();
       return;
+    }
+    if (activeSurface && activeSurface !== surface) reset();
+    activeSurface = surface;
+    if (animationFrame !== undefined) {
+      window.cancelAnimationFrame(animationFrame);
     }
     const reaction = surfaceReaction(
       event.clientX,
       event.clientY,
-      node.getBoundingClientRect(),
+      surface.getBoundingClientRect(),
     );
-    if (animationFrame !== undefined) {
-      window.cancelAnimationFrame(animationFrame);
-    }
     animationFrame = window.requestAnimationFrame(() => {
-      node.style.setProperty("--surface-shift-x", `${reaction.shiftX}px`);
-      node.style.setProperty("--surface-shift-y", `${reaction.shiftY}px`);
-      node.style.setProperty("--surface-glow-x", `${reaction.glowX}%`);
-      node.style.setProperty("--surface-glow-y", `${reaction.glowY}%`);
+      surface.style.setProperty("--surface-shift-x", `${reaction.shiftX}px`);
+      surface.style.setProperty("--surface-shift-y", `${reaction.shiftY}px`);
+      surface.style.setProperty("--surface-glow-x", `${reaction.glowX}%`);
+      surface.style.setProperty("--surface-glow-y", `${reaction.glowY}%`);
       animationFrame = undefined;
     });
   }

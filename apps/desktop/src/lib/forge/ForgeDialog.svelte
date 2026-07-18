@@ -126,7 +126,10 @@
           <span>Installed plugin folders will appear here for review.</span>
         </div>
       {:else}
-        <section class="forge-explorer" aria-label="Installed plugin exploration">
+        <section
+          class="forge-explorer"
+          aria-label="Installed plugin exploration"
+        >
           <label class="forge-search">
             <span>Find a plugin, author, capability, state, or error</span>
             <input type="search" bind:value={filters.query} />
@@ -134,7 +137,9 @@
           <details class="forge-filter-panel">
             <summary>
               <span>Filter and sort</span>
-              {#if activeFilterCount > 0}<strong>{activeFilterCount} active</strong>{/if}
+              {#if activeFilterCount > 0}<strong
+                  >{activeFilterCount} active</strong
+                >{/if}
             </summary>
             <div class="forge-filter-grid">
               <label>
@@ -150,7 +155,8 @@
                 <span>Access review</span>
                 <select bind:value={filters.access}>
                   <option value="all">Approved and awaiting review</option>
-                  <option value="approved">All requested access approved</option>
+                  <option value="approved">All requested access approved</option
+                  >
                   <option value="review">Permission review required</option>
                 </select>
               </label>
@@ -164,7 +170,9 @@
                 >
                   <option value="">Any requested capability</option>
                   {#each filterOptions.capabilities as capability}
-                    <option value={capability}>{permissionLabel(capability)}</option>
+                    <option value={capability}
+                      >{permissionLabel(capability)}</option
+                    >
                   {/each}
                 </select>
               </label>
@@ -229,6 +237,20 @@
                 </ul>
               </div>
 
+              {#if plugin.weather_capabilities.length > 0}
+                <div class="provider-scope">
+                  <span class="panel-label">Weather provider scope</span>
+                  <p>
+                    {plugin.weather_capabilities
+                      .map((capability) => capability.replaceAll("_", " "))
+                      .join(" · ")}
+                  </p>
+                  {#each plugin.network_origins as origin}
+                    <code>{origin}</code>
+                  {/each}
+                </div>
+              {/if}
+
               {#if plugin.last_error}<p class="plugin-error" role="alert">
                   {plugin.last_error}
                 </p>{/if}
@@ -236,7 +258,7 @@
               <footer>
                 <span>
                   {plugin.state === "running"
-                    ? `${plugin.published_layer_count} Atlas ${plugin.published_layer_count === 1 ? "layer" : "layers"} published`
+                    ? `${plugin.published_layer_count} Atlas · ${plugin.published_weather_layer_count} weather published`
                     : "Python 3 runtime · framed protocol v1"}
                 </span>
                 <div>
@@ -253,9 +275,15 @@
                     <label class="lifetime-choice">
                       <span>{$translation("security-approval-duration")}</span>
                       <select bind:value={approvalLifetime} disabled={busy}>
-                        <option value="once">{$translation("security-lifetime-once")}</option>
-                        <option value="session">{$translation("security-lifetime-session")}</option>
-                        <option value="standing">{$translation("security-lifetime-standing")}</option>
+                        <option value="once"
+                          >{$translation("security-lifetime-once")}</option
+                        >
+                        <option value="session"
+                          >{$translation("security-lifetime-session")}</option
+                        >
+                        <option value="standing"
+                          >{$translation("security-lifetime-standing")}</option
+                        >
                       </select>
                     </label>
                     <button
@@ -293,7 +321,10 @@
           {:else}
             <div class="empty-state filtered">
               <strong>No plugins match these controls</strong>
-              <span>Clear the presentation filters to review every installed plugin.</span>
+              <span
+                >Clear the presentation filters to review every installed
+                plugin.</span
+              >
             </div>
           {/each}
         </div>
@@ -498,6 +529,26 @@
     padding: 13px;
     border: 1px solid var(--color-line-faint);
     background: var(--color-surface-soft);
+  }
+  .provider-scope {
+    display: grid;
+    gap: 6px;
+    margin: 10px 18px 0;
+    padding: 11px 13px;
+    border-left: 2px solid var(--color-highlight);
+    background: var(--color-surface-soft-translucent);
+  }
+  .provider-scope p {
+    margin: 0;
+    color: var(--color-text);
+    font-size: 10px;
+    text-transform: capitalize;
+  }
+  .provider-scope code {
+    color: var(--color-text-muted);
+    font-family: inherit;
+    font-size: 9px;
+    overflow-wrap: anywhere;
   }
   ul {
     display: grid;
