@@ -8,7 +8,7 @@ grammar, plurals, number and date formatting, and bidirectional text.
 
 ## Implemented foundation
 
-- `locales/en-AU.json` is source catalogue version 6.
+- `locales/en-AU.json` is source catalogue version 11.
 - Language-pack manifest schema version 1 is defined in
   `schemas/language-pack-v1.schema.json`.
 - Rust validates and canonicalizes imported packs before SQLite persistence.
@@ -59,14 +59,15 @@ bundled through a future trusted release path.
 Source catalogue version 6 adds the protected `data-protection-` namespace for
 encryption, backup-password, destructive restore, and licence wording. Version
 5 community packs are rejected rather than being silently reinterpreted;
-authors must review the version 10 catalogue, update `source_catalog_version`,
+authors must review the version 11 catalogue, update `source_catalog_version`,
 and import the pack again. Existing ordinary translated message keys keep their
 meaning. Version 5 previously introduced the protected `security-` namespace.
 
-Source catalogue version 10 adds the protected weather-provider permission
-label. Version 9 added the enhanced-weather display preference. Community packs
-must review the new catalogue even though neither protected message can be
-overridden.
+Source catalogue version 11 adds the weather-graphics quality, phenomenon, and
+flash-safety preferences. Version 10 added the protected weather-provider
+permission label, while version 9 added the original enhanced-weather display
+preference. Community packs must review the new catalogue; protected messages
+remain unavailable to community overrides.
 
 The desktop **Diagnostics** surface and its local structured log are also
 English-only and do not resolve message keys through language packs. This is an

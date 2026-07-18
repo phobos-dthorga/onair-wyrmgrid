@@ -2374,8 +2374,7 @@
             flightRoute={atlasFlightRoute}
             weather={atlasWeather}
             {weatherVisible}
-            enhancedWeather={displayPreferences.weather_rendering_profile ===
-              "enhanced"}
+            weatherGraphics={displayPreferences}
             {regionsVisible}
             lowResource={startupOptions.low_resource}
             selectedRegionId={selectedAdministrativeRegion?.id}

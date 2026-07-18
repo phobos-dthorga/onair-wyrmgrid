@@ -5,8 +5,8 @@ join without creating a second interpretation of the same operational facts.
 It is the design contract for staged increments. Atlas now draws the current
 coordinate-only Dispatch plan, its current airport-weather observations, and a
 bounded planned-versus-recorded route for a selected historical simulator
-recording. It does not yet resolve navigation geometry or draw animated
-weather.
+recording. It does not yet resolve navigation geometry. Atlas now animates
+bounded source-shaped weather graphics without interpolating sparse reports.
 
 ## One plan, two projections
 
@@ -218,23 +218,41 @@ Display size is not a performance proxy. A handheld or low-resolution laptop
 may have a capable GPU, while a large remote-desktop window may not. Atlas uses
 an explicit rendering preference plus capability probing.
 
-| Profile                | Default | Intended presentation                                                                                     |
-| ---------------------- | ------- | --------------------------------------------------------------------------------------------------------- |
-| Compatibility          | No      | Airport symbols and labels with conservative texture, animation, and memory budgets                       |
-| Enhanced               | Yes     | GPU heatmap atmosphere, sourced wind vectors, and gentle condition motion around reporting airports       |
-| Experimental cinematic | No      | Future sourced volumetric or three-dimensional effects behind explicit feature flags and measured budgets |
+| Profile       | Default | Intended presentation                                                                                      |
+| ------------- | ------- | ---------------------------------------------------------------------------------------------------------- |
+| Compatibility | No      | Airport symbols and labels with conservative texture, animation, and memory budgets                        |
+| Enhanced      | Yes     | GPU heatmap atmosphere, sourced wind vectors, and gentle condition motion around reporting airports        |
+| Cinematic     | No      | Layered cloud depth, dense precipitation marks, convective illumination, and dust volumes for capable GPUs |
 
-The user-facing **Enhanced GPU weather** preference is enabled by default and
-can be disabled for conservative static markers. The `--low-resource` launch
-switch always forces Compatibility for that run; it does not rewrite the
-persisted preference. Reduced Motion keeps the Enhanced atmosphere static.
+The user-facing **Enhanced** preference is enabled by default. Users may choose
+Compatibility or Cinematic and may independently disable cloud,
+precipitation, lightning, and dust graphics. The `--low-resource` launch switch
+always forces Compatibility for that run; it does not rewrite the persisted
+preference. Reduced Motion keeps every detailed profile static.
 
-The implemented Enhanced profile remains deliberately station-shaped. It uses
-only structured wind and explicit METAR present-weather/category fields,
-labels the display **METAR-local only**, and does not interpolate between
-airports. Radar, satellite imagery, forecast animation, lightning, cloud
-volumes, GPU capability reporting, measured frame budgets, and device-loss
-telemetry remain future source and renderer work.
+The station treatment remains deliberately station-shaped. Enhanced and
+Cinematic lazily initialize a separately composited Three.js
+`WebGPURenderer`, preferring WebGPU and accepting its WebGL2 fallback. MapLibre
+retains markers, labels, wind vectors, radar, and a complete decorative fallback
+if Three.js cannot initialize or loses its device. WebGPU ray-marches a bounded
+shared procedural density texture for local cloud, obscuration, and dust
+volumes; WebGL2 uses layered mesh and point substitutes. It uses only
+structured wind and explicit METAR present-weather/category fields, labels the
+display source-shaped, and does not interpolate between airports. Rain and snow
+marks, dust layers, cloud shading, and the convective lightning symbol remain
+anchored to their station report. Grid effects use only validated provider
+points, while radar uses bounded provider tiles. The current lightning graphic
+is a storm-cell symbol and local illumination, not a strike. Satellite imagery,
+forecast animation, exact lightning events, measured GPU-time/VRAM budgets, and
+persisted device-loss telemetry remain future source and renderer work. A local
+submission-pressure controller can temporarily reduce visual ceilings without
+changing the selected profile or factual layers. The active Three.js backend
+and device-loss fallback are reported in the Atlas presentation.
+Atlas also compares the source coordinate with MapLibre's projection round trip
+and fades decorative cells whose anchor falls behind the globe or pitched-map
+horizon. Ray-marched volumes use a deterministic screen-stable sample offset
+to reduce slicing at bounded step counts. Neither mechanism supplies terrain
+depth, a shared GPU render graph, or new meteorological evidence.
 
 Every profile must preserve facts, timestamps, selected time, hazards, and
 accessibility. Lower profiles reduce rendering cost, never data correctness.
@@ -255,8 +273,9 @@ warning effects may flash, while the runtime control prevents or reduces them.
 
 - Pilot IDs, OFP content, routes, coordinates, registrations, and historical
   movement are private operational data.
-- Atlas receives only stable application views; MapLibre, community plugins,
-  diagnostics, and Sentry do not receive raw plans or weather payloads.
+- Atlas receives only stable application views; MapLibre, Three.js, community
+  plugins, diagnostics, and Sentry do not receive raw plans or weather
+  payloads.
 - Community layers cannot access the map object, replace WyrmGrid route/weather
   layers, or counterfeit provenance and freshness labels.
 - A future plugin capability for plan or historical-weather access requires a
@@ -278,8 +297,24 @@ warning effects may flash, while the runtime control prevents or reduces them.
    remain later work.
 5. Add append-only bounded weather persistence and Hoard historical playback.
 6. Add Compatibility/Enhanced settings and a truthful first GPU airport-weather
-   treatment. **Implemented.** Capability reporting, measured budgets, and
-   device-loss telemetry remain future work.
+   treatment. **Implemented.**
+7. Add Cinematic and phenomenon-specific controls with visible precipitation,
+   source-shaped clouds, convective illumination, dust graphics, flash safety,
+   and low-resource/Reduced Motion overrides. **Implemented.** Measured
+   frame-time/VRAM budgets and persisted device-loss telemetry remain future
+   work.
+8. Add a lazy Three.js `WebGPURenderer`, automatic WebGL2 and MapLibre
+   fallbacks, bounded render-scene projection, initial hard resource ceilings,
+   and device-loss reporting. **Implemented.** See the
+   [renderer contract](weather-renderer.md).
+9. Add bounded TSL ray-marched WebGPU cloud/obscuration/dust volumes, a shared
+   deterministic 3D density field, WebGL2 visual substitutes, and conservative
+   adaptive pressure levels. **Implemented.** Measured GPU timing, VRAM
+   accounting, and cross-WebView visual baselines remain future work.
+10. Add projection-round-trip horizon fading and deterministic screen-stable
+    ray-sample stratification without private MapLibre renderer access or
+    frame-varying noise. **Implemented.** Terrain/building depth and volume-wide
+    globe intersection still require a supported shared rendering contract.
 
 Tests must cover route order, unresolved legs, duplicate identifiers, procedure
 classification, AIRAC mismatch, full-route bounds, antimeridian crossing,
@@ -287,10 +322,10 @@ weather validity and gaps, historical as-of resolution, profile persistence,
 low-resource override, device loss, hostile geometry, and identical factual
 content across rendering profiles.
 
-Open decisions include the approved navigation geometry source, MapLibre custom
-layer versus a separately composited renderer, WebGL2/WebGPU support policy,
-weather imagery licensing, historical retention limits, and the measurable
-frame-time/VRAM thresholds for each profile.
+Open decisions include the approved navigation geometry source, whether a
+future MapLibre WebGPU backend exposes a supported shared-device/depth custom
+layer contract, weather imagery licensing, historical retention limits, and
+the measurable frame-time/VRAM thresholds for each profile.
 
 Radar source evaluation, immutable frame requirements, rendering profiles, and
 historical gates are defined in the

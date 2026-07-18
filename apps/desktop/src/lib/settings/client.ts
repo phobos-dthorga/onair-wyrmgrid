@@ -39,6 +39,12 @@ export function validatePreferences(value: unknown): DisplayPreferences {
   const responsiveSurfaces = candidate.responsive_surfaces ?? true;
   const weatherRenderingProfile =
     candidate.weather_rendering_profile ?? "enhanced";
+  const weatherCloudEffects = candidate.weather_cloud_effects ?? true;
+  const weatherPrecipitationEffects =
+    candidate.weather_precipitation_effects ?? true;
+  const weatherLightningEffects = candidate.weather_lightning_effects ?? true;
+  const weatherDustEffects = candidate.weather_dust_effects ?? true;
+  const reduceWeatherFlashes = candidate.reduce_weather_flashes ?? true;
   if (
     !altitudeUnit ||
     !["feet", "metres"].includes(altitudeUnit) ||
@@ -60,7 +66,14 @@ export function validatePreferences(value: unknown): DisplayPreferences {
       "litres",
     ].includes(fuelUnit) ||
     typeof responsiveSurfaces !== "boolean" ||
-    !["compatibility", "enhanced"].includes(weatherRenderingProfile)
+    !["compatibility", "enhanced", "cinematic"].includes(
+      weatherRenderingProfile,
+    ) ||
+    typeof weatherCloudEffects !== "boolean" ||
+    typeof weatherPrecipitationEffects !== "boolean" ||
+    typeof weatherLightningEffects !== "boolean" ||
+    typeof weatherDustEffects !== "boolean" ||
+    typeof reduceWeatherFlashes !== "boolean"
   ) {
     return aviationDisplayPreferences;
   }
@@ -71,5 +84,10 @@ export function validatePreferences(value: unknown): DisplayPreferences {
     fuel_unit: fuelUnit,
     responsive_surfaces: responsiveSurfaces,
     weather_rendering_profile: weatherRenderingProfile,
+    weather_cloud_effects: weatherCloudEffects,
+    weather_precipitation_effects: weatherPrecipitationEffects,
+    weather_lightning_effects: weatherLightningEffects,
+    weather_dust_effects: weatherDustEffects,
+    reduce_weather_flashes: reduceWeatherFlashes,
   };
 }

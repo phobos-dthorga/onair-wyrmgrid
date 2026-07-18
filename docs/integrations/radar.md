@@ -55,7 +55,8 @@ The Compatibility profile uses static or deliberately low-rate imagery with a
 small texture/memory budget. Enhanced rendering may use GPU colour mapping,
 temporal interpolation between actual adjacent frames, reprojection, terrain
 masking, particles driven by supported fields, and higher-resolution textures.
-Experimental cinematic effects remain feature-gated.
+Cinematic rendering is an explicit local preference. It increases the detail
+of the same validated products and never expands radar coverage or precision.
 
 All profiles show the same factual frames. Interpolation is presentation
 between two observations, not a new observation, and stops across missing

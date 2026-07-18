@@ -56,18 +56,52 @@ OnAir, simulator providers, plugins, or diagnostic telemetry.
 ## Atlas weather profiles
 
 Atlas weather has a separate rendering preference because window size and
-graphics capability are independent. **Enhanced GPU weather** is enabled by
-default and presents sourced airport METAR conditions plus approved global
-model samples as GPU-rendered atmosphere, with wind vectors and gentle
-condition motion. Approved current-radar tiles remain host-rendered in either
-profile. Turn Enhanced weather off in **Settings > Motion & response** to keep
-the same facts with conservative static markers.
+graphics capability are independent. **Enhanced** is the default and presents
+sourced airport METAR conditions plus approved global-model samples as a
+GPU-rendered atmosphere, with wind vectors and restrained condition motion.
+**Cinematic** raises the limits for ray-marched 3D cloud and dust density,
+denser rain or snow particles, and convective illumination on capable GPUs.
+Enhanced and Cinematic use a lazily loaded Three.js renderer that prefers
+WebGPU. Its WebGL2 fallback substitutes layered cloud meshes and dust points for
+ray-marched volumes. **Compatibility** keeps the same facts with conservative
+static markers and does not load Three.js. Approved current-radar tiles remain
+host-rendered in every profile.
+
+Choose the profile in **Settings > Weather graphics**. Cloud depth, visible
+precipitation, lightning, and dust can each be disabled independently. These
+controls affect presentation only: disabling visible rain does not remove the
+sourced rain condition or radar product.
+
+Atlas reports the renderer that actually started: Three.js WebGPU, Three.js
+WebGL2 fallback, or MapLibre fallback. A renderer initialization or graphics-
+device failure restores the MapLibre effect automatically; weather markers,
+labels, radar, wind, timestamps, and provenance do not depend on the Three.js
+canvas. The current separate canvases do not share terrain depth, so detailed
+weather may cover map labels and is not yet occluded by terrain or buildings.
+WyrmGrid does compare each weather anchor with MapLibre's projection round trip,
+so effects fade behind the globe or a pitched-map horizon instead of remaining
+painted over empty space. This anchor check is not terrain depth. See the
+[weather renderer design](../atlas/weather-renderer.md) for this limit and the
+future shared-WebGPU path.
+
+Detailed profiles also adapt within their selected ceiling. If renderer
+submission remains expensive, WyrmGrid gradually reduces volume count, ray
+steps, particles, and resolution; it restores them only after a long healthy
+period. This temporary level is not saved as a judgement about the device and
+never changes the weather facts or the user's selected profile.
 
 The airport atmosphere remains local to its report. The global model layer
 renders only the coarse points WyrmGrid requested, while radar uses the
 provider's bounded source tiles. WyrmGrid does not turn sparse METARs or model
-samples into invented observations between stations. Reduced Motion keeps
-Enhanced weather static; no weather effect flashes.
+samples into invented observations between stations. A METAR thunderstorm
+supports a station-local storm symbol and illumination, not an invented strike
+coordinate. Exact strike visualisation remains unavailable until a provider
+supplies a bounded lightning product.
+
+**Reduce weather flashes** is enabled by default. Turning it off requires an
+explicit photosensitivity confirmation. The operating system's Reduce Motion
+preference always keeps detailed weather static and flash-free, regardless of
+the saved profile or flash choice.
 
 `--low-resource` will force the Compatibility profile for that run. It will not
 silently change the saved preference, and a low display resolution alone will

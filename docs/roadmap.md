@@ -3,7 +3,7 @@
 ## Foundation
 
 - Repository, governance, security, CI, and release automation
-- Tauri/Svelte/MapLibre application shell
+- Tauri/Svelte/MapLibre application shell with lazy Three.js weather rendering
 - Stable domain provenance and plugin manifest v1 groundwork
 - Read-only credential-safe OnAir adapter and SQLite migration ownership
 - Versioned first-run Terms, Privacy Notice, persistent user control, and
@@ -111,8 +111,10 @@ not replace completion of the current vertical slice.
   full-route framing, stable linked airport/fix selections, and explicit
   unresolved-location results (implemented); clickable SID/STAR geometry still
   waits for navigation and AIRAC resolution
-- Live and Hoard-historical Atlas weather with a default Compatibility renderer,
-  opt-in GPU-enhanced effects, and identical facts across rendering profiles
+- Live and Hoard-historical Atlas weather with selectable Compatibility,
+  Enhanced, and Cinematic rendering, bounded WebGPU ray-marched volumes,
+  WebGL2/MapLibre fallbacks, adaptive visual ceilings, and identical facts
+  across rendering profiles (implemented)
 - Independently approved Open-Meteo global model and RainViewer current-radar
   plugins with host-owned GPU rendering (coarse static layers implemented;
   visible no-data masks and bounded animation remain)

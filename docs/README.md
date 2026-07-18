@@ -15,6 +15,7 @@
 - [Roadmap](roadmap.md)
 - [WyrmGrid Atlas](atlas/README.md)
   - [Flight plans, linked procedures, and live/historical weather](atlas/flight-plan-and-weather.md)
+  - [Three.js weather rendering and WebGPU migration](atlas/weather-renderer.md)
 - [WyrmGrid Hoard](hoard/README.md)
 - [WyrmGrid Staff](staff/README.md)
 - [Core authorization model](security/authorization-model.md)

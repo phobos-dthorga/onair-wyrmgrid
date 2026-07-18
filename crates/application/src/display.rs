@@ -42,6 +42,7 @@ pub enum FuelUnit {
 pub enum WeatherRenderingProfile {
     Compatibility,
     Enhanced,
+    Cinematic,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -52,6 +53,11 @@ pub struct DisplayPreferences {
     pub fuel_unit: FuelUnit,
     pub responsive_surfaces: bool,
     pub weather_rendering_profile: WeatherRenderingProfile,
+    pub weather_cloud_effects: bool,
+    pub weather_precipitation_effects: bool,
+    pub weather_lightning_effects: bool,
+    pub weather_dust_effects: bool,
+    pub reduce_weather_flashes: bool,
 }
 
 impl Default for DisplayPreferences {
@@ -63,6 +69,11 @@ impl Default for DisplayPreferences {
             fuel_unit: FuelUnit::Pounds,
             responsive_surfaces: true,
             weather_rendering_profile: WeatherRenderingProfile::Enhanced,
+            weather_cloud_effects: true,
+            weather_precipitation_effects: true,
+            weather_lightning_effects: true,
+            weather_dust_effects: true,
+            reduce_weather_flashes: true,
         }
     }
 }
@@ -156,8 +167,14 @@ fn preferences_to_record(preferences: DisplayPreferences) -> DisplayPreferencesR
         weather_rendering_profile: match preferences.weather_rendering_profile {
             WeatherRenderingProfile::Compatibility => "compatibility",
             WeatherRenderingProfile::Enhanced => "enhanced",
+            WeatherRenderingProfile::Cinematic => "cinematic",
         }
         .to_owned(),
+        weather_cloud_effects: preferences.weather_cloud_effects,
+        weather_precipitation_effects: preferences.weather_precipitation_effects,
+        weather_lightning_effects: preferences.weather_lightning_effects,
+        weather_dust_effects: preferences.weather_dust_effects,
+        reduce_weather_flashes: preferences.reduce_weather_flashes,
     }
 }
 
@@ -171,6 +188,11 @@ fn record_to_preferences(
         fuel_unit: parse_unit(&record.fuel_unit)?,
         responsive_surfaces: record.responsive_surfaces,
         weather_rendering_profile: parse_unit(&record.weather_rendering_profile)?,
+        weather_cloud_effects: record.weather_cloud_effects,
+        weather_precipitation_effects: record.weather_precipitation_effects,
+        weather_lightning_effects: record.weather_lightning_effects,
+        weather_dust_effects: record.weather_dust_effects,
+        reduce_weather_flashes: record.reduce_weather_flashes,
     })
 }
 

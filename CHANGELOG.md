@@ -28,6 +28,23 @@ major application version.
   provider plugins with bounded weather requests and publications.
 - Added sourced airport, global-model, and radar weather presentation in Atlas,
   including persistent Enhanced GPU and Compatibility rendering preferences.
+- Added Cinematic Atlas weather graphics with layered source-shaped clouds,
+  visible rain and snow, convective lightning illumination, dust and sand
+  effects, independent phenomenon controls, flash reduction, and automatic
+  low-resource and Reduced Motion fallbacks.
+- Added a lazy Three.js weather renderer that prefers WebGPU, falls back to the
+  Three.js WebGL2 backend, and restores the existing MapLibre effects after
+  initialization, rendering, or graphics-device failure. Initial visible-cell,
+  particle, cloud, dust, and resolution ceilings keep Enhanced and Cinematic
+  work bounded while preserving all sourced markers and provenance.
+- Added bounded TSL ray-marched WebGPU density volumes for source-local clouds,
+  obscuration, and dust. A deterministic shared 3D texture, WebGL2 mesh/point
+  substitutes, and conservative in-memory pressure levels enrich weather while
+  preserving the selected profile, factual layers, and failure fallback.
+- Added projection-aware Atlas weather composition that fades decorative cells
+  behind the globe or pitched-map horizon using a host projection round trip.
+  Screen-stable stratified volume sampling reduces ray-march banding without
+  introducing frame-varying noise or claiming shared terrain depth.
 
 ### Changes
 
@@ -53,8 +70,10 @@ major application version.
   provider plugins. The new protocol-v1 messages and capabilities are additive,
   so existing version-one plugins remain compatible; weather providers require
   Python 3 and explicit user approval and fail independently when unavailable.
-- Database migrations 0013 and 0014 append flight-operation history and Atlas
-  weather preferences without rewriting an earlier released migration.
+- Database migrations 0013 through 0015 append flight-operation history and
+  Atlas weather preferences without rewriting an earlier released migration.
+  Migration 0015 retains the earlier two-profile preference as a legacy
+  fallback while making the richer graphics record authoritative.
 
 ### Removed
 

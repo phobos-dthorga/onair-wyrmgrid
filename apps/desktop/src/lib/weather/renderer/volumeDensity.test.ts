@@ -1,0 +1,72 @@
+import { describe, expect, it } from "vitest";
+import {
+  generateWeatherVolumeDensity,
+  generateWeatherVolumeDensityAsync,
+} from "./volumeDensity";
+
+function mean(values: readonly number[]): number {
+  return values.reduce((total, value) => total + value, 0) / values.length;
+}
+
+describe("weather volume density", () => {
+  it("is deterministic for one seed and distinct across seeds", () => {
+    const first = generateWeatherVolumeDensity(12, 42);
+    const repeated = generateWeatherVolumeDensity(12, 42);
+    const different = generateWeatherVolumeDensity(12, 43);
+
+    expect(first).toEqual(repeated);
+    expect(first).not.toEqual(different);
+    expect(first).toHaveLength(12 ** 3);
+  });
+
+  it("tapers the volume boundary below its cloud-bearing centre", () => {
+    const size = 16;
+    const density = generateWeatherVolumeDensity(size, 7);
+    const boundary: number[] = [];
+    const centre: number[] = [];
+    for (let z = 0; z < size; z += 1) {
+      for (let y = 0; y < size; y += 1) {
+        for (let x = 0; x < size; x += 1) {
+          const value = density[z * size * size + y * size + x];
+          if (
+            x === 0 ||
+            y === 0 ||
+            z === 0 ||
+            x === size - 1 ||
+            y === size - 1 ||
+            z === size - 1
+          ) {
+            boundary.push(value);
+          }
+          if (x >= 6 && x <= 9 && y >= 6 && y <= 9 && z >= 6 && z <= 9) {
+            centre.push(value);
+          }
+        }
+      }
+    }
+
+    expect(mean(centre)).toBeGreaterThan(mean(boundary));
+    expect(Math.max(...density)).toBeLessThanOrEqual(255);
+  });
+
+  it("rejects unbounded texture allocations", () => {
+    expect(() => generateWeatherVolumeDensity(3)).toThrow(RangeError);
+    expect(() => generateWeatherVolumeDensity(129)).toThrow(RangeError);
+    expect(() => generateWeatherVolumeDensity(8.5)).toThrow(RangeError);
+  });
+
+  it("can yield during initialization without changing the density field", async () => {
+    let yields = 0;
+    const asynchronous = await generateWeatherVolumeDensityAsync(
+      12,
+      51,
+      async () => {
+        yields += 1;
+      },
+      3,
+    );
+
+    expect(asynchronous).toEqual(generateWeatherVolumeDensity(12, 51));
+    expect(yields).toBe(3);
+  });
+});

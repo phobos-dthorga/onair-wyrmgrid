@@ -18,14 +18,14 @@ External providers    Simulator sidecars    Audio sidecars (planned)
                         |
                         v
             Svelte presentation <--- Fluent catalogue + data-only language pack
-                        |          |
-                    MapLibre    WyrmChart
-                     (Atlas)    (ECharts)
+                        |          |          |
+                    MapLibre   Three.js   WyrmChart
+                     (Atlas)   (weather)  (ECharts)
 ```
 
 The dependency direction points inward. Interface and infrastructure adapters
 depend on application-owned domain contracts; domain code does not depend on
-Tauri, SQLite, HTTP, MapLibre, or a plugin language.
+Tauri, SQLite, HTTP, MapLibre, Three.js, or a plugin language.
 
 ## Development-assistance boundary
 
@@ -150,7 +150,14 @@ before unrestricted custom UI.
 WyrmGrid is designed to remain sustainable for one maintainer. Community-ready
 boundaries must not require community-scale infrastructure. Each replaceable
 technology has one application-owned adapter: OnAir JSON, SQLite, Tauri,
-MapLibre, and ECharts remain outside domain rules.
+MapLibre, Three.js, and ECharts remain outside domain rules. The Three.js
+weather renderer receives only a bounded host-owned presentation scene and
+cannot reinterpret provider payloads or operational state. Its procedural 3D
+density field changes local presentation texture only; it cannot manufacture a
+weather cell or extend sourced coverage. Map projection round trips may fade a
+decorative anchor behind the globe or horizon, but do not expose MapLibre's
+renderer or imply shared terrain depth. See
+[ADR-0018](decisions/0018-threejs-webgpu-weather-composition.md).
 
 New abstraction is justified by a current use case, not the possibility of a
 future contributor. See

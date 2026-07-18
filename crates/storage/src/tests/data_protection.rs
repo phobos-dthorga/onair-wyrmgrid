@@ -229,5 +229,10 @@ fn preferences(altitude_unit: &str, fuel_unit: &str) -> DisplayPreferencesRecord
         fuel_unit: fuel_unit.into(),
         responsive_surfaces: true,
         weather_rendering_profile: "enhanced".into(),
+        weather_cloud_effects: true,
+        weather_precipitation_effects: true,
+        weather_lightning_effects: true,
+        weather_dust_effects: true,
+        reduce_weather_flashes: true,
     }
 }
