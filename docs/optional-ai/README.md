@@ -14,14 +14,15 @@ substitution, missing exact token usage, and malformed output headings.
 
 ## Supported tasks
 
-| Task ID               | Purpose                                                                                       | npm command                   | Handoff template                             |
-| --------------------- | --------------------------------------------------------------------------------------------- | ----------------------------- | -------------------------------------------- |
-| `release-curation-v1` | Draft the four required changelog categories from reviewed release evidence                   | `npm run ai:release-curation` | [Template](templates/release-curation-v1.md) |
-| `change-impact-v1`    | Build an affected-component, test, documentation, compatibility-flag, and changelog dossier   | `npm run ai:change-impact`    | [Template](templates/change-impact-v1.md)    |
-| `test-matrix-v1`      | Draft success, boundary, failure, unavailable-data, and regression cases for an approved rule | `npm run ai:test-matrix`      | [Template](templates/test-matrix-v1.md)      |
-| `docs-sync-v1`        | Find evidence-backed documentation candidates and draft narrow replacements                   | `npm run ai:docs-sync`        | [Template](templates/docs-sync-v1.md)        |
-| `fixture-variants-v1` | Draft sanitized valid and invalid fixture variants from an approved contract                  | `npm run ai:fixture-variants` | [Template](templates/fixture-variants-v1.md) |
-| `failure-triage-v1`   | Cluster sanitized local failures and propose narrow, non-destructive checks                   | `npm run ai:failure-triage`   | [Template](templates/failure-triage-v1.md)   |
+| Task ID                   | Purpose                                                                                       | npm command                       | Handoff template                                 |
+| ------------------------- | --------------------------------------------------------------------------------------------- | --------------------------------- | ------------------------------------------------ |
+| `release-curation-v1`     | Draft the four required changelog categories from reviewed release evidence                   | `npm run ai:release-curation`     | [Template](templates/release-curation-v1.md)     |
+| `change-impact-v1`        | Build an affected-component, test, documentation, compatibility-flag, and changelog dossier   | `npm run ai:change-impact`        | [Template](templates/change-impact-v1.md)        |
+| `test-matrix-v1`          | Draft success, boundary, failure, unavailable-data, and regression cases for an approved rule | `npm run ai:test-matrix`          | [Template](templates/test-matrix-v1.md)          |
+| `docs-sync-v1`            | Find evidence-backed documentation candidates and draft narrow replacements                   | `npm run ai:docs-sync`            | [Template](templates/docs-sync-v1.md)            |
+| `fixture-variants-v1`     | Draft sanitized valid and invalid fixture variants from an approved contract                  | `npm run ai:fixture-variants`     | [Template](templates/fixture-variants-v1.md)     |
+| `implementation-patch-v1` | Draft one bounded textual patch for explicitly allowed paths                                  | `npm run ai:implementation-patch` | [Template](templates/implementation-patch-v1.md) |
+| `failure-triage-v1`       | Cluster sanitized local failures and propose narrow, non-destructive checks                   | `npm run ai:failure-triage`       | [Template](templates/failure-triage-v1.md)       |
 
 The task prompts under [`tasks/`](tasks/) are public review boundaries. The
 [base system prompt](base-system-prompt-v1.md) supplies the common no-tools,
@@ -68,15 +69,28 @@ For a substantial reviewed change, use the tasks in this order when applicable:
 1. create and reconcile a `change-impact-v1` dossier;
 2. prepare separate `test-matrix-v1`, `docs-sync-v1`, and
    `fixture-variants-v1` packets from confirmed parts of that dossier;
-3. run deterministic validators, tests, formatting, and builds;
-4. use `failure-triage-v1` only for sanitized failures;
-5. curate release notes after the implementation and compatibility decisions are
+3. optionally draft one `implementation-patch-v1` result from an independently
+   reviewed packet and extract it without feeding another model response into it;
+4. run deterministic validators, tests, formatting, and builds;
+5. use `failure-triage-v1` only for sanitized failures;
+6. curate release notes after the implementation and compatibility decisions are
    complete.
 
 The runner never automatically feeds one model response into another. A person
 or coordinating reviewer must reconcile every draft against repository evidence
 before selecting facts for the next packet. This prevents an early
 hallucination from silently becoming downstream authority.
+
+## Optional generated-contribution attribution
+
+A maintainer may publish a wholly model-generated patch through a dedicated,
+least-privileged GitHub App so its commit and branch have a separate bot
+identity. After discarding the App token, the human maintainer opens the draft
+PR. The assistant never receives the App key or token, and the App has no Pull
+requests, merge, or release authority. The two-phase, hash-bound broker and
+exact registration permissions are documented in the
+[GitHub attribution guide](github-app-attribution.md). Human or materially
+rewritten work remains human-authored and may use an `Assisted-by` note instead.
 
 ## Non-delegable boundaries
 

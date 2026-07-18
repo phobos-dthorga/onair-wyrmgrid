@@ -142,9 +142,13 @@ outside the application and its release infrastructure. Contributors may work
 entirely by hand or, if they choose, use the optional bounded development-task
 helpers with their own loopback Ollama or OpenAI-compatible local server. Those
 review-only helpers cover change impact, test matrices, documentation sync,
-synthetic fixtures, sanitized failure triage, and release curation without
-entering the application. GitHub CI reads only reviewed, checked-in content and
-never calls an AI service.
+synthetic fixtures, bounded implementation patches, sanitized failure triage,
+and release curation without entering the application. A maintainer may
+separately publish a wholly generated patch as a bot-attributed commit and
+branch through a least-privileged GitHub App, then open its draft PR under the
+human maintainer identity. The assistant never receives GitHub credentials or
+merge authority. GitHub CI reads only reviewed, checked-in content and never
+calls an AI service.
 
 Newer NSIS setups install over the existing per-user application and preserve
 its encrypted data; release CI verifies that path against the closest older

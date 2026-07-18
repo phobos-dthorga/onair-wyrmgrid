@@ -38,15 +38,24 @@ project authority.
 Development and release work can be performed entirely by a person. A
 contributor may instead choose the repository's versioned, profile-driven local
 helper for bounded change-impact, test-matrix, documentation-sync, synthetic
-fixture, sanitized failure-triage, or release-curation drafts. Its adapters
-support user-selected Ollama models and unauthenticated local servers that
-implement the OpenAI-compatible model-list and chat-completion endpoints, all
-restricted to that machine's loopback interface. Drafts remain untrusted input
-for normal review, are never autonomously chained, and profiles and temporary
-artifacts remain outside the application. LAN, authenticated, or hosted AI
-providers are intentionally not interchangeable with this local boundary;
-supporting one would require a separate privacy, authentication, data-flow, and
-threat-model decision.
+fixture, bounded implementation-patch, sanitized failure-triage, or release-
+curation drafts. Its adapters support user-selected Ollama models and
+unauthenticated local servers that implement the OpenAI-compatible model-list
+and chat-completion endpoints, all restricted to that machine's loopback
+interface. Drafts remain untrusted input for normal review, are never
+autonomously chained, and profiles and temporary artifacts remain outside the
+application. LAN, authenticated, or hosted AI providers are intentionally not
+interchangeable with this local boundary; supporting one would require a
+separate privacy, authentication, data-flow, and threat-model decision.
+
+Generated-contribution attribution is a separate maintainer-side control plane.
+A local broker may exchange an App JWT for a short-lived, repository-scoped
+installation token after validating a human-approved patch and manifest hash.
+The assistant has no access to that broker credential. The App creates only one
+commit and an identity-bound branch. After the token is discarded, the human
+maintainer's authenticated GitHub CLI creates the draft PR. The App is not a
+WyrmGrid plugin, runtime sidecar, build input, CI model call, or landing
+authority.
 
 ## Localization boundary
 

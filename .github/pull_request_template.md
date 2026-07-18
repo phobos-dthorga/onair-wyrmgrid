@@ -12,6 +12,14 @@ Describe the change and why it belongs in WyrmGrid.
 
 List the checks and manual tests performed.
 
+## Generated contribution provenance
+
+Leave blank for human-authored work. For a wholly assistant-generated patch,
+link the generated-contribution manifest, identify the bot commit and assistant
+contribution ID, and confirm that the final squash message preserves its
+provenance trailers. Materially rewritten work remains human-authored and may
+use `Assisted-by:` instead.
+
 ## Release notes
 
 - [ ] Added user- or developer-visible changes to `CHANGELOG.md` under
