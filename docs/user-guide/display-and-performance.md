@@ -53,23 +53,24 @@ simulator. A low screen resolution alone is not a reason to select
 The switches are local presentation preferences. They are not transmitted to
 OnAir, simulator providers, plugins, or diagnostic telemetry.
 
-## Planned Atlas weather profiles
+## Atlas weather profiles
 
-Atlas weather will use a separate rendering preference because window size and
-graphics capability are independent. **Prefer compatibility weather rendering**
-will be enabled by default. It will retain route, time, provenance, and hazard
-facts while using simpler symbols, shapes, and animation. Users with suitable
-hardware may opt into GPU-enhanced wind, imagery, and time animation after
-capability detection.
+Atlas weather has a separate rendering preference because window size and
+graphics capability are independent. **Enhanced GPU weather** is enabled by
+default and presents sourced airport METAR conditions plus approved global
+model samples as GPU-rendered atmosphere, with wind vectors and gentle
+condition motion. Approved current-radar tiles remain host-rendered in either
+profile. Turn Enhanced weather off in **Settings > Motion & response** to keep
+the same facts with conservative static markers.
 
-**Reduce flashes** will remain enabled by default independently of the selected
-profile. Enhanced or cinematic weather will not disable it automatically.
-Turning it off will require an explicit photosensitivity warning and user
-confirmation; accepting the Application Terms alone will not enable stronger
-flashing effects.
+The airport atmosphere remains local to its report. The global model layer
+renders only the coarse points WyrmGrid requested, while radar uses the
+provider's bounded source tiles. WyrmGrid does not turn sparse METARs or model
+samples into invented observations between stations. Reduced Motion keeps
+Enhanced weather static; no weather effect flashes.
 
 `--low-resource` will force the Compatibility profile for that run. It will not
 silently change the saved preference, and a low display resolution alone will
 never be treated as evidence of a weak GPU. See the
 [Atlas flight-plan and weather contract](../atlas/flight-plan-and-weather.md)
-for the planned profiles and safeguards.
+for the profiles and safeguards.

@@ -29,7 +29,9 @@ const PROVIDER_ACCOUNTS_SCHEMA: &str = include_str!("../migrations/0011_provider
 const INTERACTION_PREFERENCES_SCHEMA: &str =
     include_str!("../migrations/0012_interaction_preferences.sql");
 const FLIGHT_OPERATIONS_SCHEMA: &str = include_str!("../migrations/0013_flight_operations.sql");
-pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 13;
+const ATLAS_RENDERING_PREFERENCES_SCHEMA: &str =
+    include_str!("../migrations/0014_atlas_rendering_preferences.sql");
+pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 14;
 
 #[derive(Debug, Error)]
 pub enum StorageError {
@@ -109,6 +111,7 @@ pub struct DisplayPreferencesRecord {
     pub weight_unit: String,
     pub fuel_unit: String,
     pub responsive_surfaces: bool,
+    pub weather_rendering_profile: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -260,6 +263,7 @@ impl Store {
         connection.execute_batch(PROVIDER_ACCOUNTS_SCHEMA)?;
         connection.execute_batch(INTERACTION_PREFERENCES_SCHEMA)?;
         connection.execute_batch(FLIGHT_OPERATIONS_SCHEMA)?;
+        connection.execute_batch(ATLAS_RENDERING_PREFERENCES_SCHEMA)?;
         if path.is_some() {
             data_protection::mark_wyrmgrid_database(&connection)?;
         }
@@ -539,10 +543,13 @@ impl Store {
                         display.speed_unit,
                         display.weight_unit,
                         display.fuel_unit,
-                        COALESCE(interaction.responsive_surfaces, 1)
+                        COALESCE(interaction.responsive_surfaces, 1),
+                        COALESCE(atlas.weather_rendering_profile, 'enhanced')
                  FROM display_preferences AS display
                  LEFT JOIN interaction_preferences AS interaction
                    ON interaction.singleton_id = display.singleton_id
+                 LEFT JOIN atlas_rendering_preferences AS atlas
+                   ON atlas.singleton_id = display.singleton_id
                  WHERE display.singleton_id = 1",
                 [],
                 |row| {
@@ -552,6 +559,7 @@ impl Store {
                         weight_unit: row.get(2)?,
                         fuel_unit: row.get(3)?,
                         responsive_surfaces: row.get(4)?,
+                        weather_rendering_profile: row.get(5)?,
                     })
                 },
             )
@@ -594,6 +602,15 @@ impl Store {
                 responsive_surfaces = excluded.responsive_surfaces,
                 updated_at = CURRENT_TIMESTAMP",
             params![preferences.responsive_surfaces],
+        )?;
+        transaction.execute(
+            "INSERT INTO atlas_rendering_preferences (
+                singleton_id, weather_rendering_profile
+             ) VALUES (1, ?1)
+             ON CONFLICT(singleton_id) DO UPDATE SET
+                weather_rendering_profile = excluded.weather_rendering_profile,
+                updated_at = CURRENT_TIMESTAMP",
+            params![preferences.weather_rendering_profile],
         )?;
         transaction.commit().map_err(StorageError::from)
     }

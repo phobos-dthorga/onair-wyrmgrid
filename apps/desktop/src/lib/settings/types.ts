@@ -4,6 +4,7 @@ export type SpeedUnit =
 export type WeightUnit = "pounds" | "kilograms";
 export type FuelUnit =
   "pounds" | "kilograms" | "us_gallons" | "imperial_gallons" | "litres";
+export type WeatherRenderingProfile = "compatibility" | "enhanced";
 
 export type DisplayPreferences = {
   altitude_unit: AltitudeUnit;
@@ -11,6 +12,7 @@ export type DisplayPreferences = {
   weight_unit: WeightUnit;
   fuel_unit: FuelUnit;
   responsive_surfaces: boolean;
+  weather_rendering_profile: WeatherRenderingProfile;
 };
 
 export const aviationDisplayPreferences: DisplayPreferences = {
@@ -19,6 +21,7 @@ export const aviationDisplayPreferences: DisplayPreferences = {
   weight_unit: "pounds",
   fuel_unit: "pounds",
   responsive_surfaces: true,
+  weather_rendering_profile: "enhanced",
 };
 
 export const displayPresets = {
@@ -29,6 +32,7 @@ export const displayPresets = {
     weight_unit: "pounds",
     fuel_unit: "imperial_gallons",
     responsive_surfaces: true,
+    weather_rendering_profile: "enhanced",
   },
   metric: {
     altitude_unit: "metres",
@@ -36,6 +40,7 @@ export const displayPresets = {
     weight_unit: "kilograms",
     fuel_unit: "litres",
     responsive_surfaces: true,
+    weather_rendering_profile: "enhanced",
   },
   si: {
     altitude_unit: "metres",
@@ -43,5 +48,6 @@ export const displayPresets = {
     weight_unit: "kilograms",
     fuel_unit: "kilograms",
     responsive_surfaces: true,
+    weather_rendering_profile: "enhanced",
   },
 } as const satisfies Record<string, DisplayPreferences>;
