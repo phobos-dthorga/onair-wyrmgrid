@@ -1,7 +1,7 @@
 import { get } from "svelte/store";
 import { afterEach, describe, expect, it } from "vitest";
 import { sourceLanguagePack } from "./client";
-import { applyLanguage, translation } from "./runtime";
+import { applyLanguage, translate, translation } from "./runtime";
 import type { LanguagePackManifest } from "./types";
 
 afterEach(() => applyLanguage(sourceLanguagePack));
@@ -34,7 +34,7 @@ describe("localization runtime", () => {
   });
 
   it("returns an explicit caller fallback for an unknown message", () => {
-    expect(get(translation)("missing-key", {}, "Readable fallback")).toBe(
+    expect(translate("missing-key", {}, "Readable fallback")).toBe(
       "Readable fallback",
     );
   });

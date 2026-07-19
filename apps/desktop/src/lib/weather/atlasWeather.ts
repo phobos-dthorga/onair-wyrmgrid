@@ -1,7 +1,7 @@
 import type { FlightCategory, FlightWeatherMapView } from "$lib/weather/types";
 
 export type WeatherEffect =
-  "none" | "rain" | "snow" | "convective" | "obscuration";
+  "none" | "rain" | "snow" | "convective" | "dust" | "obscuration";
 
 export type WeatherStationFeatureCollection = {
   type: "FeatureCollection";
@@ -17,8 +17,10 @@ export type WeatherStationFeatureCollection = {
       has_taf: boolean;
       severity: number;
       effect: WeatherEffect;
+      intensity: number;
       wind_speed_kt: number;
       wind_gust_kt: number;
+      wind_bearing: number;
     };
   }>;
 };
@@ -76,8 +78,17 @@ export function weatherEffect(
   }
   if (/(SN|SG|IC|PL|GR|GS)/.test(weather)) return "snow";
   if (/(RA|DZ)/.test(weather)) return "rain";
-  if (/(FG|BR|HZ|FU|DU|SA|VA)/.test(weather)) return "obscuration";
+  if (/(DS|SS|DU|SA|VA)/.test(weather)) return "dust";
+  if (/(FG|BR|HZ|FU)/.test(weather)) return "obscuration";
   return "none";
+}
+
+export function weatherIntensity(presentWeather: string | undefined): number {
+  const weather = presentWeather?.trim() ?? "";
+  if (!weather) return 0;
+  if (weather.startsWith("-")) return 0.38;
+  if (weather.startsWith("+")) return 1;
+  return 0.68;
 }
 
 function destinationCoordinate(
@@ -135,8 +146,15 @@ export function weatherStationFeatures(
                     station.metar?.value.flight_category ?? "unknown"
                   ],
                 effect: weatherEffect(station.metar?.value.present_weather),
+                intensity: weatherIntensity(
+                  station.metar?.value.present_weather,
+                ),
                 wind_speed_kt: station.metar?.value.wind_speed_kt ?? 0,
                 wind_gust_kt: station.metar?.value.wind_gust_kt ?? 0,
+                wind_bearing:
+                  station.metar?.value.wind_direction?.kind === "degrees"
+                    ? (station.metar.value.wind_direction.value + 180) % 360
+                    : 0,
               },
             },
           ]

@@ -6,7 +6,228 @@ fn initializes_the_database_schema() {
     let store = Store::open_in_memory().expect("in-memory database should open");
     assert_eq!(
         store.schema_version().expect("version should be readable"),
-        14
+        17
+    );
+}
+
+#[test]
+fn atlas_preferences_and_opt_in_view_round_trip() {
+    let store = Store::open_in_memory().expect("store should initialize");
+    let preferences = AtlasPreferencesRecord {
+        automatic_sync_minutes: 60,
+        daylight_visible: false,
+        regions_visible: true,
+        route_visible: true,
+        fleet_visible: false,
+        fbos_visible: true,
+        airport_weather_visible: true,
+        global_weather_visible: false,
+        weather_coverage_visible: true,
+        plugin_layers_visible: false,
+        restore_last_view: true,
+        last_longitude: None,
+        last_latitude: None,
+        last_zoom: None,
+        last_bearing: None,
+        last_pitch: None,
+    };
+
+    assert_eq!(store.load_atlas_preferences_record().unwrap(), None);
+    store.save_atlas_preferences_record(&preferences).unwrap();
+    assert!(
+        store
+            .save_atlas_view_record(151.2093, -91.0, 6.0, 12.0, 35.0)
+            .is_err()
+    );
+    store
+        .save_atlas_view_record(151.2093, -33.8688, 6.0, 12.0, 35.0)
+        .unwrap();
+    let saved = store
+        .load_atlas_preferences_record()
+        .unwrap()
+        .expect("preferences should exist");
+    assert_eq!(saved.automatic_sync_minutes, 60);
+    assert!(!saved.daylight_visible);
+    assert_eq!(saved.last_longitude, Some(151.2093));
+    assert_eq!(saved.last_pitch, Some(35.0));
+
+    let disabled = AtlasPreferencesRecord {
+        restore_last_view: false,
+        ..preferences
+    };
+    store.save_atlas_preferences_record(&disabled).unwrap();
+    let cleared = store.load_atlas_preferences_record().unwrap().unwrap();
+    assert_eq!(cleared.last_longitude, None);
+    assert_eq!(cleared.last_latitude, None);
+    assert_eq!(cleared.last_zoom, None);
+    assert_eq!(cleared.last_bearing, None);
+    assert_eq!(cleared.last_pitch, None);
+}
+
+#[test]
+fn plugin_configuration_round_trips_without_manifest_or_permission_coupling() {
+    let store = Store::open_in_memory().expect("store should initialize");
+    let record = PluginConfigurationRecord {
+        plugin_id: "org.wyrmgrid.provider.open-meteo".into(),
+        setting_key: "weather_refresh_minutes".into(),
+        value: "30".into(),
+    };
+
+    assert_eq!(
+        store
+            .load_plugin_configuration_record(&record.plugin_id, &record.setting_key)
+            .unwrap(),
+        None
+    );
+    store.save_plugin_configuration_record(&record).unwrap();
+    assert_eq!(
+        store
+            .load_plugin_configuration_record(&record.plugin_id, &record.setting_key)
+            .unwrap(),
+        Some(record)
+    );
+}
+
+#[test]
+fn atlas_and_plugin_configuration_migration_preserves_version_16_preferences() {
+    let connection = Connection::open_in_memory().expect("database should open");
+    connection
+        .execute_batch(INITIAL_SCHEMA)
+        .expect("initial schema should apply");
+    connection
+        .execute_batch(PLUGIN_PREFERENCES_SCHEMA)
+        .expect("version 16 schema should apply");
+    connection
+        .execute(
+            "INSERT INTO plugin_preferences (
+                plugin_id, scope_revision, start_with_wyrmgrid
+             ) VALUES ('org.wyrmgrid.test', 'scope-v1', 1)",
+            [],
+        )
+        .expect("existing preference should save");
+
+    connection
+        .execute_batch(ATLAS_AND_PLUGIN_CONFIGURATION_SCHEMA)
+        .expect("version 17 schema should apply");
+    connection
+        .execute_batch(ATLAS_AND_PLUGIN_CONFIGURATION_SCHEMA)
+        .expect("version 17 schema should be idempotent");
+
+    let existing: (String, bool) = connection
+        .query_row(
+            "SELECT scope_revision, start_with_wyrmgrid
+             FROM plugin_preferences WHERE plugin_id = 'org.wyrmgrid.test'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .expect("existing preference should remain");
+    assert_eq!(existing, ("scope-v1".into(), true));
+    assert_eq!(
+        connection
+            .query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0))
+            .unwrap(),
+        17
+    );
+}
+
+#[test]
+fn plugin_startup_preferences_round_trip_and_delete() {
+    let store = Store::open_in_memory().expect("store should initialize");
+    let record = PluginPreferencesRecord {
+        plugin_id: "org.wyrmgrid.test.weather".into(),
+        scope_revision: "plugin:org.wyrmgrid.test.weather:v1".into(),
+        start_with_wyrmgrid: true,
+    };
+
+    assert_eq!(
+        store
+            .load_plugin_preferences_record(&record.plugin_id)
+            .unwrap(),
+        None
+    );
+    store.save_plugin_preferences_record(&record).unwrap();
+    assert_eq!(
+        store
+            .load_plugin_preferences_record(&record.plugin_id)
+            .unwrap(),
+        Some(record.clone())
+    );
+
+    let revised = PluginPreferencesRecord {
+        scope_revision: "plugin:org.wyrmgrid.test.weather:v2".into(),
+        start_with_wyrmgrid: false,
+        ..record.clone()
+    };
+    store.save_plugin_preferences_record(&revised).unwrap();
+    assert_eq!(
+        store
+            .load_plugin_preferences_record(&record.plugin_id)
+            .unwrap(),
+        Some(revised)
+    );
+
+    store
+        .delete_plugin_preferences_record(&record.plugin_id)
+        .unwrap();
+    assert_eq!(
+        store
+            .load_plugin_preferences_record(&record.plugin_id)
+            .unwrap(),
+        None
+    );
+}
+
+#[test]
+fn migrates_existing_atlas_weather_preferences_idempotently() {
+    let connection = Connection::open_in_memory().expect("database should open");
+    connection
+        .execute_batch(INITIAL_SCHEMA)
+        .expect("initial schema should apply");
+    connection
+        .execute_batch(ATLAS_RENDERING_PREFERENCES_SCHEMA)
+        .expect("profile schema should apply");
+    connection
+        .execute(
+            "INSERT INTO atlas_rendering_preferences (
+                singleton_id, weather_rendering_profile
+             ) VALUES (1, 'compatibility')",
+            [],
+        )
+        .expect("existing profile should save");
+
+    connection
+        .execute_batch(ATLAS_WEATHER_GRAPHICS_PREFERENCES_SCHEMA)
+        .expect("graphics migration should apply");
+    connection
+        .execute_batch(ATLAS_WEATHER_GRAPHICS_PREFERENCES_SCHEMA)
+        .expect("graphics migration should be idempotent");
+
+    let migrated: (String, bool, bool, bool, bool, bool) = connection
+        .query_row(
+            "SELECT weather_rendering_profile,
+                    weather_cloud_effects,
+                    weather_precipitation_effects,
+                    weather_lightning_effects,
+                    weather_dust_effects,
+                    reduce_weather_flashes
+             FROM atlas_weather_graphics_preferences
+             WHERE singleton_id = 1",
+            [],
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                ))
+            },
+        )
+        .expect("migrated graphics preference should be readable");
+    assert_eq!(
+        migrated,
+        ("compatibility".into(), true, true, true, true, true)
     );
 }
 
@@ -183,7 +404,12 @@ fn persists_independent_display_preferences() {
         weight_unit: "kilograms".into(),
         fuel_unit: "litres".into(),
         responsive_surfaces: false,
-        weather_rendering_profile: "compatibility".into(),
+        weather_rendering_profile: "cinematic".into(),
+        weather_cloud_effects: true,
+        weather_precipitation_effects: false,
+        weather_lightning_effects: true,
+        weather_dust_effects: false,
+        reduce_weather_flashes: false,
     };
     store
         .save_display_preferences_record(&preferences)
@@ -193,8 +419,31 @@ fn persists_independent_display_preferences() {
         store
             .load_display_preferences_record()
             .expect("display preferences should be readable"),
-        Some(preferences)
+        Some(preferences.clone())
     );
+
+    let connection = store
+        .connection
+        .lock()
+        .expect("storage connection should be available");
+    let legacy_profile: String = connection
+        .query_row(
+            "SELECT weather_rendering_profile
+             FROM atlas_rendering_preferences WHERE singleton_id = 1",
+            [],
+            |row| row.get(0),
+        )
+        .expect("the legacy fallback preference should be readable");
+    let cinematic_profile: String = connection
+        .query_row(
+            "SELECT weather_rendering_profile
+             FROM atlas_weather_graphics_preferences WHERE singleton_id = 1",
+            [],
+            |row| row.get(0),
+        )
+        .expect("the authoritative graphics preference should be readable");
+    assert_eq!(legacy_profile, "enhanced");
+    assert_eq!(cinematic_profile, "cinematic");
 }
 
 #[test]

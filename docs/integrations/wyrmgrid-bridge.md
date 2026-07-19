@@ -67,6 +67,24 @@ and the compatibility decision in
 See [simulator provider authoring](simulator-provider-authoring.md) for the
 implemented contract and the FSUIPC/community-provider path.
 
+## Adjacent audio-recording boundary
+
+Planned simulator-synchronised audio is not a Bridge protocol version 1
+payload. Continuous PCM or encoded media would violate the purpose and limits
+of the 64 KiB JSON telemetry channel and couple audio backpressure to simulator
+facts. Bridge providers continue to supply attributed radio state and session
+evidence; a separately versioned and supervised Audio Capture Provider supplies
+capability-labelled Opus tracks on the same application-owned timeline.
+
+MSFS 2024's documented COM facts do not establish isolated COM audio. X-Plane
+12's named audio groups make isolated capture a feasibility candidate, but its
+planned Web API Bridge provider remains the telemetry authority. Any future
+in-process X-Plane audio tap must be thin, first-party, non-blocking, and unable
+to make WyrmGrid policy or storage decisions. The complete planned boundary is
+defined in
+[ADR-0017](../architecture/decisions/0017-simulator-synchronised-audio-recording.md)
+and the [simulator-audio plan](simulator-audio-recording.md).
+
 ## MSFS 2024 slice
 
 ### Phase 1: detection and read-only telemetry
@@ -143,6 +161,9 @@ flight initialization. Users can disable incoming traffic in X-Plane.
 - Local sockets, ports, and peer processes are authenticated or restricted as
   strongly as each provider permits; origin and process assumptions are covered
   in the threat model.
+- Bridge messages, diagnostics, Sentry, and ordinary plugins never receive
+  microphone samples, communications audio, device labels, application labels,
+  encoded-media paths, or audio content.
 - Sidecar diagnostics use stable codes and aggregate counts rather than raw
   simulation values.
 
@@ -162,6 +183,7 @@ flight initialization. Users can disable incoming traffic in X-Plane.
 ## References
 
 - [Simulator provider authoring](simulator-provider-authoring.md)
+- [Simulator-synchronised audio recording](simulator-audio-recording.md)
 - [MSFS 2024 SimConnect flight APIs](https://docs.flightsimulator.com/msfs2024/html/6_Programming_APIs/SimConnect/API_Reference/Flights/Flights.htm)
 - [MSFS 2024 SimConnect SDK](https://docs.flightsimulator.com/msfs2024/html/6_Programming_APIs/SimConnect/SimConnect_SDK.htm)
 - [X-Plane local Web API](https://developer.x-plane.com/article/x-plane-web-api/)

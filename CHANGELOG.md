@@ -28,9 +28,81 @@ major application version.
   provider plugins with bounded weather requests and publications.
 - Added sourced airport, global-model, and radar weather presentation in Atlas,
   including persistent Enhanced GPU and Compatibility rendering preferences.
+- Added Cinematic Atlas weather graphics with layered source-shaped clouds,
+  visible rain and snow, convective lightning illumination, dust and sand
+  effects, independent phenomenon controls, flash reduction, and automatic
+  low-resource and Reduced Motion fallbacks.
+- Added a lazy Three.js weather renderer that prefers WebGPU, falls back to the
+  Three.js WebGL2 backend, and restores the existing MapLibre effects after
+  initialization, rendering, or graphics-device failure. Initial visible-cell,
+  particle, cloud, dust, and resolution ceilings keep Enhanced and Cinematic
+  work bounded while preserving all sourced markers and provenance.
+- Added bounded TSL ray-marched WebGPU density volumes for source-local clouds,
+  obscuration, and dust. A deterministic shared 3D texture, WebGL2 mesh/point
+  substitutes, and conservative in-memory pressure levels enrich weather while
+  preserving the selected profile, factual layers, and failure fallback.
+- Added projection-aware Atlas weather composition that fades decorative cells
+  behind the globe or pitched-map horizon using a host projection round trip.
+  Screen-stable stratified volume sampling reduces ray-march banding without
+  introducing frame-varying noise or claiming shared terrain depth.
+- Added a toggleable UTC day/night layer with civil, nautical, and
+  astronomical twilight, including historical-Hoard time projection. Added a
+  separate weather-support-zone layer for indicative airport observation
+  vicinity, compact regular-grid sample patches, and exact received RADAR tile
+  footprints without presenting point observations as storm boundaries or
+  allowing sparse samples to colour continent-sized cells.
+  Theme-independent repeating patterns distinguish cloud, rain, snow,
+  convective, obscuration, dust, and RADAR zones without relying on colour
+  alone.
+- Added a per-plugin **Start automatically with WyrmGrid** choice. It is off by
+  default, requires standing access, survives ordinary restarts, and becomes
+  inactive whenever the plugin version, capabilities, weather products, or
+  approved network origins change.
+- Added a guarded **Erase the WyrmGrid database** control to Encrypted data &
+  backups. It requires an acknowledgement and exact typed phrase, restarts the
+  application, and replaces the active database with an empty encrypted one
+  while leaving portable backups, installed plugins, diagnostics, simulator
+  sidecars, browser-webview local storage, and separately stored operating-system
+  credentials alone.
+- Added encrypted Atlas continuity preferences for automatic synchronization
+  and layer visibility, plus an opt-in **Restore my last Atlas view** choice
+  that clears its bounded camera values when disabled.
+- Added host-owned Forge settings with bounded refresh choices for forecast-grid
+  and RADAR plugins. Plugins cannot declare, read, or write these non-secret
+  records, and plugin API version 1 remains unchanged.
 
 ### Changes
 
+- Reworked detailed Atlas cloud, storm, obscuration, and dust volumes with a
+  higher-resolution multi-lobed density field, stable optical thickness,
+  brighter internal shading, sourced-wind alignment, and deterministic
+  three-dimensional variation. Rain and snow now begin below their parent
+  cloud and taper around the precipitation field instead of surrounding its
+  centre.
+- Added an isolated deterministic weather gallery for renderer calibration and
+  hardware diagnosis. It is available automatically in development builds and
+  in packaged builds only through the explicit `--weather-gallery` startup
+  flag; its controls are temporary and never replace supported user graphics
+  preferences.
+- Fixed detailed Atlas weather exposing the hard faces of its volume boxes,
+  repeating recognisable cloud silhouettes, crossing the globe horizon, and
+  drawing over map information cards.
+- Added compile-time catalogue-key ownership for translated interface code,
+  replaced constructed Settings and Simulator message identifiers with
+  explicit typed mappings, and moved Atlas renderer status text into source
+  catalogue version 12.
+- Added deterministic localization and desktop-command identifier audits, plus
+  a repository-wide boundary report covering current UI, Tauri, Atlas,
+  localization, migration, protocol, and provider separation.
+- Reserved Codex semantic review of valid Hoardmind output for high-benefit or
+  critical work. Lower-benefit drafts now avoid redundant frontier-model review
+  while deterministic gates and mandatory human release or generated-
+  contribution approvals remain unchanged.
+- Documented the accepted future simulator-synchronised audio architecture:
+  Opus working tracks, capability-labelled MSFS and X-Plane sources, separate
+  audio consent, encrypted external media, metadata-only SQLite records, and an
+  independently versioned provider boundary. No audio capture implementation is
+  included yet.
 - Generated-contribution squash landing now uses a human-authenticated,
   exact-head guard that verifies the App-bot commit and clean protected PR,
   supplies every provenance trailer explicitly, forbids administrative bypass,
@@ -44,8 +116,13 @@ major application version.
   provider plugins. The new protocol-v1 messages and capabilities are additive,
   so existing version-one plugins remain compatible; weather providers require
   Python 3 and explicit user approval and fail independently when unavailable.
-- Database migrations 0013 and 0014 append flight-operation history and Atlas
-  weather preferences without rewriting an earlier released migration.
+- Database migrations 0013 through 0015 append flight-operation history and
+  Atlas weather preferences without rewriting an earlier released migration.
+  Migration 0015 retains the earlier two-profile preference as a legacy
+  fallback while making the richer graphics record authoritative.
+- Database migration 0016 adds host-owned, scope-bound plugin startup
+  preferences without changing plugin protocol version 1. Source catalogue
+  version 13 adds the associated Forge and destructive-reset wording.
 
 ### Removed
 

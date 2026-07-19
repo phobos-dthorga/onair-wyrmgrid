@@ -1,31 +1,31 @@
 # Architecture overview
 
 ```text
-External providers       Simulator sidecars
-    |                           |
-    v                           v
-Rust provider adapters   WyrmGrid Bridge
-    |                           |
-    +--------> application <----+
-                    |
-          +---------+---------+
-          |                   |
- SQLCipher SQLite         plugin broker
-     (Hoard)                   |
-          |              external plugins
-          v
-      Tauri commands
-          |
-          v
-  Svelte presentation <--- Fluent catalogue + data-only language pack
-     |          |
- MapLibre    WyrmChart
-  (Atlas)    (ECharts)
+External providers    Simulator sidecars    Audio sidecars (planned)
+        |                      |                       |
+        v                      v                       v
+ Rust provider adapters  WyrmGrid Bridge    Audio capture boundary
+        |                      |                       |
+        +--------------------> application <----------+
+                                  |
+                        +---------+---------+
+                        |                   |
+               SQLCipher SQLite         plugin broker
+                   (Hoard)                   |
+                        |              external plugins
+                        v
+                    Tauri commands
+                        |
+                        v
+            Svelte presentation <--- Fluent catalogue + data-only language pack
+                        |          |          |
+                    MapLibre   Three.js   WyrmChart
+                     (Atlas)   (weather)  (ECharts)
 ```
 
 The dependency direction points inward. Interface and infrastructure adapters
 depend on application-owned domain contracts; domain code does not depend on
-Tauri, SQLite, HTTP, MapLibre, or a plugin language.
+Tauri, SQLite, HTTP, MapLibre, Three.js, or a plugin language.
 
 ## Development-assistance boundary
 
@@ -42,11 +42,14 @@ fixture, bounded implementation-patch, sanitized failure-triage, or release-
 curation drafts. Its adapters support user-selected Ollama models and
 unauthenticated local servers that implement the OpenAI-compatible model-list
 and chat-completion endpoints, all restricted to that machine's loopback
-interface. Drafts remain untrusted input for normal review, are never
-autonomously chained, and profiles and temporary artifacts remain outside the
-application. LAN, authenticated, or hosted AI providers are intentionally not
-interchangeable with this local boundary; supporting one would require a
-separate privacy, authentication, data-flow, and threat-model decision.
+interface. Drafts remain untrusted input, but independent Codex semantic review
+is reserved for high-benefit or critical work. Valid lower-benefit output still
+passes deterministic gates without spending frontier-model review resources.
+Drafts are never autonomously chained, and profiles and temporary artifacts
+remain outside the application. LAN, authenticated, or hosted AI providers are
+intentionally not interchangeable with this local boundary; supporting one
+would require a separate privacy, authentication, data-flow, and threat-model
+decision.
 
 Generated-contribution attribution is a separate maintainer-side control plane.
 A local broker may exchange an App JWT for a short-lived, repository-scoped
@@ -118,6 +121,22 @@ See [ADR-0008](decisions/0008-provider-adapters-and-operational-snapshots.md)
 and [ADR-0011](decisions/0011-core-simulator-capability-provider-sidecars.md),
 plus the [external integrations programme](../integrations/README.md).
 
+## Planned simulator-audio boundary
+
+Simulator-synchronised audio is adjacent to Bridge telemetry rather than part
+of Bridge protocol version 1. The application owns separate default-off audio
+consent, session correlation, retention, deletion, and presentation. A
+separately supervised Audio Capture Provider supplies capability-labelled Opus
+tracks; SQLite stores metadata while encrypted media remains in bounded
+external segments. Audio, device labels, and communications are unavailable to
+ordinary plugins and observability.
+
+MSFS 2024 capture is Windows-specific. X-Plane 12 provides the cross-platform
+Windows, macOS, and supported Linux target, while its named COM audio groups
+remain a feasibility candidate until a thin non-blocking tap is proven. See
+[ADR-0017](decisions/0017-simulator-synchronised-audio-recording.md) and the
+[audio-recording plan](../integrations/simulator-audio-recording.md).
+
 ## Extension boundary
 
 Community plugins never link into the desktop process. The host launches a
@@ -131,7 +150,14 @@ before unrestricted custom UI.
 WyrmGrid is designed to remain sustainable for one maintainer. Community-ready
 boundaries must not require community-scale infrastructure. Each replaceable
 technology has one application-owned adapter: OnAir JSON, SQLite, Tauri,
-MapLibre, and ECharts remain outside domain rules.
+MapLibre, Three.js, and ECharts remain outside domain rules. The Three.js
+weather renderer receives only a bounded host-owned presentation scene and
+cannot reinterpret provider payloads or operational state. Its procedural 3D
+density field changes local presentation texture only; it cannot manufacture a
+weather cell or extend sourced coverage. Map projection round trips may fade a
+decorative anchor behind the globe or horizon, but do not expose MapLibre's
+renderer or imply shared terrain depth. See
+[ADR-0018](decisions/0018-threejs-webgpu-weather-composition.md).
 
 New abstraction is justified by a current use case, not the possibility of a
 future contributor. See

@@ -1,4 +1,8 @@
-export const capabilityTranslationKeys: Readonly<Record<string, string>> = {
+import type { TranslationKey } from "$lib/i18n/catalog";
+
+export const capabilityTranslationKeys: Readonly<
+  Record<string, TranslationKey>
+> = {
   on_air_company_read: "security-capability-company-read",
   on_air_fleet_read: "security-capability-fleet-read",
   on_air_jobs_read: "security-capability-jobs-read",
@@ -12,12 +16,20 @@ export const capabilityTranslationKeys: Readonly<Record<string, string>> = {
   weather_data_publish: "security-capability-weather-publish",
 };
 
-export function capabilityTranslationKey(capability: string): string | null {
+export function capabilityTranslationKey(
+  capability: string,
+): TranslationKey | null {
   return capabilityTranslationKeys[capability] ?? null;
 }
 
 export function lifetimeTranslationKey(
   lifetime: "once" | "session" | "standing",
-): string {
-  return `security-lifetime-${lifetime}`;
+): TranslationKey {
+  return lifetimeTranslationKeys[lifetime];
 }
+
+const lifetimeTranslationKeys = {
+  once: "security-lifetime-once",
+  session: "security-lifetime-session",
+  standing: "security-lifetime-standing",
+} as const satisfies Record<"once" | "session" | "standing", TranslationKey>;

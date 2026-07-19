@@ -13,6 +13,7 @@ struct StartupOptions {
     no_launch_art: bool,
     compact_ui: bool,
     low_resource: bool,
+    weather_gallery: bool,
 }
 
 struct DesktopState {
@@ -35,6 +36,7 @@ struct DesktopState {
     themes: wyrmgrid_application::ThemeSettingsService<wyrmgrid_storage::Store>,
     languages: wyrmgrid_application::LanguageSettingsService<wyrmgrid_storage::Store>,
     display: wyrmgrid_application::DisplaySettingsService<wyrmgrid_storage::Store>,
+    atlas_preferences: wyrmgrid_application::AtlasPreferencesService<wyrmgrid_storage::Store>,
     observability: observability::Controller,
 }
 
@@ -357,6 +359,20 @@ fn data_protection_status(
 }
 
 #[tauri::command]
+fn reset_local_data(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, DesktopState>,
+    confirmation: String,
+) -> Result<wyrmgrid_application::LocalDataResetView, wyrmgrid_application::OperationError> {
+    let result = state
+        .data_protection
+        .prepare_local_data_reset(&confirmation)
+        .map_err(operation_error)?;
+    app.request_restart();
+    Ok(result)
+}
+
+#[tauri::command]
 async fn create_portable_backup(
     state: tauri::State<'_, DesktopState>,
     destination: String,
@@ -461,6 +477,35 @@ fn update_display_preferences(
 }
 
 #[tauri::command]
+fn atlas_preferences(
+    state: tauri::State<'_, DesktopState>,
+) -> Result<wyrmgrid_application::AtlasPreferences, wyrmgrid_application::OperationError> {
+    state.atlas_preferences.status().map_err(operation_error)
+}
+
+#[tauri::command]
+fn update_atlas_preferences(
+    state: tauri::State<'_, DesktopState>,
+    preferences: wyrmgrid_application::AtlasPreferences,
+) -> Result<wyrmgrid_application::AtlasPreferences, wyrmgrid_application::OperationError> {
+    state
+        .atlas_preferences
+        .update(preferences)
+        .map_err(operation_error)
+}
+
+#[tauri::command]
+fn update_atlas_view(
+    state: tauri::State<'_, DesktopState>,
+    view: wyrmgrid_application::AtlasView,
+) -> Result<wyrmgrid_application::AtlasPreferences, wyrmgrid_application::OperationError> {
+    state
+        .atlas_preferences
+        .update_view(view)
+        .map_err(operation_error)
+}
+
+#[tauri::command]
 fn select_theme(
     state: tauri::State<'_, DesktopState>,
     theme_id: String,
@@ -518,6 +563,31 @@ fn approve_plugin_permissions(
     state
         .plugins
         .approve_requested_permissions_with_lifetime(&plugin_id, lifetime)
+        .map_err(operation_error)
+}
+
+#[tauri::command]
+fn update_plugin_startup_preference(
+    state: tauri::State<'_, DesktopState>,
+    plugin_id: String,
+    enabled: bool,
+) -> Result<wyrmgrid_application::PluginHostView, wyrmgrid_application::OperationError> {
+    state
+        .plugins
+        .set_start_with_wyrmgrid(&plugin_id, enabled)
+        .map_err(operation_error)
+}
+
+#[tauri::command]
+fn update_plugin_configuration(
+    state: tauri::State<'_, DesktopState>,
+    plugin_id: String,
+    setting_key: String,
+    value: String,
+) -> Result<wyrmgrid_application::PluginHostView, wyrmgrid_application::OperationError> {
+    state
+        .plugins
+        .set_configuration(&plugin_id, &setting_key, &value)
         .map_err(operation_error)
 }
 
@@ -746,6 +816,9 @@ pub fn run() {
             std::fs::create_dir_all(&app_data_directory)?;
             diagnostics::initialize(Some(&app_data_directory));
             let database_path = app_data_directory.join("wyrmgrid.db");
+            wyrmgrid_storage::apply_pending_local_data_reset(&database_path).inspect_err(|_| {
+                show_encrypted_storage_startup_error(app);
+            })?;
             let device_keys = database_key::DeviceKeyStore;
             let database_key = device_keys
                 .load_or_create(wyrmgrid_storage::encrypted_database_state_exists(
@@ -763,6 +836,8 @@ pub fn run() {
             let themes = wyrmgrid_application::ThemeSettingsService::new(store.clone());
             let languages = wyrmgrid_application::LanguageSettingsService::new(store.clone());
             let display = wyrmgrid_application::DisplaySettingsService::new(store.clone());
+            let atlas_preferences =
+                wyrmgrid_application::AtlasPreferencesService::new(store.clone());
             let authorization_runtime = wyrmgrid_application::AuthorizationRuntime::default();
             let security = wyrmgrid_application::SecurityCentreService::with_runtime(
                 store.clone(),
@@ -793,7 +868,11 @@ pub fn run() {
                 store.clone(),
                 simulator.provider_ids(),
             );
-            let automatic_provider = simulator_settings.startup_provider_id().ok().flatten();
+            let automatic_provider = if parsed_startup_options.weather_gallery {
+                None
+            } else {
+                simulator_settings.startup_provider_id().ok().flatten()
+            };
             let plugins = wyrmgrid_application::PluginService::with_authorization_runtime(
                 Some(app_data_directory.join("plugins")),
                 store,
@@ -822,6 +901,7 @@ pub fn run() {
                 themes,
                 languages,
                 display,
+                atlas_preferences,
                 observability: observability::Controller::new(legal_status.telemetry_enabled),
             });
             if let Some(provider_id) = automatic_provider {
@@ -835,6 +915,27 @@ pub fn run() {
                             &error.to_string(),
                         );
                     }
+                });
+            }
+            if !parsed_startup_options.weather_gallery && legal_status.acknowledged {
+                let plugins = app.state::<DesktopState>().plugins.clone();
+                std::thread::spawn(move || match plugins.start_enabled() {
+                    Ok(outcome) => {
+                        for failure in outcome.failures {
+                            diagnostics::record(
+                                "warning",
+                                "plugin.automatic_start_failed",
+                                "desktop_startup",
+                                &format!("{}: {}", failure.plugin_id, failure.message),
+                            );
+                        }
+                    }
+                    Err(error) => diagnostics::record(
+                        "warning",
+                        "plugin.automatic_start_failed",
+                        "desktop_startup",
+                        &error.to_string(),
+                    ),
                 });
             }
             Ok(())
@@ -872,11 +973,15 @@ pub fn run() {
             update_telemetry_preference,
             security_centre_status,
             data_protection_status,
+            reset_local_data,
             create_portable_backup,
             prepare_portable_restore,
             theme_status,
             display_preferences,
             update_display_preferences,
+            atlas_preferences,
+            update_atlas_preferences,
+            update_atlas_view,
             select_theme,
             import_theme,
             language_status,
@@ -884,6 +989,8 @@ pub fn run() {
             import_language_pack,
             plugin_host_status,
             approve_plugin_permissions,
+            update_plugin_startup_preference,
+            update_plugin_configuration,
             revoke_plugin_permissions,
             start_plugin,
             stop_plugin,
@@ -928,6 +1035,7 @@ where
             "--no-launch-art" => options.no_launch_art = true,
             "--compact-ui" => options.compact_ui = true,
             "--low-resource" => options.low_resource = true,
+            "--weather-gallery" => options.weather_gallery = true,
             _ => {}
         }
     }

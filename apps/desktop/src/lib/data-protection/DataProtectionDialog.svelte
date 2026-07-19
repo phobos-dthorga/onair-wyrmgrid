@@ -16,6 +16,7 @@
     onchooserestore,
     onbackup,
     onrestore,
+    onreset,
     onlicenses,
     onclose,
   }: {
@@ -39,6 +40,7 @@
       password: string,
       replacementConfirmed: boolean,
     ) => void;
+    onreset: (confirmation: string) => void;
     onlicenses: () => void;
     onclose: () => void;
   } = $props();
@@ -50,6 +52,8 @@
   let restorePassword = $state("");
   let replacementConfirmed = $state(false);
   let choosingFile = $state(false);
+  let resetAcknowledged = $state(false);
+  let resetConfirmation = $state("");
 
   $effect(() => {
     if (open) resetSecrets();
@@ -71,6 +75,8 @@
     restoreSource = "";
     restorePassword = "";
     replacementConfirmed = false;
+    resetAcknowledged = false;
+    resetConfirmation = "";
   }
 
   function selectedName(path: string): string {
@@ -297,6 +303,62 @@
             </button>
           </section>
         </div>
+
+        <section class="local-data-reset" aria-labelledby="local-data-reset-title">
+          <div>
+            <span class="eyebrow"
+              >{$translation("data-protection-reset-eyebrow")}</span
+            >
+            <h3 id="local-data-reset-title">
+              {$translation("data-protection-reset-title")}
+            </h3>
+            <p>{$translation("data-protection-reset-detail")}</p>
+          </div>
+          <div class="reset-losses">
+            <strong>{$translation("data-protection-reset-erases-title")}</strong>
+            <ul>
+              <li>{$translation("data-protection-reset-erases-history")}</li>
+              <li>{$translation("data-protection-reset-erases-recordings")}</li>
+              <li>{$translation("data-protection-reset-erases-preferences")}</li>
+              <li>{$translation("data-protection-reset-erases-access")}</li>
+            </ul>
+            <strong>{$translation("data-protection-reset-keeps-title")}</strong>
+            <p>{$translation("data-protection-reset-keeps-detail")}</p>
+          </div>
+          <label class="replacement-confirmation reset-acknowledgement">
+            <input
+              type="checkbox"
+              disabled={busy}
+              bind:checked={resetAcknowledged}
+            />
+            <span>{$translation("data-protection-reset-acknowledge")}</span>
+          </label>
+          <label>
+            <span
+              >{$translation("data-protection-reset-type", {
+                phrase: status.local_data_reset_confirmation,
+              })}</span
+            >
+            <input
+              type="text"
+              autocomplete="off"
+              spellcheck="false"
+              disabled={busy || !resetAcknowledged}
+              bind:value={resetConfirmation}
+            />
+          </label>
+          <button
+            class="reset-action"
+            type="button"
+            disabled={!desktopRuntime ||
+              busy ||
+              !resetAcknowledged ||
+              resetConfirmation !== status.local_data_reset_confirmation}
+            onclick={() => onreset(resetConfirmation)}
+          >
+            {$translation("data-protection-reset-action")}
+          </button>
+        </section>
       {/if}
 
       {#if successMessage}

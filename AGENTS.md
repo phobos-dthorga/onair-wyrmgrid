@@ -55,8 +55,21 @@
   assistance must use one of the built-in versioned task contracts with a
   bounded, review-only handoff. Change-impact, test-matrix, documentation-sync,
   fixture-variant, bounded implementation-patch, failure-triage, and
-  release-curation drafts remain untrusted evidence. Reconcile every draft
-  against source, deterministic tools, and tests before using it.
+  release-curation drafts remain untrusted evidence.
+- Reserve ChatGPT/Codex semantic review of Hoardmind output for work where the
+  expected review benefit is **HIGH** or the work touches a critical project
+  boundary. Valid low- or medium-benefit output receives no separate Codex
+  review or double-check. Continue inexpensive deterministic contract, schema,
+  formatting, lint, test, and build gates; those checks do not count as Codex
+  semantic review.
+- Critical boundaries always require review regardless of apparent complexity:
+  security, privacy, legal meaning, credentials, authorization, cryptography,
+  destructive or data-loss behaviour, database migrations, protocol or schema
+  compatibility, breaking-change and semantic-version decisions, releases,
+  tags, CI/CD, signing, installer identity, live-provider support claims, and
+  optional-AI or repository governance. If criticality is uncertain, treat the
+  work as critical. Separate human approval required by the generated-
+  contribution workflow remains in force.
 - Hoardmind is the current maintainer's private local assistant, not a WyrmGrid
   component or requirement. Never assume it exists on another contributor's
   machine. WyrmGrid must remain usable, buildable, testable, contributable, and
@@ -69,8 +82,9 @@
   `scripts/run-optional-ai-task.mjs` with an explicitly selected task and
   versioned profile so exact server-reported tokens and available timing or
   model-allocation metadata are retained outside the repository. Never
-  automatically chain model output into another task; a reviewer must select
-  confirmed evidence for each new packet. Schema version 1 supports
+  automatically chain model output into another task; construct each new
+  packet from confirmed source and deterministic evidence rather than a prior
+  model draft. Schema version 1 supports
   unauthenticated loopback Ollama and OpenAI-compatible chat servers; the latter
   must report exact token usage, while non-portable timing, resource, and unload
   fields remain explicitly unavailable. A LAN, authenticated, or hosted adapter

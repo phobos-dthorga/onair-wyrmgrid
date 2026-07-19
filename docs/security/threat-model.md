@@ -7,6 +7,9 @@
 - SimBrief identifiers and OFPs, SayIntentions API keys, account identity,
   communications and active-flight files, imported routes, weather caches,
   online-network activity, and simulator telemetry;
+- planned simulator-synchronised recordings: voices, radio or ATC
+  communications, simulator and application output, device/application labels,
+  source identifiers, timing metadata, Opus segments, and media keys;
 - Navigraph, IVAO, community-delivery, and future provider tokens or application
   credentials;
 - local files and operating-system access;
@@ -51,6 +54,18 @@
   preferences;
 - personal network data, routes, coordinates, callsigns, or free-form content
   leaking through persistence, plugins, support output, or diagnostics;
+- a microphone, full desktop, wrong device, or unrelated application being
+  recorded without narrow and visible consent, including after a device change
+  or automatic telemetry start;
+- mixed simulator, radio, or third-party-application audio being mislabelled as
+  isolated COM1/COM2 evidence, or simulator radio state being mistaken for
+  captured samples;
+- recorded voices, communications, device/application identities, media paths,
+  or plaintext exports leaking through plugins, Sentry, diagnostics, optional
+  AI, support bundles, backups, public services, or filesystem recovery;
+- unbounded audio buffers, encoder stalls, disk exhaustion, corrupt segments,
+  orphaned media, clock drift, or a blocking in-process X-Plane tap degrading
+  the simulator or joining discontinuous evidence;
 - staff names, airport presence, availability, or qualifications leaking through
   raw provider retention, plugins, diagnostics, exports, or misleading UI labels;
 - accepted plans, selected jobs, aggregate passenger/freight facts, or revision
@@ -218,10 +233,15 @@
   and release-curation tasks each use an explicit versioned packet and output
   contract with no tools, repository access, durable memory, or change
   authority. Diffs, logs, schemas, fixtures, documentation, and commit text
-  remain untrusted evidence; sensitive provider or user data is excluded, and a
-  person or coordinating reviewer reconciles every draft against the repository
-  and deterministic tools. Model drafts are never chained automatically.
-  GitHub CI performs no model call and receives no inference credential;
+  remain untrusted evidence and sensitive provider or user data is excluded.
+  Codex semantic review is reserved for high-benefit output and critical
+  security, privacy, legal, credential, authorization, cryptographic,
+  destructive, migration, protocol/schema, release, signing, installer,
+  live-provider, or governance boundaries. Valid lower-benefit output passes
+  without Codex re-analysis but still receives every applicable deterministic
+  contract, schema, format, test, build, audit, path, and branch-protection gate.
+  Model drafts are never chained automatically. GitHub CI performs no model call
+  and receives no inference credential;
 - the optional local-AI measurement wrapper uses a versioned profile and accepts
   only unauthenticated loopback Ollama or OpenAI-compatible chat origins in
   schema version 1. It pins the advertised and returned model, requires
@@ -348,6 +368,15 @@
   only after current legal acknowledgement. SimBrief Pilot IDs and usernames
   are stored only as explicitly selected encrypted metadata and never treated
   as passwords or authorization tokens;
+- automatic synchronization and Atlas layer choices are host-validated,
+  bounded preferences in SQLCipher. Last-map restoration is off by default,
+  accepts only finite camera values within map bounds, and clears the retained
+  camera when disabled. An older webview interval is copied once through the
+  same host validation and removed only after the encrypted save succeeds;
+- per-plugin configuration is defined, validated, scheduled, and rendered by
+  the host using fixed non-secret choices. A plugin cannot declare controls,
+  access the configuration table, write values, or receive them through plugin
+  API version 1, so this store is not a credential or covert host-data channel;
 - portable backup version 1 is a complete SQLCipher export under a distinct
   user password. The host refuses overwrite, validates the encrypted manifest,
   schema and cipher integrity, re-encrypts restored data with the destination
@@ -357,6 +386,17 @@
   strings after the operation, never persisted, logged, sent to plugins, or
   recoverable by WyrmGrid. Restore requires a separate momentary destructive
   confirmation and runs outside the interface thread;
+- a whole-database reset requires both an explicit acknowledgement and an exact
+  host-validated phrase. The application service writes a versioned marker,
+  restart closes every database user, and startup validates the marker before
+  deleting only the active, pending, rollback, WAL, and shared-memory database
+  files. An invalid marker fails closed without deletion, and the marker is
+  removed last so an interrupted reset can safely resume. Portable backups,
+  plugin files, diagnostics, sidecars, browser-webview local storage, the device
+  key, and separately stored provider credentials are outside this operation;
+  Atlas and host-owned plugin preferences inside SQLite are erased.
+  Filesystem recovery and external copies remain a disclosed residual risk
+  rather than a secure-erasure claim;
 - Hoard Timeline remains read-only, persistently identifies mutually exclusive
   LIVE or HISTORICAL workspace mode separately from data availability, shows
   the selected time and each resource's actual observation time, and offers an
@@ -379,6 +419,51 @@
   legal, privacy, credential, telemetry, plugin-permission, data-protection,
   destructive-action, or diagnostic namespaces and cannot load resources or
   execute code.
+
+## Planned simulator-audio controls
+
+Simulator-synchronised audio is approved design work and is not implemented.
+Before any capture path ships, these are mandatory controls rather than claims
+about the current application:
+
+- Opus is the versioned working codec, with bounded profiles and independently
+  recoverable encrypted segments. SQLite stores only metadata and opaque media
+  identifiers through a new append-only migration.
+- Audio uses a separately supervised Audio Capture Provider and a bounded media
+  path, never Bridge protocol version 1's 64 KiB JSON channel. Audio failure
+  cannot block telemetry or the simulator.
+- Microphone and communications consent is separate, explicit, default-off,
+  source-specific, and visibly active. Telemetry recording and its automation
+  grant no audio authority, and full desktop audio is never implicit.
+- Providers label sources as isolated, mixed output, or metadata only. COM
+  telemetry never proves the provenance of an audible sample. A disappearing
+  device cannot silently switch to a default source.
+- Monotonic anchors, sample-frame ranges, gaps, dropouts, drift observations,
+  permission delays, source changes, and interruptions remain explicit. Pause
+  or disconnection never compresses or silently joins the evidence timeline.
+- Audio segments use a purpose-separated media key and authenticated envelope;
+  exact derivation, nonce, atomic finalisation, tamper, wrong-key, recovery, and
+  key-version fixtures precede implementation.
+- Storage budgets, active-session protection, retention, tombstoned deletion,
+  orphan cleanup, disk-full failure, and the limits of secure erasure are user-
+  visible and tested. Default portable backups omit media and say so; deliberate
+  audio exports warn that their copies are outside WyrmGrid's protection.
+- Audio, labels, identifiers, content, and media paths are excluded from
+  plugins, Sentry, diagnostics, optional-AI packets, support bundles, and public
+  services by construction and regression tests.
+- A first-party X-Plane in-process tap can proceed only after stability,
+  licensing, signing, installation/removal, local authentication, backpressure,
+  third-party-aircraft, and cross-platform review. It has no business logic and
+  drops bounded samples rather than blocking X-Plane.
+- The Privacy Notice, data inventory, legal versions, recording-law review,
+  captured-service rules, licence bundle, user guide, and platform permission
+  instructions are updated before release, not while the capability is merely
+  planned.
+
+The accepted boundary and full test matrix are recorded in
+[ADR-0017](../architecture/decisions/0017-simulator-synchronised-audio-recording.md)
+and the
+[simulator-audio plan](../integrations/simulator-audio-recording.md).
 
 Before stable release, the project needs a cross-platform review of its
 operating-system credential-store backends and recovery messaging, signed
@@ -598,6 +683,11 @@ to an external report.
 - Grants are denied by default and bound to actor kind, actor ID, exact
   capabilities, a scope revision, and an explicit lifetime. Plugin version or
   permission-set changes require a fresh review.
+- plugin automatic start is a separate default-off preference available only
+  with a standing grant. It is stored by the host, bound to the plugin version,
+  capabilities, weather products, and network origins, evaluated only after
+  current legal acknowledgement, and cleared on revocation. Each startup is
+  isolated so one plugin failure cannot block the core or another plugin;
 - `Once` is consumed at the privileged launch boundary, `Session` exists only
   in the shared in-memory authorization runtime, and only `Standing` is written
   to encrypted storage. A new process therefore starts without temporary

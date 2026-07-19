@@ -43,6 +43,7 @@ plugin boundary available to third-party developers.
 | Core and services            | Rust 2024                               |
 | Interface                    | Svelte 5 and TypeScript                 |
 | Map                          | MapLibre GL JS                          |
+| Detailed weather             | Three.js WebGPU with WebGL2 fallback    |
 | Charts                       | Apache ECharts behind WyrmChart         |
 | Localization                 | Fluent with canonical `en-AU` fallback  |
 | Local storage                | SQLCipher-encrypted SQLite              |

@@ -1,5 +1,6 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { translate } from "$lib/i18n/runtime";
+import type { TranslationKey } from "$lib/i18n/catalog";
 
 export type OperationError = {
   code: string;
@@ -48,9 +49,24 @@ export function operationErrorMessage(
   fallback: string,
 ): string {
   if (!(error instanceof DesktopOperationFailure)) return fallback;
-  const messageId = `error-${error.operation.code.replaceAll(/[._]/g, "-")}`;
-  return translate(messageId, {}, error.operation.message);
+  const messageId = operationErrorMessageKeys[error.operation.code];
+  return messageId
+    ? translate(messageId, {}, error.operation.message)
+    : error.operation.message;
 }
+
+const operationErrorMessageKeys: Readonly<Record<string, TranslationKey>> = {
+  "onair.rate_limited": "error-onair-rate-limited",
+  "data_protection.reset_confirmation_required":
+    "error-data-protection-reset-confirmation-required",
+  "plugin.standing_permission_required":
+    "error-plugin-standing-permission-required",
+  "plugin.unknown_configuration": "error-plugin-unknown-configuration",
+  "plugin.invalid_configuration": "error-plugin-invalid-configuration",
+  "atlas.preferences_storage_unavailable":
+    "error-atlas-preferences-storage-unavailable",
+  "atlas.invalid_preference": "error-atlas-invalid-preference",
+};
 
 function normalizeOperationError(value: unknown): OperationError {
   if (isOperationError(value)) return value;

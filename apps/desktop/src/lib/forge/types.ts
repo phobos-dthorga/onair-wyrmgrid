@@ -21,6 +21,16 @@ export type PluginProcessState =
 
 export type AuthorizationGrantLifetime = "once" | "session" | "standing";
 
+export type PluginSettingChoice = {
+  value: string;
+};
+
+export type PluginSettingView = {
+  key: string;
+  value: string;
+  choices: PluginSettingChoice[];
+};
+
 export type PluginView = {
   id: string;
   name: string;
@@ -32,6 +42,8 @@ export type PluginView = {
   requested_permissions: PluginPermission[];
   granted_permissions: PluginPermission[];
   grant_lifetime?: AuthorizationGrantLifetime;
+  start_with_wyrmgrid: boolean;
+  configuration: PluginSettingView[];
   state: PluginProcessState;
   published_layer_count: number;
   published_weather_layer_count: number;

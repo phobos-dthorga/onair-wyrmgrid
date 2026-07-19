@@ -15,6 +15,13 @@ opt-in evidence-led automatic lifecycle. It displays the latest fresh connected
 snapshot, persists the selected provider, and keeps provider auto-start and
 recording automation as separate default-off choices.
 
+Planned simulator-synchronised audio adds a fourth independent state: **audio
+recording active**. It is never implied by provider availability, connection,
+manual telemetry recording, or automatic telemetry recording. Audio has its own
+default-off consent, negotiated sources, failures, retention, and visible
+indicator as defined in the
+[audio-recording plan](simulator-audio-recording.md).
+
 ## Simulator weather evidence
 
 A recording must not equate the simulated atmosphere with external real-world
@@ -140,6 +147,12 @@ models:
 - `SimulatorSessionSummary`: duration, distance, fuel used, phase totals, and
   explicitly versioned calculations.
 
+These models describe translated telemetry, not encoded media. Planned audio
+links to a `SimulatorSession` through separate metadata while segmented Opus
+content remains in encrypted external media files. Audio bytes do not become
+SQLite BLOBs, Bridge messages, telemetry exports, or plugin history. See
+[ADR-0017](../architecture/decisions/0017-simulator-synchronised-audio-recording.md).
+
 At the current one-hertz host rate, storage is manageable, but retention is
 still user-owned. WyrmGrid should offer per-session deletion, delete-all,
 export, a visible retention setting, and bounded automatic pruning. Raw native
@@ -219,6 +232,10 @@ user-selected sessions, and exclude raw high-frequency data by default.
 6. Prove simulator weather-mode and ambient-condition observability, then add a
    versioned, gap-preserving recording contract that remains distinct from
    external weather.
+7. Add the separately consented Audio Capture Provider contract, Opus media
+   store, and fake-provider tests before native capture. Deliver Windows/MSFS
+   sources first, then X-Plane on its supported desktop systems; isolated
+   X-Plane radio tracks wait for the plugin feasibility and licensing decision.
 
 ## Questions and suggestions
 

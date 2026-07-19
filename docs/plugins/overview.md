@@ -37,6 +37,31 @@ append-only migration-4 preview grant table is no longer authoritative after
 migration 9, so an existing preview installation asks once more rather than
 silently carrying an unverifiable grant forward.
 
+Forge can also remember **Start automatically with WyrmGrid** for an individual
+plugin. This host-owned preference is off by default and can be enabled only
+after standing access has been approved. It is bound to the same plugin version,
+capability, weather-product, and network-origin scope as the approval; changing
+any of those details makes the saved startup choice inactive until the user
+reviews the plugin and enables it again. Temporary once or session access can
+never authorize a future launch. A manual stop affects the current session only
+and does not silently rewrite the saved choice.
+
+Automatic launches occur independently after a normal startup and current legal
+acknowledgement. One missing runtime, invalid plugin, or failed handshake is
+reported against that plugin and does not prevent other enabled plugins or the
+core application from starting. The preference belongs to WyrmGrid's encrypted
+database rather than `plugin.json`, so a plugin cannot enable itself. Revoking
+access removes the corresponding automatic-start choice.
+
+Forge also exposes host-owned configuration for bounded, non-secret behaviour.
+The first settings control how often WyrmGrid asks forecast-grid and RADAR
+providers for refreshed layers. Definitions, allowed choices, validation,
+scheduling, and rendering remain in the host; plugins cannot declare arbitrary
+controls, read these records, write them, or use this mechanism for credentials.
+The values live in the encrypted WyrmGrid database and do not alter plugin API
+version 1 or its messages. This provides a safe base for future host-controlled
+plugin options without making `plugin.json` an application-settings surface.
+
 The complete framing, lifecycle, limit, and compatibility contract is in
 [protocol version 1](protocol-v1.md).
 

@@ -11,6 +11,7 @@ fn uses_full_presentation_by_default() {
     assert!(!options.no_launch_art);
     assert!(!options.compact_ui);
     assert!(!options.low_resource);
+    assert!(!options.weather_gallery);
 }
 
 #[test]
@@ -24,6 +25,7 @@ fn keeps_launch_art_and_compact_layout_independent() {
     assert!(!compact.no_launch_art);
     assert!(compact.compact_ui);
     assert!(!compact.low_resource);
+    assert!(!compact.weather_gallery);
 }
 
 #[test]
@@ -33,6 +35,17 @@ fn low_resource_mode_implies_both_presentation_overrides() {
     assert!(options.no_launch_art);
     assert!(options.compact_ui);
     assert!(options.low_resource);
+    assert!(!options.weather_gallery);
+}
+
+#[test]
+fn enables_the_isolated_weather_gallery_only_when_requested() {
+    let options = parse(&["--weather-gallery"]);
+
+    assert!(options.weather_gallery);
+    assert!(!options.no_launch_art);
+    assert!(!options.compact_ui);
+    assert!(!options.low_resource);
 }
 
 #[test]
@@ -42,4 +55,5 @@ fn ignores_unrelated_process_arguments() {
     assert!(!options.no_launch_art);
     assert!(!options.compact_ui);
     assert!(!options.low_resource);
+    assert!(!options.weather_gallery);
 }

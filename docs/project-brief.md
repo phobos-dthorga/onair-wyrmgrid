@@ -20,7 +20,8 @@ Optional hosted diagnostics must not become an availability dependency. Public
 telemetry remains disclosed and user-controlled, and ordinary application work
 continues when the diagnostic service is unavailable.
 
-The core application uses Rust, Tauri, TypeScript, Svelte, MapLibre, and SQLite.
+The core application uses Rust, Tauri, TypeScript, Svelte, MapLibre, Three.js,
+and SQLite.
 Public plugins run as separate processes over a language-neutral, versioned,
 permission-controlled protocol. Python is the first executable SDK;
 Rust, C++, and TypeScript SDKs can follow once the protocol is proven.
