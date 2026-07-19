@@ -46,8 +46,11 @@ The initial products are deliberately bounded:
 
 - AviationWeather.gov returns airport `WeatherSnapshot` facts for an explicit
   set of at most ten normalized ICAO stations.
-- Open-Meteo returns a coarse host-selected global forecast grid. The plugin
-  does not decide the sampling density or invent observations between samples.
+- Open-Meteo returns six UTC horizons derived from hourly data for a coarse 84-location
+  host-selected global forecast grid. Optional point-level valid times let the
+  Rust application perform bounded ETA matching without sending the route or
+  schedule to the plugin. The plugin does not decide the sampling density or
+  invent observations between samples.
 - RainViewer returns a small, recent set of validated PNG RADAR tiles and
   provider no-coverage masks. The host requests, orders, deduplicates, and
   retains at most six frames in memory. Remote scripts, styles, tile templates,

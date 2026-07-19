@@ -15,6 +15,24 @@ fn plugin_view<'a>(status: &'a PluginHostView, plugin_id: &str) -> &'a PluginVie
 }
 
 #[test]
+fn forecast_provider_receives_only_the_fixed_host_grid() {
+    let WeatherQuery::ForecastGrid { points } = default_global_weather_grid() else {
+        panic!("default global weather query should be a forecast grid");
+    };
+
+    assert_eq!(points.len(), 84);
+    assert_eq!(
+        points.first().map(|point| point.id.as_str()),
+        Some("global-0-0")
+    );
+    assert_eq!(
+        points.last().map(|point| point.id.as_str()),
+        Some("global-6-11")
+    );
+    assert!(points.iter().all(|point| point.location.is_valid()));
+}
+
+#[test]
 fn installs_all_bundled_plugins_with_no_implicit_grants() {
     let directory = tempfile::tempdir().expect("temporary directory should open");
     let store = Store::open_in_memory().expect("store should open");

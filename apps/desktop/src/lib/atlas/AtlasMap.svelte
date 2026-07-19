@@ -245,6 +245,8 @@
   const ROUTE_WEATHER_SOURCE_ID = "wyrmgrid-route-weather";
   const ROUTE_WEATHER_HALO_LAYER_ID = "wyrmgrid-route-weather-halo";
   const ROUTE_WEATHER_SUPPORTED_LAYER_ID = "wyrmgrid-route-weather-supported";
+  const ROUTE_WEATHER_CURRENT_CONTEXT_LAYER_ID =
+    "wyrmgrid-route-weather-current-context";
   const ROUTE_WEATHER_UNAVAILABLE_LAYER_ID =
     "wyrmgrid-route-weather-unavailable";
   const DISPATCH_ROUTE_LINE_LAYER_ID = "wyrmgrid-dispatch-route-line";
@@ -1350,6 +1352,7 @@
     for (const layerId of [
       ROUTE_WEATHER_HALO_LAYER_ID,
       ROUTE_WEATHER_SUPPORTED_LAYER_ID,
+      ROUTE_WEATHER_CURRENT_CONTEXT_LAYER_ID,
       ROUTE_WEATHER_UNAVAILABLE_LAYER_ID,
     ]) {
       map.setLayoutProperty(layerId, "visibility", routeWeatherVisibility);
@@ -3057,7 +3060,7 @@
           id: ROUTE_WEATHER_SUPPORTED_LAYER_ID,
           type: "line",
           source: ROUTE_WEATHER_SOURCE_ID,
-          filter: ["==", ["get", "support"], "supported"],
+          filter: ["==", ["get", "temporal_support"], "eta_matched"],
           layout: {
             visibility:
               routeVisible && pluginWeatherVisible && routeWeather
@@ -3068,6 +3071,24 @@
             "line-color": weatherCoverageColor("condition"),
             "line-width": ["interpolate", ["linear"], ["zoom"], 1, 4.5, 8, 10],
             "line-opacity": 0.82,
+          },
+        });
+        atlasMap.addLayer({
+          id: ROUTE_WEATHER_CURRENT_CONTEXT_LAYER_ID,
+          type: "line",
+          source: ROUTE_WEATHER_SOURCE_ID,
+          filter: ["==", ["get", "temporal_support"], "current_context"],
+          layout: {
+            visibility:
+              routeVisible && pluginWeatherVisible && routeWeather
+                ? "visible"
+                : "none",
+          },
+          paint: {
+            "line-color": weatherCoverageColor("condition"),
+            "line-width": ["interpolate", ["linear"], ["zoom"], 1, 4, 8, 9],
+            "line-opacity": 0.58,
+            "line-dasharray": [2.2, 1.6],
           },
         });
         atlasMap.addLayer({

@@ -81,6 +81,7 @@ export type GlobalWeatherCondition =
 export type GlobalWeatherGridPoint = {
   id: string;
   location: Coordinates;
+  valid_at?: string;
   condition: GlobalWeatherCondition;
   temperature_c?: number;
   precipitation_mm?: number;

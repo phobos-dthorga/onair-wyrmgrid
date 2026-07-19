@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { PublishedPluginWeatherLayer } from "$lib/forge/types";
 import {
+  displayedGlobalWeatherGridPoints,
   pluginRadarTimelines,
   pluginWeatherGridFeatures,
   pluginWeatherItemCount,
@@ -52,6 +53,50 @@ describe("plugin weather presentation", () => {
       },
     });
     expect(pluginWeatherItemCount(layers)).toBe(1);
+  });
+
+  it("draws only the forecast horizon nearest retrieval at each location", () => {
+    const layer: PublishedPluginWeatherLayer["layer"] = {
+      schema_version: 1,
+      id: "temporal-grid",
+      title: "Temporal grid",
+      data: {
+        kind: "grid",
+        points: [
+          {
+            id: "sydney-h06",
+            location: { latitude: -33.86, longitude: 151.2 },
+            valid_at: "2026-07-17T18:00:00Z",
+            condition: "rain",
+          },
+          {
+            id: "sydney-h00",
+            location: { latitude: -33.86, longitude: 151.2 },
+            valid_at: "2026-07-17T12:00:00Z",
+            condition: "clear",
+          },
+          {
+            id: "legacy-melbourne",
+            location: { latitude: -37.81, longitude: 144.96 },
+            condition: "cloud",
+          },
+        ],
+      },
+      provenance,
+    };
+
+    expect(
+      displayedGlobalWeatherGridPoints(layer).map((point) => point.id),
+    ).toEqual(["sydney-h00", "legacy-melbourne"]);
+    const published = [
+      {
+        plugin_id: "org.example.weather",
+        plugin_name: "Example Weather",
+        layer,
+      },
+    ];
+    expect(pluginWeatherGridFeatures(published).features).toHaveLength(2);
+    expect(pluginWeatherItemCount(published)).toBe(2);
   });
 
   it("converts validated XYZ tiles into host-owned image corners", () => {

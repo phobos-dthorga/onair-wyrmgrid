@@ -117,6 +117,26 @@
         );
     }
   }
+
+  function routeWeatherTimingLabel(): string {
+    switch (routeWeather?.timing.availability) {
+      case "ready":
+        return $translation("dispatch-route-weather-timing-ready", {
+          departure: formatDate(routeWeather.timing.departure_at),
+          duration: formatDuration(routeWeather.timing.duration_seconds),
+        });
+      case "departure_unavailable":
+        return $translation(
+          "dispatch-route-weather-timing-departure-unavailable",
+        );
+      case "duration_unavailable":
+        return $translation(
+          "dispatch-route-weather-timing-duration-unavailable",
+        );
+      default:
+        return "";
+    }
+  }
   const operation = $derived(status.operation);
   function atlasWeatherStationId(stationIcao: string): string | undefined {
     return atlasWeather?.stations.find(
@@ -166,8 +186,9 @@
 
   function formatDuration(seconds: number | undefined): string {
     if (seconds === undefined) return "—";
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.round((seconds % 3600) / 60);
+    const totalMinutes = Math.round(seconds / 60);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
     return `${hours}h ${minutes.toString().padStart(2, "0")}m`;
   }
 
@@ -391,6 +412,12 @@
               interval: routeWeather.sample_interval_nm,
             })}
           </p>
+          <p
+            class:unavailable={routeWeather.timing.availability !== "ready"}
+            class="dispatch-route-weather-timing"
+          >
+            {routeWeatherTimingLabel()}
+          </p>
           <div class="dispatch-weather-actions">
             <button
               class="dispatch-inline-action"
@@ -428,6 +455,13 @@
                       <span
                         >{Math.round(sample.distance_from_origin_nm)} nm</span
                       >
+                      {#if sample.estimated_arrival_at}
+                        <span>
+                          {$translation("dispatch-route-weather-eta", {
+                            eta: formatDate(sample.estimated_arrival_at),
+                          })}
+                        </span>
+                      {/if}
                       {#if sample.source}
                         <strong
                           >{routeWeatherConditionLabel(
@@ -449,6 +483,27 @@
                             ),
                           })}
                         </em>
+                        {#if sample.source.temporal_support === "eta_matched"}
+                          <em class="eta-matched">
+                            {$translation(
+                              "dispatch-route-weather-forecast-match",
+                              {
+                                validAt: formatDate(sample.source.valid_at),
+                                offset: Math.round(
+                                  Math.abs(
+                                    sample.source.time_offset_seconds ?? 0,
+                                  ) / 60,
+                                ),
+                              },
+                            )}
+                          </em>
+                        {:else}
+                          <em class="current-context">
+                            {$translation(
+                              "dispatch-route-weather-current-context",
+                            )}
+                          </em>
+                        {/if}
                       {:else}
                         <strong
                           >{$translation(
@@ -479,6 +534,38 @@
                 {$translation("dispatch-route-weather-no-layer-detail")}
               </span>
             </div>
+          {/if}
+          {#if routeWeather.radar_contexts.length > 0}
+            <section class="dispatch-route-weather-radar responsive-surface">
+              <header>
+                <div>
+                  <span class="eyebrow"
+                    >{$translation(
+                      "dispatch-route-weather-radar-eyebrow",
+                    )}</span
+                  >
+                  <strong
+                    >{$translation(
+                      "dispatch-route-weather-radar-title",
+                    )}</strong
+                  >
+                </div>
+                <small
+                  >{$translation("dispatch-route-weather-radar-detail")}</small
+                >
+              </header>
+              <ul>
+                {#each routeWeather.radar_contexts as radar}
+                  <li>
+                    <strong>{radar.title}</strong>
+                    <span>{radar.provenance.provider}</span>
+                    <time datetime={radar.frame_time}
+                      >{formatDate(radar.frame_time)}</time
+                    >
+                  </li>
+                {/each}
+              </ul>
+            </section>
           {/if}
         </article>
       {/if}

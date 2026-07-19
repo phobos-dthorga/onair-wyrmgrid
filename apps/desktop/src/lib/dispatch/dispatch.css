@@ -1022,6 +1022,22 @@
   margin-top: 16px;
 }
 
+.dispatch-route-weather-timing {
+  margin: 12px 0 0;
+  border-left: 2px solid var(--color-highlight);
+  padding: 7px 10px;
+  color: var(--color-text);
+  background: var(--color-highlight-soft);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.dispatch-route-weather-timing.unavailable {
+  border-left-color: var(--color-accent);
+  color: var(--color-text-muted);
+  background: var(--color-surface-soft);
+}
+
 .dispatch-route-weather-layer > header {
   display: flex;
   justify-content: space-between;
@@ -1086,6 +1102,67 @@
 
 .dispatch-route-weather-samples em {
   color: var(--color-highlight);
+}
+
+.dispatch-route-weather-samples em.eta-matched {
+  border-top: 1px solid var(--color-highlight-border);
+  padding-top: 5px;
+}
+
+.dispatch-route-weather-samples em.current-context {
+  border-top: 1px dashed var(--color-accent-border);
+  padding-top: 5px;
+  color: var(--color-accent);
+}
+
+.dispatch-route-weather-radar {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  border: 1px solid var(--color-accent-border);
+  padding: 12px;
+  background: var(--color-surface-soft);
+}
+
+.dispatch-route-weather-radar > header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.dispatch-route-weather-radar > header > div {
+  display: grid;
+  gap: 3px;
+}
+
+.dispatch-route-weather-radar > header small {
+  max-width: 420px;
+  color: var(--color-text-muted);
+  font-size: 8px;
+  line-height: 1.4;
+  text-align: right;
+}
+
+.dispatch-route-weather-radar ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dispatch-route-weather-radar li {
+  display: grid;
+  gap: 2px;
+  border: 1px solid var(--color-line-faint);
+  padding: 7px 9px;
+  font-size: 8px;
+}
+
+.dispatch-route-weather-radar li span,
+.dispatch-route-weather-radar li time {
+  color: var(--color-text-muted);
 }
 
 .dispatch-inspector-stack {

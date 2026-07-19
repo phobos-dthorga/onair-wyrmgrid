@@ -119,10 +119,26 @@ export type DispatchComparison = {
 export type RouteWeatherAvailability =
   "ready" | "partial" | "route_unavailable" | "source_unavailable";
 
+export type RouteWeatherTimingAvailability =
+  "ready" | "departure_unavailable" | "duration_unavailable";
+
+export type RouteWeatherTiming = {
+  availability: RouteWeatherTimingAvailability;
+  departure_basis?: "scheduled_off" | "scheduled_out";
+  duration_basis?: "estimated_enroute" | "scheduled_on" | "scheduled_in";
+  departure_at?: string;
+  duration_seconds?: number;
+};
+
+export type RouteWeatherTemporalSupport = "eta_matched" | "current_context";
+
 export type RouteWeatherSourceSample = {
   point_id: string;
   location: Coordinates;
   support_distance_nm: number;
+  temporal_support: RouteWeatherTemporalSupport;
+  valid_at?: string;
+  time_offset_seconds?: number;
   condition: GlobalWeatherCondition;
   temperature_c?: number;
   precipitation_mm?: number;
@@ -136,7 +152,16 @@ export type RouteWeatherSample = {
   segment_index: number;
   distance_from_origin_nm: number;
   location: Coordinates;
+  estimated_arrival_at?: string;
   source?: RouteWeatherSourceSample;
+};
+
+export type RouteWeatherRadarContext = {
+  layer_id: string;
+  title: string;
+  provenance: OperationalProvenance;
+  frame_time: string;
+  relationship: "observation_only";
 };
 
 export type RouteWeatherLayerAnalysis = {
@@ -152,10 +177,13 @@ export type RouteWeatherAnalysis = {
   plan_id: string;
   sample_interval_nm: number;
   maximum_support_distance_nm: number;
+  maximum_temporal_support_seconds: number;
   mapped_route_point_count: number;
   unresolved_route_point_count: number;
+  timing: RouteWeatherTiming;
   availability: RouteWeatherAvailability;
   layers: RouteWeatherLayerAnalysis[];
+  radar_contexts: RouteWeatherRadarContext[];
 };
 
 export type DispatchStatus = {

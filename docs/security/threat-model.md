@@ -754,7 +754,9 @@ approved provider plugin receives the station identifiers; translated weather
 remains excluded from other plugins and Sentry.
 
 The Open-Meteo plugin receives only an 84-point host-selected global grid and
-publishes bounded numeric samples. The RainViewer plugin receives four
+publishes six UTC forecast horizons per location, capped at 504 validated
+numeric samples. Route coordinates, schedule times, account references, and
+plan identity remain inside the host. The RainViewer plugin receives four
 host-selected zoom-one addresses plus one bounded recent-frame offset and
 publishes validated RADAR and coverage-mask PNG bytes rather than remote URLs.
 The host retains at most six distinct frames in memory. Both refresh in the background, preserve the last valid layer on a
@@ -762,11 +764,15 @@ provider failure, and are independently stoppable. Neither receives a plan,
 OnAir fact, account reference, or credential.
 
 Along-route analysis runs after publication in the Rust application service.
-The plugin never receives plan coordinates. The service samples only mapped,
-continuous plan segments, caps the checkpoint count, accepts model support only
-inside a fixed maximum distance, and exposes that distance and missing support
-to the UI. This limits provider disclosure and prevents unresolved route gaps
-or distant model points from being presented as measured corridor conditions.
+The plugin never receives plan coordinates or schedule data. The service
+samples only mapped, continuous plan segments, caps the checkpoint count,
+derives ETAs only from validated plan timing, and accepts forecast support only
+inside fixed spatial and temporal limits. Point-level valid times, offsets,
+distances, legacy current-context classification, and missing support cross to
+the UI. This limits provider disclosure and prevents unresolved route gaps,
+distant model points, old plugin data, or an exhausted forecast horizon from
+being presented as ETA-matched corridor conditions. RADAR frame metadata is
+observation-only and no cell motion or future image is inferred.
 
 Atlas receives host-built weather projections rather than raw weather payloads
 or arbitrary provider map resources. Missing reports remain unknown,

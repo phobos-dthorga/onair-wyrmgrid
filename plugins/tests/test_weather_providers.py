@@ -38,19 +38,22 @@ AVIATION_WEATHER_FIXTURES = (
 class OpenMeteoClient:
     def get_json(self, origin, path, query):
         self.call = (origin, path, query)
+        times = [f"2026-07-17T{hour:02d}:00" for hour in range(24)]
+        location_count = len(query["latitude"].split(","))
         return [
             {
-                "current": {
-                    "time": "2026-07-17T12:00",
-                    "temperature_2m": 18.5,
-                    "precipitation": 1.25,
-                    "weather_code": 61,
-                    "cloud_cover": 82,
-                    "wind_speed_10m": 14.0,
-                    "wind_direction_10m": 245,
+                "hourly": {
+                    "time": times,
+                    "temperature_2m": [18.5] * len(times),
+                    "precipitation": [1.25] * len(times),
+                    "weather_code": [61] * len(times),
+                    "cloud_cover": [82] * len(times),
+                    "wind_speed_10m": [14.0] * len(times),
+                    "wind_direction_10m": [245] * len(times),
                     "provider_only": "must-not-cross-the-boundary",
                 }
             }
+            for _ in range(location_count)
         ]
 
 
@@ -103,12 +106,83 @@ class WeatherProviderTests(unittest.TestCase):
 
         product = OPEN_METEO.forecast_grid(request, client)
 
-        point = product["layer"]["data"]["points"][0]
-        self.assertEqual(point["id"], "grid-01")
+        points = product["layer"]["data"]["points"]
+        self.assertEqual(len(points), 6)
+        point = points[0]
+        self.assertEqual(point["id"], "grid-01-h00")
+        self.assertEqual(point["valid_at"], "2026-07-17T00:00:00Z")
         self.assertEqual(point["condition"], "rain")
         self.assertEqual(point["wind_speed_kt"], 14.0)
         self.assertNotIn("provider_only", json.dumps(product))
         self.assertEqual(client.call[1], "/v1/forecast")
+        self.assertEqual(client.call[2]["hourly"], OPEN_METEO.FIELDS)
+        self.assertEqual(client.call[2]["forecast_hours"], 19)
+        self.assertNotIn("current", client.call[2])
+
+    def test_open_meteo_rejects_malformed_hourly_series(self):
+        class MalformedOpenMeteoClient(OpenMeteoClient):
+            def get_json(self, origin, path, query):
+                payload = super().get_json(origin, path, query)
+                payload[0]["hourly"]["cloud_cover"] = [82]
+                return payload
+
+        with self.assertRaises(OPEN_METEO.ProviderError) as failure:
+            OPEN_METEO.forecast_grid(
+                {
+                    "query": {
+                        "kind": "forecast_grid",
+                        "points": [
+                            {
+                                "id": "grid-01",
+                                "location": {
+                                    "latitude": -33.8688,
+                                    "longitude": 151.2093,
+                                },
+                            }
+                        ],
+                    }
+                },
+                MalformedOpenMeteoClient(),
+            )
+        self.assertEqual(failure.exception.code, "invalid_response")
+
+    def test_open_meteo_keeps_six_horizons_under_the_domain_point_ceiling(self):
+        requested = [
+            {
+                "id": f"grid-{index:02d}",
+                "location": {"latitude": -75 + index, "longitude": -165},
+            }
+            for index in range(84)
+        ]
+        product = OPEN_METEO.forecast_grid(
+            {"query": {"kind": "forecast_grid", "points": requested}},
+            OpenMeteoClient(),
+        )
+
+        self.assertEqual(len(product["layer"]["data"]["points"]), 504)
+        self.assertLessEqual(
+            len(product["layer"]["data"]["points"]),
+            512,
+        )
+        self.assertLess(len(json.dumps(product).encode("utf-8")), 1_048_576)
+
+        with self.assertRaises(OPEN_METEO.ProviderError) as failure:
+            OPEN_METEO.forecast_grid(
+                {
+                    "query": {
+                        "kind": "forecast_grid",
+                        "points": requested
+                        + [
+                            {
+                                "id": "grid-84",
+                                "location": {"latitude": 9, "longitude": -165},
+                            },
+                        ],
+                    }
+                },
+                OpenMeteoClient(),
+            )
+        self.assertEqual(failure.exception.code, "invalid_response")
 
     def test_aviation_weather_translates_metar_and_taf_without_raw_objects(self):
         product = AVIATION_WEATHER.airport_reports(
