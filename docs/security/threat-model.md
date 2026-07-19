@@ -64,6 +64,10 @@
   disaster-recovery copies behaving inconsistently or being described
   misleadingly;
 - path traversal and unsafe process arguments;
+- malicious repository paths, links, junctions, Git metadata, file races, or
+  crafted diff records causing local review tooling to read outside the
+  repository, execute attacker-controlled arguments, expose sensitive content,
+  misclassify a critical change, or present incomplete evidence as a pass;
 - unbounded messages, event storms, hangs, and resource exhaustion;
 - hostile API payloads, imported files, map styles, and URLs;
 - imported themes concealing security text, counterfeiting controls, loading
@@ -258,6 +262,25 @@
   requires explicit feature, change, removal, and breaking-change lists and
   rejects declared breaking changes outside a new major-version line. Rebuilds
   reuse the exact tagged text rather than regenerating it;
+- the Stage 1 local review inventory is deterministic, local-only, and
+  dependency-free. It requires the exact Git repository root; invokes only
+  fixed read-only Git argument arrays without a shell; consumes bounded,
+  NUL-delimited status, diff, numstat, and tracked-mode output; rejects invalid
+  UTF-8 and unsafe repository-relative paths; disables optional Git locks,
+  prompts, filesystem-monitor hooks, untracked-cache updates, external diffs,
+  and text conversion; bounds Git output and duration; limits each selected
+  content hash to 128 MiB and 30 seconds; refuses to follow selected file links;
+  resolves regular files within the repository; and performs a stat-hash-stat
+  identity check while streaming SHA-256. It records only
+  repository-relative metadata and hashes in a new atomically renamed directory
+  beneath ignored `.wyrmgrid-local/`. A strict version-1 schema, canonical
+  fixture, runtime validator, stable candidate IDs, and conservative critical
+  path rules reject inconsistent counts, unknown fields, changed rule identity,
+  privacy-claim drift, or malformed evidence. Missing Git or file facts remain
+  explicitly unavailable and force classification review. The inventory runs
+  no validation command, network request, model, cache, patch, Git mutation, or
+  external action, and its path classification can escalate but never establish
+  semantic safety;
 - AI-assisted development tasks are optional and outside the WyrmGrid product.
   Hoardmind is the maintainer's private local assistant rather than a bundled
   component or required service. Change-impact, test-matrix, documentation-sync,
@@ -623,6 +646,24 @@ complete.
 - Record-level sync would expose substantially greater metadata, compatibility,
   conflict, deletion and recovery risk than opaque backup storage and remains
   outside this proposal.
+
+## Residual local-review automation risks
+
+The version-1 inventory is a source snapshot, not a repository lock. A
+concurrent local process with sufficient filesystem control may still replace
+or mutate a path around operating-system metadata checks, and a content hash
+does not prove that the source is correct, safe, reviewed, or unchanged later.
+Evidence must therefore be regenerated immediately before a later bounded use,
+and a stale or unavailable result cannot authorize work.
+
+Critical path rules are deliberately conservative but cannot infer security,
+privacy, legal, destructive, provider, or compatibility meaning from every
+ordinary filename. A `routine-candidate` still requires human scope review; an
+unknown or incomplete scope requires classification rather than a downgrade.
+Repository-relative filenames and content hashes can themselves disclose
+project structure or confirm known content, so ignored evidence remains private
+maintainer material and must not be copied into AI packets, diagnostics,
+issues, or releases without a separate bounded review.
 
 ## Residual localization risks
 

@@ -218,6 +218,16 @@ Proposed work:
 
 ### Stage 6 — optional Hoardmind conveniences
 
+The detailed candidate architecture, safety boundaries, implementation stages,
+and validation plan are recorded in the
+[local review automation and bounded Hoardmind delegation plan](local-review-automation.md).
+This section remains the CI/CD programme boundary for those proposed helpers.
+
+The deterministic Stage 1 inventory is now implemented as
+`npm run review:inventory`. It records a versioned local source-evidence bundle
+without running validation, preparing an AI packet, invoking a model, reusing a
+cache, or changing CI/CD. The remaining helpers below are still proposals.
+
 Proposed local-only helpers:
 
 - prepare a bounded change-impact, test-matrix, documentation-sync, or fixture
