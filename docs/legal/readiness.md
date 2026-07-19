@@ -107,6 +107,109 @@ relevant release issue or architecture decision.
   operating-system, architecture, source class, and permission path. Do not
   generalise an MSFS or one-platform result to X-Plane or another platform.
 
+## Before a public website, Aerie, or private vault
+
+The proposal-only hosted boundaries are defined by
+[ADR-0019](../architecture/decisions/0019-hosted-web-aerie-and-private-vault.md).
+Complete the applicable gates below before making the corresponding service
+public; a static informational site does not authorize accounts, uploads,
+package publication, or private storage.
+
+### Operator and public terms
+
+- Identify the legal operator, physical or service address, jurisdiction,
+  responsible contacts, domain registrant, security contact, privacy contact,
+  abuse contact, and service-discontinuation authority.
+- Obtain professional review appropriate to the operator and intended users for
+  the website terms, Privacy Notice, accessibility posture, consumer rights,
+  liability statements, governing law, disputes, age restrictions, sanctions,
+  export controls, and any digital-service or marketplace obligations.
+- Define uptime, support, backup, recovery, data-loss, maintenance, suspension,
+  termination, account closure, and change-notice promises conservatively.
+  Dedicated hardware does not establish a service-level commitment.
+- Inventory all website text, documentation excerpts, screenshots, fonts,
+  icons, maps, tiles, provider data, names, and marks. Confirm permission,
+  required attribution, and production terms before publication.
+
+### Accounts and identity
+
+- Document the selected identity provider, operator roles, controller and
+  processor allocation, regions, subprocessors, retention, deletion, export,
+  recovery, breach notification, and data-processing agreement.
+- Keep public browsing and downloads anonymous. Explain every account field,
+  login identity, access log, security event, moderation record, support record,
+  and recovery datum that is collected.
+- Require external-browser Authorization Code with PKCE for the native client;
+  do not collect identity-provider passwords in the Tauri webview.
+- Approve stable publisher identity, namespace ownership and transfer,
+  publisher-key enrolment, rotation, loss, compromise, revocation, recovery,
+  account closure, and the limit of what account recovery restores.
+- Define individual administrator and moderator authentication, least privilege,
+  phishing-resistant multifactor authentication, step-up checks, audit,
+  emergency access, access review, suspension, and departure procedures.
+
+### Community packages
+
+- Approve a publisher agreement, acceptable-use policy, moderation policy,
+  package-kind and licence allowlists, prohibited content, security response,
+  yanking, revocation, retention, appeal, and repeated-infringement process.
+- Require an SPDX licence expression, complete licence and notice material,
+  dependency and bundled-asset inventory, corresponding source where required,
+  distribution authority, trademark rights, and an auditable publisher
+  attestation. No licence means no catalogue redistribution.
+- Establish copyright notice and counter-notice, trademark, impersonation,
+  malware, privacy, emergency removal, evidence preservation, legal hold, and
+  complaint response appropriate to the operator's jurisdiction.
+- Publish accurate limits: publisher signing proves key control; repository
+  signing proves approval of exact bytes; scanning and moderation do not prove
+  safety, quality, compatibility, endorsement, or absence of infringement.
+- Review the exact package, plugin protocol, SDK, signing, installation,
+  rollback, update, native-provider, and dependency licences. Keep protocol,
+  schema, and database compatibility versions independent and explicit.
+
+### Infrastructure and external processors
+
+- Record DNS, certificate authority, identity, social login, mail, CDN or DDoS,
+  object storage, off-site backup, monitoring, registry, malware-signature, and
+  support providers in the third-party service register before data flows.
+- Record purpose, data, credentials, region, retention, subprocessors, transfer
+  mechanism, contractual role, security controls, quotas, fees, outage
+  behaviour, deletion, export, and replacement path for each provider.
+- Review the exact source dependencies, container layers, operating-system
+  packages, scanner and signature database, fonts, assets, and external terms
+  against the
+  [hosted-platform licensing register](hosted-platform-licensing.md). Generate
+  accurate notices and source-compliance material from the deployed bill of
+  materials.
+- Approve signing-key custody, offline backups, thresholds, ceremonies,
+  rotation, compromise response and recovery. TLS, publisher, repository,
+  installer, and platform code signatures must not be presented as equivalent.
+- Complete threat modelling, independent security review, off-site restore,
+  clean-host reconstruction, key-loss, incident, moderation, provider-loss,
+  and service-shutdown exercises before the relevant public phase.
+
+### Private encrypted backup storage
+
+- Complete a privacy impact assessment for the exact contents and metadata of
+  the existing `.wyrmbackup` format. State accurately which credentials and
+  device-bound values are excluded and which personal or operational records
+  remain inside the encrypted object.
+- Review and test client-side encryption, key derivation, authentication,
+  password change and loss, corruption, format versioning, replay, resumable
+  upload, cross-account isolation, quotas, generations, export, restore across
+  supported versions, and provider loss. Do not claim zero knowledge or
+  end-to-end encryption beyond the proven design.
+- Define server metadata minimization, operator and support access, retention,
+  deletion, legal hold, account closure, off-site backup, deletion from backup,
+  breach notification, recovery objectives, discontinuation, and a user export
+  period.
+- Keep vault authorization, database roles, storage, logs, audit, backup,
+  support and incident access separate from Aerie. The server must never receive
+  the backup password or plaintext database.
+- Treat record-level synchronization as a different future product requiring a
+  later ADR, protocol, schemas, device and key recovery, conflict and deletion
+  rules, compatibility fixtures, provenance policy, and a new legal review.
+
 ## Obtain professional legal review when a trigger is reached
 
 Professional review becomes proportionate before any of the following:

@@ -64,8 +64,9 @@ Online networks --------------------------+--> Atlas overlays     |
    slice. (The read-only Bridge protocol, provider supervisor, SimConnect
    sidecar, desktop controls, and plugin snapshot delivery are implemented;
    route export, live certification, and release bundling remain.)
-7. Add read-only SayIntentions `flight.json` correlation and selected SAPI reads,
-   followed by explicit user-initiated ACARS, crew, or gate actions.
+7. Add read-only SayIntentions local active-flight correlation through a reviewed
+   documented transport and selected SAPI reads, followed by explicit
+   user-initiated ACARS, crew, or gate actions.
 8. Reconcile plan versus recorded time, track distance, altitude, fuel, airport
    proximity, and registration without inventing unavailable facts. (Version 1
    SimBrief/telemetry correlation implemented; payload, route adherence, phase
@@ -81,6 +82,10 @@ Provider work does not bypass the quality gates. Each protocol or schema change
 needs sanitized fixtures, bounded validation tests, documentation, and an
 explicit compatibility decision. Claims about authenticated or live behaviour
 require a sanitized captured response or an outside-repository integration test.
+
+The candidate register and implementation processes for the currently selected
+SayIntentions, direct VATSIM, direct IVAO, and Navigraph work are documented in
+the [high-value provider integration process](high-value-provider-process.md).
 
 ## Shared requirements
 
@@ -106,8 +111,10 @@ require a sanitized captured response or an outside-repository integration test.
 
 ## Detailed plans
 
+- [High-value provider integration process](high-value-provider-process.md)
 - [SimBrief](simbrief.md)
 - [SayIntentions.AI](sayintentions.md)
+- [SayIntentions public-contract observation — 2026-07-19](sayintentions-contract-observation-2026-07-19.md)
 - [Aviation weather](weather.md)
 - [Weather radar](radar.md)
 - [VATSIM and IVAO](online-networks.md)

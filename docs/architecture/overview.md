@@ -27,6 +27,27 @@ The dependency direction points inward. Interface and infrastructure adapters
 depend on application-owned domain contracts; domain code does not depend on
 Tauri, SQLite, HTTP, MapLibre, Three.js, or a plugin language.
 
+## Proposed hosted ecosystem boundary
+
+WyrmGrid remains usable without project-operated infrastructure. A future
+SvelteKit website may present documentation and catalogue views, while a
+separate Rust Aerie service owns package, publisher, compatibility, moderation,
+revocation, and authorization rules. Quarantined validation workers never
+execute uploaded code, and signed immutable public targets remain distinct from
+private user storage.
+
+If an optional private vault proceeds, its first scope is opaque storage of an
+existing client-encrypted `.wyrmbackup`; the client retains the password and
+plaintext. It uses separate service credentials, database roles, storage roots,
+retention, audit, and incident boundaries from the public catalogue. It does
+not imply record-level synchronization. Website, catalogue, identity, vault,
+DNS, or signing-service unavailability must not block ordinary local use.
+
+See
+[ADR-0019](decisions/0019-hosted-web-aerie-and-private-vault.md), the
+[implementation plan](../operations/hosted-platform.md), and the
+[licensing and compliance register](../legal/hosted-platform-licensing.md).
+
 ## Development-assistance boundary
 
 AI assistants are outside the WyrmGrid product architecture. WyrmGrid has no AI

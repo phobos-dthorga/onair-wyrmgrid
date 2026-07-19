@@ -15,6 +15,21 @@ third-party software licence bundle shipped with a release.
 | Sentry Cloud                 | An unexpected reportable error occurs after user opt-in and build-time enablement                                                         | Redacted error metadata described in the Privacy Notice and normal connection metadata                       | WyrmGrid organization currently uses Sentry's US data region                                                              | Optional, off by default, reversible in Privacy & Terms                                                             | Complete the public-telemetry checklist before embedding release DSNs                                                                           |
 | GitHub                       | User independently follows a support, issue, discussion, or private-reporting link                                                        | Information the user chooses to submit to GitHub                                                             | Independent website and repository host                                                                                   | Optional; not contacted by the application automatically                                                            | Establish a dedicated privacy contact before broad distribution                                                                                 |
 
+## Planned hosted services
+
+The proposal for a WyrmGrid website, Aerie catalogue, identity service, mail,
+DNS and certificate services, monitoring, off-site backup, and optional private
+vault does not add any live application connection. Do not add a planned
+provider to the table as though it were operational. Before selection, record
+the exact operator, trigger, data, region, retention, subprocessors, user
+control, terms, fees, outage behaviour, and exit path required below.
+
+Candidate categories and their software and service-term questions are tracked
+in the
+[hosted-platform licensing and compliance register](hosted-platform-licensing.md).
+The separation and launch sequence are in the
+[hosted-platform implementation plan](../operations/hosted-platform.md).
+
 ## Adding or changing a service
 
 Before code introduces a new external connection, record its operator, purpose,

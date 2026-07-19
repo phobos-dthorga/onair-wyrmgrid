@@ -5,6 +5,13 @@ storage and cryptography components introduced by encrypted local data. Release
 automation must distribute these notices with binaries; this page does not
 replace the full dependency licence inventory produced for a release.
 
+Candidate server components for the proposal-only website, Aerie catalogue,
+and private vault are not shipped application notices and are not claimed to be
+in use here. Their preliminary review and the distinction between hosted use,
+browser distribution, container redistribution, and desktop distribution live
+in the
+[hosted-platform licensing and compliance register](hosted-platform-licensing.md).
+
 ## SQLCipher Community Edition
 
 Copyright (c) 2008-2020 Zetetic LLC

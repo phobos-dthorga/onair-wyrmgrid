@@ -20,6 +20,15 @@ Optional hosted diagnostics must not become an availability dependency. Public
 telemetry remains disclosed and user-controlled, and ordinary application work
 continues when the diagnostic service is unavailable.
 
+A future public website and WyrmGrid Aerie may provide documentation, release
+discovery, and moderated community-package distribution. A separately gated
+private vault may store an existing client-encrypted portable backup as an
+opaque object. None of these services is required for ordinary use, and they do
+not imply live database synchronization. Their proposed trust boundaries and
+delivery gates are recorded in
+[ADR-0019](architecture/decisions/0019-hosted-web-aerie-and-private-vault.md)
+and the [hosted-platform plan](operations/hosted-platform.md).
+
 The core application uses Rust, Tauri, TypeScript, Svelte, MapLibre, Three.js,
 and SQLite.
 Public plugins run as separate processes over a language-neutral, versioned,
