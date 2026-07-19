@@ -123,7 +123,8 @@ not replace completion of the current vertical slice.
 
 ### SayIntentions.AI
 
-- Explicit opt-in read of the credential-bearing local `flight.json`
+- Explicit opt-in read of the credential-bearing local active-flight payload
+  through a reviewed fixed-loopback or `flight.json` transport
 - Session-only SAPI key handling, followed by operating-system credential-store
   persistence only when the user requests it
 - Provider-labelled active-flight, frequency, parking, and gate context without
@@ -207,6 +208,70 @@ The complete sequence and provider constraints live in the
 The simulator UX sequence is detailed in the
 [simulator experience roadmap](integrations/simulator-experience-roadmap.md).
 
+## Hosted ecosystem track
+
+This is an optional, separately approved track. It must not make application
+startup, local Hoard access, existing plugins, local backup creation, or manual
+installation of an already verified package depend on a WyrmGrid server. Its
+architecture, detailed gates, and preliminary licence register are in
+[ADR-0019](architecture/decisions/0019-hosted-web-aerie-and-private-vault.md),
+the [hosted-platform implementation plan](operations/hosted-platform.md), and
+the
+[hosted-platform licensing and compliance register](legal/hosted-platform-licensing.md).
+
+### Decisions and static website
+
+- Confirm the legal operator, jurisdiction, final server and storage details,
+  domain, DNS, operating system, backups, external providers, ongoing cost,
+  availability, recovery and service-discontinuation expectations.
+- Complete the package, signing, identity, privacy, legal, abuse, incident,
+  dependency and hosted-migration decisions before implementing their phase.
+- Begin with a reviewed, accessible, mostly static public site for project
+  information, documentation, release verification guidance and security
+  contact details, with no account, analytics, upload or private-data need.
+- Prove clean-host reconstruction, external monitoring, off-site restore,
+  deployment rollback, TLS renewal, dependency notices and safe outage
+  behaviour before adding state.
+
+### Curated read-only Aerie
+
+- Define versioned catalogue, package-kind, repository-signing and desktop
+  verification contracts with valid, invalid, malicious, expired, rollback,
+  freeze, corrupt, yanked, revoked and permission-changing fixtures.
+- Publish only reviewed immutable targets, beginning with lower-risk data-only
+  assets. Keep downloads anonymous and installation explicitly user initiated.
+- Keep the Rust service authoritative for compatibility, approval, revocation
+  and installation; Svelte remains presentational.
+
+### Publisher uploads and executable packages
+
+- Add reviewed OpenID Connect, stable publisher identities, namespace and key
+  recovery, narrowly scoped grants, named moderator accounts and append-only
+  audit only after the curated pipeline is proven.
+- Accept bounded objects into quarantine, validate them in isolated workers that
+  cannot execute packages or access production credentials, and require human
+  moderation before signed publication.
+- Launch rights attestations, SPDX and notice collection, takedown, abuse,
+  yanking, revocation, incident, off-site recovery and key-compromise processes
+  before public submissions.
+- Enable ordinary out-of-process executable plugins only after protocol and SDK
+  conformance, deny-by-default permissions, resource controls, staged atomic
+  installation, rollback, client revalidation and independent security review.
+  Automatic updates remain a later decision.
+
+### Optional private vault
+
+- Consider only opaque storage of the existing client-encrypted `.wyrmbackup`
+  after a separate privacy and security approval. Keep its authorization,
+  database role, storage, backup, retention, support and incident boundaries
+  separate from public Aerie data.
+- Test password loss, corruption, cross-account access, replay, quota,
+  generations, export, deletion, account closure, client-version restore,
+  off-site recovery and provider loss before real user data is accepted.
+- Defer record-level synchronization to a later ADR and versioned protocol with
+  device keys, recovery, provenance, conflict, tombstone, deletion and
+  mixed-version rules. Do not replicate the live SQLite database.
+
 ## Later modules
 
 - Dispatch and explainable job scoring using OnAir, SimBrief, SayIntentions.AI,
@@ -220,7 +285,8 @@ The simulator UX sequence is detailed in the
   routes, utilization, finance, and named milestones
 - WyrmGrid Bridge lifecycle and SimBrief correlation refinement, followed by
   additional simulator and aircraft-specific providers
-- Signed plugin packages, hardened supervision, and WyrmGrid Aerie discovery
+- Hosted-ecosystem refinements that have passed the separate track's gates,
+  including carefully scoped catalogue discovery and update ergonomics
 
 Stable plugin APIs, automatic updates, signing, and a public plugin catalogue
 require separate readiness reviews; they are not implied by the initial shell.

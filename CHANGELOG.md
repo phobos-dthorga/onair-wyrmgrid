@@ -73,6 +73,32 @@ major application version.
 
 ### Changes
 
+- Existing webview synchronization choices now migrate once into encrypted
+  settings and are removed from browser storage after a successful save. The
+  privacy notice and source language catalogue advance for the newly retained
+  Atlas and plugin preferences.
+
+- Documented a proposal-only hosted-platform architecture and staged delivery
+  plan for the public website, WyrmGrid Aerie catalogue, signed community
+  packages, and a separately isolated encrypted-backup vault. Added a candidate
+  software-licence register, community-package rights policy, operating-cost
+  ledger, threat controls, and legal gates. No server deployment, account,
+  upload, private-data service, package format, signing key, version, workflow,
+  or public support claim is enabled.
+- Documented a staged, proposal-only plan for release-integrity hardening,
+  truthful pull-request validation, deterministic release gates, protected
+  GitHub promotion, supply-chain evidence, platform coverage, and optional
+  local Hoardmind review conveniences. The plan authorizes no workflow, GitHub
+  setting, version, tag, release, cache, secret, or signing change.
+- Documented a proposal-only implementation programme for the selected
+  SayIntentions, direct VATSIM, direct IVAO, and Navigraph integrations. It
+  defines provider-specific sequencing, privacy and authorization gates,
+  unavailable-data behaviour, validation, and live-certification requirements
+  without enabling provider access or claiming compatibility.
+- Reconciled maintainer-supplied SayIntentions public-document screenshots with
+  the current provider page and recorded the SAPI endpoint inventory,
+  `flight.json` field decisions, SimAPI boundary, immediate subscribed-account
+  path, VA-Link exception, and sanitized live-certification requirements.
 - Reworked detailed Atlas cloud, storm, obscuration, and dust volumes with a
   higher-resolution multi-lobed density field, stable optical thickness,
   brighter internal shading, sourced-wind alignment, and deterministic

@@ -14,6 +14,15 @@
   credentials;
 - local files and operating-system access;
 - plugin trust decisions and signatures;
+- proposed Aerie accounts, stable publisher identities and namespaces,
+  publisher keys, moderator authority, scoped grants, validation and moderation
+  evidence, repository metadata, offline and online signing keys, package
+  digests, immutable targets, revocations, and hosted audit records;
+- quarantined community uploads, public catalogue availability, DNS and TLS
+  control, deployment and backup credentials, hosted PostgreSQL state, and
+  off-site recovery material;
+- proposed private-vault accounts, object metadata, encrypted `.wyrmbackup`
+  objects, retention and deletion state, access history, and restore evidence;
 - diagnostic events, telemetry preferences, and Sentry report identifiers;
 - release source maps, native debug information, and telemetry upload credentials;
 - maintainer GitHub App private keys, short-lived installation tokens, generated-
@@ -33,6 +42,27 @@
 - credential disclosure through logs, errors, telemetry, storage, or plugins;
 - malicious plugin or simulator-provider manifests, executables, dependencies,
   and messages;
+- malicious, compromised, impersonating, unlicensed, or deceptively named
+  Aerie publishers and packages being accepted, signed, cached, installed, or
+  mistaken for an endorsement;
+- uploaded archive traversal, links, case collisions, alternate data streams,
+  Unicode deception, decompression bombs, parser exploits, scanner evasion,
+  worker escape, malicious metadata, and CPU, memory, disk or queue exhaustion;
+- account takeover, weak recovery, confused OAuth clients, token replay, scope
+  escalation, cross-account object access, moderator abuse, shared
+  administration, or publisher-key and namespace theft;
+- compromise or misuse of DNS, TLS, CDN, deployment, database, object-store,
+  identity, mail, container-runtime, audit, backup, or repository-signing
+  authority;
+- rollback, freeze, mix-and-match, mirror equivocation, metadata expiry, target
+  substitution, key loss, key compromise, unsafe rotation, or a desktop client
+  accepting a server response without independent verification;
+- public catalogue data, account records, IP addresses, upload attribution,
+  private-backup metadata, encrypted backup objects, or operational history
+  leaking through authorization faults, logs, support, backups or incidents;
+- deletion, yanking, revocation, account closure, retention, legal hold, and
+  disaster-recovery copies behaving inconsistently or being described
+  misleadingly;
 - path traversal and unsafe process arguments;
 - unbounded messages, event storms, hangs, and resource exhaustion;
 - hostile API payloads, imported files, map styles, and URLs;
@@ -77,7 +107,8 @@
   URLs, remote tracking requests, oversized media, or misleading portraits;
 - embedded desktop application secrets being extracted and abused;
 - a SayIntentions key leaking through query URLs, redirects, HTTP diagnostics,
-  local `flight.json` parsing, support bundles, or automatic retries;
+  the provider-controlled local active-flight endpoint or its documented LAN
+  exposure, local `flight.json` parsing, support bundles, or automatic retries;
 - external writes or simulator commands occurring without explicit user intent;
 - dependency or release-pipeline compromise;
 - a release tag packaging untested code, a commit outside `main`, or application
@@ -132,10 +163,11 @@
   application secrets are never embedded in desktop binaries or public sites.
   The encrypted database stores only non-secret account metadata and startup
   choices, and plugins never receive credential-profile data;
-- SayIntentions `flight.json` is read only after opt-in, parsed through a strict
-  allowlist, and never persisted raw; its API key becomes an in-memory secret
-  immediately and its documented HTTPS origin is pinned independently of any
-  hostname in the file;
+- SayIntentions local active-flight data is read only after opt-in through a
+  reviewed fixed-loopback or documented `flight.json` transport, parsed through
+  a strict allowlist, and never persisted raw. WyrmGrid never uses a LAN address
+  or hostname from the payload; the API key becomes an in-memory secret
+  immediately and the documented SAPI HTTPS origin is pinned independently;
 - secret-bearing SAPI URLs, redirects, and HTTP client errors are converted to
   bounded codes before logging, telemetry, persistence, or display;
 - SayIntentions communications and airport mutations require an explicit user
@@ -475,6 +507,122 @@ infrastructure after onboarding. WyrmGrid does not intentionally include OnAir
 payloads in those requests, but ordinary network metadata reaches that service.
 Production suitability, retention, attribution, availability limits, and a
 replacement or approval decision remain stable-release requirements.
+
+## Planned hosted-platform controls
+
+The website, Aerie catalogue, public uploads, repository signing, and private
+vault are proposals, not implemented controls. If a phase proceeds, its
+exposure is blocked until that phase's controls and tests in the
+[hosted-platform implementation plan](../operations/hosted-platform.md) are
+complete.
+
+- WyrmGrid Web is presentational. A separate Rust service owns publisher,
+  compatibility, upload, moderation, authorization, revocation, vault, and
+  installation rules. Browser, desktop, database, scanner, identity and object-
+  store representations translate into stable application contracts.
+- Public catalogue storage, inbound quarantine, disposable validation work,
+  repository metadata, signing authority, audit evidence, and private encrypted
+  backups use separate roots and least-privileged service identities. A
+  catalogue compromise must not grant private-vault or offline-key access.
+- Public reads and downloads remain anonymous. Publisher, moderator, desktop,
+  vault and service scopes are distinct. Native authorization uses the system
+  browser with Authorization Code and PKCE; short-lived audience-restricted
+  tokens are retained only in the operating-system credential store when
+  necessary.
+- Stable Aerie publisher IDs are distinct from mutable social or email
+  identities. Key enrolment, rotation, loss, compromise, recovery, revocation,
+  namespace transfer and account closure are explicit, audited workflows.
+  Moderators have named least-privileged accounts, phishing-resistant
+  multifactor authentication and step-up checks; shared administrators are
+  prohibited.
+- Uploads are bounded and streamed into non-public immutable quarantine under
+  application-generated identifiers. Publication requires successful
+  deterministic validation and an individual moderation decision bound to the
+  exact digest. Upload, validation, approval and publication are different
+  states.
+- Validators enforce compressed, expanded, per-file, file-count, path-depth,
+  process, CPU, memory, disk, output and time ceilings. They reject traversal,
+  absolute paths, links, device names, alternate data streams, case collisions,
+  duplicate entries, dangerous Unicode controls, sparse tricks and install
+  hooks without executing or importing package code.
+- Validation workers have disposable work directories, a read-only root where
+  possible, restricted system calls and processes, no runtime socket, no
+  production or signing credentials, and no outbound network by default.
+  Scanner updates are a separate operation. Scanner failure or a clean result
+  cannot silently approve a package.
+- Public targets are immutable and content-addressed. A reviewed TUF-compatible
+  profile protects root, targets, snapshot and timestamp metadata with defined
+  thresholds, expiry, rollback, freeze, mix-and-match, rotation, delegation and
+  recovery behaviour. Offline or hardware-backed root and publication
+  authority never enters the public host or its routine backups.
+- The Rust desktop independently verifies trusted metadata, exact target length
+  and digest, manifest, package kind, compatibility, publisher identity and
+  permissions; stages and revalidates the archive; requires user approval for
+  new capabilities; installs atomically; and retains a bounded rollback. No
+  install script or undeclared runtime dependency download is allowed.
+- If the private vault is approved, the client uploads only an authenticated,
+  password-encrypted `.wyrmbackup` as an opaque object. The server never
+  receives its password or plaintext. Vault authorization, roles, storage,
+  logs, backup and incident access remain separate from Aerie, with tested
+  quotas, generations, corruption, replay, deletion, export and versioned
+  restore behaviour.
+- Record-level synchronization is denied until a later ADR, privacy assessment,
+  device and key model, versioned protocol and schemas, provenance policy,
+  conflict and tombstone rules, deletion contract and mixed-version fixtures
+  exist. Raw OnAir payloads, credentials, provider tokens, device trust, audio,
+  plugin grants and local authorization decisions are denied by default.
+- Only the hardened edge proxy is public. Databases, workers, metrics, storage
+  control and container administration remain private. Services run as
+  dedicated non-root identities with pinned artifacts, restricted capabilities,
+  resource limits and no runtime socket. Administrative access uses individual
+  keys through a reviewed private path.
+- Request, upload, download, account, authorization and moderation endpoints
+  receive separate rate, concurrency and body limits. Browser mutations use
+  anti-CSRF protection and restrictive content security headers. Logs are
+  bounded and exclude tokens, cookies, authorization headers, backup contents,
+  archive contents, API keys and raw OnAir data.
+- Encrypted off-site backups, clean-host reconstruction, independent availability
+  observation, repository-metadata expiry alerts, database and object restore,
+  key-loss exercises, incident playbooks, abuse and takedown processes, and
+  service-shutdown export are launch gates rather than post-launch work.
+- Hosted-service failure never blocks local startup, existing plugin use,
+  ordinary Hoard access, local backup creation, or manual installation of an
+  already verified package.
+
+## Residual hosted-platform risks
+
+- One dedicated server remains a common availability and compromise domain.
+  Separation on the host limits credentials and paths but is not equivalent to
+  independent physical security boundaries. Off-site recovery cannot provide
+  uninterrupted service.
+- A correctly signed package can still be malicious, vulnerable, misleading,
+  incompatible, or unlawfully distributed. Signatures, scanning, schemas,
+  moderation and process separation reduce different risks; none proves safety
+  or rights ownership.
+- A compromised online service can deny service, collect traffic metadata,
+  present stale public content, or distribute malicious bytes. Independent
+  desktop verification limits target substitution but cannot prevent outages,
+  phishing, traffic analysis or every client-verification defect.
+- Root and publication key custody moves risk to people and ceremonies. Lost
+  keys can make recovery difficult; compromised keys can create apparently
+  valid malicious metadata; excessive recovery authority can defeat thresholds.
+- Revocation cannot instantly reach an offline client. Existing installations
+  may retain vulnerable code, and expiry-based fail-closed behaviour can itself
+  deny new installs during a prolonged outage.
+- Identity-provider compromise, mutable external identities, recovery abuse,
+  email interception, moderator coercion and support impersonation remain
+  account risks even with PKCE and multifactor authentication.
+- Client-side backup encryption does not conceal account identity, address,
+  timing, object size, access, quota and retention metadata. Weak or forgotten
+  passwords can expose or permanently lose user data; server backups and legal
+  holds can delay physical deletion.
+- Moderation, privacy requests, takedowns, abuse, incident response, dependency
+  review and restore exercises create continuing human obligations. A free
+  software stack does not remove those costs or guarantee the operator can meet
+  them.
+- Record-level sync would expose substantially greater metadata, compatibility,
+  conflict, deletion and recovery risk than opaque backup storage and remains
+  outside this proposal.
 
 ## Residual localization risks
 

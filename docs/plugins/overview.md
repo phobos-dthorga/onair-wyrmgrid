@@ -65,6 +65,14 @@ plugin options without making `plugin.json` an application-settings surface.
 The complete framing, lifecycle, limit, and compatibility contract is in
 [protocol version 1](protocol-v1.md).
 
+WyrmGrid Aerie is a future distribution and discovery service, not part of the
+current protocol proof. Its proposal keeps upload quarantine, validation,
+moderation, publisher signatures, repository approval, desktop verification,
+installation and rollback as distinct steps. See
+[ADR-0019](../architecture/decisions/0019-hosted-web-aerie-and-private-vault.md)
+and the
+[hosted-platform implementation plan](../operations/hosted-platform.md).
+
 ## Chart contributions
 
 Charts use the versioned, declarative contract in

@@ -4,6 +4,12 @@ WyrmGrid needs a simulator-neutral route representation. SimBrief, Navigraph,
 OnAir, MSFS, X-Plane, Little Navmap, and community plugins must not each create a
 parallel concept of a flight plan.
 
+The approval track and cross-provider delivery order for the selected Navigraph
+work live in the
+[high-value provider integration process](high-value-provider-process.md). This
+document remains authoritative for the canonical route, licensed-data,
+authentication, package, and interchange boundaries.
+
 ## Canonical route boundary
 
 The first route model should represent only demonstrated needs:
