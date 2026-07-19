@@ -16,6 +16,11 @@ const preferences: DisplayPreferences = {
   fuel_unit: "litres",
   responsive_surfaces: true,
   weather_rendering_profile: "enhanced",
+  weather_cloud_effects: true,
+  weather_precipitation_effects: true,
+  weather_lightning_effects: true,
+  weather_dust_effects: true,
+  reduce_weather_flashes: true,
 };
 
 const session: SimulatorSessionView = {

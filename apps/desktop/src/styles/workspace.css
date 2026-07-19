@@ -365,6 +365,105 @@ nav {
   border-color: var(--color-highlight-border);
   background: var(--color-highlight-soft);
 }
+.weather-zone-note > div {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+}
+.weather-zone-note p {
+  margin: 0;
+}
+.weather-zone-key {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px 8px;
+}
+.weather-zone-key span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: var(--color-text-muted);
+  font-size: 10px;
+}
+.weather-zone-key i {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 12px;
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 2px;
+  background-color: rgb(132 152 166 / 18%);
+}
+.weather-zone-key .cloud {
+  background-color: rgb(143 168 187 / 18%);
+  background-image: repeating-linear-gradient(
+    0deg,
+    transparent 0 4px,
+    #8fa8bb 4px 5px,
+    transparent 5px 8px
+  );
+}
+.weather-zone-key .rain {
+  background-color: rgb(65 159 209 / 16%);
+  background-image: repeating-linear-gradient(
+    135deg,
+    transparent 0 4px,
+    #419fd1 4px 5.5px,
+    transparent 5.5px 9px
+  );
+}
+.weather-zone-key .snow {
+  background-color: rgb(215 237 244 / 13%);
+  background-image:
+    radial-gradient(circle, #d7edf4 0 1.2px, transparent 1.4px),
+    linear-gradient(90deg, transparent 45%, #d7edf4 46% 54%, transparent 55%);
+  background-position:
+    0 0,
+    4px 1px;
+  background-size:
+    8px 8px,
+    8px 8px;
+}
+.weather-zone-key .convective {
+  background-color: rgb(212 97 117 / 16%);
+  background-image:
+    linear-gradient(135deg, transparent 42%, #d46175 43% 53%, transparent 54%),
+    linear-gradient(45deg, transparent 42%, #d46175 43% 53%, transparent 54%);
+  background-position:
+    0 0,
+    4px 0;
+  background-size: 8px 8px;
+}
+.weather-zone-key .obscuration {
+  background-color: rgb(164 145 180 / 16%);
+  background-image: radial-gradient(circle, #a491b4 0 1.1px, transparent 1.3px);
+  background-position: 0 0;
+  background-size: 6px 6px;
+}
+.weather-zone-key .dust {
+  background-color: rgb(194 135 79 / 15%);
+  background-image:
+    repeating-linear-gradient(
+      45deg,
+      transparent 0 5px,
+      #c2874f 5px 6px,
+      transparent 6px 10px
+    ),
+    repeating-linear-gradient(
+      135deg,
+      transparent 0 5px,
+      #c2874f 5px 6px,
+      transparent 6px 10px
+    );
+}
+.weather-zone-key .radar {
+  border-color: #6ec5df;
+  background-color: rgb(110 197 223 / 10%);
+  background-image:
+    linear-gradient(#6ec5df 1px, transparent 1px),
+    linear-gradient(90deg, #6ec5df 1px, transparent 1px);
+  background-size: 6px 6px;
+}
 .route-note p {
   flex: 1;
   margin: 0;
@@ -394,6 +493,7 @@ nav {
 .map-wash {
   pointer-events: none;
   position: absolute;
+  z-index: 2;
   inset: 0;
   background: linear-gradient(
     180deg,
@@ -405,7 +505,7 @@ nav {
 .region-hover-card {
   pointer-events: none;
   position: absolute;
-  z-index: 2;
+  z-index: 3;
   top: 22px;
   right: 58px;
   min-width: 190px;
@@ -440,6 +540,7 @@ nav {
 }
 .map-title {
   position: absolute;
+  z-index: 3;
   left: 24px;
   top: 22px;
   padding: 12px 14px;
@@ -473,6 +574,7 @@ nav {
 }
 .readiness-card {
   position: absolute;
+  z-index: 3;
   left: 24px;
   bottom: 24px;
   width: min(430px, calc(100% - 48px));

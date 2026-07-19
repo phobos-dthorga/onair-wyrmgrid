@@ -1,6 +1,11 @@
 <script lang="ts">
   import { translation } from "$lib/i18n/runtime";
   import { displayPresets, type DisplayPreferences } from "./types";
+  import {
+    displayPresetMessageKeys,
+    weatherProfileDetailMessageKeys,
+    type DisplayPreset,
+  } from "./presentation";
   import type {
     SimulatorPreferences,
     SimulatorProviderView,
@@ -65,12 +70,29 @@
     }
   });
 
-  function applyPreset(preset: keyof typeof displayPresets): void {
+  function applyPreset(preset: DisplayPreset): void {
     draft = {
       ...displayPresets[preset],
       responsive_surfaces: draft.responsive_surfaces,
       weather_rendering_profile: draft.weather_rendering_profile,
+      weather_cloud_effects: draft.weather_cloud_effects,
+      weather_precipitation_effects: draft.weather_precipitation_effects,
+      weather_lightning_effects: draft.weather_lightning_effects,
+      weather_dust_effects: draft.weather_dust_effects,
+      reduce_weather_flashes: draft.reduce_weather_flashes,
     };
+  }
+
+  function updateReduceWeatherFlashes(event: Event): void {
+    const input = event.currentTarget as HTMLInputElement;
+    if (
+      !input.checked &&
+      !window.confirm($translation("settings-weather-flash-confirmation"))
+    ) {
+      input.checked = true;
+      return;
+    }
+    draft.reduce_weather_flashes = input.checked;
   }
 
   function handleKeydown(event: KeyboardEvent): void {
@@ -111,13 +133,13 @@
         </div>
 
         <div class="preset-row" aria-label={$translation("settings-presets")}>
-          {#each Object.keys(displayPresets) as preset}
+          {#each Object.keys(displayPresets) as preset (preset)}
             <button
               type="button"
               disabled={busy}
-              onclick={() => applyPreset(preset as keyof typeof displayPresets)}
+              onclick={() => applyPreset(preset as DisplayPreset)}
             >
-              {$translation(`settings-preset-${preset}`)}
+              {$translation(displayPresetMessageKeys[preset as DisplayPreset])}
             </button>
           {/each}
         </div>
@@ -265,26 +287,116 @@
           </span>
         </label>
 
-        <label
-          class="settings-toggle settings-motion-toggle responsive-surface"
-        >
-          <input
-            type="checkbox"
-            disabled={busy}
-            checked={draft.weather_rendering_profile === "enhanced"}
-            onchange={(event) =>
-              (draft.weather_rendering_profile = event.currentTarget.checked
-                ? "enhanced"
-                : "compatibility")}
-          />
-          <span>
-            <strong>{$translation("settings-enhanced-weather")}</strong>
-            <small>{$translation("settings-enhanced-weather-detail")}</small>
-          </span>
-        </label>
-
         <p class="settings-boundary">
           {$translation("settings-motion-boundary")}
+        </p>
+      </section>
+
+      <section class="settings-section">
+        <div class="section-copy">
+          <span class="eyebrow"
+            >{$translation("settings-weather-graphics-eyebrow")}</span
+          >
+          <h3>{$translation("settings-weather-graphics-title")}</h3>
+          <p>{$translation("settings-weather-graphics-detail")}</p>
+        </div>
+
+        <div class="weather-profile-grid">
+          <label>
+            <span>{$translation("settings-weather-profile")}</span>
+            <select
+              disabled={busy}
+              bind:value={draft.weather_rendering_profile}
+            >
+              <option value="compatibility"
+                >{$translation(
+                  "settings-weather-profile-compatibility",
+                )}</option
+              >
+              <option value="enhanced"
+                >{$translation("settings-weather-profile-enhanced")}</option
+              >
+              <option value="cinematic"
+                >{$translation("settings-weather-profile-cinematic")}</option
+              >
+            </select>
+            <small>
+              {$translation(
+                weatherProfileDetailMessageKeys[
+                  draft.weather_rendering_profile
+                ],
+              )}
+            </small>
+          </label>
+        </div>
+
+        <div class="weather-effect-grid">
+          <label class="settings-toggle responsive-surface">
+            <input
+              type="checkbox"
+              disabled={busy}
+              bind:checked={draft.weather_cloud_effects}
+            />
+            <span>
+              <strong>{$translation("settings-weather-clouds")}</strong>
+              <small>{$translation("settings-weather-clouds-detail")}</small>
+            </span>
+          </label>
+          <label class="settings-toggle responsive-surface">
+            <input
+              type="checkbox"
+              disabled={busy}
+              bind:checked={draft.weather_precipitation_effects}
+            />
+            <span>
+              <strong>{$translation("settings-weather-precipitation")}</strong>
+              <small
+                >{$translation("settings-weather-precipitation-detail")}</small
+              >
+            </span>
+          </label>
+          <label class="settings-toggle responsive-surface">
+            <input
+              type="checkbox"
+              disabled={busy}
+              bind:checked={draft.weather_lightning_effects}
+            />
+            <span>
+              <strong>{$translation("settings-weather-lightning")}</strong>
+              <small>{$translation("settings-weather-lightning-detail")}</small>
+            </span>
+          </label>
+          <label class="settings-toggle responsive-surface">
+            <input
+              type="checkbox"
+              disabled={busy}
+              bind:checked={draft.weather_dust_effects}
+            />
+            <span>
+              <strong>{$translation("settings-weather-dust")}</strong>
+              <small>{$translation("settings-weather-dust-detail")}</small>
+            </span>
+          </label>
+          <label
+            class="settings-toggle responsive-surface weather-flash-safety"
+          >
+            <input
+              type="checkbox"
+              disabled={busy || !draft.weather_lightning_effects}
+              checked={draft.reduce_weather_flashes}
+              onchange={updateReduceWeatherFlashes}
+            />
+            <span>
+              <strong>{$translation("settings-weather-reduce-flashes")}</strong>
+              <small
+                >{$translation("settings-weather-reduce-flashes-detail")}</small
+              >
+            </span>
+          </label>
+        </div>
+
+        <p class="settings-boundary">
+          {$translation("settings-weather-boundary")}
         </p>
       </section>
 

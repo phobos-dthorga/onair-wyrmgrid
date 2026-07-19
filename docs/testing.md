@@ -99,6 +99,19 @@ in changed business logic during local review.
    Dispatch import, Hoard history selection, language packs, and plugin
    permission review.
 
+## Identifier boundary audits
+
+Run `npm run audit:boundaries` after changing localization calls, the source
+catalogue, frontend desktop clients, or Tauri command registration. The
+localization audit rejects unknown literal keys, template-constructed Svelte
+keys, and catalogue-version drift. The desktop-command audit requires every
+frontend invocation to pass through the shared client and match one registered
+Tauri handler exactly.
+
+These audits verify identifier ownership and parity only. They do not replace
+Svelte type checking, Rust application tests, or review of whether a Tauri
+command is thin.
+
 ## Optional AI-assisted test work
 
 No AI is required for WyrmGrid development or testing. A contributor who elects

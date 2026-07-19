@@ -3,6 +3,7 @@ import type { PluginHostView, PluginView } from "./types";
 const requestedPermissions = [
   "on_air_fleet_read",
   "map_layers_publish",
+  "weather_data_publish",
 ] as const;
 
 const previewPlugin: PluginView = {
@@ -11,7 +12,7 @@ const previewPlugin: PluginView = {
   version: "0.1.0",
   author: "WyrmGrid contributors",
   runtime: "python",
-  weather_capabilities: [],
+  weather_capabilities: ["forecast_grid"],
   network_origins: [],
   requested_permissions: [...requestedPermissions],
   granted_permissions: [],
@@ -47,6 +48,7 @@ export const forgePreviewRunning: PluginHostView = {
       granted_permissions: [...requestedPermissions],
       state: "running",
       published_layer_count: 1,
+      published_weather_layer_count: 1,
     },
   ],
   layers: [
@@ -81,5 +83,58 @@ export const forgePreviewRunning: PluginHostView = {
       },
     },
   ],
-  weather_layers: [],
+  weather_layers: [
+    {
+      plugin_id: previewPlugin.id,
+      plugin_name: previewPlugin.name,
+      layer: {
+        schema_version: 1,
+        id: "weather-pattern-reference",
+        title: "Weather pattern reference",
+        data: {
+          kind: "grid",
+          points: [
+            {
+              id: "cloud",
+              location: { latitude: 20, longitude: -30 },
+              condition: "cloud",
+            },
+            {
+              id: "rain",
+              location: { latitude: 20, longitude: 15 },
+              condition: "rain",
+            },
+            {
+              id: "snow",
+              location: { latitude: 20, longitude: 60 },
+              condition: "snow",
+            },
+            {
+              id: "convective",
+              location: { latitude: -20, longitude: -30 },
+              condition: "convective",
+            },
+            {
+              id: "obscuration",
+              location: { latitude: -20, longitude: 15 },
+              condition: "obscuration",
+            },
+            {
+              id: "clear",
+              location: { latitude: -20, longitude: 60 },
+              condition: "clear",
+            },
+          ],
+        },
+        provenance: {
+          kind: "external_calculation",
+          provider: "WyrmGrid illustrative preview",
+          generated_at: "2026-07-19T00:00:00Z",
+          retrieved_at: "2026-07-19T00:00:00Z",
+          transformation_version: 1,
+          freshness: "current",
+        },
+      },
+    },
+  ],
 };

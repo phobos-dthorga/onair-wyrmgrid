@@ -31,7 +31,9 @@ const INTERACTION_PREFERENCES_SCHEMA: &str =
 const FLIGHT_OPERATIONS_SCHEMA: &str = include_str!("../migrations/0013_flight_operations.sql");
 const ATLAS_RENDERING_PREFERENCES_SCHEMA: &str =
     include_str!("../migrations/0014_atlas_rendering_preferences.sql");
-pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 14;
+const ATLAS_WEATHER_GRAPHICS_PREFERENCES_SCHEMA: &str =
+    include_str!("../migrations/0015_atlas_weather_graphics_preferences.sql");
+pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 15;
 
 #[derive(Debug, Error)]
 pub enum StorageError {
@@ -112,6 +114,11 @@ pub struct DisplayPreferencesRecord {
     pub fuel_unit: String,
     pub responsive_surfaces: bool,
     pub weather_rendering_profile: String,
+    pub weather_cloud_effects: bool,
+    pub weather_precipitation_effects: bool,
+    pub weather_lightning_effects: bool,
+    pub weather_dust_effects: bool,
+    pub reduce_weather_flashes: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -264,6 +271,7 @@ impl Store {
         connection.execute_batch(INTERACTION_PREFERENCES_SCHEMA)?;
         connection.execute_batch(FLIGHT_OPERATIONS_SCHEMA)?;
         connection.execute_batch(ATLAS_RENDERING_PREFERENCES_SCHEMA)?;
+        connection.execute_batch(ATLAS_WEATHER_GRAPHICS_PREFERENCES_SCHEMA)?;
         if path.is_some() {
             data_protection::mark_wyrmgrid_database(&connection)?;
         }
@@ -544,12 +552,21 @@ impl Store {
                         display.weight_unit,
                         display.fuel_unit,
                         COALESCE(interaction.responsive_surfaces, 1),
-                        COALESCE(atlas.weather_rendering_profile, 'enhanced')
+                        COALESCE(graphics.weather_rendering_profile,
+                                 atlas.weather_rendering_profile,
+                                 'enhanced'),
+                        COALESCE(graphics.weather_cloud_effects, 1),
+                        COALESCE(graphics.weather_precipitation_effects, 1),
+                        COALESCE(graphics.weather_lightning_effects, 1),
+                        COALESCE(graphics.weather_dust_effects, 1),
+                        COALESCE(graphics.reduce_weather_flashes, 1)
                  FROM display_preferences AS display
                  LEFT JOIN interaction_preferences AS interaction
                    ON interaction.singleton_id = display.singleton_id
                  LEFT JOIN atlas_rendering_preferences AS atlas
                    ON atlas.singleton_id = display.singleton_id
+                 LEFT JOIN atlas_weather_graphics_preferences AS graphics
+                   ON graphics.singleton_id = display.singleton_id
                  WHERE display.singleton_id = 1",
                 [],
                 |row| {
@@ -560,6 +577,11 @@ impl Store {
                         fuel_unit: row.get(3)?,
                         responsive_surfaces: row.get(4)?,
                         weather_rendering_profile: row.get(5)?,
+                        weather_cloud_effects: row.get(6)?,
+                        weather_precipitation_effects: row.get(7)?,
+                        weather_lightning_effects: row.get(8)?,
+                        weather_dust_effects: row.get(9)?,
+                        reduce_weather_flashes: row.get(10)?,
                     })
                 },
             )
@@ -610,7 +632,38 @@ impl Store {
              ON CONFLICT(singleton_id) DO UPDATE SET
                 weather_rendering_profile = excluded.weather_rendering_profile,
                 updated_at = CURRENT_TIMESTAMP",
-            params![preferences.weather_rendering_profile],
+            params![if preferences.weather_rendering_profile == "cinematic" {
+                "enhanced"
+            } else {
+                &preferences.weather_rendering_profile
+            }],
+        )?;
+        transaction.execute(
+            "INSERT INTO atlas_weather_graphics_preferences (
+                singleton_id,
+                weather_rendering_profile,
+                weather_cloud_effects,
+                weather_precipitation_effects,
+                weather_lightning_effects,
+                weather_dust_effects,
+                reduce_weather_flashes
+             ) VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6)
+             ON CONFLICT(singleton_id) DO UPDATE SET
+                weather_rendering_profile = excluded.weather_rendering_profile,
+                weather_cloud_effects = excluded.weather_cloud_effects,
+                weather_precipitation_effects = excluded.weather_precipitation_effects,
+                weather_lightning_effects = excluded.weather_lightning_effects,
+                weather_dust_effects = excluded.weather_dust_effects,
+                reduce_weather_flashes = excluded.reduce_weather_flashes,
+                updated_at = CURRENT_TIMESTAMP",
+            params![
+                preferences.weather_rendering_profile,
+                preferences.weather_cloud_effects,
+                preferences.weather_precipitation_effects,
+                preferences.weather_lightning_effects,
+                preferences.weather_dust_effects,
+                preferences.reduce_weather_flashes,
+            ],
         )?;
         transaction.commit().map_err(StorageError::from)
     }

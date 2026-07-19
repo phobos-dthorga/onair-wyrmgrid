@@ -19,6 +19,7 @@
     onrefresh,
     onclear,
     onclose,
+    weatherGalleryEnabled = false,
   }: {
     open: boolean;
     log: DiagnosticLogView;
@@ -27,6 +28,7 @@
     onrefresh: () => void;
     onclear: () => void;
     onclose: () => void;
+    weatherGalleryEnabled?: boolean;
   } = $props();
 
   let filters = $state<DiagnosticFilters>({ ...defaultDiagnosticFilters });
@@ -78,6 +80,9 @@
           language packs. WyrmGrid does not include OnAir credentials, company
           identifiers, or raw provider responses in this log.
         </span>
+        {#if weatherGalleryEnabled}
+          <a href="/weather-gallery">Open deterministic weather gallery</a>
+        {/if}
       </div>
 
       {#if errorMessage}<p class="diagnostics-error" role="alert">

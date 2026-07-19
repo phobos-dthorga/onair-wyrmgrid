@@ -6,7 +6,61 @@ fn initializes_the_database_schema() {
     let store = Store::open_in_memory().expect("in-memory database should open");
     assert_eq!(
         store.schema_version().expect("version should be readable"),
-        14
+        15
+    );
+}
+
+#[test]
+fn migrates_existing_atlas_weather_preferences_idempotently() {
+    let connection = Connection::open_in_memory().expect("database should open");
+    connection
+        .execute_batch(INITIAL_SCHEMA)
+        .expect("initial schema should apply");
+    connection
+        .execute_batch(ATLAS_RENDERING_PREFERENCES_SCHEMA)
+        .expect("profile schema should apply");
+    connection
+        .execute(
+            "INSERT INTO atlas_rendering_preferences (
+                singleton_id, weather_rendering_profile
+             ) VALUES (1, 'compatibility')",
+            [],
+        )
+        .expect("existing profile should save");
+
+    connection
+        .execute_batch(ATLAS_WEATHER_GRAPHICS_PREFERENCES_SCHEMA)
+        .expect("graphics migration should apply");
+    connection
+        .execute_batch(ATLAS_WEATHER_GRAPHICS_PREFERENCES_SCHEMA)
+        .expect("graphics migration should be idempotent");
+
+    let migrated: (String, bool, bool, bool, bool, bool) = connection
+        .query_row(
+            "SELECT weather_rendering_profile,
+                    weather_cloud_effects,
+                    weather_precipitation_effects,
+                    weather_lightning_effects,
+                    weather_dust_effects,
+                    reduce_weather_flashes
+             FROM atlas_weather_graphics_preferences
+             WHERE singleton_id = 1",
+            [],
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                ))
+            },
+        )
+        .expect("migrated graphics preference should be readable");
+    assert_eq!(
+        migrated,
+        ("compatibility".into(), true, true, true, true, true)
     );
 }
 
@@ -183,7 +237,12 @@ fn persists_independent_display_preferences() {
         weight_unit: "kilograms".into(),
         fuel_unit: "litres".into(),
         responsive_surfaces: false,
-        weather_rendering_profile: "compatibility".into(),
+        weather_rendering_profile: "cinematic".into(),
+        weather_cloud_effects: true,
+        weather_precipitation_effects: false,
+        weather_lightning_effects: true,
+        weather_dust_effects: false,
+        reduce_weather_flashes: false,
     };
     store
         .save_display_preferences_record(&preferences)
@@ -193,8 +252,31 @@ fn persists_independent_display_preferences() {
         store
             .load_display_preferences_record()
             .expect("display preferences should be readable"),
-        Some(preferences)
+        Some(preferences.clone())
     );
+
+    let connection = store
+        .connection
+        .lock()
+        .expect("storage connection should be available");
+    let legacy_profile: String = connection
+        .query_row(
+            "SELECT weather_rendering_profile
+             FROM atlas_rendering_preferences WHERE singleton_id = 1",
+            [],
+            |row| row.get(0),
+        )
+        .expect("the legacy fallback preference should be readable");
+    let cinematic_profile: String = connection
+        .query_row(
+            "SELECT weather_rendering_profile
+             FROM atlas_weather_graphics_preferences WHERE singleton_id = 1",
+            [],
+            |row| row.get(0),
+        )
+        .expect("the authoritative graphics preference should be readable");
+    assert_eq!(legacy_profile, "enhanced");
+    assert_eq!(cinematic_profile, "cinematic");
 }
 
 #[test]

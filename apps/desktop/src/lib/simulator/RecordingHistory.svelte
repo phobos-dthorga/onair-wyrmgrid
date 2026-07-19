@@ -24,6 +24,7 @@
     defaultRecordingFilters,
     filterAndSortRecordings,
     recordingFilterOptions,
+    recordingStatusMessageKeys,
     type RecordingFilters,
   } from "./recordingPresentation";
   import type {
@@ -157,7 +158,10 @@
         );
   }
 
-  const eventLabels: Record<string, string> = {
+  const eventLabels: Record<
+    string,
+    import("$lib/i18n/catalog").TranslationKey
+  > = {
     recording_started_manually: "simulator-recording-event-manual-start",
     takeoff_confirmed: "simulator-recording-event-takeoff",
     telemetry_gap: "simulator-recording-event-gap",
@@ -344,9 +348,7 @@
               {$translation("simulator-recording-samples")}
             </span>
             <small
-              >{$translation(
-                `simulator-recording-status-${recording.status}`,
-              )}</small
+              >{$translation(recordingStatusMessageKeys[recording.status])}</small
             >
             <small>
               {$translation(

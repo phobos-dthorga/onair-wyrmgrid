@@ -74,6 +74,39 @@ relevant release issue or architecture decision.
 - Validate installer licence notices, attribution, privacy/terms accessibility,
   and acknowledgement persistence on every supported platform.
 
+## Before simulator-synchronised audio recording
+
+- Update the data inventory and versioned Privacy Notice with the exact voice,
+  communications, device/application metadata, external-media location,
+  purpose, retention, deletion, backup, and export behaviour. Do not describe
+  the planned feature as available before it ships.
+- Obtain professional review of recording and consent obligations in the
+  jurisdictions targeted by the release, including recordings that may contain
+  another person's voice or unrelated background speech.
+- Review the current rules and terms of every supported captured communications
+  service, including VATSIM, IVAO, SayIntentions, or another ATC client. Local
+  availability does not establish permission to record or redistribute it.
+- Keep microphone and communications consent separate, explicit, and off by
+  default. Confirm that legal acknowledgement, provider launch, telemetry
+  recording, automatic telemetry recording, and plugin grants cannot enable
+  audio.
+- Verify persistent, accessible recording indication and permission recovery on
+  every packaged Windows, macOS, and Linux target. Full desktop audio must not
+  be selected implicitly.
+- Complete the Audio Capture Provider, X-Plane in-process tap, Opus and FMOD
+  licence, dependency-notice, signing, installation/removal, and third-party-
+  aircraft reviews applicable to the shipped source set.
+- Complete a focused privacy and security review of media-key separation,
+  authenticated segment storage, size quotas, disk-full behaviour, orphan
+  cleanup, deletion limitations, default backup omission, restore messaging,
+  and deliberate plaintext export.
+- Prove that audio, device and application labels, source identifiers, media
+  paths, and voice-derived content are excluded from plugins, Sentry,
+  diagnostics, optional-AI packets, support bundles, and public services.
+- Exercise outside-repository live tests for every claimed simulator,
+  operating-system, architecture, source class, and permission path. Do not
+  generalise an MSFS or one-platform result to X-Plane or another platform.
+
 ## Obtain professional legal review when a trigger is reached
 
 Professional review becomes proportionate before any of the following:
@@ -86,7 +119,8 @@ Professional review becomes proportionate before any of the following:
 - a public plugin catalogue, paid plugins, executable community plugins, or
   publisher verification;
 - persistent simulator telemetry, precise location, imported personal data,
-  weather providers, financial integrations, or additional licensed datasets;
+  recorded voices or communications, weather providers, financial
+  integrations, or additional licensed datasets;
 - users or targeted distribution in jurisdictions with materially different
   privacy, consumer, accessibility, export, or age-assurance rules;
 - formation of a company, hiring contributors or contractors, accepting outside

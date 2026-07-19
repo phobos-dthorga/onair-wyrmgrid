@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { FlightWeatherMapView } from "$lib/weather/types";
 import {
   weatherEffect,
+  weatherIntensity,
   weatherMapSignature,
   weatherPointCoordinates,
   weatherStationFeatures,
@@ -64,8 +65,13 @@ describe("Atlas airport-weather projection", () => {
   it("derives bounded visual effects only from explicit present-weather codes", () => {
     expect(weatherEffect("-SHRA BR")).toBe("rain");
     expect(weatherEffect("TSRA")).toBe("convective");
+    expect(weatherEffect("+DS")).toBe("dust");
+    expect(weatherEffect("HZ")).toBe("obscuration");
     expect(weatherEffect("BKN020")).toBe("none");
     expect(weatherEffect(undefined)).toBe("none");
+    expect(weatherIntensity("-SHRA")).toBe(0.38);
+    expect(weatherIntensity("+TSRA")).toBe(1);
+    expect(weatherIntensity(undefined)).toBe(0);
   });
 
   it("projects a sourced wind vector in the direction the air is moving", () => {
@@ -103,8 +109,10 @@ describe("Atlas airport-weather projection", () => {
     expect(station.properties).toMatchObject({
       severity: 0.42,
       effect: "rain",
+      intensity: 0.38,
       wind_speed_kt: 20,
       wind_gust_kt: 30,
+      wind_bearing: 140,
     });
 
     const wind = weatherWindFeatures(windWeather);

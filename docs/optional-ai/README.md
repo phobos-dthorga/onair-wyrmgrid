@@ -62,6 +62,30 @@ The durable structures are the
 [profile schema](../../schemas/optional-ai-task-profile-v1.schema.json) and
 [metrics schema](../../schemas/optional-ai-task-metrics-v1.schema.json).
 
+## Codex semantic-review budget
+
+Hoardmind and another selected local assistant exist partly to avoid spending a
+frontier assistant on routine work. A valid local-model result receives an
+independent ChatGPT/Codex semantic review only when the expected benefit is
+**HIGH** or the work touches a critical WyrmGrid boundary. Valid low- and
+medium-benefit results otherwise pass without Codex re-analysis.
+
+Critical boundaries always qualify for review: security, privacy, legal
+meaning, credentials, authorization, cryptography, destructive or data-loss
+behaviour, database migrations, protocol/schema compatibility, breaking-change
+or semantic-version decisions, release/tag/CI/CD/signing controls, installer
+identity, live-provider support claims, and optional-AI or repository
+governance. Treat uncertain criticality as critical. Large cross-cutting,
+ambiguous, difficult-to-test, or hard-to-reverse work normally has high review
+benefit even when it is not on that list.
+
+This budget removes redundant Codex reading, not deterministic quality gates.
+The runner must still validate the task contract, and applicable schemas,
+formatters, linters, tests, builds, audits, path restrictions, and branch
+protections still run. A malformed result does not pass. Separate human review
+or approval required by the generated-contribution, pull-request, and release
+workflows also remains mandatory.
+
 ## Sequential use without autonomous chaining
 
 For a substantial reviewed change, use the tasks in this order when applicable:
@@ -76,10 +100,12 @@ For a substantial reviewed change, use the tasks in this order when applicable:
 6. curate release notes after the implementation and compatibility decisions are
    complete.
 
-The runner never automatically feeds one model response into another. A person
-or coordinating reviewer must reconcile every draft against repository evidence
-before selecting facts for the next packet. This prevents an early
-hallucination from silently becoming downstream authority.
+The runner never automatically feeds one model response into another. Prepare
+each new packet from source and deterministic evidence rather than copying a
+prior model draft. Apply the semantic-review budget above: high-benefit or
+critical results are reconciled, while valid lower-benefit results do not spend
+Codex review resources. This prevents an early hallucination from becoming
+downstream authority without restoring blanket frontier-model review.
 
 ## Optional generated-contribution attribution
 
