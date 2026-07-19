@@ -6,19 +6,31 @@ WyrmGrid Bridge rather than replacing it: Bridge remains the authoritative
 adapter for simulator actuals, while SayIntentions supplies facts and actions
 owned by its AI world.
 
+The cross-provider order, capability-level delivery steps, and acceptance gates
+for the selected high-value work live in the
+[high-value provider integration process](high-value-provider-process.md). This
+document remains authoritative for the SayIntentions contract and
+provider-specific boundaries.
+
+The maintainer's 2026-07-19 screenshots of the public provider documentation,
+the reconciled endpoint inventory, field-disposition decisions, SimAPI notes,
+and immediate-use conclusion are preserved in the
+[dated public-contract observation](sayintentions-contract-observation-2026-07-19.md).
+
 ## Verified public contract
 
-As documented on 2026-07-14:
+As documented on 2026-07-19:
 
 - SAPI is a preview REST API for communications, weather and live data, airport
   operations, flight management, and virtual-airline integration;
 - a normal subscribed pilot can obtain the SAPI key from the Pilot Portal or the
-  locally generated `flight.json`; demo accounts cannot use the API;
-- `flight.json` is created under `%LOCALAPPDATA%\SayIntentionsAI\flight.json`
-  during an active flight, is updated approximately every 3 to 30 seconds, and
-  must be treated as read-only;
-- the file contains credentials and identity together with callsign, flight-plan,
-  runway, gate, traffic, and other active-flight fields;
+  local active-flight payload; demo accounts cannot use the API;
+- the same active-flight payload is available through the local
+  `http://localhost:63287/flightJSON` endpoint or the generated
+  `%LOCALAPPDATA%\SayIntentionsAI\flight.json` file, is updated approximately
+  every 3 to 30 seconds, and must be treated as read-only;
+- the payload contains credentials and identity together with callsign,
+  flight-plan, runway, gate, traffic, and other active-flight fields;
 - API operations use an account key, and some require an active flight session;
 - voice-generation requests must remain aviation-themed and family-friendly,
   are limited in message length, incur provider cost, and may be restricted if
@@ -31,12 +43,21 @@ authenticated testing. It is not a WyrmGrid developer credential and must never
 be shared, committed, copied into fixtures, or entered into the Svelte interface
 unless a reviewed secret-entry flow is implemented.
 
+No partnership is documented as necessary for these ordinary pilot-facing
+surfaces. That does not mean WyrmGrid can use them today: the local adapter,
+secret boundary, synthetic fixtures, and outside-repository authenticated
+compatibility test still have to be implemented. VA-Link remains the exception
+because its persistent import requires a separate provider-issued virtual-
+airline key.
+
 ## Product boundary
 
 WyrmGrid initially uses two SayIntentions surfaces:
 
-1. **`flight.json` read adapter** for presence, active-flight identity, and a
-   minimal allowlist of SayIntentions-owned state.
+1. **Local active-flight read adapter** for presence, active-flight identity,
+   and a minimal allowlist of SayIntentions-owned state. A bounded spike chooses
+   between the fixed loopback HTTP endpoint and the documented `flight.json`
+   file before the released transport is fixed.
 2. **SAPI adapter** for carefully selected reads and explicit user-initiated
    communications or airport actions.
 
@@ -54,16 +75,21 @@ same OFP or silently replaces one plan with the other.
 ## Phase 1: local read-only connection
 
 - Keep the integration disabled until the user enables it.
-- Detect the documented `flight.json` path on Windows; do not scan unrelated
-  directories or simulator installations.
-- Ask before reading the file because it contains the user's email, account ID,
-  API key, route, coordinates, callsign, and group configuration.
-- Parse a bounded snapshot in Rust, tolerate an absent file and partial rewrite,
-  and debounce changes instead of polling faster than the documented update
-  interval.
-- Treat the API key as a `SecretString` immediately. Never include the raw file,
-  its path, or secret-bearing parse errors in logs, UI state, SQLite, Sentry, or
-  plugin messages.
+- Spike both documented transports: a request to the fixed loopback endpoint and
+  a read of the documented `flight.json` path on Windows. Do not use a LAN
+  address, trust a hostname from the payload, or scan unrelated directories or
+  simulator installations.
+- Ask before reading either transport because the payload contains the user's
+  email, account ID, API key, route, coordinates, callsign, and group
+  configuration.
+- Parse a bounded snapshot in Rust, tolerate an unavailable endpoint, empty
+  inactive-flight response, absent file, and partial rewrite, and debounce or
+  poll no faster than the documented update interval.
+- Select the released transport only after comparing local-server exposure,
+  filesystem permissions, startup ordering, cancellation, and supportability.
+- Treat the API key as a `SecretString` immediately. Never include the raw
+  payload, access path, or secret-bearing parse errors in logs, UI state, SQLite,
+  Sentry, or plugin messages.
 - Use the discovered key only for the active process by default. Offer opt-in
   persistence only after the operating-system credential store exists.
 - Translate only implemented fields into a provider-labelled
@@ -150,8 +176,9 @@ before implementing it.
   error, breadcrumb, support bundle, test snapshot, or crash report.
 - Pin the official API origin and HTTPS scheme; reject origin changes rather than
   forwarding the account key.
-- Do not persist raw `flight.json`, communications, audio URLs, routes,
-  coordinates, callsigns, user IDs, email addresses, or multiplayer settings.
+- Do not persist the raw local active-flight payload, communications, audio URLs,
+  routes, coordinates, callsigns, user IDs, email addresses, or multiplayer
+  settings.
 - Plugins receive neither the key nor a generic SayIntentions capability. A
   future read or send capability must be operation-specific, deny-by-default,
   bounded, and mediated by host templates and user confirmation.
@@ -160,8 +187,10 @@ before implementing it.
 
 ## Required validation
 
-- synthetic `flight.json` fixtures for active, absent, partial-write, malformed,
-  oversized, unknown-field, and schema-change cases;
+- synthetic local-HTTP and `flight.json` fixtures for active, empty, absent,
+  partial-write, malformed, oversized, unknown-field, and schema-change cases;
+- fixed-loopback, LAN-address rejection, unavailable-port, cancellation, and
+  transport-fallback tests before choosing or supporting fallback behaviour;
 - canary tests proving that API keys, email, user ID, path, host, callsign, route,
   coordinates, and communication text cannot enter logs, errors, Sentry, SQLite,
   or plugin models;

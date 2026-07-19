@@ -8,6 +8,12 @@ The initial integration reads public feeds without asking the user to connect a
 network account. Authenticated identity, flight-plan filing, or other writes are
 separate future capabilities.
 
+The shared delivery gates and the order relative to SayIntentions and Navigraph
+live in the
+[high-value provider integration process](high-value-provider-process.md). This
+document remains authoritative for VATSIM- and IVAO-specific feed, polling,
+privacy, and translation policy.
+
 SayIntentions.AI exposes its own account-gated VATSIM view through SAPI. That
 does not replace WyrmGrid's direct public VATSIM adapter. If adopted later, it is
 labelled as a SayIntentions-derived snapshot and is never merged silently with

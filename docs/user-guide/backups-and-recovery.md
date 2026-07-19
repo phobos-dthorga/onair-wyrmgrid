@@ -133,3 +133,17 @@ Ordinary whole-system backups can preserve WyrmGrid if they restore both the
 application data and the operating-system credential store consistently, but
 that behaviour depends on the backup product. A WyrmGrid portable backup is the
 explicit cross-system recovery contract.
+
+## Proposed private vault
+
+WyrmGrid does not currently provide cloud upload, rotation, deletion or restore.
+A future optional private vault is documented only as a proposal: the desktop
+would upload an existing password-encrypted `.wyrmbackup` as an opaque object,
+while the server would never receive the password or plaintext. That service
+requires separate authorization, metadata, retention, deletion, off-site
+backup, incident and restore approval and must remain isolated from the public
+Aerie catalogue.
+
+The proposal does not synchronize the live database. See the
+[hosted-platform implementation plan](../operations/hosted-platform.md) for the
+full boundary and launch gates.

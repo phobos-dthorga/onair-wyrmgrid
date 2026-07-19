@@ -154,3 +154,10 @@ restart throttling, OS-specific filesystem and network isolation, SDK
 conformance suites, safe update/rollback, and a security review. Until then,
 Forge labels the runtime a developer preview and users should run only code they
 trust.
+
+The proposal for supplying that distribution boundary through WyrmGrid Aerie
+is documented separately in
+[ADR-0019](../architecture/decisions/0019-hosted-web-aerie-and-private-vault.md)
+and the
+[hosted-platform implementation plan](../operations/hosted-platform.md). It does
+not change plugin protocol version 1 or authorize community publication.

@@ -3,6 +3,8 @@
 Accepted decisions are append-only. Supersede an earlier decision with a new
 record rather than silently rewriting history.
 
+## Accepted decisions
+
 - [ADR-0001: Rust, Tauri, and a web map](0001-rust-tauri-maplibre.md)
 - [ADR-0002: Out-of-process plugins](0002-out-of-process-plugins.md)
 - [ADR-0003: Local-first provenance-aware data](0003-local-first-provenance.md)
@@ -21,3 +23,7 @@ record rather than silently rewriting history.
 - [ADR-0016: Out-of-process weather provider plugins](0016-out-of-process-weather-provider-plugins.md)
 - [ADR-0017: Simulator-synchronised audio recording through capability providers](0017-simulator-synchronised-audio-recording.md)
 - [ADR-0018: Three.js WebGPU-preferred weather composition](0018-threejs-webgpu-weather-composition.md)
+
+## Proposed decisions
+
+- [ADR-0019: Separate hosted web, Aerie, and private vault boundaries](0019-hosted-web-aerie-and-private-vault.md)
