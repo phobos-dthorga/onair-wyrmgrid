@@ -1776,6 +1776,10 @@
     } finally {
       startupOptionsLoaded = true;
     }
+    if (startupOptions.weather_gallery) {
+      window.location.replace("/weather-gallery");
+      return;
+    }
     await initializeLanguage();
     await initializeTheme();
     await initializeDisplayPreferences();
@@ -2977,6 +2981,8 @@
     log={diagnosticLog}
     busy={diagnosticsBusy}
     errorMessage={diagnosticsError}
+    weatherGalleryEnabled={import.meta.env.DEV ||
+      startupOptions.weather_gallery}
     onrefresh={() => void refreshDiagnostics()}
     onclear={() => void clearDiagnostics()}
     onclose={leaveDialog}

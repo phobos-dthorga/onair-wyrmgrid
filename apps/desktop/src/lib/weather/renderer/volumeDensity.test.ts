@@ -50,6 +50,41 @@ describe("weather volume density", () => {
     expect(Math.max(...density)).toBeLessThanOrEqual(255);
   });
 
+  it("builds a broad asymmetric multi-lobed body", () => {
+    const size = 24;
+    const density = generateWeatherVolumeDensity(size, 91);
+    const occupied: Array<{ x: number; y: number; z: number }> = [];
+    for (let z = 0; z < size; z += 1) {
+      for (let y = 0; y < size; y += 1) {
+        for (let x = 0; x < size; x += 1) {
+          if (density[z * size * size + y * size + x] >= 40) {
+            occupied.push({ x, y, z });
+          }
+        }
+      }
+    }
+
+    const span = (axis: "x" | "y" | "z") => {
+      const values = occupied.map((point) => point[axis]);
+      return Math.max(...values) - Math.min(...values) + 1;
+    };
+    expect(occupied.length).toBeGreaterThan(size ** 3 * 0.04);
+    expect(span("x") / span("y")).toBeLessThan(1.7);
+    expect(span("z") / span("y")).toBeGreaterThan(0.65);
+
+    let mirroredDifference = 0;
+    for (let z = 0; z < size; z += 1) {
+      for (let y = 0; y < size; y += 1) {
+        for (let x = 0; x < size / 2; x += 1) {
+          const left = density[z * size * size + y * size + x];
+          const right = density[z * size * size + y * size + (size - 1 - x)];
+          mirroredDifference += Math.abs(left - right);
+        }
+      }
+    }
+    expect(mirroredDifference).toBeGreaterThan(10_000);
+  });
+
   it("rejects unbounded texture allocations", () => {
     expect(() => generateWeatherVolumeDensity(3)).toThrow(RangeError);
     expect(() => generateWeatherVolumeDensity(129)).toThrow(RangeError);

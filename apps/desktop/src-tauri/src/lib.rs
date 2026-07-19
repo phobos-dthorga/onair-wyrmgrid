@@ -13,6 +13,7 @@ struct StartupOptions {
     no_launch_art: bool,
     compact_ui: bool,
     low_resource: bool,
+    weather_gallery: bool,
 }
 
 struct DesktopState {
@@ -793,7 +794,11 @@ pub fn run() {
                 store.clone(),
                 simulator.provider_ids(),
             );
-            let automatic_provider = simulator_settings.startup_provider_id().ok().flatten();
+            let automatic_provider = if parsed_startup_options.weather_gallery {
+                None
+            } else {
+                simulator_settings.startup_provider_id().ok().flatten()
+            };
             let plugins = wyrmgrid_application::PluginService::with_authorization_runtime(
                 Some(app_data_directory.join("plugins")),
                 store,
@@ -928,6 +933,7 @@ where
             "--no-launch-art" => options.no_launch_art = true,
             "--compact-ui" => options.compact_ui = true,
             "--low-resource" => options.low_resource = true,
+            "--weather-gallery" => options.weather_gallery = true,
             _ => {}
         }
     }

@@ -1,5 +1,5 @@
-export const WEATHER_VOLUME_TEXTURE_SIZE = 48;
-const DEFAULT_SLICES_PER_YIELD = 6;
+export const WEATHER_VOLUME_TEXTURE_SIZE = 80;
+const DEFAULT_SLICES_PER_YIELD = 5;
 
 function clampUnit(value: number): number {
   return Math.min(1, Math.max(0, value));
@@ -61,6 +61,40 @@ function fractalNoise(x: number, y: number, z: number, seed: number): number {
   return total / normalizer;
 }
 
+type DensityLobe = {
+  centre: readonly [number, number, number];
+  radius: readonly [number, number, number];
+};
+
+const DENSITY_LOBES: readonly DensityLobe[] = [
+  { centre: [-0.08, -0.08, 0], radius: [0.82, 0.62, 0.72] },
+  { centre: [-0.48, 0.02, 0.08], radius: [0.56, 0.48, 0.55] },
+  { centre: [0.42, 0.08, -0.09], radius: [0.6, 0.5, 0.58] },
+  { centre: [-0.12, 0.38, -0.05], radius: [0.48, 0.44, 0.5] },
+  { centre: [0.24, -0.31, 0.12], radius: [0.52, 0.4, 0.46] },
+];
+
+function lobeEnvelope(
+  x: number,
+  y: number,
+  z: number,
+  lobe: DensityLobe,
+): number {
+  const dx = (x - lobe.centre[0]) / lobe.radius[0];
+  const dy = (y - lobe.centre[1]) / lobe.radius[1];
+  const dz = (z - lobe.centre[2]) / lobe.radius[2];
+  const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+  return smooth(clampUnit((1 - distance) / 0.32));
+}
+
+function cloudEnvelope(x: number, y: number, z: number): number {
+  let envelope = 0;
+  for (const lobe of DENSITY_LOBES) {
+    envelope = Math.max(envelope, lobeEnvelope(x, y, z, lobe));
+  }
+  return envelope;
+}
+
 function validateSize(size: number): void {
   if (!Number.isInteger(size) || size < 4 || size > 128) {
     throw new RangeError(
@@ -80,15 +114,10 @@ function fillDensitySlice(
     const normalizedY = (y + 0.5) / size;
     for (let x = 0; x < size; x += 1) {
       const normalizedX = (x + 0.5) / size;
-      const horizontalX = (normalizedX - 0.5) * 2;
-      const horizontalZ = (normalizedZ - 0.5) * 2;
-      const vertical = (normalizedY - 0.48) * 2.3;
-      const radial = Math.sqrt(
-        horizontalX * horizontalX * 0.72 +
-          vertical * vertical * 1.35 +
-          horizontalZ * horizontalZ * 0.72,
-      );
-      const edgeTaper = clampUnit((1.03 - radial) / 0.34);
+      const localX = (normalizedX - 0.5) * 2;
+      const localY = (normalizedY - 0.5) * 2;
+      const localZ = (normalizedZ - 0.5) * 2;
+      const envelope = cloudEnvelope(localX, localY, localZ);
       const distanceToTextureFace = Math.min(
         x,
         y,
@@ -98,14 +127,12 @@ function fillDensitySlice(
         size - 1 - z,
       );
       const faceTaper = smooth(
-        clampUnit(distanceToTextureFace / Math.max(1, size * 0.14)),
+        clampUnit(distanceToTextureFace / Math.max(1, size * 0.1)),
       );
       const base = fractalNoise(normalizedX, normalizedY, normalizedZ, seed);
-      const billow = clampUnit((base - 0.3) / 0.62);
+      const billow = smooth(clampUnit((base - 0.2) / 0.68));
       const index = z * size * size + y * size + x;
-      data[index] = Math.round(
-        255 * billow * edgeTaper * edgeTaper * faceTaper * faceTaper,
-      );
+      data[index] = Math.round(255 * billow * envelope * faceTaper * faceTaper);
     }
   }
 }

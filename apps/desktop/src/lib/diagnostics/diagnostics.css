@@ -67,6 +67,11 @@
   color: var(--color-highlight);
 }
 
+.diagnostics-boundary a {
+  width: fit-content;
+  color: var(--color-accent);
+}
+
 .diagnostics-error {
   margin: 8px 22px 0;
   color: var(--color-danger);

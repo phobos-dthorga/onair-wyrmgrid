@@ -48,6 +48,17 @@ major application version.
 
 ### Changes
 
+- Reworked detailed Atlas cloud, storm, obscuration, and dust volumes with a
+  higher-resolution multi-lobed density field, stable optical thickness,
+  brighter internal shading, sourced-wind alignment, and deterministic
+  three-dimensional variation. Rain and snow now begin below their parent
+  cloud and taper around the precipitation field instead of surrounding its
+  centre.
+- Added an isolated deterministic weather gallery for renderer calibration and
+  hardware diagnosis. It is available automatically in development builds and
+  in packaged builds only through the explicit `--weather-gallery` startup
+  flag; its controls are temporary and never replace supported user graphics
+  preferences.
 - Fixed detailed Atlas weather exposing the hard faces of its volume boxes,
   repeating recognisable cloud silhouettes, crossing the globe horizon, and
   drawing over map information cards.

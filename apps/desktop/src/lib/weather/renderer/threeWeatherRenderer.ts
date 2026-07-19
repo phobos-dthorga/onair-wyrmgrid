@@ -36,9 +36,20 @@ import { weatherVisualSurfaceVisibility } from "./surfaceClipping";
 import { weatherVolumeVariation } from "./volumeVariation";
 import type { WeatherRenderCell } from "./weatherRenderScene";
 import {
+  PRECIPITATION_FIELD_HEIGHT,
+  PRECIPITATION_FIELD_WIDTH,
+  precipitationParticleTaper,
+  precipitationVerticalPosition,
+} from "./precipitationLayout";
+import {
   generateWeatherVolumeDensityAsync,
   WEATHER_VOLUME_TEXTURE_SIZE,
 } from "./volumeDensity";
+import {
+  resolveWeatherVolumeAppearance,
+  weatherCloudColor,
+  type WeatherVolumeAppearanceOverrides,
+} from "./volumeAppearance";
 
 type ParticleSeed = {
   x: number;
@@ -80,11 +91,10 @@ type CellVisual = {
   };
 };
 
-const SCREEN_MARGIN = 120;
+const SCREEN_MARGIN = 210;
 const MINIMUM_SURFACE_VISIBILITY = 0.01;
 const DEGREES_TO_RADIANS = Math.PI / 180;
-const PRECIPITATION_FIELD_HEIGHT = 120;
-const WEATHER_VISUAL_RADIUS = 82;
+const WEATHER_VISUAL_RADIUS = 126;
 const WEATHER_CAMERA_VERTICAL_FOV_DEGREES = 32;
 
 function disposeObject(root: THREE.Object3D): void {
@@ -130,24 +140,6 @@ function applySurfaceVisibility(
   });
 }
 
-function cloudColor(effect: WeatherRenderCell["effect"]): number {
-  switch (effect) {
-    case "convective":
-      return 0x596273;
-    case "snow":
-      return 0xd8e7ed;
-    case "obscuration":
-      return 0xa8b1b5;
-    default:
-      return 0x8fa1ad;
-  }
-}
-
-function volumeColor(effect: WeatherRenderCell["effect"]): number {
-  if (effect === "dust") return 0xb7834d;
-  return cloudColor(effect);
-}
-
 async function createVolumeDensityTexture(): Promise<THREE.Data3DTexture> {
   const density = await generateWeatherVolumeDensityAsync();
   const texture = new THREE.Data3DTexture(
@@ -168,19 +160,26 @@ function createVolumeMaterial(
   texture: THREE.Data3DTexture,
   cell: WeatherRenderCell,
   steps: number,
-  densityThresholdOffset: number,
+  variation: ReturnType<typeof weatherVolumeVariation>,
+  appearanceOverrides: WeatherVolumeAppearanceOverrides,
 ): THREE.NodeMaterial {
   const densityTexture = texture3D(texture, null, 0);
   const dust = cell.effect === "dust";
-  const threshold = float(
-    (dust ? 0.32 : 0.48 - Math.min(0.12, cell.intensity * 0.12)) +
-      densityThresholdOffset,
+  const appearance = resolveWeatherVolumeAppearance(
+    cell.effect,
+    cell.intensity,
+    steps,
+    {
+      ...appearanceOverrides,
+      thresholdOffset:
+        (appearanceOverrides.thresholdOffset ?? 0) +
+        variation.densityThresholdOffset,
+    },
   );
-  const range = float(dust ? 0.16 : 0.115);
-  const opacity = float(
-    ((dust ? 1.1 : 1.75) * (0.72 + cell.intensity * 0.38)) / steps,
-  );
-  const baseColor = uniform(new THREE.Color(volumeColor(cell.effect)));
+  const threshold = float(appearance.threshold);
+  const range = float(appearance.transitionRange);
+  const opacity = float(appearance.sampleOpacity);
+  const baseColor = uniform(new THREE.Color(appearance.color));
   const localRayOrigin = varying(
     modelWorldMatrixInverse.mul(vec4(cameraPosition, 1)).xyz,
   );
@@ -198,8 +197,36 @@ function createVolumeMaterial(
   const volumeNode = Fn(() => {
     const finalColor = vec4(0).toVar();
     RaymarchingBox(steps, ({ positionRay }) => {
-      const coordinates = positionRay
-        .add(localRayDirection.mul(raySampleOffset))
+      const jittered = positionRay.add(localRayDirection.mul(raySampleOffset));
+      const cosX = Math.cos(variation.sampleRotation.x);
+      const sinX = Math.sin(variation.sampleRotation.x);
+      const cosY = Math.cos(variation.sampleRotation.y);
+      const sinY = Math.sin(variation.sampleRotation.y);
+      const cosZ = Math.cos(variation.sampleRotation.z);
+      const sinZ = Math.sin(variation.sampleRotation.z);
+      const aroundX = vec3(
+        jittered.x,
+        jittered.y.mul(cosX).sub(jittered.z.mul(sinX)),
+        jittered.y.mul(sinX).add(jittered.z.mul(cosX)),
+      );
+      const aroundY = vec3(
+        aroundX.x.mul(cosY).add(aroundX.z.mul(sinY)),
+        aroundX.y,
+        aroundX.z.mul(cosY).sub(aroundX.x.mul(sinY)),
+      );
+      const rotated = vec3(
+        aroundY.x.mul(cosZ).sub(aroundY.y.mul(sinZ)),
+        aroundY.x.mul(sinZ).add(aroundY.y.mul(cosZ)),
+        aroundY.z,
+      );
+      const coordinates = rotated
+        .add(
+          vec3(
+            variation.sampleOffset.x,
+            variation.sampleOffset.y,
+            variation.sampleOffset.z,
+          ),
+        )
         .add(0.5);
       const mapValue = float(densityTexture.sample(coordinates).r).toVar();
       mapValue.assign(
@@ -208,13 +235,13 @@ function createVolumeMaterial(
         ),
       );
       const shading = densityTexture
-        .sample(coordinates.sub(vec3(0.015)))
+        .sample(coordinates.sub(vec3(-0.018, 0.024, 0.012)))
         .r.sub(densityTexture.sample(coordinates.add(vec3(0.015))).r);
       const light = shading
-        .mul(dust ? 1.8 : 2.7)
-        .add(positionRay.y.mul(dust ? 0.08 : 0.18))
-        .add(dust ? 0.72 : 0.82)
-        .clamp(0.32, 1.18);
+        .mul(dust ? 2.2 : 3.8)
+        .add(positionRay.y.mul(dust ? -0.08 : -0.28))
+        .add(dust ? 0.76 : 0.9)
+        .clamp(dust ? 0.38 : 0.46, dust ? 1.18 : 1.38);
       const contribution = finalColor.a
         .oneMinus()
         .mul(mapValue)
@@ -233,6 +260,7 @@ function createVolumeMaterial(
   material.transparent = true;
   material.depthTest = false;
   material.depthWrite = false;
+  material.premultipliedAlpha = true;
   material.toneMapped = false;
   registerWeatherMaterial(material);
   return material;
@@ -242,20 +270,31 @@ function addVolume(
   visual: CellVisual,
   texture: THREE.Data3DTexture,
   steps: number,
+  appearanceOverrides: WeatherVolumeAppearanceOverrides,
 ): void {
-  const dust = visual.cell.effect === "dust";
   const variation = weatherVolumeVariation(visual.cell.id);
+  const appearance = resolveWeatherVolumeAppearance(
+    visual.cell.effect,
+    visual.cell.intensity,
+    steps,
+    appearanceOverrides,
+  );
   const mesh = new THREE.Mesh(
     new THREE.BoxGeometry(1, 1, 1),
     createVolumeMaterial(
       texture,
       visual.cell,
       steps,
-      variation.densityThresholdOffset,
+      variation,
+      appearanceOverrides,
     ),
   );
-  mesh.position.y = dust ? -4 : -13;
-  mesh.scale.set(dust ? 132 : 112, dust ? 72 : 58, dust ? 42 : 48);
+  mesh.position.y = appearance.verticalOffset;
+  mesh.scale.set(
+    appearance.scale.x * variation.scale.x,
+    appearance.scale.y * variation.scale.y,
+    appearance.scale.z * variation.scale.z,
+  );
   const phase =
     deterministicWeatherUnit(
       hashWeatherText(`${visual.cell.id}:volume-animation`),
@@ -263,7 +302,7 @@ function addVolume(
     ) *
     Math.PI *
     2;
-  const baseRotation = variation.rotationRadians;
+  const baseRotation = variation.meshRotationRadians;
   mesh.rotation.z = baseRotation;
   visual.volume = { mesh, baseRotation, phase };
   visual.group.add(mesh);
@@ -279,7 +318,7 @@ function addClouds(
     const size = 13 + deterministicWeatherUnit(seed, index * 5) * 11;
     const geometry = new THREE.SphereGeometry(size, cinematic ? 14 : 10, 8);
     const material = new THREE.MeshPhongMaterial({
-      color: cloudColor(visual.cell.effect),
+      color: weatherCloudColor(visual.cell.effect),
       depthTest: false,
       depthWrite: false,
       opacity: (cinematic ? 0.2 : 0.16) * (0.72 + visual.cell.intensity * 0.28),
@@ -327,7 +366,9 @@ function addPrecipitation(
   const seed = hashWeatherText(`${visual.cell.id}:precipitation`);
   for (let index = 0; index < count; index += 1) {
     visual.precipitationSeeds.push({
-      x: (deterministicWeatherUnit(seed, index * 5) - 0.5) * 90,
+      x:
+        (deterministicWeatherUnit(seed, index * 5) - 0.5) *
+        PRECIPITATION_FIELD_WIDTH,
       y:
         deterministicWeatherUnit(seed, index * 5 + 1) *
         PRECIPITATION_FIELD_HEIGHT,
@@ -399,6 +440,7 @@ function createCellVisual(
   budget: WeatherRenderBudget,
   volumeTexture: THREE.Data3DTexture | undefined,
   useVolume: boolean,
+  appearanceOverrides: WeatherVolumeAppearanceOverrides,
 ): CellVisual | undefined {
   const visual: CellVisual = {
     cell,
@@ -414,7 +456,12 @@ function createCellVisual(
     cell.effect === "obscuration"
   ) {
     if (useVolume && volumeTexture) {
-      addVolume(visual, volumeTexture, budget.volumeRaymarchSteps);
+      addVolume(
+        visual,
+        volumeTexture,
+        budget.volumeRaymarchSteps,
+        appearanceOverrides,
+      );
     } else {
       addClouds(
         visual,
@@ -435,7 +482,12 @@ function createCellVisual(
   }
   if (update.policy.dust && cell.effect === "dust") {
     if (useVolume && volumeTexture) {
-      addVolume(visual, volumeTexture, budget.volumeRaymarchSteps);
+      addVolume(
+        visual,
+        volumeTexture,
+        budget.volumeRaymarchSteps,
+        appearanceOverrides,
+      );
     }
     addDust(visual, budget.dustParticlesPerCell);
   }
@@ -478,6 +530,7 @@ class ThreeWeatherRenderer implements WeatherRenderer {
     private readonly onQualityChanged: (
       quality: AdaptiveWeatherQuality,
     ) => void,
+    private readonly appearanceOverrides: WeatherVolumeAppearanceOverrides,
   ) {
     this.backend = backend;
     this.volumeTexture = volumeTexture;
@@ -665,6 +718,7 @@ class ThreeWeatherRenderer implements WeatherRenderer {
         budget,
         this.volumeTexture,
         useVolume,
+        this.appearanceOverrides,
       );
       if (!visual) continue;
       if (visual.volume) volumeCellCount += 1;
@@ -691,7 +745,12 @@ class ThreeWeatherRenderer implements WeatherRenderer {
     }
 
     if (visual.volume) {
+      const windRotation =
+        visual.cell.windSpeedKt >= 2
+          ? (visual.cell.windBearing - frame.bearing) * DEGREES_TO_RADIANS
+          : 0;
       visual.volume.mesh.rotation.z =
+        windRotation +
         visual.volume.baseRotation +
         Math.sin(animationTime / 8_200 + visual.volume.phase) * 0.025;
       visual.volume.mesh.position.x =
@@ -705,18 +764,25 @@ class ThreeWeatherRenderer implements WeatherRenderer {
       this.instanceRotation.setFromAxisAngle(this.screenAxis, windRotation);
       const seconds = animationTime / 1_000;
       visual.precipitationSeeds.forEach((seed, index) => {
-        const falling =
-          ((seed.y + seconds * seed.speed) % PRECIPITATION_FIELD_HEIGHT) -
-          PRECIPITATION_FIELD_HEIGHT / 2;
+        const falling = precipitationVerticalPosition(
+          seed.y,
+          seconds,
+          seed.speed,
+        );
         const windDrift =
           Math.sin(seconds * 0.9 + seed.phase) *
           Math.min(12, visual.cell.windSpeedKt * 0.22);
         this.instancePosition.set(seed.x + windDrift, falling, seed.z);
+        const taper = precipitationParticleTaper(seed.x + windDrift, falling);
         if (snow) {
           const pulse = 0.72 + Math.sin(seconds + seed.phase) * 0.22;
-          this.instanceScale.setScalar(pulse);
+          this.instanceScale.setScalar(pulse * taper);
         } else {
-          this.instanceScale.set(1, 0.86 + visual.cell.intensity * 0.32, 1);
+          this.instanceScale.set(
+            taper,
+            (0.86 + visual.cell.intensity * 0.32) * taper,
+            1,
+          );
         }
         this.instanceMatrix.compose(
           this.instancePosition,
@@ -753,6 +819,7 @@ export async function createThreeWeatherRenderer(
   initialUpdate: WeatherRendererUpdate,
   onDeviceLost: (backend: WeatherRendererBackend, reason: string) => void,
   onQualityChanged: (quality: AdaptiveWeatherQuality) => void,
+  appearanceOverrides: WeatherVolumeAppearanceOverrides = {},
 ): Promise<WeatherRenderer> {
   const renderer = new THREE.WebGPURenderer({
     alpha: true,
@@ -785,6 +852,7 @@ export async function createThreeWeatherRenderer(
       backend,
       volumeTexture,
       onQualityChanged,
+      appearanceOverrides,
     );
   } catch (error) {
     volumeTexture?.dispose();

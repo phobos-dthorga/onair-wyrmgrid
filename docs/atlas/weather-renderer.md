@@ -91,21 +91,26 @@ cloud, or strike data.
 
 ## Effect implementation
 
-- **Clouds and obscuration:** the WebGPU backend ray-marches a shared 48³
-  deterministic density texture through source-local boxes using Three.js TSL.
-  Each cell receives bounded, condition- and intensity-driven density,
-  absorption, colour, scale, orientation, and motion. The density field is
-  forced to zero on every texture face so the invisible sampling box cannot
-  become a visible slab. Per-cell threshold and orientation variation prevents
-  the shared field from appearing as a repeated stamp. Cells beyond the volume
-  ceiling, and every WebGL2-backend cell, use the deterministic lit-mesh
-  representation.
+- **Clouds and obscuration:** the WebGPU backend ray-marches a shared 80³
+  deterministic, multi-lobed density texture through source-local boxes using
+  Three.js TSL. Each cell receives bounded, condition- and intensity-driven
+  density, optical thickness, colour, scale, sourced-wind alignment, and
+  motion. Total optical thickness is converted to per-sample opacity using the
+  active step count, so adaptive quality changes edge smoothness without
+  making the cloud disappear. The density field is forced to zero on every
+  texture face so the invisible sampling box cannot become a visible slab.
+  Per-cell threshold, three-dimensional sample rotation, offset, and aspect
+  variation prevent the shared field from appearing as a repeated stamp. Cells
+  beyond the volume ceiling, and every WebGL2-backend cell, use the
+  deterministic lit-mesh representation.
   The one-time field generation yields between small slice batches so renderer
   startup does not monopolize the UI thread. A deterministic screen-space
   interleaved offset stratifies samples along each view ray, reducing visible
   low-step slicing without adding frame-varying temporal noise.
-- **Rain and snow:** bounded GPU-instanced geometry with deterministic positions,
-  sourced wind direction, bounded density, and camera-relative recycling.
+- **Rain and snow:** bounded GPU-instanced geometry with deterministic
+  positions, sourced wind direction, bounded density, and camera-relative
+  recycling. The one-sided field begins below its parent volume and tapers at
+  its sides, cloud edge, and lower edge.
 - **Lightning:** a deterministic local bolt and illumination attached to a
   sourced convective cell. It is not presented as an observed strike.
 - **Dust:** WebGPU combines a broad ray-marched brown density volume with
@@ -116,13 +121,81 @@ Animation stops under Reduced Motion. Flash pulses also require the user to
 disable the default Reduce Weather Flashes protection; otherwise lightning is
 shown without repeated pulsing.
 
+## Visual-quality baseline and reference
+
+Maintainer captures reviewed on 2026-07-19 confirmed that the horizon-clipping
+repair removed the hard sampling-box wedges and off-globe particle spill. The
+remaining WebGPU clouds were nevertheless too small, dark, translucent, and
+elliptical. Reusing one elongated density field made separate weather cells
+look like rotated copies of the same grey smoke capsule.
+
+The visual-quality pass uses the upstream Three.js
+[`webgpu_volume_cloud`](https://threejs.org/examples/webgpu_volume_cloud.html)
+demonstration as a renderer reference, not as a complete weather-system design.
+Its source demonstrates a 128-cubed 3D noise texture, 100 ray samples, a lower
+density threshold, materially stronger sample opacity, density-gradient
+lighting, early alpha termination, and developer controls for threshold,
+opacity, transition range, and sample count. These choices explain its solid,
+internally shaded silhouette. WyrmGrid must adapt rather than copy them because
+it renders several bounded cells over a geographic camera and must keep its
+appearance stable while adaptive quality changes the sample count.
+
+The pass therefore follows these rules:
+
+- keep density, extinction, edge softness, lighting, scale, and variation as
+  named renderer configuration rather than scattered shader literals;
+- use an irregular multi-lobed envelope so mesh scale does not stretch a
+  spherical density field into a capsule;
+- vary the three-dimensional sample orientation, scale, and offset per stable
+  cell identity so a shared texture does not become a repeated stamp, while
+  aligning the broad screen silhouette with sourced wind when it is available;
+- derive per-sample absorption from a total optical thickness and the current
+  ray-step budget, so lowering quality changes smoothness rather than making
+  clouds disappear;
+- place precipitation in a one-sided field below its parent cloud and taper it
+  at the sides and lower edge;
+- reserve raw shader parameters for a deterministic developer gallery; user
+  settings remain Compatibility, Enhanced, Cinematic, effect toggles, Reduced
+  Motion, and flash protection; and
+- do not infer a regional storm footprint from a point sample. Future
+  world-scale systems require an explicit host-owned coverage or cell-boundary
+  contract.
+
+### Visual acceptance criteria
+
+The deterministic reference scenes must demonstrate all of the following:
+
+1. no hard box face, wedge, or off-globe particle spill;
+2. cloud silhouettes with multiple lobes and no dominant capsule outline;
+3. visibly brighter illuminated regions and darker internal or lower regions;
+4. several simultaneous cells that do not read as rotated copies;
+5. rain and snow beginning below, rather than surrounding, the cloud body;
+6. Enhanced and Cinematic retaining the same broad appearance while Cinematic
+   improves edge detail, volume count, and particle density; and
+7. Compatibility and renderer failure continuing to preserve the factual
+   MapLibre weather presentation.
+
+The isolated developer gallery is a visual calibration aid, not a second
+source of renderer rules. Its scenes and controls consume the same exported
+appearance configuration and scene-building helpers used by Atlas. Hardware
+captures remain necessary because shader output and WebView WebGPU support
+cannot be proven by unit tests alone.
+
+The gallery is available automatically from Diagnostics in development builds.
+A packaged build exposes it only when WyrmGrid is deliberately launched with
+`--weather-gallery`; that flag opens the isolated gallery instead of the normal
+workspace and suppresses automatic simulator-sidecar startup. Direct browser
+navigation, query parameters, or stored preferences cannot enable it in a
+packaged build. Calibration values remain in memory for that gallery session
+and never update the supported user graphics preferences.
+
 ## Profiles and hard budgets
 
 | Profile       | Pixel ratio ceiling | Visible cells | WebGPU volume cells | Ray steps | Fallback cloud puffs/cell | Precipitation instances/cell | Dust points/cell |
 | ------------- | ------------------- | ------------- | ------------------- | --------- | ------------------------- | ---------------------------- | ---------------- |
 | Compatibility | 1.0                 | 0             | 0                   | 0         | 0                         | 0                            | 0                |
-| Enhanced      | 1.0                 | 48            | 8                   | 28        | 4                         | 18                           | 24               |
-| Cinematic     | 1.5                 | 96            | 16                  | 48        | 7                         | 36                           | 48               |
+| Enhanced      | 1.0                 | 48            | 8                   | 32        | 4                         | 18                           | 24               |
+| Cinematic     | 1.5                 | 96            | 16                  | 64        | 7                         | 36                           | 48               |
 
 The ceilings are named in one presentation module and covered by unit tests.
 They are initial safety limits, not measured hardware classifications. Future
@@ -182,11 +255,20 @@ The implementation is intentionally kept out of Svelte event handlers:
   public-projection horizon checks;
 - `weather/renderer/volumeDensity.ts` generates the bounded procedural 3D
   density field;
+- `weather/renderer/volumeAppearance.ts` owns the named optical and colour
+  presets shared by Atlas and the gallery;
+- `weather/renderer/precipitationLayout.ts` owns the bounded, one-sided rain
+  and snow layout beneath a weather cell;
 - `weather/renderer/deterministic.ts` and `volumeVariation.ts` provide stable,
   cell-specific visual variation;
+- `weather/renderer/weatherGallery.ts` builds deterministic reference scenes,
+  while `weatherGalleryAccess.ts` owns the development-build and startup-flag
+  access rule;
 - `weather/renderer/threeWeatherRenderer.ts` owns Three.js resources and
   animation;
 - `weather/renderer/types.ts` is the renderer adapter contract; and
+- `routes/weather-gallery/+page.svelte` presents the deliberately isolated
+  developer gallery without owning renderer rules; and
 - `AtlasMap.svelte` owns only composition, visibility, camera projection, and
   lifecycle delegation.
 
@@ -204,7 +286,10 @@ The lowest presentation layer tests cover:
 - Compatibility allocating no Three.js resources; and
 - Enhanced remaining below Cinematic ceilings;
 - adaptive degradation, slow recovery, and invalid-sample rejection; and
-- deterministic density generation, edge tapering, and allocation bounds.
+- deterministic density generation, edge tapering, and allocation bounds;
+- optical-thickness invariance, multi-lobed density proportions, bounded
+  calibration overrides, precipitation placement and tapering, stable gallery
+  scenes, and gallery access gating;
 - projection round-trip visibility, antimeridian equivalence, horizon fading,
   and invalid-coordinate rejection.
 
