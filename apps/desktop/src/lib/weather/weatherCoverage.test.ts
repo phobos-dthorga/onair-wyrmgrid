@@ -44,7 +44,7 @@ function point(
 }
 
 describe("weather support-zone geometry", () => {
-  it("builds midpoint cells only for a complete regular grid", () => {
+  it("builds compact source-centred cells only for a complete regular grid", () => {
     const layer = gridLayer([
       point("nw", 10, -10, "cloud"),
       point("ne", 10, 10, "rain"),
@@ -61,11 +61,32 @@ describe("weather support-zone geometry", () => {
       feature.properties.id.includes(":nw:"),
     );
     expect(northwest?.geometry.coordinates[0]).toEqual([
-      [-20, 20],
-      [0, 20],
+      [-13, 13],
+      [-7, 13],
+      [-7, 7],
+      [-13, 7],
+      [-13, 13],
+    ]);
+  });
+
+  it("preserves native midpoint cells when the source grid is already dense", () => {
+    const layer = gridLayer([
+      point("nw", 2, -2),
+      point("ne", 2, 2),
+      point("sw", -2, -2),
+      point("se", -2, 2),
+    ]);
+    const coverage = pluginWeatherGridCoverageFeatures([layer]);
+    const northwest = coverage.features.find((feature) =>
+      feature.properties.id.includes(":nw:"),
+    );
+
+    expect(northwest?.geometry.coordinates[0]).toEqual([
+      [-4, 4],
+      [0, 4],
       [0, 0],
-      [-20, 0],
-      [-20, 20],
+      [-4, 0],
+      [-4, 4],
     ]);
   });
 
@@ -95,7 +116,7 @@ describe("weather support-zone geometry", () => {
     expect(pluginWeatherGridCoverageFeatures([irregular]).features).toEqual([]);
   });
 
-  it("keeps a regular global grid bounded at the antimeridian", () => {
+  it("keeps compact support zones safely inside the antimeridian", () => {
     const layer = gridLayer([
       point("a", -10, -165),
       point("b", -10, -135),
@@ -107,8 +128,8 @@ describe("weather support-zone geometry", () => {
       feature.properties.id.includes(":a:"),
     );
 
-    expect(western?.geometry.coordinates[0][0][0]).toBe(-180);
-    expect(western?.geometry.coordinates[0][1][0]).toBe(-150);
+    expect(western?.geometry.coordinates[0][0][0]).toBe(-168);
+    expect(western?.geometry.coordinates[0][1][0]).toBe(-162);
   });
 
   it("outlines exactly the validated received RADAR tile footprint", () => {

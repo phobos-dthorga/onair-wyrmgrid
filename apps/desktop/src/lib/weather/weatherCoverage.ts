@@ -28,6 +28,7 @@ export type WeatherCoverageFeatureCollection = {
 const COORDINATE_PRECISION = 6;
 const MAXIMUM_REGULAR_SPACING_RATIO = 1.35;
 const MAXIMUM_LONGITUDE_SPACING = 90;
+const MAXIMUM_MODEL_SUPPORT_SPAN_DEGREES = 6;
 
 function coordinateKey(value: number): string {
   return value.toFixed(COORDINATE_PRECISION);
@@ -59,17 +60,22 @@ function coordinateBounds(
   index: number,
   minimum: number,
   maximum: number,
+  maximumSpan: number,
 ): [number, number] {
   const value = values[index];
-  const lower =
+  const midpointLower =
     index === 0
       ? value - (values[index + 1] - value) / 2
       : (values[index - 1] + value) / 2;
-  const upper =
+  const midpointUpper =
     index === values.length - 1
       ? value + (value - values[index - 1]) / 2
       : (value + values[index + 1]) / 2;
-  return [Math.max(minimum, lower), Math.min(maximum, upper)];
+  const maximumHalfSpan = maximumSpan / 2;
+  return [
+    Math.max(minimum, midpointLower, value - maximumHalfSpan),
+    Math.min(maximum, midpointUpper, value + maximumHalfSpan),
+  ];
 }
 
 function completeRegularGrid(
@@ -137,12 +143,14 @@ function gridCoverageFeatures(
       latitudeIndex,
       -90,
       90,
+      MAXIMUM_MODEL_SUPPORT_SPAN_DEGREES,
     );
     const [west, east] = coordinateBounds(
       grid.longitudes,
       longitudeIndex,
       -180,
       180,
+      MAXIMUM_MODEL_SUPPORT_SPAN_DEGREES,
     );
     return {
       type: "Feature" as const,

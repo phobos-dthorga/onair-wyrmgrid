@@ -91,11 +91,13 @@ for route clearance, avoidance, or a claim that weather stops at the ring.
 ### Complete regular forecast grids
 
 When a validated plugin layer contains every point in a complete rectilinear
-latitude/longitude grid, Atlas can calculate the midpoint-bounded cell nearest
-to each source sample. Each cell is a **model sampling support area**. It shows
-which validated point supplies the colour and detailed visual at that part of
-the coarse host-selected grid; it does not state that a weather front follows
-the cell boundary.
+latitude/longitude grid, Atlas calculates a compact support patch centred on
+each source sample. The patch follows midpoint boundaries when neighbouring
+samples are close, but neither dimension may exceed 6°. Coarse grids therefore
+leave visible unknown gaps instead of allowing one reading to colour a
+continent-sized rectangle. Each patch is a **model sampling support area**. It
+identifies its nearest validated sample; it does not state that a weather front
+follows the patch boundary or that an unfilled gap is clear weather.
 
 Irregular, incomplete, duplicate, or single-row grids do not receive inferred
 polygons. Their validated points remain visible without fabricated coverage.

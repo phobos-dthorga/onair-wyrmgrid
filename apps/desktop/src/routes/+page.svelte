@@ -2294,7 +2294,7 @@
                 <p>
                   <strong>Weather support zones</strong><br />
                   Soft airport rings are indicative observation vicinity only.
-                  Filled grid cells show nearest model samples; RADAR outlines show received tile footprints.
+                  Compact grid patches show nearest model samples; gaps remain unknown. RADAR outlines show received tile footprints.
                 </p>
                 <div
                   class="weather-zone-key"

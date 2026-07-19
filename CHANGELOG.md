@@ -48,8 +48,9 @@ major application version.
 - Added a toggleable UTC day/night layer with civil, nautical, and
   astronomical twilight, including historical-Hoard time projection. Added a
   separate weather-support-zone layer for indicative airport observation
-  vicinity, complete regular-grid sample cells, and exact received RADAR tile
-  footprints without presenting point observations as storm boundaries.
+  vicinity, compact regular-grid sample patches, and exact received RADAR tile
+  footprints without presenting point observations as storm boundaries or
+  allowing sparse samples to colour continent-sized cells.
   Theme-independent repeating patterns distinguish cloud, rain, snow,
   convective, obscuration, dust, and RADAR zones without relying on colour
   alone.
