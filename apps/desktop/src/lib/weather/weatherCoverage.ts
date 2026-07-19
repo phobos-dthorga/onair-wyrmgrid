@@ -4,7 +4,7 @@ import type {
   PublishedPluginWeatherLayer,
 } from "$lib/forge/types";
 import { weatherStationFeatures } from "./atlasWeather";
-import { pluginRadarFrames } from "./pluginWeather";
+import { pluginRadarTimelines } from "./pluginWeather";
 import type { FlightWeatherMapView } from "./types";
 
 type Coordinate = [number, number];
@@ -192,21 +192,25 @@ export function pluginRadarCoverageFeatures(
 ): WeatherCoverageFeatureCollection {
   return {
     type: "FeatureCollection",
-    features: pluginRadarFrames(publishedLayers).map((frame) => ({
-      type: "Feature" as const,
-      geometry: {
-        type: "Polygon" as const,
-        coordinates: [[...frame.coordinates, frame.coordinates[0]]],
-      },
-      properties: {
-        id: `${frame.id}:coverage`,
-        plugin_id: frame.plugin_id,
-        layer_title: frame.layer_title,
-        condition: "radar" as const,
-        coverage_kind: "radar_tile" as const,
-        frame_time: frame.frame_time,
-      },
-    })),
+    features: pluginRadarTimelines(publishedLayers).flatMap((timeline) => {
+      const frame = timeline.frames.at(-1);
+      if (!frame) return [];
+      return frame.tiles.map((tile) => ({
+        type: "Feature" as const,
+        geometry: {
+          type: "Polygon" as const,
+          coordinates: [[...tile.coordinates, tile.coordinates[0]]],
+        },
+        properties: {
+          id: `${tile.id}:footprint`,
+          plugin_id: timeline.plugin_id,
+          layer_title: timeline.layer_title,
+          condition: "radar" as const,
+          coverage_kind: "radar_tile" as const,
+          frame_time: frame.frame_time,
+        },
+      }));
+    }),
   };
 }
 

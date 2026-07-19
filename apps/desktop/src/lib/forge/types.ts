@@ -95,6 +95,7 @@ export type GlobalWeatherRasterTile = {
   x: number;
   y: number;
   png_base64: string;
+  coverage_png_base64?: string;
 };
 
 export type GlobalWeatherLayer = {

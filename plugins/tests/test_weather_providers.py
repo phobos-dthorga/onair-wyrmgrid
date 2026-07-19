@@ -71,7 +71,8 @@ class RainViewerClient:
             "host": "https://tilecache.rainviewer.com",
             "radar": {
                 "past": [
-                    {"time": 1784290800, "path": "/v2/radar/1784290800"}
+                    {"time": 1784290200, "path": "/v2/radar/1784290200"},
+                    {"time": 1784290800, "path": "/v2/radar/1784290800"},
                 ]
             },
             "provider_only": "must-not-cross-the-boundary",
@@ -80,7 +81,8 @@ class RainViewerClient:
     def get_bytes(
         self, origin, path, maximum_bytes, accepted_content_types
     ):
-        self.tile_call = (origin, path, maximum_bytes, accepted_content_types)
+        self.tile_calls = getattr(self, "tile_calls", [])
+        self.tile_calls.append((origin, path, maximum_bytes, accepted_content_types))
         return b"\x89PNG\r\n\x1a\nsynthetic-provider-test"
 
 
@@ -135,8 +137,47 @@ class WeatherProviderTests(unittest.TestCase):
         tile = product["layer"]["data"]["tiles"][0]
         self.assertEqual((tile["zoom"], tile["x"], tile["y"]), (1, 1, 0))
         self.assertTrue(base64.b64decode(tile["png_base64"]).startswith(b"\x89PNG"))
+        self.assertTrue(
+            base64.b64decode(tile["coverage_png_base64"]).startswith(b"\x89PNG")
+        )
         self.assertNotIn("provider_only", json.dumps(product))
-        self.assertEqual(client.tile_call[0], "https://tilecache.rainviewer.com")
+        self.assertEqual(client.tile_calls[0][0], "https://tilecache.rainviewer.com")
+        self.assertIn("/v2/radar/1784290800", client.tile_calls[0][1])
+        self.assertIn("/v2/coverage/0/", client.tile_calls[1][1])
+
+    def test_rainviewer_selects_a_bounded_factual_past_frame(self):
+        client = RainViewerClient()
+        product = RAINVIEWER.radar_tiles(
+            {
+                "query": {
+                    "kind": "radar_tiles",
+                    "frame_offset": 1,
+                    "tiles": [{"zoom": 1, "x": 1, "y": 0}],
+                }
+            },
+            client,
+        )
+
+        self.assertEqual(
+            product["layer"]["data"]["frame_time"], "2026-07-17T12:10:00Z"
+        )
+        self.assertIn("/v2/radar/1784290200", client.tile_calls[0][1])
+
+    def test_rainviewer_rejects_an_unavailable_or_excessive_offset(self):
+        for offset, code in ((2, "no_data"), (6, "invalid_response")):
+            with self.subTest(offset=offset):
+                with self.assertRaises(RAINVIEWER.ProviderError) as failure:
+                    RAINVIEWER.radar_tiles(
+                        {
+                            "query": {
+                                "kind": "radar_tiles",
+                                "frame_offset": offset,
+                                "tiles": [{"zoom": 1, "x": 1, "y": 0}],
+                            }
+                        },
+                        RainViewerClient(),
+                    )
+                self.assertEqual(failure.exception.code, code)
 
 
 if __name__ == "__main__":

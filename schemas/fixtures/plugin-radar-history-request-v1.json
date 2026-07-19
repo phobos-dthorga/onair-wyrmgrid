@@ -1,0 +1,15 @@
+{
+  "protocol_version": 1,
+  "sequence": 3,
+  "payload": {
+    "type": "weather_request",
+    "request": {
+      "id": "radar-history-5",
+      "query": {
+        "kind": "radar_tiles",
+        "tiles": [{ "zoom": 1, "x": 0, "y": 0 }],
+        "frame_offset": 5
+      }
+    }
+  }
+}

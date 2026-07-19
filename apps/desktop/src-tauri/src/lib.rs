@@ -228,6 +228,10 @@ fn dispatch_status(
             },
         )
         .map_err(operation_error)?;
+    state
+        .plugins
+        .enrich_dispatch_route_weather(&mut status)
+        .map_err(operation_error)?;
     Ok(status)
 }
 

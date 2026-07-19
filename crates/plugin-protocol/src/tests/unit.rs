@@ -99,6 +99,50 @@ fn validates_weather_manifest_scope_and_bounded_requests() {
 }
 
 #[test]
+fn radar_history_offsets_are_bounded_and_omitted_for_legacy_requests() {
+    let tile = WeatherTileAddress {
+        zoom: 1,
+        x: 0,
+        y: 0,
+    };
+    let legacy = WeatherRequest {
+        id: "radar-current".into(),
+        query: WeatherQuery::RadarTiles {
+            tiles: vec![tile],
+            frame_offset: None,
+        },
+    };
+    assert_eq!(legacy.validate(), Ok(()));
+    let encoded = serde_json::to_value(&legacy).unwrap();
+    assert!(encoded["query"].get("frame_offset").is_none());
+
+    let historical = WeatherRequest {
+        id: "radar-history".into(),
+        query: WeatherQuery::RadarTiles {
+            tiles: vec![tile],
+            frame_offset: Some(MAX_RADAR_FRAME_OFFSET),
+        },
+    };
+    assert_eq!(historical.validate(), Ok(()));
+    assert_eq!(
+        serde_json::to_value(&historical).unwrap()["query"]["frame_offset"],
+        MAX_RADAR_FRAME_OFFSET
+    );
+
+    let excessive = WeatherRequest {
+        id: "radar-invalid".into(),
+        query: WeatherQuery::RadarTiles {
+            tiles: vec![tile],
+            frame_offset: Some(MAX_RADAR_FRAME_OFFSET + 1),
+        },
+    };
+    assert_eq!(
+        excessive.validate(),
+        Err(WeatherRequestError::InvalidRadarFrameOffset)
+    );
+}
+
+#[test]
 fn rejects_weather_scope_widening_without_matching_permissions() {
     let mut candidate = manifest();
     candidate.weather_capabilities = vec![WeatherCapability::RadarTiles];
@@ -221,6 +265,31 @@ fn validates_the_protocol_version_one_fixtures() {
             ..
         } => assert!(product.validate()),
         _ => panic!("fixture should contain a complete weather product"),
+    }
+
+    let radar_request: ProtocolEnvelope<HostMessage> = serde_json::from_str(include_str!(
+        "../../../../schemas/fixtures/plugin-radar-history-request-v1.json"
+    ))
+    .expect("RADAR history request fixture should deserialize");
+    match radar_request.payload {
+        HostMessage::WeatherRequest { request } => {
+            request
+                .validate()
+                .expect("RADAR history request should validate");
+        }
+        _ => panic!("fixture should contain a RADAR history request"),
+    }
+
+    let radar_response: ProtocolEnvelope<PluginMessage> = serde_json::from_str(include_str!(
+        "../../../../schemas/fixtures/plugin-radar-layer-v1.json"
+    ))
+    .expect("RADAR response fixture should deserialize");
+    match radar_response.payload {
+        PluginMessage::PublishWeather {
+            response: PluginWeatherResponse::Complete { product },
+            ..
+        } => assert!(product.validate()),
+        _ => panic!("fixture should contain a complete RADAR product"),
     }
 }
 

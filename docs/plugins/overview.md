@@ -133,7 +133,8 @@ The independently installable providers in `plugins/` are:
 
 - Open-Meteo for a coarse, host-selected global model grid;
 - AviationWeather.gov for explicit plan-airport METAR and TAF requests; and
-- RainViewer for a small host-selected current global radar tile set.
+- RainViewer for a small host-selected recent global RADAR timeline with
+  explicit no-coverage masks.
 
 They share the same SDK and stable core weather models. Provider failures are
 independent, the last valid global layer remains visible when a refresh fails,

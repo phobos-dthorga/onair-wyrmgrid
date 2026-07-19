@@ -11,10 +11,12 @@
   import type {
     DispatchStatus,
     Mass,
+    RouteWeatherAvailability,
     SimBriefAccountPreference,
     SimBriefReferenceKind,
   } from "$lib/dispatch/types";
   import type { FlightOperationStage } from "$lib/flightOperation/types";
+  import type { GlobalWeatherCondition } from "$lib/forge/types";
   import { dispatchFindingMessageKeys } from "./localization";
 
   let {
@@ -29,6 +31,7 @@
     onjourney,
     onviewweatheratlas,
     onviewroute,
+    onviewrouteweather,
     onviewfeature,
   }: {
     status: DispatchStatus;
@@ -46,6 +49,7 @@
     onjourney: (stage: FlightOperationStage) => void;
     onviewweatheratlas: (stationId?: string) => void;
     onviewroute: () => void;
+    onviewrouteweather: () => void;
     onviewfeature: (featureId: string) => void;
   } = $props();
 
@@ -72,6 +76,47 @@
   const comparison = $derived(status.comparison);
   const weather = $derived(status.weather.snapshot);
   const atlasWeather = $derived(status.atlas_weather);
+  const routeWeather = $derived(status.route_weather);
+
+  function routeWeatherConditionLabel(
+    condition: GlobalWeatherCondition,
+  ): string {
+    switch (condition) {
+      case "clear":
+        return $translation("dispatch-route-weather-condition-clear");
+      case "cloud":
+        return $translation("dispatch-route-weather-condition-cloud");
+      case "rain":
+        return $translation("dispatch-route-weather-condition-rain");
+      case "snow":
+        return $translation("dispatch-route-weather-condition-snow");
+      case "convective":
+        return $translation("dispatch-route-weather-condition-convective");
+      case "obscuration":
+        return $translation("dispatch-route-weather-condition-obscuration");
+      case "unknown":
+        return $translation("dispatch-route-weather-condition-unknown");
+    }
+  }
+
+  function routeWeatherAvailabilityLabel(
+    availability: RouteWeatherAvailability,
+  ): string {
+    switch (availability) {
+      case "ready":
+        return $translation("dispatch-route-weather-availability-ready");
+      case "partial":
+        return $translation("dispatch-route-weather-availability-partial");
+      case "route_unavailable":
+        return $translation(
+          "dispatch-route-weather-availability-route-unavailable",
+        );
+      case "source_unavailable":
+        return $translation(
+          "dispatch-route-weather-availability-source-unavailable",
+        );
+    }
+  }
   const operation = $derived(status.operation);
   function atlasWeatherStationId(stationIcao: string): string | undefined {
     return atlasWeather?.stations.find(
@@ -326,6 +371,118 @@
         </article>
       </div>
 
+      {#if routeWeather}
+        <article class="dispatch-card dispatch-route-weather-card">
+          <div class="dispatch-card-heading">
+            <div>
+              <span class="eyebrow"
+                >{$translation("dispatch-route-weather-eyebrow")}</span
+              >
+              <h3>{$translation("dispatch-route-weather-title")}</h3>
+            </div>
+            <strong
+              >{routeWeatherAvailabilityLabel(
+                routeWeather.availability,
+              )}</strong
+            >
+          </div>
+          <p class="dispatch-card-intro">
+            {$translation("dispatch-route-weather-intro", {
+              interval: routeWeather.sample_interval_nm,
+            })}
+          </p>
+          <div class="dispatch-weather-actions">
+            <button
+              class="dispatch-inline-action"
+              type="button"
+              disabled={!status.atlas_route}
+              onclick={onviewrouteweather}
+            >
+              {$translation("dispatch-route-weather-view-atlas")}
+            </button>
+          </div>
+
+          {#if routeWeather.layers.length > 0}
+            {#each routeWeather.layers as layer}
+              <section class="dispatch-route-weather-layer responsive-surface">
+                <header>
+                  <div>
+                    <strong>{layer.title}</strong>
+                    <span>{layer.provenance.provider}</span>
+                  </div>
+                  <div>
+                    <span
+                      >{$translation("dispatch-route-weather-model-time")}</span
+                    >
+                    <strong
+                      >{formatDate(
+                        layer.provenance.generated_at ??
+                          layer.provenance.retrieved_at,
+                      )}</strong
+                    >
+                  </div>
+                </header>
+                <ol class="dispatch-route-weather-samples">
+                  {#each layer.samples as sample}
+                    <li class:unavailable={!sample.source}>
+                      <span
+                        >{Math.round(sample.distance_from_origin_nm)} nm</span
+                      >
+                      {#if sample.source}
+                        <strong
+                          >{routeWeatherConditionLabel(
+                            sample.source.condition,
+                          )}</strong
+                        >
+                        <small>
+                          {$translation("dispatch-route-weather-metrics", {
+                            temperature: sample.source.temperature_c ?? "—",
+                            precipitation:
+                              sample.source.precipitation_mm ?? "—",
+                            wind: sample.source.wind_speed_kt ?? "—",
+                          })}
+                        </small>
+                        <em>
+                          {$translation("dispatch-route-weather-support", {
+                            distance: Math.round(
+                              sample.source.support_distance_nm,
+                            ),
+                          })}
+                        </em>
+                      {:else}
+                        <strong
+                          >{$translation(
+                            "dispatch-route-weather-no-nearby-sample",
+                          )}</strong
+                        >
+                        <small>
+                          {$translation(
+                            "dispatch-route-weather-support-limit",
+                            {
+                              distance:
+                                routeWeather.maximum_support_distance_nm,
+                            },
+                          )}
+                        </small>
+                      {/if}
+                    </li>
+                  {/each}
+                </ol>
+              </section>
+            {/each}
+          {:else}
+            <div class="dispatch-weather-prompt">
+              <strong
+                >{$translation("dispatch-route-weather-no-layer-title")}</strong
+              >
+              <span>
+                {$translation("dispatch-route-weather-no-layer-detail")}
+              </span>
+            </div>
+          {/if}
+        </article>
+      {/if}
+
       <FlightOperationJourney
         journey={status.journey}
         onstage={openJourneyStage}
@@ -462,7 +619,8 @@
           {#if comparison}
             <ol class="dispatch-finding-list">
               {#each comparison.findings as finding}
-                {@const messageKeys = dispatchFindingMessageKeys[finding.message_key]}
+                {@const messageKeys =
+                  dispatchFindingMessageKeys[finding.message_key]}
                 <li
                   class={`dispatch-finding-${finding.status} responsive-surface`}
                 >

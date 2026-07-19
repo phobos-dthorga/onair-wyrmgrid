@@ -10,6 +10,7 @@ import type {
   ProvenanceKind,
 } from "$lib/operational/types";
 import type { FlightWeatherMapView, WeatherSnapshot } from "$lib/weather/types";
+import type { GlobalWeatherCondition } from "$lib/forge/types";
 
 export type {
   Coordinates,
@@ -115,6 +116,48 @@ export type DispatchComparison = {
   provenance: OperationalProvenance;
 };
 
+export type RouteWeatherAvailability =
+  "ready" | "partial" | "route_unavailable" | "source_unavailable";
+
+export type RouteWeatherSourceSample = {
+  point_id: string;
+  location: Coordinates;
+  support_distance_nm: number;
+  condition: GlobalWeatherCondition;
+  temperature_c?: number;
+  precipitation_mm?: number;
+  cloud_cover_percent?: number;
+  wind_direction_degrees?: number;
+  wind_speed_kt?: number;
+};
+
+export type RouteWeatherSample = {
+  id: string;
+  segment_index: number;
+  distance_from_origin_nm: number;
+  location: Coordinates;
+  source?: RouteWeatherSourceSample;
+};
+
+export type RouteWeatherLayerAnalysis = {
+  layer_id: string;
+  title: string;
+  provenance: OperationalProvenance;
+  availability: RouteWeatherAvailability;
+  samples: RouteWeatherSample[];
+};
+
+export type RouteWeatherAnalysis = {
+  schema_version: number;
+  plan_id: string;
+  sample_interval_nm: number;
+  maximum_support_distance_nm: number;
+  mapped_route_point_count: number;
+  unresolved_route_point_count: number;
+  availability: RouteWeatherAvailability;
+  layers: RouteWeatherLayerAnalysis[];
+};
+
 export type DispatchStatus = {
   provider_available: boolean;
   availability: "empty" | "ready";
@@ -123,6 +166,7 @@ export type DispatchStatus = {
   snapshot?: FlightPlanSnapshot;
   atlas_plan?: import("$lib/atlas/types").AtlasPlannedRoute;
   atlas_weather?: FlightWeatherMapView;
+  route_weather?: RouteWeatherAnalysis;
   journey: FlightOperationJourneyView;
   atlas_route?: AtlasRouteView;
   comparison?: DispatchComparison;

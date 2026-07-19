@@ -111,12 +111,16 @@ The current RainViewer integration supplies bounded raster tiles rather than
 individual RADAR station locations or ranges. Atlas can therefore outline the
 exact geographic footprint of each validated received tile and retain the
 existing raster as the precipitation evidence. The outline does not mean every
-pixel has a measurement, does not reinterpret transparent pixels as clear
-weather, and does not create a RADAR-station range.
+pixel has a measurement and does not create a RADAR-station range. The bundled
+provider now supplies RainViewer's separate coverage PNG with each tile;
+transparent pixels are covered and black pixels are unavailable. Atlas renders
+unavailable pixels in neutral grey and retains the tile outline as the received
+product footprint. A missing mask still does not make transparency mean clear
+weather.
 
 Station rings become possible only after the host-owned RADAR contract carries
 a validated station identifier, location, scan radius/beam geometry, product
-time, resolution, and explicit no-data mask. The evidence and licensing gates
+time, resolution, and station geometry. The evidence and licensing gates
 remain those in the [RADAR integration contract](../integrations/radar.md).
 
 ## Eclipse extension

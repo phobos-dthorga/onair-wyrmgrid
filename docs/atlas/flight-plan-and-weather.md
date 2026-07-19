@@ -6,7 +6,9 @@ It is the design contract for staged increments. Atlas now draws the current
 coordinate-only Dispatch plan, its current airport-weather observations, and a
 bounded planned-versus-recorded route for a selected historical simulator
 recording. It does not yet resolve navigation geometry. Atlas now animates
-bounded source-shaped weather graphics without interpolating sparse reports.
+bounded source-shaped weather graphics without interpolating sparse reports,
+plays a bounded recent RADAR timeline, and projects coarse global-model context
+along continuous plan segments.
 
 ## One plan, two projections
 
@@ -159,6 +161,21 @@ The intended layers are incremental:
 5. optional high-detail animation and volumetric presentation where the source
    data legitimately supports it.
 
+### Current along-route model projection
+
+`DispatchStatus.route_weather` is an additive schema-1 application view. Rust
+samples continuous mapped plan segments about every 300 nautical miles and
+associates each checkpoint with the nearest current global-model point only
+when it lies within the explicit 1,200-nautical-mile support limit. The view
+retains point identity, distance from origin, support distance, provider,
+model/retrieval time, freshness, and every supplied numeric field.
+
+Missing plan coordinates split the corridor. Missing or distant model support
+stays unavailable. Svelte formats this view and builds declarative Atlas line
+features; it does not select sources, interpolate conditions, or decide route
+suitability. The display is broad simulation-planning context, not an aviation
+briefing or a claim that weather between coarse samples is known.
+
 Absence of a report is not rendered as clear weather. Sparse station
 observations must not be interpolated into a photorealistic atmospheric claim.
 A high-end GPU permits richer rendering of sourced data; it does not create
@@ -241,9 +258,11 @@ structured wind and explicit METAR present-weather/category fields, labels the
 display source-shaped, and does not interpolate between airports. Rain and snow
 marks, dust layers, cloud shading, and the convective lightning symbol remain
 anchored to their station report. Grid effects use only validated provider
-points, while radar uses bounded provider tiles. The current lightning graphic
-is a storm-cell symbol and local illumination, not a strike. Satellite imagery,
-forecast animation, exact lightning events, measured GPU-time/VRAM budgets, and
+points, while RADAR uses the selected frame from a bounded six-frame provider
+timeline. A separate coverage mask makes no-data pixels visibly grey. The
+current lightning graphic is a storm-cell symbol and local illumination, not a
+strike. Satellite imagery, forecast animation, persisted RADAR history, exact
+lightning events, measured GPU-time/VRAM budgets, and
 persisted device-loss telemetry remain future source and renderer work. A local
 submission-pressure controller can temporarily reduce visual ceilings without
 changing the selected profile or factual layers. The active Three.js backend

@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { PublishedPluginWeatherLayer } from "$lib/forge/types";
 import {
-  pluginRadarFrames,
+  pluginRadarTimelines,
   pluginWeatherGridFeatures,
   pluginWeatherItemCount,
+  longestRadarTimeline,
   rasterTileCoordinates,
+  selectedRadarFrames,
 } from "./pluginWeather";
 
 const provenance = {
@@ -77,8 +79,58 @@ describe("plugin weather presentation", () => {
         },
       },
     ];
-    expect(pluginRadarFrames(layers)[0].url).toBe(
+    const timeline = pluginRadarTimelines(layers)[0];
+    expect(timeline.frames[0].tiles[0].url).toBe(
       "data:image/png;base64,iVBORw0KGgo=",
     );
+  });
+
+  it("orders factual RADAR frames and exposes optional no-data masks", () => {
+    const layers: PublishedPluginWeatherLayer[] = ["12:10:00", "12:00:00"].map(
+      (time, index) => ({
+        plugin_id: "org.example.radar",
+        plugin_name: "Example Radar",
+        layer: {
+          schema_version: 1,
+          id: "radar",
+          title: "Radar",
+          data: {
+            kind: "raster_tiles" as const,
+            frame_time: `2026-07-17T${time}Z`,
+            tiles: [
+              {
+                zoom: 1,
+                x: 0,
+                y: 0,
+                png_base64: `radar-${index}`,
+                coverage_png_base64: `coverage-${index}`,
+              },
+            ],
+          },
+          provenance: { ...provenance, kind: "external_fact" as const },
+        },
+      }),
+    );
+
+    const timeline = pluginRadarTimelines(layers)[0];
+    expect(timeline.frames.map((frame) => frame.frame_time)).toEqual([
+      "2026-07-17T12:00:00Z",
+      "2026-07-17T12:10:00Z",
+    ]);
+    expect(timeline.frames[0].tiles[0].coverage_url).toBe(
+      "data:image/png;base64,coverage-1",
+    );
+    expect(selectedRadarFrames([timeline], 0, false)[0].frame_time).toBe(
+      "2026-07-17T12:00:00Z",
+    );
+    expect(selectedRadarFrames([timeline], 0, true)[0].frame_time).toBe(
+      "2026-07-17T12:10:00Z",
+    );
+    expect(
+      longestRadarTimeline([
+        { ...timeline, id: "static", frames: [timeline.frames[0]] },
+        timeline,
+      ])?.id,
+    ).toBe(timeline.id);
   });
 });

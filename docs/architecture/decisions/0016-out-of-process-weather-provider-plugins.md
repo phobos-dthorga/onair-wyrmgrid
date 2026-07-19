@@ -48,8 +48,10 @@ The initial products are deliberately bounded:
   set of at most ten normalized ICAO stations.
 - Open-Meteo returns a coarse host-selected global forecast grid. The plugin
   does not decide the sampling density or invent observations between samples.
-- RainViewer returns a small, current set of validated PNG radar tiles. Remote
-  scripts, styles, tile templates, and credentials never enter the webview.
+- RainViewer returns a small, recent set of validated PNG RADAR tiles and
+  provider no-coverage masks. The host requests, orders, deduplicates, and
+  retains at most six frames in memory. Remote scripts, styles, tile templates,
+  and credentials never enter the webview.
 
 All three sources are external real-world or model evidence for simulation use.
 They do not establish the simulator's selected weather mode and are never

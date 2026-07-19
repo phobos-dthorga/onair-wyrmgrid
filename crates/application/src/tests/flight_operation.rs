@@ -79,6 +79,7 @@ fn status(plan: Option<FlightPlanSnapshot>, job: Option<DispatchJobSelection>) -
         snapshot: plan,
         atlas_plan: None,
         atlas_weather: None,
+        route_weather: None,
         journey: build_initial_flight_operation_journey(InitialJourneyEvidence {
             plan_provider_available: true,
             plan_available: true,

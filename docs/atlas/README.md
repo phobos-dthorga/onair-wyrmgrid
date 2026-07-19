@@ -109,6 +109,9 @@ recorded in [Atlas Three.js weather renderer](weather-renderer.md). The UTC
 daylight, truthful weather-support-zone, RADAR-footprint, and future eclipse
 boundaries are recorded in
 [Atlas daylight, weather coverage, and eclipse plan](daylight-weather-coverage-and-eclipses.md).
+Atlas also renders the host-selected recent RADAR frame and its explicit
+no-coverage mask, with timestamped motion-safe playback controls, and overlays
+Rust-derived global-model context along continuous Dispatch route segments.
 Remaining features should be added only when the
 preceding layer establishes the smallest shared contract they require.
 

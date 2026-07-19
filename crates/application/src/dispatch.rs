@@ -196,6 +196,8 @@ pub struct DispatchStatus {
     pub atlas_plan: Option<crate::FlightPlanMapView>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub atlas_weather: Option<crate::FlightWeatherMapView>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub route_weather: Option<crate::RouteWeatherAnalysis>,
     pub journey: crate::FlightOperationJourneyView,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub atlas_route: Option<AtlasRouteView>,
@@ -411,6 +413,7 @@ impl DispatchSession {
             snapshot,
             atlas_plan,
             atlas_weather,
+            route_weather: None,
             journey,
             atlas_route,
             comparison,

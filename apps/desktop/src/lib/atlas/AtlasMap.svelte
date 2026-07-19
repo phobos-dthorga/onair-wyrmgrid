@@ -8,7 +8,10 @@
   import "maplibre-gl/dist/maplibre-gl.css";
   import { onMount } from "svelte";
   import { translation } from "$lib/i18n/runtime";
-  import type { AtlasRouteView } from "$lib/dispatch/types";
+  import type {
+    AtlasRouteView,
+    RouteWeatherAnalysis,
+  } from "$lib/dispatch/types";
   import type {
     PublishedPluginLayer,
     PublishedPluginWeatherLayer,
@@ -40,9 +43,12 @@
   import { buildWeatherRenderScene } from "$lib/weather/renderer/weatherRenderScene";
   import { presentWeatherRendererStatus } from "$lib/weather/renderer/statusPresentation";
   import {
-    pluginRadarFrames,
+    longestRadarTimeline,
+    pluginRadarTimelines,
     pluginWeatherGridFeatures,
+    selectedRadarFrames,
   } from "$lib/weather/pluginWeather";
+  import { routeWeatherLineFeatures } from "$lib/weather/routeWeather";
   import {
     pluginRadarCoverageFeatures,
     pluginWeatherGridCoverageFeatures,
@@ -103,6 +109,7 @@
     selectedRoutePointId,
     selectedWeatherStationId,
     route,
+    routeWeather,
     routeVisible,
     selectedAircraftId,
     selectedFboId,
@@ -139,6 +146,7 @@
     selectedRoutePointId?: string;
     selectedWeatherStationId?: string;
     route?: AtlasRouteView;
+    routeWeather?: RouteWeatherAnalysis;
     routeVisible: boolean;
     selectedAircraftId: string | null;
     selectedFboId: string | null;
@@ -234,6 +242,11 @@
   const WEATHER_LAYER_ID = "wyrmgrid-flight-weather-stations";
   const WEATHER_LABEL_LAYER_ID = "wyrmgrid-flight-weather-labels";
   const DISPATCH_ROUTE_SOURCE_ID = "wyrmgrid-dispatch-route";
+  const ROUTE_WEATHER_SOURCE_ID = "wyrmgrid-route-weather";
+  const ROUTE_WEATHER_HALO_LAYER_ID = "wyrmgrid-route-weather-halo";
+  const ROUTE_WEATHER_SUPPORTED_LAYER_ID = "wyrmgrid-route-weather-supported";
+  const ROUTE_WEATHER_UNAVAILABLE_LAYER_ID =
+    "wyrmgrid-route-weather-unavailable";
   const DISPATCH_ROUTE_LINE_LAYER_ID = "wyrmgrid-dispatch-route-line";
   const DISPATCH_ROUTE_POINT_LAYER_ID = "wyrmgrid-dispatch-route-points";
   const DISPATCH_ROUTE_LABEL_LAYER_ID = "wyrmgrid-dispatch-route-labels";
@@ -254,6 +267,9 @@
   let weatherAnimationTime = 0;
   let pluginRadarLayerIds = new Set<string>();
   let pluginRadarFrameVersions = new Map<string, string>();
+  let radarFrameIndex = $state(0);
+  let radarPlaying = $state(true);
+  let radarTimelineSignature = "";
   let daylightSourceSignature = "";
   let weatherRenderer: WeatherRenderer | undefined;
   let weatherRendererGeneration = 0;
@@ -268,6 +284,38 @@
       lowResource,
       prefersReducedMotion,
     ),
+  );
+  const radarTimelines = $derived(pluginRadarTimelines(pluginWeatherLayers));
+  const radarFrameCount = $derived(
+    Math.max(0, ...radarTimelines.map((timeline) => timeline.frames.length)),
+  );
+  const radarStaticPresentation = $derived(lowResource || prefersReducedMotion);
+  const activeRadarFrames = $derived(
+    selectedRadarFrames(
+      radarTimelines,
+      radarFrameIndex,
+      radarStaticPresentation,
+    ),
+  );
+  const primaryRadarTimeline = $derived(longestRadarTimeline(radarTimelines));
+  const primaryRadarFrame = $derived(
+    primaryRadarTimeline
+      ? selectedRadarFrames(
+          [primaryRadarTimeline],
+          radarFrameIndex,
+          radarStaticPresentation,
+        )[0]
+      : undefined,
+  );
+  const primaryRadarHasCoverageMask = $derived(
+    primaryRadarFrame?.tiles.some((tile) => tile.coverage_url) ?? false,
+  );
+  const primaryRadarFramePosition = $derived(
+    primaryRadarFrame && primaryRadarTimeline
+      ? primaryRadarTimeline.frames.findIndex(
+          (frame) => frame.id === primaryRadarFrame.id,
+        ) + 1
+      : 0,
   );
   const weatherRenderScene = $derived(
     buildWeatherRenderScene(weather, pluginWeatherLayers),
@@ -876,43 +924,43 @@
 
   function syncPluginRadarFrames(): void {
     if (!map || !mapReady) return;
-    const frames = pluginRadarFrames(pluginWeatherLayers);
     const nextLayerIds = new Set<string>();
     const nextFrameVersions = new Map<string, string>();
-    for (const frame of frames) {
-      const mapId = pluginRadarMapId(frame.id);
-      const sourceId = `${mapId}-source`;
-      const layerId = `${mapId}-layer`;
-      nextLayerIds.add(layerId);
-      nextFrameVersions.set(layerId, frame.frame_time);
-      const image = map.getSource(sourceId) as ImageSource | undefined;
-      if (image && pluginRadarFrameVersions.get(layerId) !== frame.frame_time) {
-        image.updateImage({ url: frame.url, coordinates: frame.coordinates });
-      } else if (!image) {
-        map.addSource(sourceId, {
-          type: "image",
-          url: frame.url,
-          coordinates: frame.coordinates,
-        });
-        map.addLayer(
+    for (const frame of activeRadarFrames) {
+      for (const tile of frame.tiles) {
+        const mapId = pluginRadarMapId(tile.id);
+        syncRadarImageLayer(
+          `${mapId}-source`,
+          `${mapId}-layer`,
+          tile.url,
+          tile.coordinates,
+          frame.frame_time,
           {
-            id: layerId,
-            type: "raster",
-            source: sourceId,
-            layout: { visibility: pluginWeatherVisible ? "visible" : "none" },
-            paint: {
-              "raster-opacity": lowResource ? 0.42 : 0.58,
-              "raster-fade-duration": prefersReducedMotion ? 0 : 300,
-            },
+            "raster-opacity": lowResource ? 0.42 : 0.58,
+            "raster-fade-duration": prefersReducedMotion ? 0 : 260,
           },
-          PLUGIN_WEATHER_ATMOSPHERE_LAYER_ID,
+          nextLayerIds,
+          nextFrameVersions,
         );
+        if (tile.coverage_url) {
+          syncRadarImageLayer(
+            `${mapId}-coverage-source`,
+            `${mapId}-coverage-layer`,
+            tile.coverage_url,
+            tile.coordinates,
+            `${frame.frame_time}:coverage`,
+            {
+              "raster-opacity": lowResource ? 0.38 : 0.52,
+              "raster-fade-duration": 0,
+              "raster-saturation": -1,
+              "raster-brightness-min": 0.22,
+              "raster-brightness-max": 0.48,
+            },
+            nextLayerIds,
+            nextFrameVersions,
+          );
+        }
       }
-      map.setLayoutProperty(
-        layerId,
-        "visibility",
-        pluginWeatherVisible ? "visible" : "none",
-      );
     }
     for (const layerId of pluginRadarLayerIds) {
       if (nextLayerIds.has(layerId)) continue;
@@ -922,6 +970,76 @@
     }
     pluginRadarLayerIds = nextLayerIds;
     pluginRadarFrameVersions = nextFrameVersions;
+  }
+
+  function syncRadarImageLayer(
+    sourceId: string,
+    layerId: string,
+    url: string,
+    coordinates: [
+      [number, number],
+      [number, number],
+      [number, number],
+      [number, number],
+    ],
+    version: string,
+    paint: Record<string, number>,
+    nextLayerIds: Set<string>,
+    nextFrameVersions: Map<string, string>,
+  ): void {
+    if (!map) return;
+    nextLayerIds.add(layerId);
+    nextFrameVersions.set(layerId, version);
+    const image = map.getSource(sourceId) as ImageSource | undefined;
+    if (image && pluginRadarFrameVersions.get(layerId) !== version) {
+      image.updateImage({ url, coordinates });
+    } else if (!image) {
+      map.addSource(sourceId, { type: "image", url, coordinates });
+      map.addLayer(
+        {
+          id: layerId,
+          type: "raster",
+          source: sourceId,
+          layout: { visibility: pluginWeatherVisible ? "visible" : "none" },
+          paint,
+        },
+        PLUGIN_WEATHER_ATMOSPHERE_LAYER_ID,
+      );
+    }
+    map.setLayoutProperty(
+      layerId,
+      "visibility",
+      pluginWeatherVisible ? "visible" : "none",
+    );
+  }
+
+  function selectPreviousRadarFrame(): void {
+    radarPlaying = false;
+    radarFrameIndex = Math.max(0, radarFrameIndex - 1);
+  }
+
+  function selectNextRadarFrame(): void {
+    radarPlaying = false;
+    radarFrameIndex = Math.min(radarFrameCount - 1, radarFrameIndex + 1);
+  }
+
+  function toggleRadarPlayback(): void {
+    if (radarStaticPresentation || radarFrameCount <= 1) return;
+    radarPlaying = !radarPlaying;
+  }
+
+  function formatRadarFrameTime(value: string): string {
+    const date = new Date(value);
+    return Number.isFinite(date.getTime())
+      ? new Intl.DateTimeFormat(undefined, {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          timeZoneName: "short",
+        }).format(date)
+      : value;
   }
 
   function updateAtlas(): void {
@@ -1000,6 +1118,7 @@
     const weatherStations = weatherStationFeatures(weather);
     const weatherWinds = weatherWindFeatures(weather);
     const dispatchRouteData = atlasRouteGeoJson(route);
+    const routeWeatherData = routeWeatherLineFeatures(routeWeather);
     (map.getSource(FLEET_SOURCE_ID) as GeoJSONSource | undefined)?.setData(
       fleet,
     );
@@ -1036,6 +1155,9 @@
     (
       map.getSource(DISPATCH_ROUTE_SOURCE_ID) as GeoJSONSource | undefined
     )?.setData(dispatchRouteData);
+    (
+      map.getSource(ROUTE_WEATHER_SOURCE_ID) as GeoJSONSource | undefined
+    )?.setData(routeWeatherData);
 
     const visibility = fleetVisible ? "visible" : "none";
     map.setLayoutProperty(FLEET_LAYER_ID, "visibility", visibility);
@@ -1223,6 +1345,15 @@
       weatherVisibility,
     );
     const routeVisibility = routeVisible ? "visible" : "none";
+    const routeWeatherVisibility =
+      routeVisible && pluginWeatherVisible && routeWeather ? "visible" : "none";
+    for (const layerId of [
+      ROUTE_WEATHER_HALO_LAYER_ID,
+      ROUTE_WEATHER_SUPPORTED_LAYER_ID,
+      ROUTE_WEATHER_UNAVAILABLE_LAYER_ID,
+    ]) {
+      map.setLayoutProperty(layerId, "visibility", routeWeatherVisibility);
+    }
     map.setLayoutProperty(
       DISPATCH_ROUTE_LINE_LAYER_ID,
       "visibility",
@@ -1661,13 +1792,30 @@
     selectedRoutePointId;
     selectedWeatherStationId;
     route;
+    routeWeather;
     routeVisible;
     selectedAircraftId;
     selectedFboId;
     selectedRouteFeatureId;
+    radarFrameIndex;
+    radarPlaying;
     weatherRendererStatus;
     $activeTheme;
     updateAtlas();
+  });
+
+  $effect(() => {
+    const signature = radarTimelines
+      .map((timeline) =>
+        timeline.frames.map((frame) => frame.frame_time).join(","),
+      )
+      .join("|");
+    if (signature === radarTimelineSignature) return;
+    radarTimelineSignature = signature;
+    radarFrameIndex = radarStaticPresentation
+      ? Math.max(0, radarFrameCount - 1)
+      : 0;
+    radarPlaying = !radarStaticPresentation && radarFrameCount > 1;
   });
 
   $effect(() => {
@@ -1691,6 +1839,12 @@
       daylightSourceSignature = "";
       synchronizeDaylightSource();
     }, 60_000);
+    const radarAnimationInterval = window.setInterval(() => {
+      if (radarStaticPresentation || !radarPlaying || radarFrameCount <= 1) {
+        return;
+      }
+      radarFrameIndex = (radarFrameIndex + 1) % radarFrameCount;
+    }, 1_250);
     const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
     const updateMotionPreference = () => {
       prefersReducedMotion = motionQuery.matches;
@@ -2879,6 +3033,61 @@
             "text-halo-width": 1.5,
           },
         });
+        atlasMap.addSource(ROUTE_WEATHER_SOURCE_ID, {
+          type: "geojson",
+          data: routeWeatherLineFeatures(routeWeather),
+        });
+        atlasMap.addLayer({
+          id: ROUTE_WEATHER_HALO_LAYER_ID,
+          type: "line",
+          source: ROUTE_WEATHER_SOURCE_ID,
+          layout: {
+            visibility:
+              routeVisible && pluginWeatherVisible && routeWeather
+                ? "visible"
+                : "none",
+          },
+          paint: {
+            "line-color": "#101923",
+            "line-width": ["interpolate", ["linear"], ["zoom"], 1, 7, 8, 16],
+            "line-opacity": 0.5,
+          },
+        });
+        atlasMap.addLayer({
+          id: ROUTE_WEATHER_SUPPORTED_LAYER_ID,
+          type: "line",
+          source: ROUTE_WEATHER_SOURCE_ID,
+          filter: ["==", ["get", "support"], "supported"],
+          layout: {
+            visibility:
+              routeVisible && pluginWeatherVisible && routeWeather
+                ? "visible"
+                : "none",
+          },
+          paint: {
+            "line-color": weatherCoverageColor("condition"),
+            "line-width": ["interpolate", ["linear"], ["zoom"], 1, 4.5, 8, 10],
+            "line-opacity": 0.82,
+          },
+        });
+        atlasMap.addLayer({
+          id: ROUTE_WEATHER_UNAVAILABLE_LAYER_ID,
+          type: "line",
+          source: ROUTE_WEATHER_SOURCE_ID,
+          filter: ["==", ["get", "support"], "unavailable"],
+          layout: {
+            visibility:
+              routeVisible && pluginWeatherVisible && routeWeather
+                ? "visible"
+                : "none",
+          },
+          paint: {
+            "line-color": "#a9b3bd",
+            "line-width": ["interpolate", ["linear"], ["zoom"], 1, 4, 8, 9],
+            "line-opacity": 0.72,
+            "line-dasharray": [1.2, 1.8],
+          },
+        });
         atlasMap.addSource(DISPATCH_ROUTE_SOURCE_ID, {
           type: "geojson",
           data: atlasRouteGeoJson(route),
@@ -3118,6 +3327,7 @@
     return () => {
       cancelled = true;
       window.clearInterval(daylightRefreshInterval);
+      window.clearInterval(radarAnimationInterval);
       motionQuery.removeEventListener("change", updateMotionPreference);
       stopWeatherAnimation();
       disposeWeatherRenderer();
@@ -3147,6 +3357,57 @@
     <small>{weatherStatusPresentation.detail}</small>
     <em>{weatherStatusPresentation.sourceBoundary}</em>
   </div>
+{/if}
+
+{#if pluginWeatherVisible && primaryRadarFrame && primaryRadarTimeline}
+  <section
+    class="radar-timeline"
+    aria-label={$translation("atlas-radar-timeline-title")}
+  >
+    <span
+      >{$translation("atlas-radar-timeline-title")} · {primaryRadarTimeline.provider}</span
+    >
+    <strong>{formatRadarFrameTime(primaryRadarFrame.frame_time)}</strong>
+    <small>
+      {$translation("atlas-radar-timeline-position", {
+        current: primaryRadarFramePosition,
+        total: primaryRadarTimeline.frames.length,
+      })}
+    </small>
+    <div class="radar-timeline-controls">
+      <button
+        type="button"
+        disabled={radarStaticPresentation || primaryRadarFramePosition <= 1}
+        aria-label={$translation("atlas-radar-previous-frame")}
+        onclick={selectPreviousRadarFrame}>◀</button
+      >
+      <button
+        type="button"
+        disabled={radarStaticPresentation || radarFrameCount <= 1}
+        aria-label={$translation(
+          radarPlaying ? "atlas-radar-pause" : "atlas-radar-play",
+        )}
+        onclick={toggleRadarPlayback}>{radarPlaying ? "Ⅱ" : "▶"}</button
+      >
+      <button
+        type="button"
+        disabled={radarStaticPresentation ||
+          primaryRadarFramePosition >= primaryRadarTimeline.frames.length}
+        aria-label={$translation("atlas-radar-next-frame")}
+        onclick={selectNextRadarFrame}>▶</button
+      >
+    </div>
+    {#if radarStaticPresentation}
+      <em>{$translation("atlas-radar-static-mode")}</em>
+    {/if}
+    <em
+      >{$translation(
+        primaryRadarHasCoverageMask
+          ? "atlas-radar-no-data-key"
+          : "atlas-radar-coverage-unknown",
+      )}</em
+    >
+  </section>
 {/if}
 
 <style>
@@ -3188,6 +3449,70 @@
     display: block;
   }
 
+  .radar-timeline {
+    position: absolute;
+    z-index: 3;
+    left: 22px;
+    bottom: 22px;
+    display: grid;
+    gap: 3px;
+    min-width: 220px;
+    border: 1px solid var(--color-highlight-border);
+    border-radius: 4px;
+    padding: 9px 13px;
+    color: var(--color-text);
+    background: var(--color-surface-translucent);
+    box-shadow: 0 12px 28px var(--color-shadow);
+    backdrop-filter: blur(9px);
+  }
+
+  .radar-timeline > span {
+    color: var(--color-highlight);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+  }
+
+  .radar-timeline > strong {
+    font-family: Georgia, serif;
+    font-size: 15px;
+    font-weight: 400;
+  }
+
+  .radar-timeline > small,
+  .radar-timeline > em {
+    color: var(--color-text-muted);
+    font-size: 9px;
+    font-style: normal;
+    line-height: 1.45;
+  }
+
+  .radar-timeline > em {
+    color: var(--color-highlight);
+  }
+
+  .radar-timeline-controls {
+    display: flex;
+    gap: 5px;
+    margin: 3px 0;
+  }
+
+  .radar-timeline-controls button {
+    min-width: 32px;
+    border: 1px solid var(--color-line);
+    border-radius: 3px;
+    padding: 3px 7px;
+    color: var(--color-text);
+    background: var(--color-surface-soft);
+    cursor: pointer;
+  }
+
+  .radar-timeline-controls button:disabled {
+    cursor: default;
+    opacity: 0.4;
+  }
+
   .weather-render-status span {
     color: var(--color-highlight);
     font-size: 9px;
@@ -3222,6 +3547,14 @@
       top: 12px;
       right: 12px;
       bottom: auto;
+      max-width: calc(100% - 24px);
+      padding: 7px 10px;
+    }
+
+    .radar-timeline {
+      left: 12px;
+      bottom: 12px;
+      min-width: 190px;
       max-width: calc(100% - 24px);
       padding: 7px 10px;
     }

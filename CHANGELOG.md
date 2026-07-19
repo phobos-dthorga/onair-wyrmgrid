@@ -70,6 +70,13 @@ major application version.
 - Added host-owned Forge settings with bounded refresh choices for forecast-grid
   and RADAR plugins. Plugins cannot declare, read, or write these non-secret
   records, and plugin API version 1 remains unchanged.
+- Added a bounded six-frame RainViewer RADAR timeline with visible source
+  timestamps, play/pause and stepping controls, automatic motion-safe static
+  fallback, and provider no-coverage masks rendered distinctly from clear sky.
+- Added Rust-owned weather-along-route analysis for continuous mapped plan
+  segments. Dispatch shows coarse global-model checkpoints, source times, and
+  support distances, while Atlas colours supported corridor sections and
+  leaves unsupported or unresolved areas explicit without a safety score.
 
 ### Changes
 
@@ -77,6 +84,15 @@ major application version.
   settings and are removed from browser storage after a successful save. The
   privacy notice and source language catalogue advance for the newly retained
   Atlas and plugin preferences.
+- Extended the additive plugin API version-one weather shape with a bounded
+  RainViewer-only recent-frame offset and optional per-tile coverage PNG. The
+  legacy third-party request shape and existing limits remain unchanged; the
+  source language catalogue advances to version 15 for RADAR controls,
+  no-data wording, and route-weather presentation.
+- Advanced the bundled RainViewer provider to 0.2.0 and made reserved bundled
+  plugin files refresh from the installed application. The provider-version
+  change invalidates its previous standing grant and automatic-start choice
+  until the user reviews and approves the current provider scope.
 
 - Documented a proposal-only hosted-platform architecture and staged delivery
   plan for the public website, WyrmGrid Aerie catalogue, signed community
