@@ -16,6 +16,12 @@ major application version.
   versioned, review-only handoffs. The runner captures exact reported token
   counts plus available timing and resource metadata; unavailable non-portable
   measurements remain explicit. WyrmGrid itself has no AI dependency.
+- Added a deterministic `review:inventory` maintainer command with a strict
+  version-1 evidence schema and sanitized fixture. It records NUL-safe Git
+  state, repository-relative file metadata and SHA-256 hashes, stable candidate
+  identities, conservative critical-path flags, and explicit unavailable facts
+  beneath ignored local storage without running validation, using a network or
+  model, caching results, or changing Git or tracked-file state.
 - Added a provider-neutral generated-contribution provenance contract and
   fail-closed maintainer broker. A dedicated, least-privileged GitHub App can
   publish one hash-bound bot commit and branch for a wholly local-assistant-
@@ -117,6 +123,14 @@ major application version.
   GitHub promotion, supply-chain evidence, platform coverage, and optional
   local Hoardmind review conveniences. The plan authorizes no workflow, GitHub
   setting, version, tag, release, cache, secret, or signing change.
+- Documented a proposal-only local review-automation programme that uses
+  deterministic change evidence, validation receipts, bounded packet
+  preparation, and incremental caching to support comments, tests, fixtures,
+  documentation, failure triage, boundary audits, and release-readiness
+  evidence. Hoardmind remains optional and review-only; ChatGPT/Codex semantic
+  review remains mandatory for high-benefit and critical work. Stage 1 now
+  implements only the deterministic inventory; later helpers, model authority,
+  workflows, and release behaviour remain unimplemented.
 - Documented a proposal-only implementation programme for the selected
   SayIntentions, direct VATSIM, direct IVAO, and Navigraph integrations. It
   defines provider-specific sequencing, privacy and authorization gates,

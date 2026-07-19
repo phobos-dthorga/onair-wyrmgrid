@@ -64,6 +64,41 @@ npm run dev
 See the [testing strategy](testing.md) for test placement, required cases, CI
 gates, and the safe scope for automated test-writing agents.
 
+## Local review evidence inventory
+
+Stage 1 of the local review-automation programme can inventory the current
+working tree without invoking a model, network service, validation command, or
+Git or tracked-file mutation. It writes only the requested ignored local
+evidence bundle:
+
+```powershell
+npm run review:inventory -- --base HEAD
+```
+
+The optional base is resolved to an exact commit before it is used. Omit it to
+inventory only current staged, unstaged, and untracked state. The command writes
+one versioned `evidence.json` and a derived `summary.md` beneath the ignored
+`.wyrmgrid-local/review/` directory. Use `--output
+.wyrmgrid-local/review/<new-name>` only when a stable new local directory name
+is useful; existing or outside paths are rejected.
+
+The evidence contains repository-relative paths, Git identities, file-state
+metadata, SHA-256 hashes, candidate identifiers, conservative critical-path
+flags, and explicit unavailable states. It contains no file contents, personal
+absolute paths, environment dump, credentials, raw provider payloads, database
+contents, model result, network result, or validation claim. Filenames and
+hashes can still reveal project structure or confirm known content, so keep the
+ignored output private and review `summary.md` before using it in any later
+bounded task.
+
+Exit status `0` means the requested inventory facts were available. Exit status
+`2` means the bundle was written but some evidence was unavailable and requires
+classification. Exit status `1` means the inventory failed. A
+`routine-candidate` is not a safety decision, and Stage 1 does not prepare or
+invoke a Hoardmind task. See the
+[local review automation plan](operations/local-review-automation.md) for the
+version-1 compatibility decision, threat boundary, and proposed later stages.
+
 For breakpoint-based investigation, use the checked-in VS Code configurations
 described in the [debugging guide](debugging.md). They support launching or
 attaching to the Tauri backend, focused Rust test debugging, and the WebView

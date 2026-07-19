@@ -1,0 +1,386 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/phobos-dthorga/onair-wyrmgrid/schemas/local-review-evidence-v1.schema.json",
+  "title": "WyrmGrid local review evidence version 1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "collected_at",
+    "repository",
+    "rule_set",
+    "working_tree",
+    "files",
+    "candidates",
+    "classification",
+    "privacy"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "kind": {
+      "const": "wyrmgrid-local-review-evidence"
+    },
+    "collected_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "root_label",
+        "head",
+        "base",
+        "scope_status",
+        "unavailable_reasons"
+      ],
+      "properties": {
+        "root_label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "head": {
+          "$ref": "#/$defs/gitIdentity"
+        },
+        "base": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["requested", "status", "commit", "reason"],
+          "properties": {
+            "requested": {
+              "type": "boolean"
+            },
+            "status": {
+              "enum": ["not-requested", "available", "unavailable"]
+            },
+            "commit": {
+              "type": ["string", "null"],
+              "pattern": "^[0-9a-f]{40,64}$"
+            },
+            "reason": {
+              "type": ["string", "null"]
+            }
+          }
+        },
+        "scope_status": {
+          "enum": ["available", "unavailable"]
+        },
+        "unavailable_reasons": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "rule_set": {
+      "const": "wyrmgrid-critical-paths-v1"
+    },
+    "working_tree": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "counts"],
+      "properties": {
+        "state": {
+          "enum": ["clean", "dirty", "unavailable"]
+        },
+        "counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "selected_files",
+            "staged",
+            "unstaged",
+            "untracked",
+            "renamed",
+            "deleted",
+            "binary",
+            "submodules",
+            "unavailable"
+          ],
+          "properties": {
+            "selected_files": {
+              "$ref": "#/$defs/count"
+            },
+            "staged": {
+              "$ref": "#/$defs/count"
+            },
+            "unstaged": {
+              "$ref": "#/$defs/count"
+            },
+            "untracked": {
+              "$ref": "#/$defs/count"
+            },
+            "renamed": {
+              "$ref": "#/$defs/count"
+            },
+            "deleted": {
+              "$ref": "#/$defs/count"
+            },
+            "binary": {
+              "$ref": "#/$defs/count"
+            },
+            "submodules": {
+              "$ref": "#/$defs/count"
+            },
+            "unavailable": {
+              "$ref": "#/$defs/count"
+            }
+          }
+        }
+      }
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/fileEvidence"
+      }
+    },
+    "candidates": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/candidate"
+      }
+    },
+    "classification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "critical_candidates",
+        "routine_candidates",
+        "classification_required",
+        "rule_ids"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "no-candidates",
+            "routine-candidate",
+            "critical-candidate",
+            "classification-required"
+          ]
+        },
+        "critical_candidates": {
+          "$ref": "#/$defs/count"
+        },
+        "routine_candidates": {
+          "$ref": "#/$defs/count"
+        },
+        "classification_required": {
+          "$ref": "#/$defs/count"
+        },
+        "rule_ids": {
+          "$ref": "#/$defs/ruleIds"
+        }
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file_contents_included",
+        "absolute_paths_included",
+        "environment_included",
+        "credentials_included",
+        "raw_provider_payloads_included",
+        "databases_included",
+        "network_used",
+        "model_used",
+        "local_output_written",
+        "git_state_mutated",
+        "tracked_files_mutated"
+      ],
+      "properties": {
+        "file_contents_included": {
+          "const": false
+        },
+        "absolute_paths_included": {
+          "const": false
+        },
+        "environment_included": {
+          "const": false
+        },
+        "credentials_included": {
+          "const": false
+        },
+        "raw_provider_payloads_included": {
+          "const": false
+        },
+        "databases_included": {
+          "const": false
+        },
+        "network_used": {
+          "const": false
+        },
+        "model_used": {
+          "const": false
+        },
+        "local_output_written": {
+          "const": true
+        },
+        "git_state_mutated": {
+          "const": false
+        },
+        "tracked_files_mutated": {
+          "const": false
+        }
+      }
+    }
+  },
+  "$defs": {
+    "count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "gitIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "commit", "reason"],
+      "properties": {
+        "status": {
+          "enum": ["available", "unavailable"]
+        },
+        "commit": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{40,64}$"
+        },
+        "reason": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "ruleIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^critical-[a-z0-9-]+$"
+      }
+    },
+    "fileEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "old_path",
+        "change_sources",
+        "base_status",
+        "index_status",
+        "worktree_status",
+        "untracked",
+        "conflict",
+        "binary",
+        "submodule",
+        "exists",
+        "kind",
+        "size_bytes",
+        "sha256",
+        "hash_status",
+        "unavailable_reason",
+        "candidate_id"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "old_path": {
+          "type": ["string", "null"]
+        },
+        "change_sources": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "base",
+              "index",
+              "worktree",
+              "untracked",
+              "unmerged",
+              "submodule"
+            ]
+          }
+        },
+        "base_status": {
+          "type": ["string", "null"],
+          "pattern": "^[ACDMRTUXB][0-9]*$"
+        },
+        "index_status": {
+          "type": ["string", "null"],
+          "pattern": "^[MADRCUTUXB?!]$"
+        },
+        "worktree_status": {
+          "type": ["string", "null"],
+          "pattern": "^[MADRCUTUXB?!]$"
+        },
+        "untracked": {
+          "type": "boolean"
+        },
+        "conflict": {
+          "type": "boolean"
+        },
+        "binary": {
+          "enum": ["yes", "no", "unknown"]
+        },
+        "submodule": {
+          "enum": ["yes", "no", "unknown"]
+        },
+        "exists": {
+          "type": "boolean"
+        },
+        "kind": {
+          "enum": ["file", "missing", "submodule", "unsupported"]
+        },
+        "size_bytes": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "sha256": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "hash_status": {
+          "enum": ["hashed", "not-applicable", "unavailable"]
+        },
+        "unavailable_reason": {
+          "type": ["string", "null"]
+        },
+        "candidate_id": {
+          "type": "string",
+          "pattern": "^lr1-[0-9a-f]{24}$"
+        }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "path", "classification", "rule_ids"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^lr1-[0-9a-f]{24}$"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "classification": {
+          "enum": [
+            "routine-candidate",
+            "critical-candidate",
+            "classification-required"
+          ]
+        },
+        "rule_ids": {
+          "$ref": "#/$defs/ruleIds"
+        }
+      }
+    }
+  }
+}
