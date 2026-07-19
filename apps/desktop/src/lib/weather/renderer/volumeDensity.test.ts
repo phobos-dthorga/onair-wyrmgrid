@@ -19,7 +19,7 @@ describe("weather volume density", () => {
     expect(first).toHaveLength(12 ** 3);
   });
 
-  it("tapers the volume boundary below its cloud-bearing centre", () => {
+  it("keeps every texture face empty before building cloud density", () => {
     const size = 16;
     const density = generateWeatherVolumeDensity(size, 7);
     const boundary: number[] = [];
@@ -45,7 +45,8 @@ describe("weather volume density", () => {
       }
     }
 
-    expect(mean(centre)).toBeGreaterThan(mean(boundary));
+    expect(boundary.every((value) => value === 0)).toBe(true);
+    expect(mean(centre)).toBeGreaterThan(0);
     expect(Math.max(...density)).toBeLessThanOrEqual(255);
   });
 

@@ -65,8 +65,12 @@ latitude into the current viewport. Atlas then unprojects the screen point and
 compares the round-trip coordinate with the source. Points behind the globe or
 above a pitched-map horizon resolve onto a different visible surface, allowing
 the renderer to fade and reject those decorative cells without using a private
-MapLibre transform API. Three.js uses a screen-aligned orthographic camera and
-positions a bounded local 3D group at the surviving projected anchor.
+MapLibre transform API. The renderer also samples the bounded visual perimeter
+through MapLibre's public project/unproject pair and fades the whole decorative
+cell before particles or volume geometry can cross the visible globe edge.
+Three.js uses a screen-aligned perspective camera whose target plane preserves
+CSS-pixel positions. This matches the perspective view rays required by the
+TSL box ray marcher while retaining MapLibre as the geographic camera owner.
 
 This first slice deliberately avoids a world-spanning cloud mesh. It keeps
 effects local to evidence and avoids pretending that one sparse report defines
@@ -90,8 +94,12 @@ cloud, or strike data.
 - **Clouds and obscuration:** the WebGPU backend ray-marches a shared 48³
   deterministic density texture through source-local boxes using Three.js TSL.
   Each cell receives bounded, condition- and intensity-driven density,
-  absorption, colour, scale, and motion. Cells beyond the volume ceiling, and
-  every WebGL2-backend cell, use the deterministic lit-mesh representation.
+  absorption, colour, scale, orientation, and motion. The density field is
+  forced to zero on every texture face so the invisible sampling box cannot
+  become a visible slab. Per-cell threshold and orientation variation prevents
+  the shared field from appearing as a repeated stamp. Cells beyond the volume
+  ceiling, and every WebGL2-backend cell, use the deterministic lit-mesh
+  representation.
   The one-time field generation yields between small slice batches so renderer
   startup does not monopolize the UI thread. A deterministic screen-space
   interleaved offset stratifies samples along each view ray, reducing visible
@@ -170,8 +178,12 @@ The implementation is intentionally kept out of Svelte event handlers:
   scene;
 - `weather/renderer/quality.ts` owns resource ceilings;
 - `weather/renderer/adaptiveQuality.ts` owns pressure transitions;
+- `weather/renderer/projectionVisibility.ts` and `surfaceClipping.ts` own the
+  public-projection horizon checks;
 - `weather/renderer/volumeDensity.ts` generates the bounded procedural 3D
   density field;
+- `weather/renderer/deterministic.ts` and `volumeVariation.ts` provide stable,
+  cell-specific visual variation;
 - `weather/renderer/threeWeatherRenderer.ts` owns Three.js resources and
   animation;
 - `weather/renderer/types.ts` is the renderer adapter contract; and

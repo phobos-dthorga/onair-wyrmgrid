@@ -394,6 +394,7 @@ nav {
 .map-wash {
   pointer-events: none;
   position: absolute;
+  z-index: 2;
   inset: 0;
   background: linear-gradient(
     180deg,
@@ -405,7 +406,7 @@ nav {
 .region-hover-card {
   pointer-events: none;
   position: absolute;
-  z-index: 2;
+  z-index: 3;
   top: 22px;
   right: 58px;
   min-width: 190px;
@@ -440,6 +441,7 @@ nav {
 }
 .map-title {
   position: absolute;
+  z-index: 3;
   left: 24px;
   top: 22px;
   padding: 12px 14px;
@@ -473,6 +475,7 @@ nav {
 }
 .readiness-card {
   position: absolute;
+  z-index: 3;
   left: 24px;
   bottom: 24px;
   width: min(430px, calc(100% - 48px));

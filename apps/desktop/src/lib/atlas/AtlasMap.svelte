@@ -33,7 +33,10 @@
     WeatherRendererStatus,
   } from "$lib/weather/renderer/types";
   import type { AdaptiveWeatherQuality } from "$lib/weather/renderer/quality";
-  import { weatherProjectionSurfaceVisibility } from "$lib/weather/renderer/projectionVisibility";
+  import {
+    weatherProjectionSurfaceVisibility,
+    weatherScreenSurfaceVisibility,
+  } from "$lib/weather/renderer/projectionVisibility";
   import { buildWeatherRenderScene } from "$lib/weather/renderer/weatherRenderScene";
   import { presentWeatherRendererStatus } from "$lib/weather/renderer/statusPresentation";
   import {
@@ -337,12 +340,23 @@
     const height = mapContainer.clientHeight;
     if (width < 1 || height < 1) return;
     try {
+      const centre = map.getCenter();
       weatherRenderer.render({
         width,
         height,
         pixelRatio: window.devicePixelRatio || 1,
         zoom: map.getZoom(),
         bearing: map.getBearing(),
+        projectionKey: [
+          map.getProjection().type,
+          width,
+          height,
+          map.getZoom().toFixed(3),
+          map.getBearing().toFixed(2),
+          map.getPitch().toFixed(2),
+          centre.lng.toFixed(4),
+          centre.lat.toFixed(4),
+        ].join(":"),
         timeMs,
         project: (longitude, latitude) => {
           const atlasMap = map;
@@ -359,6 +373,22 @@
               { longitude: roundTrip.lng, latitude: roundTrip.lat },
             ),
           };
+        },
+        surfaceVisibilityAt: (x, y) => {
+          const atlasMap = map;
+          if (!atlasMap || x < 0 || y < 0 || x > width || y > height) {
+            return 0;
+          }
+          try {
+            const geographic = atlasMap.unproject([x, y]);
+            const roundTrip = atlasMap.project(geographic);
+            return weatherScreenSurfaceVisibility(
+              { x, y },
+              { x: roundTrip.x, y: roundTrip.y },
+            );
+          } catch {
+            return 0;
+          }
         },
       });
     } catch (error) {

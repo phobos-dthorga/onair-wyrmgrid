@@ -48,6 +48,9 @@ major application version.
 
 ### Changes
 
+- Fixed detailed Atlas weather exposing the hard faces of its volume boxes,
+  repeating recognisable cloud silhouettes, crossing the globe horizon, and
+  drawing over map information cards.
 - Added compile-time catalogue-key ownership for translated interface code,
   replaced constructed Settings and Simulator message identifiers with
   explicit typed mappings, and moved Atlas renderer status text into source

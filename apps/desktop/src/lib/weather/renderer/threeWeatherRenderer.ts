@@ -19,6 +19,7 @@ import {
 } from "three/tsl";
 import { RaymarchingBox } from "three/addons/tsl/utils/Raymarching.js";
 import { AdaptiveWeatherQualityController } from "./adaptiveQuality";
+import { deterministicWeatherUnit, hashWeatherText } from "./deterministic";
 import {
   adaptWeatherRenderBudget,
   resolveWeatherRenderBudget,
@@ -31,6 +32,8 @@ import type {
   WeatherRendererFrame,
   WeatherRendererUpdate,
 } from "./types";
+import { weatherVisualSurfaceVisibility } from "./surfaceClipping";
+import { weatherVolumeVariation } from "./volumeVariation";
 import type { WeatherRenderCell } from "./weatherRenderScene";
 import {
   generateWeatherVolumeDensityAsync,
@@ -68,29 +71,21 @@ type CellVisual = {
   dust?: THREE.Points;
   lightning?: THREE.Line;
   lightningMaterial?: THREE.LineBasicMaterial;
+  surfaceSample?: {
+    projectionKey: string;
+    x: number;
+    y: number;
+    radius: number;
+    visibility: number;
+  };
 };
 
 const SCREEN_MARGIN = 120;
 const MINIMUM_SURFACE_VISIBILITY = 0.01;
 const DEGREES_TO_RADIANS = Math.PI / 180;
 const PRECIPITATION_FIELD_HEIGHT = 120;
-
-function hashText(value: string): number {
-  let hash = 2_166_136_261;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 16_777_619);
-  }
-  return hash >>> 0;
-}
-
-function deterministicUnit(seed: number, index: number): number {
-  let value = (seed + Math.imul(index + 1, 2_654_435_761)) >>> 0;
-  value ^= value << 13;
-  value ^= value >>> 17;
-  value ^= value << 5;
-  return (value >>> 0) / 4_294_967_295;
-}
+const WEATHER_VISUAL_RADIUS = 82;
+const WEATHER_CAMERA_VERTICAL_FOV_DEGREES = 32;
 
 function disposeObject(root: THREE.Object3D): void {
   const geometries = new Set<THREE.BufferGeometry>();
@@ -173,11 +168,13 @@ function createVolumeMaterial(
   texture: THREE.Data3DTexture,
   cell: WeatherRenderCell,
   steps: number,
+  densityThresholdOffset: number,
 ): THREE.NodeMaterial {
   const densityTexture = texture3D(texture, null, 0);
   const dust = cell.effect === "dust";
   const threshold = float(
-    dust ? 0.32 : 0.48 - Math.min(0.12, cell.intensity * 0.12),
+    (dust ? 0.32 : 0.48 - Math.min(0.12, cell.intensity * 0.12)) +
+      densityThresholdOffset,
   );
   const range = float(dust ? 0.16 : 0.115);
   const opacity = float(
@@ -247,15 +244,26 @@ function addVolume(
   steps: number,
 ): void {
   const dust = visual.cell.effect === "dust";
+  const variation = weatherVolumeVariation(visual.cell.id);
   const mesh = new THREE.Mesh(
     new THREE.BoxGeometry(1, 1, 1),
-    createVolumeMaterial(texture, visual.cell, steps),
+    createVolumeMaterial(
+      texture,
+      visual.cell,
+      steps,
+      variation.densityThresholdOffset,
+    ),
   );
   mesh.position.y = dust ? -4 : -13;
   mesh.scale.set(dust ? 132 : 112, dust ? 72 : 58, dust ? 42 : 48);
   const phase =
-    deterministicUnit(hashText(`${visual.cell.id}:volume`), 0) * Math.PI * 2;
-  const baseRotation = (phase - Math.PI) * 0.08;
+    deterministicWeatherUnit(
+      hashWeatherText(`${visual.cell.id}:volume-animation`),
+      0,
+    ) *
+    Math.PI *
+    2;
+  const baseRotation = variation.rotationRadians;
   mesh.rotation.z = baseRotation;
   visual.volume = { mesh, baseRotation, phase };
   visual.group.add(mesh);
@@ -266,9 +274,9 @@ function addClouds(
   count: number,
   cinematic: boolean,
 ): void {
-  const seed = hashText(`${visual.cell.id}:cloud`);
+  const seed = hashWeatherText(`${visual.cell.id}:cloud`);
   for (let index = 0; index < count; index += 1) {
-    const size = 13 + deterministicUnit(seed, index * 5) * 11;
+    const size = 13 + deterministicWeatherUnit(seed, index * 5) * 11;
     const geometry = new THREE.SphereGeometry(size, cinematic ? 14 : 10, 8);
     const material = new THREE.MeshPhongMaterial({
       color: cloudColor(visual.cell.effect),
@@ -280,10 +288,11 @@ function addClouds(
     });
     registerWeatherMaterial(material);
     const mesh = new THREE.Mesh(geometry, material);
-    const baseX = (deterministicUnit(seed, index * 5 + 1) - 0.5) * 70;
-    const baseY = (deterministicUnit(seed, index * 5 + 2) - 0.5) * 35 - 15;
-    const depth = (deterministicUnit(seed, index * 5 + 3) - 0.5) * 30;
-    const stretch = 0.8 + deterministicUnit(seed, index * 5 + 4) * 0.8;
+    const baseX = (deterministicWeatherUnit(seed, index * 5 + 1) - 0.5) * 70;
+    const baseY =
+      (deterministicWeatherUnit(seed, index * 5 + 2) - 0.5) * 35 - 15;
+    const depth = (deterministicWeatherUnit(seed, index * 5 + 3) - 0.5) * 30;
+    const stretch = 0.8 + deterministicWeatherUnit(seed, index * 5 + 4) * 0.8;
     mesh.position.set(baseX, baseY, depth);
     mesh.scale.set(stretch, 0.58 + visual.cell.intensity * 0.18, 0.72);
     visual.group.add(mesh);
@@ -291,7 +300,7 @@ function addClouds(
       mesh,
       baseX,
       baseY,
-      phase: deterministicUnit(seed, index * 7 + 6) * Math.PI * 2,
+      phase: deterministicWeatherUnit(seed, index * 7 + 6) * Math.PI * 2,
     });
   }
 }
@@ -315,16 +324,18 @@ function addPrecipitation(
   registerWeatherMaterial(material);
   const precipitation = new THREE.InstancedMesh(geometry, material, count);
   precipitation.frustumCulled = false;
-  const seed = hashText(`${visual.cell.id}:precipitation`);
+  const seed = hashWeatherText(`${visual.cell.id}:precipitation`);
   for (let index = 0; index < count; index += 1) {
     visual.precipitationSeeds.push({
-      x: (deterministicUnit(seed, index * 5) - 0.5) * 90,
-      y: deterministicUnit(seed, index * 5 + 1) * PRECIPITATION_FIELD_HEIGHT,
-      z: (deterministicUnit(seed, index * 5 + 2) - 0.5) * 24,
-      phase: deterministicUnit(seed, index * 5 + 3) * Math.PI * 2,
+      x: (deterministicWeatherUnit(seed, index * 5) - 0.5) * 90,
+      y:
+        deterministicWeatherUnit(seed, index * 5 + 1) *
+        PRECIPITATION_FIELD_HEIGHT,
+      z: (deterministicWeatherUnit(seed, index * 5 + 2) - 0.5) * 24,
+      phase: deterministicWeatherUnit(seed, index * 5 + 3) * Math.PI * 2,
       speed:
         (snow ? 9 : 42) +
-        deterministicUnit(seed, index * 5 + 4) * (snow ? 8 : 25),
+        deterministicWeatherUnit(seed, index * 5 + 4) * (snow ? 8 : 25),
     });
   }
   visual.precipitation = precipitation;
@@ -332,14 +343,15 @@ function addPrecipitation(
 }
 
 function addDust(visual: CellVisual, count: number): void {
-  const seed = hashText(`${visual.cell.id}:dust`);
+  const seed = hashWeatherText(`${visual.cell.id}:dust`);
   const positions = new Float32Array(count * 3);
   for (let index = 0; index < count; index += 1) {
-    positions[index * 3] = (deterministicUnit(seed, index * 3) - 0.5) * 105;
+    positions[index * 3] =
+      (deterministicWeatherUnit(seed, index * 3) - 0.5) * 105;
     positions[index * 3 + 1] =
-      (deterministicUnit(seed, index * 3 + 1) - 0.5) * 68;
+      (deterministicWeatherUnit(seed, index * 3 + 1) - 0.5) * 68;
     positions[index * 3 + 2] =
-      (deterministicUnit(seed, index * 3 + 2) - 0.5) * 25;
+      (deterministicWeatherUnit(seed, index * 3 + 2) - 0.5) * 25;
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
@@ -359,12 +371,12 @@ function addDust(visual: CellVisual, count: number): void {
 }
 
 function addLightning(visual: CellVisual): void {
-  const seed = hashText(`${visual.cell.id}:lightning`);
+  const seed = hashWeatherText(`${visual.cell.id}:lightning`);
   const points: THREE.Vector3[] = [];
   let x = 8;
   for (let index = 0; index < 8; index += 1) {
     const y = -42 + index * 12;
-    x += (deterministicUnit(seed, index) - 0.5) * 14;
+    x += (deterministicWeatherUnit(seed, index) - 0.5) * 14;
     points.push(new THREE.Vector3(x, y, 40));
   }
   const geometry = new THREE.BufferGeometry().setFromPoints(points);
@@ -437,13 +449,11 @@ class ThreeWeatherRenderer implements WeatherRenderer {
   readonly backend: WeatherRendererBackend;
 
   private readonly scene = new THREE.Scene();
-  private readonly camera = new THREE.OrthographicCamera(
-    0,
+  private readonly camera = new THREE.PerspectiveCamera(
+    WEATHER_CAMERA_VERTICAL_FOV_DEGREES,
     1,
-    1,
-    0,
     0.1,
-    1_000,
+    4_000,
   );
   private readonly root = new THREE.Group();
   private readonly instancePosition = new THREE.Vector3();
@@ -472,7 +482,7 @@ class ThreeWeatherRenderer implements WeatherRenderer {
     this.backend = backend;
     this.volumeTexture = volumeTexture;
     this.updateValue = initialUpdate;
-    this.camera.position.z = 500;
+    this.root.scale.y = -1;
     this.scene.add(this.root);
     this.scene.add(new THREE.AmbientLight(0xd9e8ef, 1.25));
     const sunlight = new THREE.DirectionalLight(0xffffff, 2.2);
@@ -526,11 +536,19 @@ class ThreeWeatherRenderer implements WeatherRenderer {
       this.pixelRatio = nextPixelRatio;
       this.renderer.setPixelRatio(nextPixelRatio);
       this.renderer.setSize(frame.width, frame.height, false);
-      this.camera.left = 0;
-      this.camera.right = frame.width;
-      this.camera.top = 0;
-      this.camera.bottom = frame.height;
+      const cameraDistance =
+        frame.height /
+        (2 * Math.tan((WEATHER_CAMERA_VERTICAL_FOV_DEGREES * Math.PI) / 360));
+      this.camera.aspect = frame.width / frame.height;
+      this.camera.far = cameraDistance + 1_000;
+      this.camera.position.set(
+        frame.width / 2,
+        frame.height / 2,
+        cameraDistance,
+      );
+      this.camera.lookAt(frame.width / 2, frame.height / 2, 0);
       this.camera.updateProjectionMatrix();
+      this.root.position.y = frame.height;
     }
 
     const projected = this.updateValue.scene.cells
@@ -578,9 +596,37 @@ class ThreeWeatherRenderer implements WeatherRenderer {
       visual.group.visible = true;
       visual.group.position.set(point.x, point.y, 0);
       const intensityScale = 0.78 + visual.cell.intensity * 0.32;
-      visual.group.scale.setScalar(scaleFromZoom * intensityScale);
+      const visualScale = scaleFromZoom * intensityScale;
+      visual.group.scale.setScalar(visualScale);
+      const sampleRadius = WEATHER_VISUAL_RADIUS * visualScale;
+      const cachedSample = visual.surfaceSample;
+      const surfaceVisibility =
+        cachedSample &&
+        cachedSample.projectionKey === frame.projectionKey &&
+        Math.abs(cachedSample.x - point.x) < 0.5 &&
+        Math.abs(cachedSample.y - point.y) < 0.5 &&
+        Math.abs(cachedSample.radius - sampleRadius) < 0.25
+          ? cachedSample.visibility
+          : weatherVisualSurfaceVisibility(
+              point.surfaceVisibility,
+              point.x,
+              point.y,
+              sampleRadius,
+              frame.surfaceVisibilityAt,
+            );
+      visual.surfaceSample = {
+        projectionKey: frame.projectionKey,
+        x: point.x,
+        y: point.y,
+        radius: sampleRadius,
+        visibility: surfaceVisibility,
+      };
+      if (surfaceVisibility <= MINIMUM_SURFACE_VISIBILITY) {
+        visual.group.visible = false;
+        continue;
+      }
       this.animateCell(visual, frame);
-      applySurfaceVisibility(visual.group, point.surfaceVisibility);
+      applySurfaceVisibility(visual.group, surfaceVisibility);
     }
     const submissionStart = performance.now();
     this.renderer.render(this.scene, this.camera);
@@ -694,7 +740,7 @@ class ThreeWeatherRenderer implements WeatherRenderer {
         opacity = 0.45;
       } else {
         const phase =
-          (animationTime + (hashText(visual.cell.id) % 4_200)) % 6_400;
+          (animationTime + (hashWeatherText(visual.cell.id) % 4_200)) % 6_400;
         opacity = phase < 80 ? 1 : phase >= 150 && phase < 215 ? 0.72 : 0.08;
       }
       visual.lightningMaterial.userData.weatherBaseOpacity = opacity;

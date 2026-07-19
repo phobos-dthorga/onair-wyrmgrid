@@ -3,8 +3,15 @@ export type GeographicPoint = {
   latitude: number;
 };
 
+export type ScreenPoint = {
+  x: number;
+  y: number;
+};
+
 const FULL_VISIBILITY_ERROR_DEGREES = 0.05;
 const HIDDEN_VISIBILITY_ERROR_DEGREES = 1.5;
+const FULL_VISIBILITY_ERROR_PIXELS = 0.75;
+const HIDDEN_VISIBILITY_ERROR_PIXELS = 10;
 const DEGREES_TO_RADIANS = Math.PI / 180;
 const RADIANS_TO_DEGREES = 180 / Math.PI;
 
@@ -69,6 +76,35 @@ export function weatherProjectionSurfaceVisibility(
   const progress =
     (error - FULL_VISIBILITY_ERROR_DEGREES) /
     (HIDDEN_VISIBILITY_ERROR_DEGREES - FULL_VISIBILITY_ERROR_DEGREES);
+  const smoothProgress = progress * progress * (3 - 2 * progress);
+  return 1 - smoothProgress;
+}
+
+/**
+ * Detects screen pixels that MapLibre cannot round-trip onto the visible map
+ * surface. This lets decorative weather fade before its geometry crosses a
+ * globe horizon even when the weather cell's centre remains visible.
+ */
+export function weatherScreenSurfaceVisibility(
+  expected: ScreenPoint,
+  roundTrip: ScreenPoint,
+): number {
+  if (
+    !Number.isFinite(expected.x) ||
+    !Number.isFinite(expected.y) ||
+    !Number.isFinite(roundTrip.x) ||
+    !Number.isFinite(roundTrip.y)
+  ) {
+    return 0;
+  }
+
+  const error = Math.hypot(roundTrip.x - expected.x, roundTrip.y - expected.y);
+  if (error <= FULL_VISIBILITY_ERROR_PIXELS) return 1;
+  if (error >= HIDDEN_VISIBILITY_ERROR_PIXELS) return 0;
+
+  const progress =
+    (error - FULL_VISIBILITY_ERROR_PIXELS) /
+    (HIDDEN_VISIBILITY_ERROR_PIXELS - FULL_VISIBILITY_ERROR_PIXELS);
   const smoothProgress = progress * progress * (3 - 2 * progress);
   return 1 - smoothProgress;
 }

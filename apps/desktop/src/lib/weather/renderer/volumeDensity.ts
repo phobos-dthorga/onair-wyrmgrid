@@ -89,10 +89,23 @@ function fillDensitySlice(
           horizontalZ * horizontalZ * 0.72,
       );
       const edgeTaper = clampUnit((1.03 - radial) / 0.34);
+      const distanceToTextureFace = Math.min(
+        x,
+        y,
+        z,
+        size - 1 - x,
+        size - 1 - y,
+        size - 1 - z,
+      );
+      const faceTaper = smooth(
+        clampUnit(distanceToTextureFace / Math.max(1, size * 0.14)),
+      );
       const base = fractalNoise(normalizedX, normalizedY, normalizedZ, seed);
       const billow = clampUnit((base - 0.3) / 0.62);
       const index = z * size * size + y * size + x;
-      data[index] = Math.round(255 * billow * edgeTaper * edgeTaper);
+      data[index] = Math.round(
+        255 * billow * edgeTaper * edgeTaper * faceTaper * faceTaper,
+      );
     }
   }
 }

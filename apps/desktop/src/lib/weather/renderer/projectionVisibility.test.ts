@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { weatherProjectionSurfaceVisibility } from "./projectionVisibility";
+import {
+  weatherProjectionSurfaceVisibility,
+  weatherScreenSurfaceVisibility,
+} from "./projectionVisibility";
 
 describe("weather projection surface visibility", () => {
   it("keeps exact and antimeridian-equivalent round trips visible", () => {
@@ -49,6 +52,38 @@ describe("weather projection surface visibility", () => {
       weatherProjectionSurfaceVisibility(
         { longitude: 0, latitude: 91 },
         { longitude: 0, latitude: 90 },
+      ),
+    ).toBe(0);
+  });
+});
+
+describe("weather screen surface visibility", () => {
+  it("keeps round-trippable pixels fully visible", () => {
+    expect(
+      weatherScreenSurfaceVisibility(
+        { x: 400, y: 240 },
+        { x: 400.25, y: 240.25 },
+      ),
+    ).toBe(1);
+  });
+
+  it("fades and then rejects pixels outside the projected surface", () => {
+    expect(
+      weatherScreenSurfaceVisibility({ x: 400, y: 240 }, { x: 405, y: 240 }),
+    ).toBeGreaterThan(0);
+    expect(
+      weatherScreenSurfaceVisibility({ x: 400, y: 240 }, { x: 405, y: 240 }),
+    ).toBeLessThan(1);
+    expect(
+      weatherScreenSurfaceVisibility({ x: 400, y: 240 }, { x: 420, y: 240 }),
+    ).toBe(0);
+  });
+
+  it("fails closed for invalid projection results", () => {
+    expect(
+      weatherScreenSurfaceVisibility(
+        { x: 400, y: 240 },
+        { x: Number.NaN, y: 240 },
       ),
     ).toBe(0);
   });

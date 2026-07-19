@@ -27,8 +27,10 @@ export type WeatherRendererFrame = {
   pixelRatio: number;
   zoom: number;
   bearing: number;
+  projectionKey: string;
   timeMs: number;
   project: (longitude: number, latitude: number) => WeatherScreenPoint;
+  surfaceVisibilityAt: (x: number, y: number) => number;
 };
 
 export type WeatherRendererUpdate = {
