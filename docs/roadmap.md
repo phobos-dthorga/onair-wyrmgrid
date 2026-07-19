@@ -106,8 +106,9 @@ not replace completion of the current vertical slice.
   selection, explicit unknown/no-report rendering, and an initial
   Plan-to-Atlas journey rail (implemented)
 - Route advisories and explainable weather findings (airport observations and
-  coarse along-route global-model context implemented; route hazard products
-  remain)
+  privacy-preserving ETA-matched coarse global-model context implemented,
+  with current-only legacy and factual RADAR context explicit; route hazard
+  products remain)
 - Dispatch-to-Atlas coordinate-only route projection with antimeridian-safe
   full-route framing, stable linked airport/fix selections, and explicit
   unresolved-location results (implemented); clickable SID/STAR geometry still
@@ -117,9 +118,10 @@ not replace completion of the current vertical slice.
   WebGL2/MapLibre fallbacks, adaptive visual ceilings, and identical facts
   across rendering profiles (implemented)
 - Independently approved Open-Meteo global model and RainViewer RADAR plugins
-  with host-owned GPU rendering (coarse layers, six-frame recent animation,
-  timestamps, and visible no-data masks implemented; higher resolution and
-  persisted history remain)
+  with host-owned GPU rendering (six bounded Open-Meteo forecast horizons,
+  coarse time-aware route matching, six-frame recent RADAR animation,
+  timestamps, and visible no-data masks implemented; higher resolution,
+  forecast confidence, and persisted history remain)
 - SimBrief generation only after Navigraph approves the desktop flow and any
   required hosted-secret boundary receives a separate decision
 

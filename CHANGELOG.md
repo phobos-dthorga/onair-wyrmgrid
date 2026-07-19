@@ -80,9 +80,12 @@ major application version.
   timestamps, play/pause and stepping controls, automatic motion-safe static
   fallback, and provider no-coverage masks rendered distinctly from clear sky.
 - Added Rust-owned weather-along-route analysis for continuous mapped plan
-  segments. Dispatch shows coarse global-model checkpoints, source times, and
-  support distances, while Atlas colours supported corridor sections and
-  leaves unsupported or unresolved areas explicit without a safety score.
+  segments. Dispatch now matches coarse global-model checkpoints to
+  proportional planned ETAs within explicit spatial and temporal limits,
+  labels legacy data as current-only context, and shows the latest factual
+  RADAR timestamp without extrapolation. Atlas distinguishes ETA-matched,
+  current-only, unsupported, and unresolved corridor sections without a safety
+  score.
 
 ### Changes
 
@@ -99,6 +102,14 @@ major application version.
   plugin files refresh from the installed application. The provider-version
   change invalidates its previous standing grant and automatic-start choice
   until the user reviews and approves the current provider scope.
+- Advanced the bundled Open-Meteo provider to 0.2.0 and changed its fixed
+  84-location request to six bounded UTC forecast horizons. Optional per-point
+  valid times remain additive in plugin API version 1; existing third-party
+  points continue to work as explicitly labelled current context. The provider
+  version change invalidates its previous standing grant and automatic-start
+  choice until the user reviews the current provider scope.
+- Advanced the source language catalogue to version 16 for planned route ETA,
+  forecast-validity, current-context, and observation-only RADAR wording.
 
 - Documented a proposal-only hosted-platform architecture and staged delivery
   plan for the public website, WyrmGrid Aerie catalogue, signed community

@@ -124,6 +124,7 @@ fn validates_a_provider_neutral_global_grid() {
                     latitude: -33.86,
                     longitude: 151.20,
                 },
+                valid_at: Some(at),
                 condition: WeatherCondition::Rain,
                 temperature_c: Some(16.0),
                 precipitation_mm: Some(2.5),
@@ -145,6 +146,35 @@ fn validates_a_provider_neutral_global_grid() {
     };
 
     assert_eq!(layer.validate(), Ok(()));
+}
+
+#[test]
+fn keeps_legacy_global_grid_points_without_a_valid_time_compatible() {
+    let layer: GlobalWeatherLayerSnapshot = serde_json::from_str(include_str!(
+        "../../../../schemas/fixtures/global-weather-layer-v1.json"
+    ))
+    .unwrap();
+    let GlobalWeatherLayerData::Grid { points } = layer.data else {
+        panic!("expected the legacy grid fixture");
+    };
+
+    assert_eq!(points[0].valid_at, None);
+}
+
+#[test]
+fn validates_a_time_aware_global_weather_layer_fixture() {
+    let layer: GlobalWeatherLayerSnapshot = serde_json::from_str(include_str!(
+        "../../../../schemas/fixtures/global-weather-layer-forecast-v1.json"
+    ))
+    .unwrap();
+    assert_eq!(layer.validate(), Ok(()));
+    let GlobalWeatherLayerData::Grid { points } = layer.data else {
+        panic!("expected a forecast grid fixture");
+    };
+    assert_eq!(
+        points[0].valid_at,
+        Some(DateTime::from_timestamp(1_784_293_200, 0).unwrap())
+    );
 }
 
 #[test]

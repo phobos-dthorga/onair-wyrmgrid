@@ -15,7 +15,11 @@ type RouteWeatherLineFeature = {
     frame_time: string;
     condition: GlobalWeatherCondition;
     support: "supported" | "unavailable";
+    temporal_support: "eta_matched" | "current_context" | "unavailable";
     support_distance_nm: number | null;
+    estimated_arrival_at: string | null;
+    valid_at: string | null;
+    time_offset_seconds: number | null;
   };
 };
 
@@ -58,8 +62,14 @@ function layerLineFeatures(
           layer.provenance.generated_at ?? layer.provenance.retrieved_at,
         condition: supported && source ? source.condition : "unknown",
         support: supported ? "supported" : "unavailable",
+        temporal_support:
+          supported && source ? source.temporal_support : "unavailable",
         support_distance_nm:
           supported && source ? source.support_distance_nm : null,
+        estimated_arrival_at: right.estimated_arrival_at ?? null,
+        valid_at: supported && source ? (source.valid_at ?? null) : null,
+        time_offset_seconds:
+          supported && source ? (source.time_offset_seconds ?? null) : null,
       },
     });
   }

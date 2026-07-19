@@ -452,24 +452,35 @@ impl PluginService {
             .runtimes
             .lock()
             .map_err(|_| PluginError::StateUnavailable)?;
-        let mut grid_layers = Vec::new();
+        let mut weather_layers = Vec::new();
         for runtime in runtimes.values() {
             let histories = runtime
                 .weather_layers
                 .lock()
                 .map_err(|_| PluginError::StateUnavailable)?;
             for history in histories.values() {
-                if let Some(layer) = history.iter().rev().find(|layer| {
-                    matches!(
-                        &layer.data,
-                        wyrmgrid_domain::GlobalWeatherLayerData::Grid { .. }
-                    )
-                }) {
-                    grid_layers.push(layer.clone());
+                if let Some(layer) = history.last() {
+                    match &layer.data {
+                        wyrmgrid_domain::GlobalWeatherLayerData::Grid { .. } => {
+                            weather_layers.push(layer.clone());
+                        }
+                        wyrmgrid_domain::GlobalWeatherLayerData::RasterTiles { .. } => {
+                            weather_layers.extend(history.iter().cloned());
+                        }
+                    }
                 }
             }
         }
-        status.route_weather = Some(crate::build_route_weather_analysis(plan, &grid_layers));
+        let schedule = status
+            .snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.schedule.as_ref())
+            .map(|schedule| &schedule.value);
+        status.route_weather = Some(crate::build_route_weather_analysis(
+            plan,
+            schedule,
+            &weather_layers,
+        ));
         Ok(())
     }
 

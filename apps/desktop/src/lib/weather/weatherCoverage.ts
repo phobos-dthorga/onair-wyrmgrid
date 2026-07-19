@@ -4,7 +4,10 @@ import type {
   PublishedPluginWeatherLayer,
 } from "$lib/forge/types";
 import { weatherStationFeatures } from "./atlasWeather";
-import { pluginRadarTimelines } from "./pluginWeather";
+import {
+  displayedGlobalWeatherGridPoints,
+  pluginRadarTimelines,
+} from "./pluginWeather";
 import type { FlightWeatherMapView } from "./types";
 
 type Coordinate = [number, number];
@@ -120,7 +123,8 @@ function gridCoverageFeatures(
 ): WeatherCoverageFeatureCollection["features"] {
   const data = published.layer.data;
   if (data.kind !== "grid") return [];
-  const grid = completeRegularGrid(data.points);
+  const points = displayedGlobalWeatherGridPoints(published.layer);
+  const grid = completeRegularGrid(points);
   if (!grid) return [];
   const latitudeIndexes = new Map(
     grid.latitudes.map((value, index) => [coordinateKey(value), index]),
@@ -128,7 +132,7 @@ function gridCoverageFeatures(
   const longitudeIndexes = new Map(
     grid.longitudes.map((value, index) => [coordinateKey(value), index]),
   );
-  return data.points.map((point) => {
+  return points.map((point) => {
     const latitudeIndex = latitudeIndexes.get(
       coordinateKey(point.location.latitude),
     );

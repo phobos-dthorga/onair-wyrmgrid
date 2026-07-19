@@ -131,6 +131,11 @@ pub enum WeatherCondition {
 pub struct GlobalWeatherGridPoint {
     pub id: String,
     pub location: crate::Coordinates,
+    /// The UTC time represented by this model sample. Older plugins may omit
+    /// it; callers must then treat the point as current context, not a
+    /// time-matched forecast.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub valid_at: Option<DateTime<Utc>>,
     pub condition: WeatherCondition,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub temperature_c: Option<f64>,

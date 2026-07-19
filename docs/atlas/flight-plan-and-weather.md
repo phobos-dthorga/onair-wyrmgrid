@@ -163,18 +163,42 @@ The intended layers are incremental:
 
 ### Current along-route model projection
 
-`DispatchStatus.route_weather` is an additive schema-1 application view. Rust
-samples continuous mapped plan segments about every 300 nautical miles and
-associates each checkpoint with the nearest current global-model point only
-when it lies within the explicit 1,200-nautical-mile support limit. The view
-retains point identity, distance from origin, support distance, provider,
-model/retrieval time, freshness, and every supplied numeric field.
+`DispatchStatus.route_weather` is now an additive schema-2 application view.
+Rust samples continuous mapped plan segments about every 300 nautical miles,
+derives a schedule basis from the validated plan, and assigns a proportional
+ETA to each checkpoint. Scheduled-off precedes scheduled-out; a positive
+estimated enroute duration precedes a positive scheduled-on or scheduled-in
+window. Missing or invalid timing remains explicit rather than being replaced
+with the local clock.
 
-Missing plan coordinates split the corridor. Missing or distant model support
-stays unavailable. Svelte formats this view and builds declarative Atlas line
-features; it does not select sources, interpolate conditions, or decide route
-suitability. The display is broad simulation-planning context, not an aviation
-briefing or a claim that weather between coarse samples is known.
+The bundled Open-Meteo layer carries six UTC forecast horizons for each of the
+fixed 84 global locations. Rust selects a source only when it lies within both
+the 1,200-nautical-mile spatial limit and the three-hour temporal limit. The
+view retains checkpoint ETA, source valid time, signed time offset, point
+identity, distances, provider, retrieval time, freshness, and supplied numeric
+fields. Deterministic ties resolve by absolute time offset, spatial distance,
+then point ID. An older plugin point without a valid time is still accepted as
+**current context**, but never called a forecast.
+
+Missing plan coordinates split the corridor. Missing schedule data, forecast
+horizon, or distant model support stays unavailable or current-only as
+appropriate. Svelte formats this view and builds declarative Atlas line
+features; it does not select sources, calculate ETAs, interpolate conditions,
+or decide route suitability. Solid coloured sections are ETA-matched, dashed
+coloured sections are current context, and neutral dashed sections are
+unsupported.
+
+The same view includes the newest retained RADAR frame metadata for each
+provider layer. It is labelled observation-only. Atlas may open the factual
+RADAR timeline and its no-data masks, but neither Rust nor Svelte projects cell
+movement or substitutes a past frame for future weather. The display remains
+broad simulation-planning context, not an aviation briefing or a claim that
+weather between coarse samples is known.
+
+Schema 2 is an internal regenerated application projection. Adding optional
+`valid_at` to global grid points is backward-compatible in plugin API version
+1: old responses deserialize unchanged, the `forecast_grid` request remains
+identical, and no database migration is required.
 
 Absence of a report is not rendered as clear weather. Sparse station
 observations must not be interpolated into a photorealistic atmospheric claim.

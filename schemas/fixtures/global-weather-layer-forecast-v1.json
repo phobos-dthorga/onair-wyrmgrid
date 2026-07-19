@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "id": "open-meteo-global",
+  "title": "Global model weather",
+  "data": {
+    "kind": "grid",
+    "points": [
+      {
+        "id": "global-0-0-h03",
+        "location": { "latitude": -75.0, "longitude": -165.0 },
+        "valid_at": "2026-07-17T13:00:00Z",
+        "condition": "snow",
+        "temperature_c": -22.5,
+        "precipitation_mm": 0.4,
+        "cloud_cover_percent": 88.0,
+        "wind_direction_degrees": 240.0,
+        "wind_speed_kt": 21.0,
+        "provider_weather_code": 71
+      }
+    ]
+  },
+  "provenance": {
+    "kind": "external_calculation",
+    "provider": "open-meteo.com",
+    "provider_revision": "forecast-api-v1-hourly",
+    "retrieved_at": "2026-07-17T12:02:00Z",
+    "transformation_version": 2,
+    "freshness": "current"
+  }
+}

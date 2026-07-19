@@ -1,4 +1,6 @@
 import type {
+  GlobalWeatherGridPoint,
+  GlobalWeatherLayer,
   GlobalWeatherRasterTile,
   PublishedPluginWeatherLayer,
 } from "$lib/forge/types";
@@ -58,7 +60,7 @@ export function pluginWeatherGridFeatures(
     type: "FeatureCollection",
     features: publishedLayers.flatMap((published) =>
       published.layer.data.kind === "grid"
-        ? published.layer.data.points.map((point) => ({
+        ? displayedGlobalWeatherGridPoints(published.layer).map((point) => ({
             type: "Feature" as const,
             geometry: {
               type: "Point" as const,
@@ -165,7 +167,7 @@ export function pluginWeatherItemCount(
     (total, published) =>
       total +
       (published.layer.data.kind === "grid"
-        ? published.layer.data.points.length
+        ? displayedGlobalWeatherGridPoints(published.layer).length
         : 0),
     0,
   );
@@ -174,6 +176,57 @@ export function pluginWeatherItemCount(
     0,
   );
   return gridPoints + currentRadarTiles;
+}
+
+/**
+ * Selects one presentation-time sample per model-grid location. The complete
+ * temporal grid remains available to Rust for route analysis; Atlas should not
+ * draw six overlapping weather volumes and support cells at every location.
+ */
+export function displayedGlobalWeatherGridPoints(
+  layer: GlobalWeatherLayer,
+): GlobalWeatherGridPoint[] {
+  if (layer.data.kind !== "grid") return [];
+  const timedByLocation = new Map<string, GlobalWeatherGridPoint>();
+  const legacy: GlobalWeatherGridPoint[] = [];
+  const reference = Date.parse(layer.provenance.retrieved_at);
+  for (const point of layer.data.points) {
+    if (!point.valid_at) {
+      legacy.push(point);
+      continue;
+    }
+    const key = `${point.location.latitude}:${point.location.longitude}`;
+    const current = timedByLocation.get(key);
+    if (
+      !current ||
+      timeDistance(point, reference) < timeDistance(current, reference) ||
+      (timeDistance(point, reference) === timeDistance(current, reference) &&
+        point.id.localeCompare(current.id) < 0)
+    ) {
+      timedByLocation.set(key, point);
+    }
+  }
+  if (timedByLocation.size === 0) return legacy;
+  const timedLocations = new Set(timedByLocation.keys());
+  return [
+    ...timedByLocation.values(),
+    ...legacy.filter(
+      (point) =>
+        !timedLocations.has(
+          `${point.location.latitude}:${point.location.longitude}`,
+        ),
+    ),
+  ];
+}
+
+function timeDistance(
+  point: GlobalWeatherGridPoint,
+  reference: number,
+): number {
+  const validAt = Date.parse(point.valid_at ?? "");
+  return Number.isFinite(validAt) && Number.isFinite(reference)
+    ? Math.abs(validAt - reference)
+    : Number.POSITIVE_INFINITY;
 }
 
 export function rasterTileCoordinates(

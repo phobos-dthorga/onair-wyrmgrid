@@ -34,14 +34,32 @@ responses captured on 2026-07-14. No provider credentials or private operational
 identifiers are present. The cache is currently process-memory only; persistent
 offline weather and route hazard products remain future increments.
 
-The current Dispatch status also includes a Rust-built along-route model view.
-It samples each continuous, coordinate-bearing plan segment at an interval no
-greater than 300 nautical miles, finds the nearest published global-model point
-within 1,200 nautical miles, and exposes that support distance with the source
-time and provenance. It never bridges an unresolved plan gap, sends the plan to
-a weather plugin, or converts the model context into a safety finding. Atlas
-colours the supported corridor by condition and draws unsupported portions as a
-neutral dashed line; Dispatch lists the samples and missing support explicitly.
+The current Dispatch status also includes a Rust-built, time-aware along-route
+model view. The bundled Open-Meteo plugin requests hourly UTC values for the
+same fixed 84 global locations and publishes six bounded horizons: the first
+available hour and hours 3, 6, 9, 12, and 18. The 504 resulting points remain
+under the existing 512-point and one-megabyte product limits. Every forecast
+point carries its own `valid_at`; provenance retrieval time is not relabelled as
+a model-run time.
+
+Rust samples each continuous, coordinate-bearing plan segment at an interval no
+greater than 300 nautical miles. It derives departure from scheduled-off then
+scheduled-out and derives duration from estimated enroute time, scheduled-on,
+or scheduled-in. Checkpoint ETAs are proportional to mapped route distance. A
+forecast is accepted only within 1,200 nautical miles and three hours of the
+checkpoint ETA. Older plugin points without `valid_at` remain compatible but
+are visibly labelled **current context**, never an ETA forecast. Missing plan
+timing, forecast horizon, or spatial support stays explicit.
+
+The fixed global request means the plan and schedule never cross into the
+plugin or Open-Meteo. Atlas draws only the horizon nearest retrieval time for
+ordinary global weather graphics, avoiding six overlapping volumes per grid
+location, while the complete temporal product remains available to the Rust
+route analysis. Atlas uses a dashed corridor for current-only context and a
+neutral dashed line for unavailable sections. Dispatch shows checkpoint ETAs,
+forecast valid times, time offsets, source distances, and the latest factual
+RADAR timestamp. RADAR remains current/past observation context and is never
+extrapolated to a route ETA or converted into a safety finding.
 
 ## Initial products
 
@@ -103,8 +121,9 @@ These are WyrmGrid operating limits, not claims about provider guarantees.
 1. Airport weather cards with source, age, raw text, and cautious decoding.
 2. Departure, destination, and alternate comparison at relevant plan times.
 3. Atlas layers for supported advisory geometries.
-4. Along-route model context with visible sample and support distances; future
-   hazard findings must remain explainable and must not become a hidden score.
+4. ETA-matched along-route model context with visible spatial and temporal
+   support; future hazard findings must remain explainable and must not become
+   a hidden score.
 5. Cached offline viewing with prominent expired or stale status.
 
 Weather must not be reduced to a single hidden score. Recommendations retain the

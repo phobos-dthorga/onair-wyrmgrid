@@ -3,12 +3,20 @@ import type { RouteWeatherAnalysis } from "$lib/dispatch/types";
 import { routeWeatherLineFeatures } from "./routeWeather";
 
 const analysis: RouteWeatherAnalysis = {
-  schema_version: 1,
+  schema_version: 2,
   plan_id: "plan-1",
   sample_interval_nm: 300,
   maximum_support_distance_nm: 1200,
+  maximum_temporal_support_seconds: 10800,
   mapped_route_point_count: 3,
   unresolved_route_point_count: 1,
+  timing: {
+    availability: "ready",
+    departure_basis: "scheduled_off",
+    duration_basis: "estimated_enroute",
+    departure_at: "2026-07-19T04:00:00Z",
+    duration_seconds: 21600,
+  },
   availability: "partial",
   layers: [
     {
@@ -31,6 +39,7 @@ const analysis: RouteWeatherAnalysis = {
       ],
     },
   ],
+  radar_contexts: [],
 };
 
 describe("route weather presentation", () => {
@@ -46,6 +55,7 @@ describe("route weather presentation", () => {
       frame_time: "2026-07-19T04:00:00Z",
       condition: "cloud",
       support: "supported",
+      temporal_support: "eta_matched",
       support_distance_nm: 60,
     });
     expect(features[1].properties.support).toBe("unavailable");
@@ -69,10 +79,14 @@ function sample(
     segment_index: segmentIndex,
     distance_from_origin_nm: 0,
     location: { latitude, longitude },
+    estimated_arrival_at: "2026-07-19T05:00:00Z",
     source: {
       point_id: `source-${id}`,
       location: { latitude, longitude },
       support_distance_nm: supportDistance,
+      temporal_support: "eta_matched" as const,
+      valid_at: "2026-07-19T05:30:00Z",
+      time_offset_seconds: 1800,
       condition,
     },
   };

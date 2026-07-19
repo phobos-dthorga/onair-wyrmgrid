@@ -118,6 +118,14 @@ are translated into stable WyrmGrid domain summaries before this adapter.
   unavailable code. Raw bodies, remote URLs, styles, scripts, and provider
   error text are not accepted.
 
+A published global-model grid point may add an optional UTC `valid_at`. Its
+absence preserves the original version-one shape and means **current context**;
+the host must not call it an ETA-matched forecast. The host-selected
+`forecast_grid` request remains unchanged and contains no active route or
+schedule. This is an additive plugin API version-one change: old providers and
+old fixture payloads remain valid, while consumers that understand the field
+may perform bounded host-side temporal matching.
+
 The map contract contains an ID, title, bounded points, and provenance. Each
 point contains a unique ID, a label, and valid WGS84 coordinates. Plugins cannot
 provide MapLibre styles, JavaScript, markup, URLs, callbacks, or theme values.
