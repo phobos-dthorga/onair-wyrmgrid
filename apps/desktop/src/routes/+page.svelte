@@ -2296,7 +2296,10 @@
                   Soft airport rings are indicative observation vicinity only.
                   Filled grid cells show nearest model samples; RADAR outlines show received tile footprints.
                 </p>
-                <div class="weather-zone-key" aria-label="Weather zone colours">
+                <div
+                  class="weather-zone-key"
+                  aria-label="Weather zone colours and patterns"
+                >
                   <span><i class="cloud"></i>Cloud</span>
                   <span><i class="rain"></i>Rain</span>
                   <span><i class="snow"></i>Snow</span>

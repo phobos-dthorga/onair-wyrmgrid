@@ -108,7 +108,10 @@ Atlas also provides two independent operational-layer switches:
   outlines around the exact RADAR tiles WyrmGrid received. Airport rings are
   not measured storm boundaries; grid cells identify the nearest validated
   sample; and RADAR outlines show tile footprint rather than station range or
-  proof of measurements in every pixel.
+  proof of measurements in every pixel. Each condition also has a distinct
+  repeating pattern—such as slanted rain strokes, snow stipple, storm
+  chevrons, or dust crosshatching—so colour is not the only way to distinguish
+  zones.
 
 These layers can be hidden without changing sourced weather, renderer quality,
 provider refresh, or saved graphics preferences. Their evidence and the future

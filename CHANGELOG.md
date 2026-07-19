@@ -50,6 +50,9 @@ major application version.
   separate weather-support-zone layer for indicative airport observation
   vicinity, complete regular-grid sample cells, and exact received RADAR tile
   footprints without presenting point observations as storm boundaries.
+  Theme-independent repeating patterns distinguish cloud, rain, snow,
+  convective, obscuration, dust, and RADAR zones without relying on colour
+  alone.
 
 ### Changes
 

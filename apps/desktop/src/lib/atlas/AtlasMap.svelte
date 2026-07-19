@@ -47,6 +47,12 @@
     pluginRadarCoverageFeatures,
     pluginWeatherGridCoverageFeatures,
   } from "$lib/weather/weatherCoverage";
+  import {
+    WEATHER_ZONE_COLORS,
+    weatherZonePatternExpression,
+    weatherZonePatternId,
+    weatherZonePatternImages,
+  } from "$lib/weather/weatherCoveragePatterns";
   import { ATLAS_HOME_CENTER, balancedOverviewCoordinates } from "./camera";
   import { daylightFeatureCollection } from "./daylight";
   import {
@@ -167,11 +173,15 @@
     "wyrmgrid-plugin-weather-coverage";
   const PLUGIN_WEATHER_COVERAGE_FILL_LAYER_ID =
     "wyrmgrid-plugin-weather-coverage-fill";
+  const PLUGIN_WEATHER_COVERAGE_PATTERN_LAYER_ID =
+    "wyrmgrid-plugin-weather-coverage-pattern";
   const PLUGIN_WEATHER_COVERAGE_LINE_LAYER_ID =
     "wyrmgrid-plugin-weather-coverage-line";
   const PLUGIN_RADAR_COVERAGE_SOURCE_ID = "wyrmgrid-plugin-radar-coverage";
   const PLUGIN_RADAR_COVERAGE_FILL_LAYER_ID =
     "wyrmgrid-plugin-radar-coverage-fill";
+  const PLUGIN_RADAR_COVERAGE_PATTERN_LAYER_ID =
+    "wyrmgrid-plugin-radar-coverage-pattern";
   const PLUGIN_RADAR_COVERAGE_LINE_LAYER_ID =
     "wyrmgrid-plugin-radar-coverage-line";
   const PLUGIN_WEATHER_ATMOSPHERE_LAYER_ID =
@@ -201,6 +211,8 @@
     "wyrmgrid-flight-weather-coverage-outer";
   const WEATHER_COVERAGE_INNER_LAYER_ID =
     "wyrmgrid-flight-weather-coverage-inner";
+  const WEATHER_COVERAGE_PATTERN_LAYER_ID =
+    "wyrmgrid-flight-weather-coverage-pattern";
   const WEATHER_CLOUD_SHADOW_LAYER_ID = "wyrmgrid-flight-weather-cloud-shadow";
   const WEATHER_CLOUD_BODY_LAYER_ID = "wyrmgrid-flight-weather-cloud-body";
   const WEATHER_CLOUD_HIGHLIGHT_LAYER_ID =
@@ -225,7 +237,6 @@
   const DUST_CORE_COLOR = "#d2ad72";
   const LIGHTNING_COLOR = "#ffe79a";
   const DAYLIGHT_TERMINATOR_COLOR = "#e3ad62";
-  const RADAR_COVERAGE_COLOR = "#6ec5df";
 
   let mapContainer: HTMLDivElement;
   let weatherCanvas: HTMLCanvasElement;
@@ -814,19 +825,26 @@
       "match",
       ["get", property],
       "cloud",
-      "#8fa8bb",
+      WEATHER_ZONE_COLORS.cloud,
       "rain",
-      "#419fd1",
+      WEATHER_ZONE_COLORS.rain,
       "snow",
-      "#d7edf4",
+      WEATHER_ZONE_COLORS.snow,
       "convective",
-      "#d46175",
+      WEATHER_ZONE_COLORS.convective,
       "obscuration",
-      "#a491b4",
+      WEATHER_ZONE_COLORS.obscuration,
       "dust",
-      "#c2874f",
+      WEATHER_ZONE_COLORS.dust,
       "#8498a6",
     ];
+  }
+
+  function registerWeatherZonePatterns(atlasMap: MapLibreMap): void {
+    for (const pattern of weatherZonePatternImages()) {
+      if (atlasMap.hasImage(pattern.id)) continue;
+      atlasMap.addImage(pattern.id, pattern.image, { pixelRatio: 2 });
+    }
   }
 
   function resolvedDaylightTime(): Date {
@@ -1036,8 +1054,10 @@
       weatherCoverageVisible && pluginWeatherVisible ? "visible" : "none";
     for (const layerId of [
       PLUGIN_WEATHER_COVERAGE_FILL_LAYER_ID,
+      PLUGIN_WEATHER_COVERAGE_PATTERN_LAYER_ID,
       PLUGIN_WEATHER_COVERAGE_LINE_LAYER_ID,
       PLUGIN_RADAR_COVERAGE_FILL_LAYER_ID,
+      PLUGIN_RADAR_COVERAGE_PATTERN_LAYER_ID,
       PLUGIN_RADAR_COVERAGE_LINE_LAYER_ID,
     ]) {
       map.setLayoutProperty(
@@ -1103,6 +1123,11 @@
     );
     map.setLayoutProperty(
       WEATHER_COVERAGE_INNER_LAYER_ID,
+      "visibility",
+      weatherCoverageVisibility,
+    );
+    map.setLayoutProperty(
+      WEATHER_COVERAGE_PATTERN_LAYER_ID,
       "visibility",
       weatherCoverageVisibility,
     );
@@ -1700,6 +1725,7 @@
       );
 
       atlasMap.on("load", () => {
+        registerWeatherZonePatterns(atlasMap);
         atlasMap.addSource(REGION_SOURCE_ID, {
           type: "geojson",
           data: ATLAS_ADMIN1_DATASET_URL,
@@ -1819,8 +1845,28 @@
           },
           paint: {
             "fill-color": weatherCoverageColor("condition"),
-            "fill-opacity": lowResource ? 0.055 : 0.09,
+            "fill-opacity": lowResource ? 0.07 : 0.12,
             "fill-antialias": true,
+          },
+        });
+        atlasMap.addLayer({
+          id: PLUGIN_WEATHER_COVERAGE_PATTERN_LAYER_ID,
+          type: "fill",
+          source: PLUGIN_WEATHER_COVERAGE_SOURCE_ID,
+          filter: [
+            "all",
+            ["!=", ["get", "condition"], "clear"],
+            ["!=", ["get", "condition"], "unknown"],
+          ],
+          layout: {
+            visibility:
+              weatherCoverageVisible && pluginWeatherVisible
+                ? "visible"
+                : "none",
+          },
+          paint: {
+            "fill-pattern": weatherZonePatternExpression("condition", "fill"),
+            "fill-opacity": lowResource ? 0.38 : 0.62,
           },
         });
         atlasMap.addLayer({
@@ -2063,8 +2109,23 @@
                 : "none",
           },
           paint: {
-            "fill-color": RADAR_COVERAGE_COLOR,
-            "fill-opacity": lowResource ? 0.015 : 0.025,
+            "fill-color": WEATHER_ZONE_COLORS.radar,
+            "fill-opacity": lowResource ? 0.025 : 0.045,
+          },
+        });
+        atlasMap.addLayer({
+          id: PLUGIN_RADAR_COVERAGE_PATTERN_LAYER_ID,
+          type: "fill",
+          source: PLUGIN_RADAR_COVERAGE_SOURCE_ID,
+          layout: {
+            visibility:
+              weatherCoverageVisible && pluginWeatherVisible
+                ? "visible"
+                : "none",
+          },
+          paint: {
+            "fill-pattern": weatherZonePatternId("radar", "fill"),
+            "fill-opacity": lowResource ? 0.3 : 0.5,
           },
         });
         atlasMap.addLayer({
@@ -2078,7 +2139,7 @@
                 : "none",
           },
           paint: {
-            "line-color": RADAR_COVERAGE_COLOR,
+            "line-color": WEATHER_ZONE_COLORS.radar,
             "line-width": ["interpolate", ["linear"], ["zoom"], 1, 0.65, 7, 1.4],
             "line-opacity": lowResource ? 0.28 : 0.52,
             "line-dasharray": [3, 2],
@@ -2246,6 +2307,33 @@
             "circle-stroke-width": lowResource ? 0.65 : 1.15,
             "circle-stroke-opacity": lowResource ? 0.28 : 0.5,
             "circle-pitch-alignment": "map",
+          },
+        });
+        atlasMap.addLayer({
+          id: WEATHER_COVERAGE_PATTERN_LAYER_ID,
+          type: "symbol",
+          source: WEATHER_SOURCE_ID,
+          filter: ["!=", ["get", "effect"], "none"],
+          layout: {
+            visibility:
+              weatherCoverageVisible && weatherVisible ? "visible" : "none",
+            "icon-image": weatherZonePatternExpression("effect", "marker"),
+            "icon-size": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              1,
+              ["+", 0.65, ["*", 0.25, ["get", "intensity"]]],
+              8,
+              ["+", 1.75, ["*", 0.85, ["get", "intensity"]]],
+            ],
+            "icon-allow-overlap": true,
+            "icon-ignore-placement": true,
+            "icon-pitch-alignment": "map",
+            "icon-rotation-alignment": "map",
+          },
+          paint: {
+            "icon-opacity": lowResource ? 0.38 : 0.58,
           },
         });
         atlasMap.addLayer({

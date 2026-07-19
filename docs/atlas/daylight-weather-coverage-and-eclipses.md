@@ -58,30 +58,35 @@ uses the geometric 0° boundary for a stable global layer.
 
 ## Weather support zones
 
-The layer is named **Weather support zones**, not storm extent. Its colour
-semantics remain stable across themes:
+The layer is named **Weather support zones**, not storm extent. Its colour and
+pattern semantics remain stable across themes:
 
-| Condition            | Zone colour       |
-| -------------------- | ----------------- |
-| Cloud/overcast       | cool grey-blue    |
-| Rain                 | medium cyan-blue  |
-| Snow                 | pale ice blue     |
-| Convective/lightning | muted coral-red   |
-| Obscuration          | muted violet-grey |
-| Dust                 | warm ochre-brown  |
+| Condition            | Zone colour       | Repeating pattern               |
+| -------------------- | ----------------- | ------------------------------- |
+| Cloud/overcast       | cool grey-blue    | gently layered horizontal bands |
+| Rain                 | medium cyan-blue  | slanted rain strokes            |
+| Snow                 | pale ice blue     | sparse flake crosses            |
+| Convective/lightning | muted coral-red   | sharp zigzag/chevrons           |
+| Obscuration          | muted violet-grey | staggered stipple               |
+| Dust                 | warm ochre-brown  | diagonal crosshatch             |
+| RADAR tile           | restrained cyan   | square scan grid                |
 
-Colour is always paired with shape, opacity, and the original weather marker;
-it is not the only carrier of meaning.
+Colour is always paired with pattern, shape, a bounded outline, and the
+original weather marker; it is not the only carrier of meaning. The patterns
+are generated locally as small power-of-two tiles so they remain seamless and
+crisp without bundled artwork or a network fetch. Reduced-resource mode keeps
+the same categorical patterns at lower opacity rather than removing the
+non-colour distinction.
 
 ### Airport observations and Three.js cells
 
 METAR and airport weather remain point observations. Atlas may draw two soft,
-semi-transparent rings behind a non-clear local weather effect so the user can
-associate the marker, detailed volume, and nearby map context. The rings are
-an **indicative observation vicinity** with no nautical-mile or storm-boundary
-claim. Their soft edge and fine outline intentionally distinguish them from
-sourced polygons. They must never be used for route clearance, avoidance, or a
-claim that weather stops at the ring.
+semi-transparent rings and the matching patterned disc behind a non-clear
+local weather effect so the user can associate the marker, detailed volume,
+and nearby map context. The rings are an **indicative observation vicinity**
+with no nautical-mile or storm-boundary claim. Their soft edge and fine outline
+intentionally distinguish them from sourced polygons. They must never be used
+for route clearance, avoidance, or a claim that weather stops at the ring.
 
 ### Complete regular forecast grids
 
