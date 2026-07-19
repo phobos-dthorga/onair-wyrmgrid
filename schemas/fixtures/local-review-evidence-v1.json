@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "kind": "wyrmgrid-local-review-evidence",
+  "collected_at": "2026-07-19T07:00:00.000Z",
+  "repository": {
+    "root_label": "OnAir WyrmGrid",
+    "head": {
+      "status": "available",
+      "commit": "1111111111111111111111111111111111111111",
+      "reason": null
+    },
+    "base": {
+      "requested": false,
+      "status": "not-requested",
+      "commit": null,
+      "reason": null
+    },
+    "scope_status": "available",
+    "unavailable_reasons": []
+  },
+  "rule_set": "wyrmgrid-critical-paths-v1",
+  "working_tree": {
+    "state": "dirty",
+    "counts": {
+      "selected_files": 1,
+      "staged": 0,
+      "unstaged": 1,
+      "untracked": 0,
+      "renamed": 0,
+      "deleted": 0,
+      "binary": 0,
+      "submodules": 0,
+      "unavailable": 0
+    }
+  },
+  "files": [
+    {
+      "path": "docs/example.md",
+      "old_path": null,
+      "change_sources": ["worktree"],
+      "base_status": null,
+      "index_status": null,
+      "worktree_status": "M",
+      "untracked": false,
+      "conflict": false,
+      "binary": "no",
+      "submodule": "no",
+      "exists": true,
+      "kind": "file",
+      "size_bytes": 128,
+      "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "hash_status": "hashed",
+      "unavailable_reason": null,
+      "candidate_id": "lr1-95b19f8d0091054721e886e1"
+    }
+  ],
+  "candidates": [
+    {
+      "id": "lr1-95b19f8d0091054721e886e1",
+      "path": "docs/example.md",
+      "classification": "routine-candidate",
+      "rule_ids": []
+    }
+  ],
+  "classification": {
+    "status": "routine-candidate",
+    "critical_candidates": 0,
+    "routine_candidates": 1,
+    "classification_required": 0,
+    "rule_ids": []
+  },
+  "privacy": {
+    "file_contents_included": false,
+    "absolute_paths_included": false,
+    "environment_included": false,
+    "credentials_included": false,
+    "raw_provider_payloads_included": false,
+    "databases_included": false,
+    "network_used": false,
+    "model_used": false,
+    "local_output_written": true,
+    "git_state_mutated": false,
+    "tracked_files_mutated": false
+  }
+}
