@@ -365,6 +365,57 @@ nav {
   border-color: var(--color-highlight-border);
   background: var(--color-highlight-soft);
 }
+.weather-zone-note > div {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+}
+.weather-zone-note p {
+  margin: 0;
+}
+.weather-zone-key {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px 8px;
+}
+.weather-zone-key span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: var(--color-text-muted);
+  font-size: 10px;
+}
+.weather-zone-key i {
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: #8498a6;
+}
+.weather-zone-key .cloud {
+  background: #8fa8bb;
+}
+.weather-zone-key .rain {
+  background: #419fd1;
+}
+.weather-zone-key .snow {
+  background: #d7edf4;
+}
+.weather-zone-key .convective {
+  background: #d46175;
+}
+.weather-zone-key .obscuration {
+  background: #a491b4;
+}
+.weather-zone-key .dust {
+  background: #c2874f;
+}
+.weather-zone-key .radar {
+  border-color: #6ec5df;
+  background: transparent;
+}
 .route-note p {
   flex: 1;
   margin: 0;

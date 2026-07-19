@@ -98,6 +98,23 @@ supports a station-local storm symbol and illumination, not an invented strike
 coordinate. Exact strike visualisation remains unavailable until a provider
 supplies a bounded lightning product.
 
+Atlas also provides two independent operational-layer switches:
+
+- **Day and night** calculates the current solar position from UTC and shades
+  civil, nautical, astronomical twilight, and night. In Historical mode it
+  uses the selected Hoard time rather than the present.
+- **Weather support zones** places soft indicative rings behind airport
+  effects, midpoint-bounded cells behind complete regular forecast grids, and
+  outlines around the exact RADAR tiles WyrmGrid received. Airport rings are
+  not measured storm boundaries; grid cells identify the nearest validated
+  sample; and RADAR outlines show tile footprint rather than station range or
+  proof of measurements in every pixel.
+
+These layers can be hidden without changing sourced weather, renderer quality,
+provider refresh, or saved graphics preferences. Their evidence and the future
+eclipse-path design are documented in the
+[Atlas daylight and weather coverage contract](../atlas/daylight-weather-coverage-and-eclipses.md).
+
 **Reduce weather flashes** is enabled by default. Turning it off requires an
 explicit photosensitivity confirmation. The operating system's Reduce Motion
 preference always keeps detailed weather static and flash-free, regardless of

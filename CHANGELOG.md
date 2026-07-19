@@ -45,6 +45,11 @@ major application version.
   behind the globe or pitched-map horizon using a host projection round trip.
   Screen-stable stratified volume sampling reduces ray-march banding without
   introducing frame-varying noise or claiming shared terrain depth.
+- Added a toggleable UTC day/night layer with civil, nautical, and
+  astronomical twilight, including historical-Hoard time projection. Added a
+  separate weather-support-zone layer for indicative airport observation
+  vicinity, complete regular-grid sample cells, and exact received RADAR tile
+  footprints without presenting point observations as storm boundaries.
 
 ### Changes
 

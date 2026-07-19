@@ -159,7 +159,11 @@ The pass therefore follows these rules:
   Motion, and flash protection; and
 - do not infer a regional storm footprint from a point sample. Future
   world-scale systems require an explicit host-owned coverage or cell-boundary
-  contract.
+  contract. The separate MapLibre support-zone layer may show a deliberately
+  indicative airport vicinity or the nearest cell of a complete regular model
+  grid, but labels both as presentation support rather than measured storm
+  extent; see the
+  [daylight and weather coverage contract](daylight-weather-coverage-and-eclipses.md).
 
 ### Visual acceptance criteria
 

@@ -103,8 +103,11 @@ This slice does not yet provide FBO capacity, fuel, workshop, pricing, or
 construction details, nor route procedures, range rings, or maintenance.
 Detailed source-shaped weather is implemented through a failure-safe
 MapLibre/Three.js composition; its present limits and future WebGPU path are
-recorded in [Atlas Three.js weather renderer](weather-renderer.md). Remaining
-features should be added only when the
+recorded in [Atlas Three.js weather renderer](weather-renderer.md). The UTC
+daylight, truthful weather-support-zone, RADAR-footprint, and future eclipse
+boundaries are recorded in
+[Atlas daylight, weather coverage, and eclipse plan](daylight-weather-coverage-and-eclipses.md).
+Remaining features should be added only when the
 preceding layer establishes the smallest shared contract they require.
 
 Atlas layers should remain declarative. A future plugin may publish bounded

@@ -17,6 +17,7 @@
 - [WyrmGrid Atlas](atlas/README.md)
   - [Flight plans, linked procedures, and live/historical weather](atlas/flight-plan-and-weather.md)
   - [Three.js weather rendering and WebGPU migration](atlas/weather-renderer.md)
+  - [Daylight, weather support zones, RADAR footprints, and eclipse plan](atlas/daylight-weather-coverage-and-eclipses.md)
 - [WyrmGrid Hoard](hoard/README.md)
 - [WyrmGrid Staff](staff/README.md)
 - [Core authorization model](security/authorization-model.md)

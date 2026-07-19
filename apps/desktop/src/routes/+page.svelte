@@ -70,6 +70,7 @@
   } from "$lib/dispatch/types";
   import type { FlightWeatherMapView } from "$lib/weather/types";
   import { pluginWeatherItemCount } from "$lib/weather/pluginWeather";
+  import { weatherSupportZoneCount } from "$lib/weather/weatherCoverage";
   import type { FlightOperationStage } from "$lib/flightOperation/types";
   import JobsWorkspace from "$lib/jobs/JobsWorkspace.svelte";
   import { jobRouteLabel } from "$lib/jobs/presentation";
@@ -308,6 +309,8 @@
   let atlasFlightRoute = $state<AtlasFlightRoute>();
   let atlasWeather = $state<FlightWeatherMapView>();
   let weatherVisible = $state(true);
+  let daylightVisible = $state(true);
+  let weatherCoverageVisible = $state(true);
   let regionsVisible = $state(true);
   let selectedAdministrativeRegion = $state<AtlasAdministrativeRegion>();
   let hoveredAdministrativeRegion = $state<AtlasAdministrativeRegion>();
@@ -529,6 +532,12 @@
   const pluginWeatherCount = $derived(
     pluginWeatherItemCount(pluginHost.weather_layers),
   );
+  const weatherCoverageCount = $derived(
+    weatherSupportZoneCount(atlasWeather, pluginHost.weather_layers),
+  );
+  const atlasDaylightAt = $derived(
+    timelineMode === "historical" ? historicalData?.selected_at : undefined,
+  );
   const pluginProcessActive = $derived(
     pluginHost.plugins.some((plugin) =>
       ["starting", "running", "stopping"].includes(plugin.state),
@@ -540,6 +549,13 @@
     ),
   );
   const layers = $derived([
+    {
+      id: "daylight",
+      name: "Day and night",
+      count: timelineMode === "historical" ? "Hoard" : "UTC",
+      active: daylightVisible,
+      available: true,
+    },
     {
       id: "regions",
       name: "Regional boundaries",
@@ -581,6 +597,13 @@
       count: pluginWeatherCount,
       active: pluginWeatherVisible && pluginWeatherCount > 0,
       available: pluginWeatherCount > 0,
+    },
+    {
+      id: "weather-coverage",
+      name: "Weather support zones",
+      count: weatherCoverageCount,
+      active: weatherCoverageVisible && weatherCoverageCount > 0,
+      available: weatherCoverageCount > 0,
     },
     {
       id: "jobs",
@@ -2233,9 +2256,13 @@
                   if (layer.id === "fleet") fleetVisible = !fleetVisible;
                   if (layer.id === "fbos") fboVisible = !fboVisible;
                   if (layer.id === "regions") regionsVisible = !regionsVisible;
+                  if (layer.id === "daylight")
+                    daylightVisible = !daylightVisible;
                   if (layer.id === "weather") weatherVisible = !weatherVisible;
                   if (layer.id === "global-weather")
                     pluginWeatherVisible = !pluginWeatherVisible;
+                  if (layer.id === "weather-coverage")
+                    weatherCoverageVisible = !weatherCoverageVisible;
                   if (layer.id === "jobs") openJobsWorkspace();
                   if (layer.id === "plugins")
                     pluginLayersVisible = !pluginLayersVisible;
@@ -2247,6 +2274,40 @@
               </button>
             {/each}
           </div>
+
+          {#if daylightVisible}
+            <div class="sidebar-note responsive-surface">
+              <span class="note-icon">◐</span>
+              <p>
+                <strong>Astronomical daylight</strong><br />
+                {timelineMode === "historical"
+                  ? "Calculated for the selected Hoard time"
+                  : "Calculated from current UTC"} · civil, nautical, and astronomical twilight.
+              </p>
+            </div>
+          {/if}
+
+          {#if weatherCoverageVisible && weatherCoverageCount > 0}
+            <div class="sidebar-note weather-zone-note responsive-surface">
+              <span class="note-icon">◎</span>
+              <div>
+                <p>
+                  <strong>Weather support zones</strong><br />
+                  Soft airport rings are indicative observation vicinity only.
+                  Filled grid cells show nearest model samples; RADAR outlines show received tile footprints.
+                </p>
+                <div class="weather-zone-key" aria-label="Weather zone colours">
+                  <span><i class="cloud"></i>Cloud</span>
+                  <span><i class="rain"></i>Rain</span>
+                  <span><i class="snow"></i>Snow</span>
+                  <span><i class="convective"></i>Storm</span>
+                  <span><i class="obscuration"></i>Low visibility</span>
+                  <span><i class="dust"></i>Dust</span>
+                  <span><i class="radar"></i>RADAR tile</span>
+                </div>
+              </div>
+            </div>
+          {/if}
 
           {#if pluginWeatherVisible && pluginHost.weather_layers.length > 0}
             <div class="sidebar-note responsive-surface">
@@ -2378,6 +2439,9 @@
             flightRoute={atlasFlightRoute}
             weather={atlasWeather}
             {weatherVisible}
+            {daylightVisible}
+            daylightAt={atlasDaylightAt}
+            {weatherCoverageVisible}
             weatherGraphics={displayPreferences}
             {regionsVisible}
             lowResource={startupOptions.low_resource}
