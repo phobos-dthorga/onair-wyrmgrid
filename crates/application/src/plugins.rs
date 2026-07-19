@@ -39,6 +39,7 @@ const RADAR_REFRESH_OPTIONS: [u16; 4] = [5, 10, 15, 30];
 const AIRPORT_WEATHER_RESPONSE_TIMEOUT: Duration = Duration::from_secs(20);
 const GLOBAL_WEATHER_RESPONSE_TIMEOUT: Duration = Duration::from_secs(90);
 const MAX_WEATHER_LAYERS_PER_PLUGIN: usize = 4;
+const MAX_RADAR_FRAMES_PER_LAYER: usize = 6;
 const BUNDLED_PLUGIN_ID: &str = "org.wyrmgrid.example.fleet-locations";
 const OPEN_METEO_PLUGIN_ID: &str = "org.wyrmgrid.provider.open-meteo";
 const AVIATION_WEATHER_PLUGIN_ID: &str = "org.wyrmgrid.provider.aviation-weather";
@@ -218,12 +219,13 @@ struct PluginServiceInner {
 }
 
 struct RunningPlugin {
+    plugin_id: String,
     child: Mutex<Child>,
     stdin: Mutex<ChildStdin>,
     state: Mutex<PluginProcessState>,
     last_error: Mutex<Option<String>>,
     layers: Mutex<BTreeMap<String, MapLayerSpec>>,
-    weather_layers: Mutex<BTreeMap<String, GlobalWeatherLayerSnapshot>>,
+    weather_layers: Mutex<BTreeMap<String, Vec<GlobalWeatherLayerSnapshot>>>,
     pending_weather: Mutex<BTreeMap<String, PendingWeatherRequest>>,
     last_weather_requests: Mutex<BTreeMap<WeatherCapability, Instant>>,
     weather_refresh_intervals: Mutex<BTreeMap<WeatherCapability, Duration>>,
@@ -359,7 +361,9 @@ impl PluginService {
                         .weather_layers
                         .lock()
                         .map_err(|_| PluginError::StateUnavailable)?
-                        .len(),
+                        .values()
+                        .map(Vec::len)
+                        .sum(),
                 ),
                 None => (
                     PluginProcessState::Stopped,
@@ -394,6 +398,7 @@ impl PluginService {
                     .lock()
                     .map_err(|_| PluginError::StateUnavailable)?
                     .values()
+                    .flatten()
                 {
                     published_weather_layers.push(PublishedPluginWeatherLayer {
                         plugin_id: plugin.manifest.id.clone(),
@@ -432,6 +437,40 @@ impl PluginService {
             layers: published_layers,
             weather_layers: published_weather_layers,
         })
+    }
+
+    pub fn enrich_dispatch_route_weather(
+        &self,
+        status: &mut crate::DispatchStatus,
+    ) -> Result<(), PluginError> {
+        let Some(plan) = status.atlas_plan.as_ref() else {
+            status.route_weather = None;
+            return Ok(());
+        };
+        let runtimes = self
+            .inner
+            .runtimes
+            .lock()
+            .map_err(|_| PluginError::StateUnavailable)?;
+        let mut grid_layers = Vec::new();
+        for runtime in runtimes.values() {
+            let histories = runtime
+                .weather_layers
+                .lock()
+                .map_err(|_| PluginError::StateUnavailable)?;
+            for history in histories.values() {
+                if let Some(layer) = history.iter().rev().find(|layer| {
+                    matches!(
+                        &layer.data,
+                        wyrmgrid_domain::GlobalWeatherLayerData::Grid { .. }
+                    )
+                }) {
+                    grid_layers.push(layer.clone());
+                }
+            }
+        }
+        status.route_weather = Some(crate::build_route_weather_analysis(plan, &grid_layers));
+        Ok(())
     }
 
     pub fn approve_requested_permissions(
@@ -625,6 +664,7 @@ impl PluginService {
         let stdout = child.stdout.take().ok_or(PluginError::LaunchFailed)?;
         let weather_refresh_intervals = self.weather_refresh_intervals(&plugin.manifest)?;
         let runtime = Arc::new(RunningPlugin {
+            plugin_id: plugin.manifest.id.clone(),
             child: Mutex::new(child),
             stdin: Mutex::new(stdin),
             state: Mutex::new(PluginProcessState::Starting),
@@ -1145,22 +1185,29 @@ impl PluginService {
             if !due {
                 continue;
             }
-            let query = match capability {
-                WeatherCapability::ForecastGrid => default_global_weather_grid(),
-                WeatherCapability::RadarTiles => default_global_radar_tiles(),
+            let queries = match capability {
+                WeatherCapability::ForecastGrid => vec![default_global_weather_grid()],
+                WeatherCapability::RadarTiles if runtime.plugin_id == RAINVIEWER_PLUGIN_ID => (0
+                    ..=wyrmgrid_plugin_protocol::MAX_RADAR_FRAME_OFFSET)
+                    .rev()
+                    .map(|offset| default_global_radar_tiles(Some(offset)))
+                    .collect(),
+                WeatherCapability::RadarTiles => vec![default_global_radar_tiles(None)],
                 WeatherCapability::AirportReports => continue,
             };
-            let request_id = self
-                .next_weather_request_id(runtime)
-                .map_err(plugin_weather_error_to_plugin_error)?;
-            self.queue_weather_request(
-                runtime,
-                WeatherRequest {
-                    id: request_id,
-                    query,
-                },
-                None,
-            )?;
+            for query in queries {
+                let request_id = self
+                    .next_weather_request_id(runtime)
+                    .map_err(plugin_weather_error_to_plugin_error)?;
+                self.queue_weather_request(
+                    runtime,
+                    WeatherRequest {
+                        id: request_id,
+                        query,
+                    },
+                    None,
+                )?;
+            }
             runtime
                 .last_weather_requests
                 .lock()
@@ -1247,8 +1294,11 @@ fn install_bundled_python_plugin(
 }
 
 fn write_bundled_file(path: &Path, contents: &str) -> Result<(), io::Error> {
-    if !path.exists() {
-        fs::write(path, contents)?;
+    match fs::read_to_string(path) {
+        Ok(existing) if existing == contents => {}
+        Ok(_) => fs::write(path, contents)?,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => fs::write(path, contents)?,
+        Err(error) => return Err(error),
     }
     Ok(())
 }
@@ -1449,7 +1499,7 @@ fn default_global_weather_grid() -> WeatherQuery {
     WeatherQuery::ForecastGrid { points }
 }
 
-fn default_global_radar_tiles() -> WeatherQuery {
+fn default_global_radar_tiles(frame_offset: Option<u8>) -> WeatherQuery {
     WeatherQuery::RadarTiles {
         tiles: vec![
             WeatherTileAddress {
@@ -1473,6 +1523,7 @@ fn default_global_radar_tiles() -> WeatherQuery {
                 y: 1,
             },
         ],
+        frame_offset,
     }
 }
 
@@ -1679,7 +1730,7 @@ fn spawn_plugin_reader(
                             fail_runtime(&runtime, "The plugin published too many weather layers.");
                             return;
                         }
-                        layers.insert(layer.id.clone(), layer.clone());
+                        insert_weather_layer(&mut layers, layer.clone());
                     }
                     if let Some(sender) = pending.response_sender {
                         let _ = sender.send(response);
@@ -1739,7 +1790,7 @@ fn weather_response_matches_request(
                     })
                 })
         }
-        (PluginWeatherProduct::GlobalLayer { layer }, WeatherQuery::RadarTiles { tiles }) => {
+        (PluginWeatherProduct::GlobalLayer { layer }, WeatherQuery::RadarTiles { tiles, .. }) => {
             let wyrmgrid_domain::GlobalWeatherLayerData::RasterTiles {
                 tiles: actual_tiles,
                 ..
@@ -1757,6 +1808,42 @@ fn weather_response_matches_request(
                 })
         }
         _ => false,
+    }
+}
+
+fn insert_weather_layer(
+    layers: &mut BTreeMap<String, Vec<GlobalWeatherLayerSnapshot>>,
+    layer: GlobalWeatherLayerSnapshot,
+) {
+    let layer_id = layer.id.clone();
+    let history = layers.entry(layer_id).or_default();
+    let wyrmgrid_domain::GlobalWeatherLayerData::RasterTiles { frame_time, .. } = &layer.data
+    else {
+        history.clear();
+        history.push(layer);
+        return;
+    };
+    if let Some(existing) = history.iter_mut().find(|candidate| {
+        matches!(
+            &candidate.data,
+            wyrmgrid_domain::GlobalWeatherLayerData::RasterTiles {
+                frame_time: candidate_time,
+                ..
+            } if candidate_time == frame_time
+        )
+    }) {
+        *existing = layer;
+    } else {
+        history.push(layer);
+    }
+    history.sort_by_key(|candidate| match &candidate.data {
+        wyrmgrid_domain::GlobalWeatherLayerData::RasterTiles { frame_time, .. } => *frame_time,
+        wyrmgrid_domain::GlobalWeatherLayerData::Grid { .. } => {
+            chrono::DateTime::<chrono::Utc>::MIN_UTC
+        }
+    });
+    if history.len() > MAX_RADAR_FRAMES_PER_LAYER {
+        history.drain(..history.len() - MAX_RADAR_FRAMES_PER_LAYER);
     }
 }
 

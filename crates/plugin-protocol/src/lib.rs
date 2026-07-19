@@ -16,6 +16,7 @@ pub const CHART_SCHEMA_VERSION: u32 = 1;
 pub const MAX_CHART_SERIES: usize = 12;
 pub const MAX_CHART_POINTS_PER_SERIES: usize = 10_000;
 pub const MAX_FRAME_BYTES: usize = 1024 * 1024;
+pub const MAX_RADAR_FRAME_OFFSET: u8 = 5;
 pub const MAX_MAP_LAYERS_PER_PLUGIN: usize = 16;
 pub const MAX_MAP_POINTS_PER_LAYER: usize = 10_000;
 pub const MAX_WEATHER_REQUEST_STATIONS: usize = 10;
@@ -193,6 +194,8 @@ pub enum WeatherQuery {
     },
     RadarTiles {
         tiles: Vec<WeatherTileAddress>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        frame_offset: Option<u8>,
     },
 }
 
@@ -281,6 +284,8 @@ pub enum WeatherRequestError {
     InvalidGridPoint,
     #[error("weather request contains an invalid or duplicate tile address")]
     InvalidTile,
+    #[error("weather request contains an invalid RADAR frame offset")]
+    InvalidRadarFrameOffset,
 }
 
 impl WeatherRequest {
@@ -324,7 +329,13 @@ impl WeatherRequest {
                     return Err(WeatherRequestError::InvalidGridPoint);
                 }
             }
-            WeatherQuery::RadarTiles { tiles } => {
+            WeatherQuery::RadarTiles {
+                tiles,
+                frame_offset,
+            } => {
+                if frame_offset.is_some_and(|offset| offset > MAX_RADAR_FRAME_OFFSET) {
+                    return Err(WeatherRequestError::InvalidRadarFrameOffset);
+                }
                 if tiles.is_empty() {
                     return Err(WeatherRequestError::Empty);
                 }

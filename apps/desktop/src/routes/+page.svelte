@@ -780,6 +780,11 @@
     activeWorkspace = "atlas";
   }
 
+  function requestAtlasRouteWeatherFocus(): void {
+    setAtlasLayerVisibility("global_weather", true);
+    requestAtlasRouteFocus();
+  }
+
   function selectAtlasRouteFeature(featureId: string): void {
     selectedAircraftId = null;
     selectedFboId = null;
@@ -1318,6 +1323,9 @@
     if (!isDesktopRuntime()) return;
     try {
       pluginHost = await loadPluginHost();
+      if (dispatchStatus.atlas_plan && !dispatchBusy) {
+        await refreshDispatchStatus();
+      }
     } catch (error) {
       pluginError = operationErrorMessage(
         error,
@@ -2643,6 +2651,7 @@
               {selectedRoutePointId}
               {selectedWeatherStationId}
               route={atlasRoute}
+              routeWeather={dispatchStatus.route_weather}
               {routeVisible}
               {selectedAircraftId}
               {selectedFboId}
@@ -3216,6 +3225,7 @@
         onjourney={openFlightOperationStage}
         onviewweatheratlas={openDispatchWeatherInAtlas}
         onviewroute={() => requestAtlasRouteFocus()}
+        onviewrouteweather={requestAtlasRouteWeatherFocus}
         onviewfeature={(featureId) => requestAtlasRouteFocus(featureId)}
       />
     {/if}

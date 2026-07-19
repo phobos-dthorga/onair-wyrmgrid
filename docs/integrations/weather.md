@@ -34,6 +34,15 @@ responses captured on 2026-07-14. No provider credentials or private operational
 identifiers are present. The cache is currently process-memory only; persistent
 offline weather and route hazard products remain future increments.
 
+The current Dispatch status also includes a Rust-built along-route model view.
+It samples each continuous, coordinate-bearing plan segment at an interval no
+greater than 300 nautical miles, finds the nearest published global-model point
+within 1,200 nautical miles, and exposes that support distance with the source
+time and provenance. It never bridges an unresolved plan gap, sends the plan to
+a weather plugin, or converts the model context into a safety finding. Atlas
+colours the supported corridor by condition and draws unsupported portions as a
+neutral dashed line; Dispatch lists the samples and missing support explicitly.
+
 ## Initial products
 
 | Product                         | Initial use                                                             |
@@ -94,7 +103,8 @@ These are WyrmGrid operating limits, not claims about provider guarantees.
 1. Airport weather cards with source, age, raw text, and cautious decoding.
 2. Departure, destination, and alternate comparison at relevant plan times.
 3. Atlas layers for supported advisory geometries.
-4. Route-weather findings explaining which sourced condition affected a score.
+4. Along-route model context with visible sample and support distances; future
+   hazard findings must remain explainable and must not become a hidden score.
 5. Cached offline viewing with prominent expired or stale status.
 
 Weather must not be reduced to a single hidden score. Recommendations retain the
@@ -139,7 +149,7 @@ source-shaped rendering rule lives in the
 - threat-model coverage for hostile text, oversized geometry, and decompression
   limits if bulk gzip files are adopted.
 
-WIFS, hazard geometry, radar animation/history, higher-resolution model grids,
+WIFS, hazard geometry, persisted RADAR history, higher-resolution model grids,
 and commercial weather sources remain deferred. Each introduces authentication,
 licensing, rendering, volume, or coverage questions beyond this initial slice.
 

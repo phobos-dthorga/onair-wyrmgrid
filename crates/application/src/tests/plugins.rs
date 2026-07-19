@@ -49,6 +49,25 @@ fn installs_all_bundled_plugins_with_no_implicit_grants() {
 }
 
 #[test]
+fn refreshes_reserved_bundled_plugin_files_when_the_shipped_provider_changes() {
+    let directory = tempfile::tempdir().expect("temporary directory should open");
+    initialize_plugin_root(directory.path()).expect("bundled plugins should install");
+    let entry_point = directory
+        .path()
+        .join(RAINVIEWER_PLUGIN_ID)
+        .join("src")
+        .join("main.py");
+    std::fs::write(&entry_point, "stale bundled provider").expect("stale provider should save");
+
+    initialize_plugin_root(directory.path()).expect("bundled plugins should refresh");
+
+    assert_eq!(
+        std::fs::read_to_string(entry_point).expect("provider should read"),
+        RAINVIEWER_ENTRY_POINT
+    );
+}
+
+#[test]
 fn host_owned_weather_configuration_is_bounded_and_persistent() {
     let directory = tempfile::tempdir().expect("temporary directory should open");
     let store = Store::open_in_memory().expect("store should open");
@@ -110,6 +129,70 @@ fn host_owned_weather_configuration_is_bounded_and_persistent() {
         plugin_view(&reopened.status().unwrap(), OPEN_METEO_PLUGIN_ID).configuration[0].value,
         "60"
     );
+}
+
+fn radar_layer(frame_time: chrono::DateTime<Utc>, title: &str) -> GlobalWeatherLayerSnapshot {
+    GlobalWeatherLayerSnapshot {
+        schema_version: wyrmgrid_domain::GLOBAL_WEATHER_LAYER_SCHEMA_VERSION,
+        id: "rainviewer-radar".into(),
+        title: title.into(),
+        data: wyrmgrid_domain::GlobalWeatherLayerData::RasterTiles {
+            frame_time,
+            tiles: vec![wyrmgrid_domain::GlobalWeatherRasterTile {
+                zoom: 1,
+                x: 0,
+                y: 0,
+                png_base64: "unused-by-history-test".into(),
+                coverage_png_base64: None,
+            }],
+        },
+        provenance: wyrmgrid_domain::OperationalProvenance {
+            kind: ProvenanceKind::ExternalFact,
+            provider: "rainviewer.com".into(),
+            provider_revision: Some("weather-maps-v2".into()),
+            generated_at: Some(frame_time),
+            retrieved_at: frame_time,
+            transformation_version: 1,
+            freshness: wyrmgrid_domain::SnapshotFreshness::Current,
+        },
+    }
+}
+
+#[test]
+fn radar_history_is_ordered_deduplicated_and_bounded_in_memory() {
+    let mut layers = BTreeMap::new();
+    let base = chrono::DateTime::from_timestamp(1_784_290_000, 0).unwrap();
+    for offset in [3_i64, 1, 2] {
+        insert_weather_layer(
+            &mut layers,
+            radar_layer(base + chrono::Duration::minutes(offset * 10), "RADAR"),
+        );
+    }
+    insert_weather_layer(
+        &mut layers,
+        radar_layer(base + chrono::Duration::minutes(20), "Updated RADAR"),
+    );
+
+    let history = &layers["rainviewer-radar"];
+    assert_eq!(history.len(), 3);
+    assert_eq!(history[1].title, "Updated RADAR");
+    for offset in [4_i64, 5, 6, 7] {
+        insert_weather_layer(
+            &mut layers,
+            radar_layer(base + chrono::Duration::minutes(offset * 10), "RADAR"),
+        );
+    }
+    let history = &layers["rainviewer-radar"];
+    assert_eq!(history.len(), MAX_RADAR_FRAMES_PER_LAYER);
+    let times = history
+        .iter()
+        .map(|layer| match layer.data {
+            wyrmgrid_domain::GlobalWeatherLayerData::RasterTiles { frame_time, .. } => frame_time,
+            wyrmgrid_domain::GlobalWeatherLayerData::Grid { .. } => unreachable!(),
+        })
+        .collect::<Vec<_>>();
+    assert!(times.windows(2).all(|pair| pair[0] < pair[1]));
+    assert_eq!(times[0], base + chrono::Duration::minutes(20));
 }
 
 #[test]

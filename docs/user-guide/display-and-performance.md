@@ -64,8 +64,10 @@ denser rain or snow particles, and convective illumination on capable GPUs.
 Enhanced and Cinematic use a lazily loaded Three.js renderer that prefers
 WebGPU. Its WebGL2 fallback substitutes layered cloud meshes and dust points for
 ray-marched volumes. **Compatibility** keeps the same facts with conservative
-static markers and does not load Three.js. Approved current-radar tiles remain
-host-rendered in every profile.
+static markers and does not load Three.js. Approved RADAR tiles remain
+host-rendered in every profile. Atlas normally loops the received recent frames
+and shows their source time; Compatibility under `--low-resource` and the
+operating system's Reduced Motion preference keep the newest frame static.
 
 Choose the profile in **Settings > Weather graphics**. Cloud depth, visible
 precipitation, lightning, and dust can each be disabled independently. These
@@ -118,6 +120,14 @@ These layers can be hidden without changing sourced weather, renderer quality,
 provider refresh, or saved graphics preferences. Their evidence and the future
 eclipse-path design are documented in the
 [Atlas daylight and weather coverage contract](../atlas/daylight-weather-coverage-and-eclipses.md).
+
+When the RainViewer layer is active, the RADAR history panel identifies the
+provider, selected time, and frame position and offers play, pause, previous,
+and next controls. Neutral-grey pixels are explicitly **no RADAR coverage**;
+they do not mean clear weather. A planned route may also carry a wider coloured
+global-model corridor. Its Dispatch card lists each coarse checkpoint and the
+distance to the model point supporting it. Dashed neutral sections have no
+nearby model support and are not silently joined or filled.
 
 **Reduce weather flashes** is enabled by default. Turning it off requires an
 explicit photosensitivity confirmation. The operating system's Reduce Motion

@@ -90,7 +90,11 @@
         "zoom": { "type": "integer", "minimum": 0, "maximum": 8 },
         "x": { "type": "integer", "minimum": 0 },
         "y": { "type": "integer", "minimum": 0 },
-        "png_base64": { "type": "string", "contentEncoding": "base64" }
+        "png_base64": { "type": "string", "contentEncoding": "base64" },
+        "coverage_png_base64": {
+          "type": "string",
+          "contentEncoding": "base64"
+        }
       }
     },
     "rasterTiles": {

@@ -153,6 +153,10 @@ pub struct GlobalWeatherRasterTile {
     pub y: u32,
     /// A base64-encoded PNG. The host validates the decoded bytes before use.
     pub png_base64: String,
+    /// An optional provider coverage mask. Transparent pixels are covered and
+    /// opaque pixels represent unavailable RADAR coverage.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub coverage_png_base64: Option<String>,
 }
 
 #[derive(Debug, Error, Clone, Copy, PartialEq, Eq)]
@@ -260,18 +264,22 @@ fn validate_global_raster_tiles(
         {
             return Err(GlobalWeatherValidationError::InvalidRasterTile);
         }
-        let bytes = BASE64_STANDARD
-            .decode(&tile.png_base64)
-            .map_err(|_| GlobalWeatherValidationError::InvalidRasterTile)?;
-        if bytes.len() > MAX_GLOBAL_WEATHER_RASTER_TILE_BYTES {
-            return Err(GlobalWeatherValidationError::RasterTooLarge);
-        }
-        if !valid_weather_png(&bytes) {
-            return Err(GlobalWeatherValidationError::InvalidRasterTile);
-        }
-        total_bytes = total_bytes.saturating_add(bytes.len());
-        if total_bytes > MAX_GLOBAL_WEATHER_RASTER_BYTES {
-            return Err(GlobalWeatherValidationError::RasterTooLarge);
+        for encoded in
+            std::iter::once(tile.png_base64.as_str()).chain(tile.coverage_png_base64.as_deref())
+        {
+            let bytes = BASE64_STANDARD
+                .decode(encoded)
+                .map_err(|_| GlobalWeatherValidationError::InvalidRasterTile)?;
+            if bytes.len() > MAX_GLOBAL_WEATHER_RASTER_TILE_BYTES {
+                return Err(GlobalWeatherValidationError::RasterTooLarge);
+            }
+            if !valid_weather_png(&bytes) {
+                return Err(GlobalWeatherValidationError::InvalidRasterTile);
+            }
+            total_bytes = total_bytes.saturating_add(bytes.len());
+            if total_bytes > MAX_GLOBAL_WEATHER_RASTER_BYTES {
+                return Err(GlobalWeatherValidationError::RasterTooLarge);
+            }
         }
     }
     Ok(())

@@ -30,6 +30,16 @@ these permissions, receive no weather requests, and remain compatible. The
 host-selected station, grid-point, or tile set is part of the request contract;
 a response that widens or substitutes it is rejected.
 
+The additive RADAR-history request field is `frame_offset`, an integer from
+`0` through `5`; `0` means the newest past frame. It is omitted for the legacy
+current-frame request shape and is sent only to the bundled RainViewer plugin,
+so existing version-one community plugins receive no new request member. A
+raster tile may add `coverage_png_base64`; it is validated as a second bounded
+256×256 PNG and counts toward the unchanged 640 KiB decoded layer ceiling.
+Coverage is a factual no-data mask, not an alternate weather image. The
+sanitized request and response fixtures are
+`plugin-radar-history-request-v1.json` and `plugin-radar-layer-v1.json`.
+
 The canonical manifest schema is `schemas/plugin-manifest.schema.json`. The
 envelope schema and accepted examples are
 `schemas/plugin-protocol-envelope.schema.json` and `schemas/fixtures/plugin-*-v1.json`.

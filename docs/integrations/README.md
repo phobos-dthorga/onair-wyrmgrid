@@ -54,9 +54,10 @@ Online networks --------------------------+--> Atlas overlays     |
    application secret. (Implemented as a Dispatch-session developer preview;
    a sanitized snapshot may also be retained with an explicitly created local
    flight recording. Authenticated live-field certification remains.)
-4. Add cached airport weather and route-weather summaries. (Initial explicitly
-   requested, session-cached METAR/TAF airport context and linked Atlas airport
-   projection implemented; route advisories remain.)
+4. Add cached airport weather and route-weather summaries. (Explicitly
+   requested, session-cached METAR/TAF airport context, linked Atlas airport
+   projection, and coarse along-route global-model context are implemented;
+   route hazard advisories remain.)
 5. Connect OnAir jobs, fleet selection, SimBrief plans, and explainable dispatch
    checks. (Registration, exact model-label, and current-airport comparison
    implemented; job payload and deadline checks await those OnAir contracts.)

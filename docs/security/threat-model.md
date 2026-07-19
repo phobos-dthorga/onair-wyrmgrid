@@ -755,19 +755,28 @@ remains excluded from other plugins and Sentry.
 
 The Open-Meteo plugin receives only an 84-point host-selected global grid and
 publishes bounded numeric samples. The RainViewer plugin receives four
-host-selected zoom-one addresses and publishes validated PNG bytes rather than
-remote URLs. Both refresh in the background, preserve the last valid layer on a
+host-selected zoom-one addresses plus one bounded recent-frame offset and
+publishes validated RADAR and coverage-mask PNG bytes rather than remote URLs.
+The host retains at most six distinct frames in memory. Both refresh in the background, preserve the last valid layer on a
 provider failure, and are independently stoppable. Neither receives a plan,
 OnAir fact, account reference, or credential.
 
+Along-route analysis runs after publication in the Rust application service.
+The plugin never receives plan coordinates. The service samples only mapped,
+continuous plan segments, caps the checkpoint count, accepts model support only
+inside a fixed maximum distance, and exposes that distance and missing support
+to the UI. This limits provider disclosure and prevents unresolved route gaps
+or distant model points from being presented as measured corridor conditions.
+
 Atlas receives host-built weather projections rather than raw weather payloads
 or arbitrary provider map resources. Missing reports remain unknown,
-and missing coordinates remain unplotted. Future external radar frames,
+and missing coordinates remain unplotted. External RADAR frames,
 simulator-selected weather mode, and ambient simulator observations are three
 distinct evidence classes: none may impersonate or silently overwrite another.
-Radar adoption requires approved access/licensing, bounded decoded dimensions,
-projection and geometry validation, no-data masks, cache/retention limits, and
-GPU resource-loss fallbacks. Simulator weather recording requires a versioned
+RADAR publication retains bounded decoded dimensions, tile-address validation,
+explicit no-data masks, in-memory retention limits, and GPU resource-loss
+fallbacks. Persisted history still requires a separate licence, storage,
+deletion, and backup decision. Simulator weather recording requires a versioned
 Bridge compatibility decision and must not infer Live Weather from resemblance
 to an external report.
 

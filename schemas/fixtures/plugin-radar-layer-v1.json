@@ -1,0 +1,41 @@
+{
+  "protocol_version": 1,
+  "sequence": 3,
+  "payload": {
+    "type": "publish_weather",
+    "request_id": "radar-history-5",
+    "response": {
+      "status": "complete",
+      "product": {
+        "kind": "global_layer",
+        "layer": {
+          "schema_version": 1,
+          "id": "rainviewer-radar",
+          "title": "Global precipitation RADAR",
+          "data": {
+            "kind": "raster_tiles",
+            "frame_time": "2026-07-19T04:00:00Z",
+            "tiles": [
+              {
+                "zoom": 1,
+                "x": 0,
+                "y": 0,
+                "png_base64": "iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAYAAAAAAAAAAAAAAElFTkQAAAAA",
+                "coverage_png_base64": "iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAYAAAAAAAAAAAAAAElFTkQAAAAA"
+              }
+            ]
+          },
+          "provenance": {
+            "kind": "external_fact",
+            "provider": "rainviewer.com",
+            "provider_revision": "weather-maps-api-v2",
+            "generated_at": "2026-07-19T04:00:00Z",
+            "retrieved_at": "2026-07-19T04:02:00Z",
+            "transformation_version": 1,
+            "freshness": "current"
+          }
+        }
+      }
+    }
+  }
+}

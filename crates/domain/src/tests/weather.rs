@@ -161,6 +161,7 @@ fn rejects_non_png_and_duplicate_global_raster_tiles() {
                 x: 0,
                 y: 0,
                 png_base64: BASE64_STANDARD.encode(b"not a PNG"),
+                coverage_png_base64: None,
             }],
         },
         provenance: OperationalProvenance {
@@ -188,6 +189,42 @@ fn rejects_non_png_and_duplicate_global_raster_tiles() {
         png.extend_from_slice(b"\0\0\0\0IEND\0\0\0\0");
         tiles[0].png_base64 = BASE64_STANDARD.encode(png);
         tiles.push(tiles[0].clone());
+    }
+    assert_eq!(
+        layer.validate(),
+        Err(GlobalWeatherValidationError::InvalidRasterTile)
+    );
+}
+
+#[test]
+fn validates_optional_radar_coverage_masks_and_counts_their_bytes() {
+    let at = DateTime::from_timestamp(1_784_243_200, 0).unwrap();
+    let mut png = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR".to_vec();
+    png.extend_from_slice(&256_u32.to_be_bytes());
+    png.extend_from_slice(&256_u32.to_be_bytes());
+    png.extend_from_slice(&[8, 6, 0, 0, 0]);
+    png.extend_from_slice(&[0, 0, 0, 0]);
+    png.extend_from_slice(b"\0\0\0\0IEND\0\0\0\0");
+    let mut layer = GlobalWeatherLayerSnapshot {
+        schema_version: GLOBAL_WEATHER_LAYER_SCHEMA_VERSION,
+        id: "rainviewer-radar".into(),
+        title: "Global precipitation radar".into(),
+        data: GlobalWeatherLayerData::RasterTiles {
+            frame_time: at,
+            tiles: vec![GlobalWeatherRasterTile {
+                zoom: 1,
+                x: 0,
+                y: 0,
+                png_base64: BASE64_STANDARD.encode(&png),
+                coverage_png_base64: Some(BASE64_STANDARD.encode(&png)),
+            }],
+        },
+        provenance: provenance(at),
+    };
+
+    assert_eq!(layer.validate(), Ok(()));
+    if let GlobalWeatherLayerData::RasterTiles { tiles, .. } = &mut layer.data {
+        tiles[0].coverage_png_base64 = Some(BASE64_STANDARD.encode(b"not a PNG"));
     }
     assert_eq!(
         layer.validate(),
