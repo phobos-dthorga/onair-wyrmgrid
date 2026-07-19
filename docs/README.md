@@ -38,6 +38,7 @@
   - [Simulator-synchronised audio recording](integrations/simulator-audio-recording.md)
 - [Observability and Sentry plan](operations/observability.md)
 - [CI/CD hardening and enrichment plan](operations/ci-cd-enhancement-plan.md)
+- [Local review automation and bounded Hoardmind delegation plan](operations/local-review-automation.md)
 - [Hosted website, Aerie, and private-vault implementation plan](operations/hosted-platform.md)
 - [Flight operation lifecycle](operations/flight-operation-lifecycle.md)
 - [Application Terms of Use](legal/terms-of-use.md)

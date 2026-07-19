@@ -112,6 +112,32 @@ These audits verify identifier ownership and parity only. They do not replace
 Svelte type checking, Rust application tests, or review of whether a Tauri
 command is thin.
 
+## Local review evidence inventory
+
+`npm run review:inventory -- --base <git-ref>` is a deterministic local
+inventory, not a test runner or approval gate. It records selected Git state,
+repository-relative file metadata and hashes, conservative critical-path
+candidates, and unavailable facts under ignored `.wyrmgrid-local/` storage. It
+does not execute the checks that it may later help select, invoke Hoardmind,
+reuse a cache, or mutate the repository.
+
+Its dedicated `scripts/local-review.test.mjs` suite covers NUL-delimited Git
+records, clean and dirty repositories, staged and unstaged changes, untracked,
+renamed, deleted, binary and submodule state, Unicode and spaces, invalid paths
+and arguments, exact-root and output-root enforcement, stat-hash-stat races,
+missing base and status evidence, stable candidate identities, critical-path
+escalation, atomic output, privacy declarations, and agreement between the
+runtime validator, schema, and sanitized fixture. Run it directly with:
+
+```powershell
+node --test scripts/local-review.test.mjs
+```
+
+It also remains part of `npm run test:tooling`. Later validation receipts,
+caching, task packets, and readiness evidence remain proposal-only and must add
+their own success, boundary, failure, unavailable-data, privacy, and regression
+tests when separately authorized.
+
 ## Optional AI-assisted test work
 
 No AI is required for WyrmGrid development or testing. A contributor who elects
