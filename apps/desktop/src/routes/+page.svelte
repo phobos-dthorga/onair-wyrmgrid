@@ -6,6 +6,16 @@
   import AtlasSearch from "$lib/atlas/AtlasSearch.svelte";
   import { findRouteFeature } from "$lib/atlas/route";
   import { atlasPreviewFbos, atlasPreviewFleet } from "$lib/atlas/sample";
+  import {
+    automaticSyncDelayMs,
+    defaultAtlasPreferences,
+    loadAtlasPreferences,
+    saveAtlasPreferences,
+    saveAtlasView,
+    type AtlasLayerVisibility,
+    type AtlasPreferences,
+    type AtlasView,
+  } from "$lib/atlas/preferences";
   import type {
     AircraftSummary,
     AtlasAdministrativeRegion,
@@ -43,6 +53,7 @@
     createPortableBackup,
     loadDataProtectionStatus,
     preparePortableRestore,
+    resetLocalData,
   } from "$lib/data-protection/client";
   import DataProtectionDialog from "$lib/data-protection/DataProtectionDialog.svelte";
   import { browserDataProtectionStatus } from "$lib/data-protection/sample";
@@ -93,6 +104,8 @@
     revokePluginPermissions,
     startPlugin,
     stopPlugin,
+    updatePluginConfiguration,
+    updatePluginStartupPreference,
   } from "$lib/forge/client";
   import {
     forgePreviewApproved,
@@ -239,8 +252,6 @@
     | "hoard"
     | "forge";
 
-  const AUTOMATIC_SYNC_STORAGE_KEY = "wyrmgrid.atlas.automatic-sync-minutes";
-  const AUTOMATIC_SYNC_OPTIONS = [0, 15, 30, 60, 120] as const;
   const PLUGIN_STATUS_POLL_INTERVAL_MS = 5_000;
   const launchStartedAt = Date.now();
 
@@ -266,15 +277,12 @@
   let staffView = $state<StaffSnapshotView | null>(null);
   let fleetLoadState = $state<FleetLoadState>("idle");
   let fleetError = $state("");
-  let fleetVisible = $state(true);
-  let fboVisible = $state(true);
-  let routeVisible = $state(true);
   let selectedAircraftId = $state<string | null>(null);
   let selectedFboId = $state<string | null>(null);
   let selectedRouteFeatureId = $state<string | null>(null);
   let atlasFocusRequest = $state<AtlasFocusRequest | null>(null);
   let atlasFocusSequence = 0;
-  let automaticSyncMinutes = $state(30);
+  let atlasPreferences = $state<AtlasPreferences>(defaultAtlasPreferences);
   let legalStatus = $state<LegalStatus>({
     terms_version: CURRENT_TERMS_VERSION,
     privacy_notice_version: CURRENT_PRIVACY_NOTICE_VERSION,
@@ -308,10 +316,6 @@
   let simulatorRecordingDebrief = $state<SimulatorSessionDebrief>();
   let atlasFlightRoute = $state<AtlasFlightRoute>();
   let atlasWeather = $state<FlightWeatherMapView>();
-  let weatherVisible = $state(true);
-  let daylightVisible = $state(true);
-  let weatherCoverageVisible = $state(true);
-  let regionsVisible = $state(true);
   let selectedAdministrativeRegion = $state<AtlasAdministrativeRegion>();
   let hoveredAdministrativeRegion = $state<AtlasAdministrativeRegion>();
   let selectedRoutePointId = $state<string>();
@@ -349,13 +353,30 @@
   let timelineBusy = $state(false);
   let timelineError = $state("");
   let pluginHost = $state<PluginHostView>(forgePreviewStopped);
-  let pluginLayersVisible = $state(true);
-  let pluginWeatherVisible = $state(true);
   let pluginBusy = $state(false);
   let pluginError = $state("");
   let workspaceInitialized = false;
+  let atlasPreferencesLoaded = $state(false);
+  let atlasPreferenceRevision = 0;
+  let atlasPreferenceSaveQueue = Promise.resolve();
+  let currentAtlasView: AtlasView | undefined;
   let responsiveSurfaceController:
     ReturnType<typeof responsiveSurfaceGroup> | undefined;
+
+  const automaticSyncMinutes = $derived(
+    atlasPreferences.automatic_sync_minutes,
+  );
+  const daylightVisible = $derived(atlasPreferences.layers.daylight);
+  const regionsVisible = $derived(atlasPreferences.layers.regions);
+  const routeVisible = $derived(atlasPreferences.layers.route);
+  const fleetVisible = $derived(atlasPreferences.layers.fleet);
+  const fboVisible = $derived(atlasPreferences.layers.fbos);
+  const weatherVisible = $derived(atlasPreferences.layers.airport_weather);
+  const pluginWeatherVisible = $derived(atlasPreferences.layers.global_weather);
+  const weatherCoverageVisible = $derived(
+    atlasPreferences.layers.weather_coverage,
+  );
+  const pluginLayersVisible = $derived(atlasPreferences.layers.plugin_layers);
 
   const showSettingsDialog = $derived(
     isDialogSurface(dialogNavigation, "settings"),
@@ -635,6 +656,64 @@
     );
   }
 
+  function persistAtlasPreferences(
+    next: AtlasPreferences,
+  ): Promise<AtlasPreferences> {
+    const previous = atlasPreferences;
+    const revision = ++atlasPreferenceRevision;
+    atlasPreferences = next;
+    const operation = atlasPreferenceSaveQueue.then(() =>
+      saveAtlasPreferences(next),
+    );
+    atlasPreferenceSaveQueue = operation.then(
+      () => undefined,
+      () => undefined,
+    );
+    void operation.then(
+      (saved) => {
+        if (revision === atlasPreferenceRevision) atlasPreferences = saved;
+      },
+      (error) => {
+        if (revision === atlasPreferenceRevision) atlasPreferences = previous;
+        settingsError = operationErrorMessage(
+          error,
+          "WyrmGrid could not save its local Atlas settings.",
+        );
+      },
+    );
+    return operation;
+  }
+
+  function setAtlasLayerVisibility(
+    layer: keyof AtlasLayerVisibility,
+    visible: boolean,
+  ): void {
+    if (atlasPreferences.layers[layer] === visible) return;
+    void persistAtlasPreferences({
+      ...atlasPreferences,
+      layers: { ...atlasPreferences.layers, [layer]: visible },
+    });
+  }
+
+  async function rememberAtlasView(view: AtlasView): Promise<void> {
+    currentAtlasView = view;
+    if (!atlasPreferences.restore_last_view) return;
+    try {
+      const saved = await saveAtlasView(view);
+      if (atlasPreferences.restore_last_view) {
+        atlasPreferences = {
+          ...atlasPreferences,
+          last_view: saved.last_view,
+        };
+      }
+    } catch (error) {
+      settingsError = operationErrorMessage(
+        error,
+        "WyrmGrid could not remember that Atlas view.",
+      );
+    }
+  }
+
   function formatObservedAt(value: string | undefined): string {
     if (!value) return "No fleet observation yet";
     const observed = formatLocalDateTime(value, "Observation time unavailable");
@@ -683,7 +762,7 @@
   }
 
   function requestAtlasRouteFocus(featureId?: string): void {
-    routeVisible = true;
+    setAtlasLayerVisibility("route", true);
     selectedAircraftId = null;
     selectedFboId = null;
     selectedRoutePointId = undefined;
@@ -1034,7 +1113,7 @@
       planned: plan,
     };
     atlasWeather = dispatchStatus.atlas_weather;
-    weatherVisible = true;
+    setAtlasLayerVisibility("airport_weather", true);
     selectedRoutePointId = pointId;
     selectedWeatherStationId = undefined;
     selectedAircraftId = null;
@@ -1048,7 +1127,7 @@
     if (!weather) return;
     const plan = dispatchStatus.atlas_plan;
     atlasWeather = weather;
-    weatherVisible = true;
+    setAtlasLayerVisibility("airport_weather", true);
     atlasFlightRoute = plan
       ? {
           schema_version: plan.schema_version,
@@ -1366,6 +1445,22 @@
     }
   }
 
+  async function runLocalDataReset(confirmation: string): Promise<void> {
+    if (!isDesktopRuntime() || dataProtectionBusy) return;
+    dataProtectionBusy = true;
+    dataProtectionError = "";
+    dataProtectionSuccess = "";
+    try {
+      await resetLocalData(confirmation);
+    } catch (error) {
+      dataProtectionError = operationErrorMessage(
+        error,
+        "WyrmGrid could not schedule the local database reset.",
+      );
+      dataProtectionBusy = false;
+    }
+  }
+
   async function refreshDispatchStatus(): Promise<void> {
     if (!isDesktopRuntime()) return;
     try {
@@ -1418,7 +1513,7 @@
       return;
     }
     if (stage === "fleet") {
-      fleetVisible = true;
+      setAtlasLayerVisibility("fleet", true);
       activeWorkspace = "atlas";
       return;
     }
@@ -1595,6 +1690,76 @@
       pluginBusy = false;
       if (showSecurityCentre && isDesktopRuntime())
         void refreshSecurityCentre();
+    }
+  }
+
+  async function updatePluginAutomaticStart(
+    pluginId: string,
+    enabled: boolean,
+  ): Promise<void> {
+    if (pluginBusy) return;
+    pluginBusy = true;
+    pluginError = "";
+    try {
+      if (!isDesktopRuntime()) {
+        pluginHost = {
+          ...pluginHost,
+          plugins: pluginHost.plugins.map((plugin) =>
+            plugin.id === pluginId
+              ? { ...plugin, start_with_wyrmgrid: enabled }
+              : plugin,
+          ),
+        };
+        return;
+      }
+      pluginHost = await updatePluginStartupPreference(pluginId, enabled);
+    } catch (error) {
+      pluginError = operationErrorMessage(
+        error,
+        "WyrmGrid could not save that plugin startup choice.",
+      );
+      await refreshPluginHost();
+    } finally {
+      pluginBusy = false;
+    }
+  }
+
+  async function savePluginConfiguration(
+    pluginId: string,
+    settingKey: string,
+    value: string,
+  ): Promise<void> {
+    if (pluginBusy) return;
+    pluginBusy = true;
+    pluginError = "";
+    try {
+      if (!isDesktopRuntime()) {
+        pluginHost = {
+          ...pluginHost,
+          plugins: pluginHost.plugins.map((plugin) =>
+            plugin.id === pluginId
+              ? {
+                  ...plugin,
+                  configuration: plugin.configuration.map((setting) =>
+                    setting.key === settingKey
+                      ? { ...setting, value }
+                      : setting,
+                  ),
+                }
+              : plugin,
+          ),
+        };
+        return;
+      }
+      pluginHost = await updatePluginConfiguration(pluginId, settingKey, value);
+    } catch (error) {
+      pluginError = operationErrorMessage(
+        error,
+        "WyrmGrid could not save that plugin setting.",
+      );
+      await refreshPluginHost();
+    } finally {
+      pluginBusy = false;
     }
   }
 
@@ -1805,7 +1970,10 @@
     }
     await initializeLanguage();
     await initializeTheme();
-    await initializeDisplayPreferences();
+    await Promise.all([
+      initializeDisplayPreferences(),
+      initializeAtlasPreferences(),
+    ]);
     await initializeSimulatorPreferences();
     await initializeLegal();
   }
@@ -1818,6 +1986,19 @@
         error,
         "WyrmGrid could not read its local display settings.",
       );
+    }
+  }
+
+  async function initializeAtlasPreferences(): Promise<void> {
+    try {
+      atlasPreferences = await loadAtlasPreferences();
+    } catch (error) {
+      settingsError = operationErrorMessage(
+        error,
+        "WyrmGrid could not read its local Atlas settings.",
+      );
+    } finally {
+      atlasPreferencesLoaded = true;
     }
   }
 
@@ -1840,13 +2021,21 @@
 
   async function saveSettings(
     preferences: DisplayPreferences,
+    nextAtlasPreferences: AtlasPreferences,
     nextSimulatorPreferences: SimulatorPreferences,
     nextRecordingPreferences: SimulatorRecordingPreferences,
   ): Promise<void> {
     settingsBusy = true;
     settingsError = "";
     try {
-      const savedDisplay = await saveDisplayPreferences(preferences);
+      const [savedDisplay, persistedAtlas] = await Promise.all([
+        saveDisplayPreferences(preferences),
+        persistAtlasPreferences(nextAtlasPreferences),
+      ]);
+      const savedAtlas =
+        persistedAtlas.restore_last_view && currentAtlasView
+          ? await saveAtlasView(currentAtlasView)
+          : persistedAtlas;
       let savedSimulator = nextSimulatorPreferences;
       let savedRecording = nextRecordingPreferences;
       if (isDesktopRuntime()) {
@@ -1856,6 +2045,7 @@
         ]);
       }
       displayPreferences = savedDisplay;
+      atlasPreferences = savedAtlas;
       simulatorPreferences = savedSimulator;
       simulatorRecording = {
         ...simulatorRecording,
@@ -1938,29 +2128,25 @@
   }
 
   function updateAutomaticSync(minutes: number): void {
-    if (
-      !AUTOMATIC_SYNC_OPTIONS.includes(
-        minutes as (typeof AUTOMATIC_SYNC_OPTIONS)[number],
-      )
-    ) {
-      return;
-    }
-    automaticSyncMinutes = minutes;
-    localStorage.setItem(AUTOMATIC_SYNC_STORAGE_KEY, String(minutes));
+    void persistAtlasPreferences({
+      ...atlasPreferences,
+      automatic_sync_minutes: minutes,
+    });
   }
 
   $effect(() => {
+    const delay = automaticSyncDelayMs(automaticSyncMinutes);
     if (
       typeof window === "undefined" ||
       !connection.connected ||
-      automaticSyncMinutes === 0
+      delay === undefined
     ) {
       return;
     }
 
     const timer = window.setInterval(
       () => void synchronizeCompanyData("automatic"),
-      automaticSyncMinutes * 60 * 1000,
+      delay,
     );
     return () => window.clearInterval(timer);
   });
@@ -2016,18 +2202,6 @@
     };
     updateViewportMode();
     window.addEventListener("resize", updateViewportMode);
-
-    const savedAutomaticSync = Number.parseInt(
-      localStorage.getItem(AUTOMATIC_SYNC_STORAGE_KEY) ?? "30",
-      10,
-    );
-    if (
-      AUTOMATIC_SYNC_OPTIONS.includes(
-        savedAutomaticSync as (typeof AUTOMATIC_SYNC_OPTIONS)[number],
-      )
-    ) {
-      automaticSyncMinutes = savedAutomaticSync;
-    }
 
     void initializeApplication();
     return () => window.removeEventListener("resize", updateViewportMode);
@@ -2252,20 +2426,34 @@
                   ? `Toggle ${layer.name}`
                   : `${layer.name} is planned for a later slice`}
                 onclick={() => {
-                  if (layer.id === "route") routeVisible = !routeVisible;
-                  if (layer.id === "fleet") fleetVisible = !fleetVisible;
-                  if (layer.id === "fbos") fboVisible = !fboVisible;
-                  if (layer.id === "regions") regionsVisible = !regionsVisible;
+                  if (layer.id === "route")
+                    setAtlasLayerVisibility("route", !routeVisible);
+                  if (layer.id === "fleet")
+                    setAtlasLayerVisibility("fleet", !fleetVisible);
+                  if (layer.id === "fbos")
+                    setAtlasLayerVisibility("fbos", !fboVisible);
+                  if (layer.id === "regions")
+                    setAtlasLayerVisibility("regions", !regionsVisible);
                   if (layer.id === "daylight")
-                    daylightVisible = !daylightVisible;
-                  if (layer.id === "weather") weatherVisible = !weatherVisible;
+                    setAtlasLayerVisibility("daylight", !daylightVisible);
+                  if (layer.id === "weather")
+                    setAtlasLayerVisibility("airport_weather", !weatherVisible);
                   if (layer.id === "global-weather")
-                    pluginWeatherVisible = !pluginWeatherVisible;
+                    setAtlasLayerVisibility(
+                      "global_weather",
+                      !pluginWeatherVisible,
+                    );
                   if (layer.id === "weather-coverage")
-                    weatherCoverageVisible = !weatherCoverageVisible;
+                    setAtlasLayerVisibility(
+                      "weather_coverage",
+                      !weatherCoverageVisible,
+                    );
                   if (layer.id === "jobs") openJobsWorkspace();
                   if (layer.id === "plugins")
-                    pluginLayersVisible = !pluginLayersVisible;
+                    setAtlasLayerVisibility(
+                      "plugin_layers",
+                      !pluginLayersVisible,
+                    );
                 }}
               >
                 <span class="layer-indicator"></span>
@@ -2282,7 +2470,8 @@
                 <strong>Astronomical daylight</strong><br />
                 {timelineMode === "historical"
                   ? "Calculated for the selected Hoard time"
-                  : "Calculated from current UTC"} · civil, nautical, and astronomical twilight.
+                  : "Calculated from current UTC"} · civil, nautical, and astronomical
+                twilight.
               </p>
             </div>
           {/if}
@@ -2293,8 +2482,9 @@
               <div>
                 <p>
                   <strong>Weather support zones</strong><br />
-                  Soft airport rings are indicative observation vicinity only.
-                  Compact grid patches show nearest model samples; gaps remain unknown. RADAR outlines show received tile footprints.
+                  Soft airport rings are indicative observation vicinity only. Compact
+                  grid patches show nearest model samples; gaps remain unknown. RADAR
+                  outlines show received tile footprints.
                 </p>
                 <div
                   class="weather-zone-key"
@@ -2430,78 +2620,83 @@
         </aside>
 
         <section class="map-stage" aria-label="Universal operations map">
-          <AtlasMap
-            {aircraft}
-            {fbos}
-            {fleetVisible}
-            {fboVisible}
-            pluginLayers={pluginHost.layers}
-            {pluginLayersVisible}
-            pluginWeatherLayers={pluginHost.weather_layers}
-            {pluginWeatherVisible}
-            flightRoute={atlasFlightRoute}
-            weather={atlasWeather}
-            {weatherVisible}
-            {daylightVisible}
-            daylightAt={atlasDaylightAt}
-            {weatherCoverageVisible}
-            weatherGraphics={displayPreferences}
-            {regionsVisible}
-            lowResource={startupOptions.low_resource}
-            selectedRegionId={selectedAdministrativeRegion?.id}
-            {selectedRoutePointId}
-            {selectedWeatherStationId}
-            route={atlasRoute}
-            {routeVisible}
-            {selectedAircraftId}
-            {selectedFboId}
-            {selectedRouteFeatureId}
-            focusRequest={atlasFocusRequest}
-            onselectaircraft={(aircraftId) => {
-              selectedAircraftId = aircraftId;
-              selectedFboId = null;
-              selectedRoutePointId = undefined;
-              selectedWeatherStationId = undefined;
-              selectedAdministrativeRegion = undefined;
-              selectedRouteFeatureId = null;
-              selectedRouteFeatureId = null;
-            }}
-            onselectfbo={(fboId) => {
-              selectedFboId = fboId;
-              selectedAircraftId = null;
-              selectedRoutePointId = undefined;
-              selectedWeatherStationId = undefined;
-              selectedAdministrativeRegion = undefined;
-              selectedRouteFeatureId = null;
-            }}
-            onselectroutepoint={(pointId) => {
-              selectedRoutePointId = pointId;
-              selectedAircraftId = null;
-              selectedFboId = null;
-              selectedWeatherStationId = undefined;
-              selectedAdministrativeRegion = undefined;
-            }}
-            onselectweatherstation={(stationId) => {
-              selectedWeatherStationId = stationId;
-              selectedRoutePointId = undefined;
-              selectedAircraftId = null;
-              selectedFboId = null;
-              selectedAdministrativeRegion = undefined;
-              selectedRouteFeatureId = null;
-            }}
-            onselectregion={(region) => {
-              selectedAdministrativeRegion = region;
-              selectedRoutePointId = undefined;
-              selectedWeatherStationId = undefined;
-              selectedAircraftId = null;
-              selectedFboId = null;
-              selectedRouteFeatureId = null;
-            }}
-            onhoverregion={(region) => {
-              hoveredAdministrativeRegion = region;
-            }}
-            onselectroutefeature={selectAtlasRouteFeature}
-          />
+          {#if atlasPreferencesLoaded}
+            <AtlasMap
+              {aircraft}
+              {fbos}
+              {fleetVisible}
+              {fboVisible}
+              pluginLayers={pluginHost.layers}
+              {pluginLayersVisible}
+              pluginWeatherLayers={pluginHost.weather_layers}
+              {pluginWeatherVisible}
+              flightRoute={atlasFlightRoute}
+              weather={atlasWeather}
+              {weatherVisible}
+              {daylightVisible}
+              daylightAt={atlasDaylightAt}
+              {weatherCoverageVisible}
+              weatherGraphics={displayPreferences}
+              {regionsVisible}
+              lowResource={startupOptions.low_resource}
+              selectedRegionId={selectedAdministrativeRegion?.id}
+              {selectedRoutePointId}
+              {selectedWeatherStationId}
+              route={atlasRoute}
+              {routeVisible}
+              {selectedAircraftId}
+              {selectedFboId}
+              {selectedRouteFeatureId}
+              focusRequest={atlasFocusRequest}
+              initialView={atlasPreferences.restore_last_view
+                ? atlasPreferences.last_view
+                : undefined}
+              onselectaircraft={(aircraftId) => {
+                selectedAircraftId = aircraftId;
+                selectedFboId = null;
+                selectedRoutePointId = undefined;
+                selectedWeatherStationId = undefined;
+                selectedAdministrativeRegion = undefined;
+                selectedRouteFeatureId = null;
+              }}
+              onselectfbo={(fboId) => {
+                selectedFboId = fboId;
+                selectedAircraftId = null;
+                selectedRoutePointId = undefined;
+                selectedWeatherStationId = undefined;
+                selectedAdministrativeRegion = undefined;
+                selectedRouteFeatureId = null;
+              }}
+              onselectroutepoint={(pointId) => {
+                selectedRoutePointId = pointId;
+                selectedAircraftId = null;
+                selectedFboId = null;
+                selectedWeatherStationId = undefined;
+                selectedAdministrativeRegion = undefined;
+              }}
+              onselectweatherstation={(stationId) => {
+                selectedWeatherStationId = stationId;
+                selectedRoutePointId = undefined;
+                selectedAircraftId = null;
+                selectedFboId = null;
+                selectedAdministrativeRegion = undefined;
+                selectedRouteFeatureId = null;
+              }}
+              onselectregion={(region) => {
+                selectedAdministrativeRegion = region;
+                selectedRoutePointId = undefined;
+                selectedWeatherStationId = undefined;
+                selectedAircraftId = null;
+                selectedFboId = null;
+                selectedRouteFeatureId = null;
+              }}
+              onhoverregion={(region) => {
+                hoveredAdministrativeRegion = region;
+              }}
+              onselectroutefeature={selectAtlasRouteFeature}
+              onviewchange={(view) => void rememberAtlasView(view)}
+            />
+          {/if}
           <div class="map-wash"></div>
           {#if hoveredAdministrativeRegion}
             <div class="region-hover-card" aria-hidden="true">
@@ -3085,14 +3280,21 @@
   <SettingsDialog
     open={showSettingsDialog}
     preferences={displayPreferences}
+    {atlasPreferences}
     {simulatorPreferences}
     recordingPreferences={simulatorRecording.preferences}
     simulatorProviders={simulatorBridge.providers}
     busy={settingsBusy}
     errorMessage={settingsError}
-    onsave={(preferences, nextSimulatorPreferences, nextRecordingPreferences) =>
+    onsave={(
+      preferences,
+      nextAtlasPreferences,
+      nextSimulatorPreferences,
+      nextRecordingPreferences,
+    ) =>
       void saveSettings(
         preferences,
+        nextAtlasPreferences,
         nextSimulatorPreferences,
         nextRecordingPreferences,
       )}
@@ -3137,6 +3339,7 @@
       void runPortableBackup(destination, password, confirmation)}
     onrestore={(source, password, confirmed) =>
       void runPortableRestore(source, password, confirmed)}
+    onreset={(confirmation) => void runLocalDataReset(confirmation)}
     onlicenses={() => {
       enterDialog("licenses");
     }}
@@ -3228,6 +3431,10 @@
     onrevoke={(pluginId) => void runPluginAction("revoke", pluginId)}
     onstart={(pluginId) => void runPluginAction("start", pluginId)}
     onstop={(pluginId) => void runPluginAction("stop", pluginId)}
+    onstartupchange={(pluginId, enabled) =>
+      void updatePluginAutomaticStart(pluginId, enabled)}
+    onconfigurationchange={(pluginId, settingKey, value) =>
+      void savePluginConfiguration(pluginId, settingKey, value)}
     onclose={leaveDialog}
   />
 {/if}

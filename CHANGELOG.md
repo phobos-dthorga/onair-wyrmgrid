@@ -54,6 +54,22 @@ major application version.
   Theme-independent repeating patterns distinguish cloud, rain, snow,
   convective, obscuration, dust, and RADAR zones without relying on colour
   alone.
+- Added a per-plugin **Start automatically with WyrmGrid** choice. It is off by
+  default, requires standing access, survives ordinary restarts, and becomes
+  inactive whenever the plugin version, capabilities, weather products, or
+  approved network origins change.
+- Added a guarded **Erase the WyrmGrid database** control to Encrypted data &
+  backups. It requires an acknowledgement and exact typed phrase, restarts the
+  application, and replaces the active database with an empty encrypted one
+  while leaving portable backups, installed plugins, diagnostics, simulator
+  sidecars, browser-webview local storage, and separately stored operating-system
+  credentials alone.
+- Added encrypted Atlas continuity preferences for automatic synchronization
+  and layer visibility, plus an opt-in **Restore my last Atlas view** choice
+  that clears its bounded camera values when disabled.
+- Added host-owned Forge settings with bounded refresh choices for forecast-grid
+  and RADAR plugins. Plugins cannot declare, read, or write these non-secret
+  records, and plugin API version 1 remains unchanged.
 
 ### Changes
 
@@ -104,6 +120,9 @@ major application version.
   Atlas weather preferences without rewriting an earlier released migration.
   Migration 0015 retains the earlier two-profile preference as a legacy
   fallback while making the richer graphics record authoritative.
+- Database migration 0016 adds host-owned, scope-bound plugin startup
+  preferences without changing plugin protocol version 1. Source catalogue
+  version 13 adds the associated Forge and destructive-reset wording.
 
 ### Removed
 

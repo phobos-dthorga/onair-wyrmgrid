@@ -16,6 +16,19 @@ const previewPlugin: PluginView = {
   network_origins: [],
   requested_permissions: [...requestedPermissions],
   granted_permissions: [],
+  start_with_wyrmgrid: false,
+  configuration: [
+    {
+      key: "forecast_refresh_minutes",
+      value: "15",
+      choices: [
+        { value: "15" },
+        { value: "30" },
+        { value: "60" },
+        { value: "120" },
+      ],
+    },
+  ],
   state: "stopped",
   published_layer_count: 0,
   published_weather_layer_count: 0,

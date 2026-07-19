@@ -368,6 +368,15 @@
   only after current legal acknowledgement. SimBrief Pilot IDs and usernames
   are stored only as explicitly selected encrypted metadata and never treated
   as passwords or authorization tokens;
+- automatic synchronization and Atlas layer choices are host-validated,
+  bounded preferences in SQLCipher. Last-map restoration is off by default,
+  accepts only finite camera values within map bounds, and clears the retained
+  camera when disabled. An older webview interval is copied once through the
+  same host validation and removed only after the encrypted save succeeds;
+- per-plugin configuration is defined, validated, scheduled, and rendered by
+  the host using fixed non-secret choices. A plugin cannot declare controls,
+  access the configuration table, write values, or receive them through plugin
+  API version 1, so this store is not a credential or covert host-data channel;
 - portable backup version 1 is a complete SQLCipher export under a distinct
   user password. The host refuses overwrite, validates the encrypted manifest,
   schema and cipher integrity, re-encrypts restored data with the destination
@@ -377,6 +386,17 @@
   strings after the operation, never persisted, logged, sent to plugins, or
   recoverable by WyrmGrid. Restore requires a separate momentary destructive
   confirmation and runs outside the interface thread;
+- a whole-database reset requires both an explicit acknowledgement and an exact
+  host-validated phrase. The application service writes a versioned marker,
+  restart closes every database user, and startup validates the marker before
+  deleting only the active, pending, rollback, WAL, and shared-memory database
+  files. An invalid marker fails closed without deletion, and the marker is
+  removed last so an interrupted reset can safely resume. Portable backups,
+  plugin files, diagnostics, sidecars, browser-webview local storage, the device
+  key, and separately stored provider credentials are outside this operation;
+  Atlas and host-owned plugin preferences inside SQLite are erased.
+  Filesystem recovery and external copies remain a disclosed residual risk
+  rather than a secure-erasure claim;
 - Hoard Timeline remains read-only, persistently identifies mutually exclusive
   LIVE or HISTORICAL workspace mode separately from data availability, shows
   the selected time and each resource's actual observation time, and offers an
@@ -663,6 +683,11 @@ to an external report.
 - Grants are denied by default and bound to actor kind, actor ID, exact
   capabilities, a scope revision, and an explicit lifetime. Plugin version or
   permission-set changes require a fresh review.
+- plugin automatic start is a separate default-off preference available only
+  with a standing grant. It is stored by the host, bound to the plugin version,
+  capabilities, weather products, and network origins, evaluated only after
+  current legal acknowledgement, and cleared on revocation. Each startup is
+  isolated so one plugin failure cannot block the core or another plugin;
 - `Once` is consumed at the privileged launch boundary, `Session` exists only
   in the shared in-memory authorization runtime, and only `Standing` is written
   to encrypted storage. A new process therefore starts without temporary

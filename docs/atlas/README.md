@@ -31,6 +31,8 @@ The first Atlas slice provides:
   during its silently enforced quiet period;
 - locally remembered automatic-check preferences with conservative interval
   choices;
+- locally remembered Atlas layer visibility, plus an optional last-view restore
+  that stores bounded camera values only while the user enables it;
 - stable aircraft and airport summaries translated in Rust;
 - OnAir provenance and observation time for the complete fleet snapshot;
 - aircraft markers for records with valid WGS84 coordinates;

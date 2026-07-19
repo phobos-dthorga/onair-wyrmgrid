@@ -54,6 +54,7 @@
     weatherZonePatternImages,
   } from "$lib/weather/weatherCoveragePatterns";
   import { ATLAS_HOME_CENTER, balancedOverviewCoordinates } from "./camera";
+  import type { AtlasView } from "./preferences";
   import { daylightFeatureCollection } from "./daylight";
   import {
     ADMINISTRATIVE_REGION_LABEL_BANDS,
@@ -107,6 +108,7 @@
     selectedFboId,
     selectedRouteFeatureId,
     focusRequest,
+    initialView,
     onselectaircraft,
     onselectfbo,
     onselectroutepoint,
@@ -114,6 +116,7 @@
     onselectregion,
     onhoverregion,
     onselectroutefeature,
+    onviewchange,
   }: {
     aircraft: AircraftSummary[];
     fbos: FboSummary[];
@@ -141,6 +144,7 @@
     selectedFboId: string | null;
     selectedRouteFeatureId: string | null;
     focusRequest: AtlasFocusRequest | null;
+    initialView?: AtlasView;
     onselectaircraft: (aircraftId: string) => void;
     onselectfbo: (fboId: string) => void;
     onselectroutepoint: (pointId: string) => void;
@@ -148,6 +152,7 @@
     onselectregion: (region: AtlasAdministrativeRegion) => void;
     onhoverregion: (region?: AtlasAdministrativeRegion) => void;
     onselectroutefeature: (featureId: string) => void;
+    onviewchange: (view: AtlasView) => void;
   } = $props();
 
   const REGION_SOURCE_ID = "wyrmgrid-administrative-regions";
@@ -169,8 +174,7 @@
   const PLUGIN_LAYER_ID = "wyrmgrid-plugin-points";
   const PLUGIN_LABEL_LAYER_ID = "wyrmgrid-plugin-labels";
   const PLUGIN_WEATHER_GRID_SOURCE_ID = "wyrmgrid-plugin-weather-grid";
-  const PLUGIN_WEATHER_COVERAGE_SOURCE_ID =
-    "wyrmgrid-plugin-weather-coverage";
+  const PLUGIN_WEATHER_COVERAGE_SOURCE_ID = "wyrmgrid-plugin-weather-coverage";
   const PLUGIN_WEATHER_COVERAGE_FILL_LAYER_ID =
     "wyrmgrid-plugin-weather-coverage-fill";
   const PLUGIN_WEATHER_COVERAGE_PATTERN_LAYER_ID =
@@ -860,9 +864,9 @@
       : String(Math.floor(selected.getTime() / 60_000));
     const signature = `${timeKey}:${lowResource}`;
     if (signature === daylightSourceSignature) return;
-    (
-      map.getSource(DAYLIGHT_SOURCE_ID) as GeoJSONSource | undefined
-    )?.setData(daylightFeatureCollection(selected, lowResource ? 90 : 180));
+    (map.getSource(DAYLIGHT_SOURCE_ID) as GeoJSONSource | undefined)?.setData(
+      daylightFeatureCollection(selected, lowResource ? 90 : 180),
+    );
     daylightSourceSignature = signature;
   }
 
@@ -987,9 +991,8 @@
     const fboNetwork = fboFeatures();
     const pluginData = pluginFeatures();
     const pluginWeatherData = pluginWeatherGridFeatures(pluginWeatherLayers);
-    const pluginWeatherCoverageData = pluginWeatherGridCoverageFeatures(
-      pluginWeatherLayers,
-    );
+    const pluginWeatherCoverageData =
+      pluginWeatherGridCoverageFeatures(pluginWeatherLayers);
     const pluginRadarCoverageData =
       pluginRadarCoverageFeatures(pluginWeatherLayers);
     const routes = routeLineFeatures(flightRoute);
@@ -1011,13 +1014,11 @@
     )?.setData(pluginWeatherData);
     (
       map.getSource(PLUGIN_WEATHER_COVERAGE_SOURCE_ID) as
-        | GeoJSONSource
-        | undefined
+        GeoJSONSource | undefined
     )?.setData(pluginWeatherCoverageData);
     (
       map.getSource(PLUGIN_RADAR_COVERAGE_SOURCE_ID) as
-        | GeoJSONSource
-        | undefined
+        GeoJSONSource | undefined
     )?.setData(pluginRadarCoverageData);
     syncPluginRadarFrames();
     (map.getSource(ROUTE_SOURCE_ID) as GeoJSONSource | undefined)?.setData(
@@ -1704,11 +1705,25 @@
       const atlasMap = new maplibregl.Map({
         container: mapContainer,
         style: "https://demotiles.maplibre.org/globe.json",
-        center: ATLAS_HOME_CENTER,
-        zoom: 1.25,
+        center: initialView
+          ? [initialView.longitude, initialView.latitude]
+          : ATLAS_HOME_CENTER,
+        zoom: initialView?.zoom ?? 1.25,
+        bearing: initialView?.bearing ?? 0,
+        pitch: initialView?.pitch ?? 0,
         attributionControl: false,
       });
       map = atlasMap;
+      atlasMap.on("moveend", () => {
+        const centre = atlasMap.getCenter();
+        onviewchange({
+          longitude: centre.lng,
+          latitude: centre.lat,
+          zoom: atlasMap.getZoom(),
+          bearing: atlasMap.getBearing(),
+          pitch: atlasMap.getPitch(),
+        });
+      });
       atlasMap.on("render", () => {
         if (threeWeatherActive && !weatherPolicy.animation) {
           renderThreeWeather(performance.now());
@@ -1886,7 +1901,15 @@
           },
           paint: {
             "line-color": weatherCoverageColor("condition"),
-            "line-width": ["interpolate", ["linear"], ["zoom"], 1, 0.55, 7, 1.15],
+            "line-width": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              1,
+              0.55,
+              7,
+              1.15,
+            ],
             "line-opacity": lowResource ? 0.22 : 0.42,
             "line-dasharray": [2, 2],
           },
@@ -2140,7 +2163,15 @@
           },
           paint: {
             "line-color": WEATHER_ZONE_COLORS.radar,
-            "line-width": ["interpolate", ["linear"], ["zoom"], 1, 0.65, 7, 1.4],
+            "line-width": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              1,
+              0.65,
+              7,
+              1.4,
+            ],
             "line-opacity": lowResource ? 0.28 : 0.52,
             "line-dasharray": [3, 2],
           },

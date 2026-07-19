@@ -1,5 +1,9 @@
 <script lang="ts">
   import { translation } from "$lib/i18n/runtime";
+  import {
+    defaultAtlasPreferences,
+    type AtlasPreferences,
+  } from "$lib/atlas/preferences";
   import { displayPresets, type DisplayPreferences } from "./types";
   import {
     displayPresetMessageKeys,
@@ -16,6 +20,7 @@
   let {
     open,
     preferences,
+    atlasPreferences,
     simulatorPreferences,
     recordingPreferences,
     simulatorProviders,
@@ -32,6 +37,7 @@
   }: {
     open: boolean;
     preferences: DisplayPreferences;
+    atlasPreferences: AtlasPreferences;
     simulatorPreferences: SimulatorPreferences;
     recordingPreferences: SimulatorRecordingPreferences;
     simulatorProviders: SimulatorProviderView[];
@@ -39,6 +45,7 @@
     errorMessage?: string;
     onsave: (
       preferences: DisplayPreferences,
+      atlasPreferences: AtlasPreferences,
       simulatorPreferences: SimulatorPreferences,
       recordingPreferences: SimulatorRecordingPreferences,
     ) => void;
@@ -52,6 +59,10 @@
   } = $props();
 
   let draft = $state<DisplayPreferences>({ ...displayPresets.aviation });
+  let atlasDraft = $state<AtlasPreferences>({
+    ...defaultAtlasPreferences,
+    layers: { ...defaultAtlasPreferences.layers },
+  });
   let simulatorDraft = $state<SimulatorPreferences>({
     start_with_wyrmgrid: false,
   });
@@ -65,6 +76,13 @@
   $effect(() => {
     if (open) {
       draft = { ...preferences };
+      atlasDraft = {
+        ...atlasPreferences,
+        layers: { ...atlasPreferences.layers },
+        last_view: atlasPreferences.last_view
+          ? { ...atlasPreferences.last_view }
+          : undefined,
+      };
       simulatorDraft = { ...simulatorPreferences };
       recordingDraft = { ...recordingPreferences };
     }
@@ -124,6 +142,55 @@
           onclick={onclose}>×</button
         >
       </header>
+
+      <section class="settings-section">
+        <div class="section-copy">
+          <span class="eyebrow">{$translation("settings-atlas-eyebrow")}</span>
+          <h3>{$translation("settings-atlas-title")}</h3>
+          <p>{$translation("settings-atlas-detail")}</p>
+        </div>
+
+        <div class="unit-grid atlas-settings-grid">
+          <label>
+            <span>{$translation("settings-atlas-sync")}</span>
+            <select
+              disabled={busy}
+              bind:value={atlasDraft.automatic_sync_minutes}
+            >
+              <option value={0}
+                >{$translation("settings-atlas-sync-off")}</option
+              >
+              <option value={15}
+                >{$translation("settings-atlas-sync-15")}</option
+              >
+              <option value={30}
+                >{$translation("settings-atlas-sync-30")}</option
+              >
+              <option value={60}
+                >{$translation("settings-atlas-sync-60")}</option
+              >
+              <option value={120}
+                >{$translation("settings-atlas-sync-120")}</option
+              >
+            </select>
+          </label>
+          <label class="settings-toggle responsive-surface">
+            <input
+              type="checkbox"
+              disabled={busy}
+              bind:checked={atlasDraft.restore_last_view}
+            />
+            <span>
+              <strong>{$translation("privacy-atlas-restore-view")}</strong>
+              <small>{$translation("privacy-atlas-restore-view-detail")}</small>
+            </span>
+          </label>
+        </div>
+
+        <p class="settings-boundary">
+          {$translation("privacy-atlas-boundary")}
+        </p>
+      </section>
 
       <section class="settings-section">
         <div class="section-copy">
@@ -553,7 +620,12 @@
           type="button"
           disabled={busy}
           onclick={() =>
-            onsave({ ...draft }, { ...simulatorDraft }, { ...recordingDraft })}
+            onsave(
+              { ...draft },
+              { ...atlasDraft, layers: { ...atlasDraft.layers } },
+              { ...simulatorDraft },
+              { ...recordingDraft },
+            )}
         >
           {busy
             ? $translation("settings-saving")

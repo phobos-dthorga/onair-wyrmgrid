@@ -18,7 +18,7 @@ use wyrmgrid_plugin_protocol::{
     WeatherCapability, WeatherGridRequestPoint, WeatherQuery, WeatherRequest, WeatherTileAddress,
     WeatherUnavailableCode, read_frame, write_frame,
 };
-use wyrmgrid_storage::Store;
+use wyrmgrid_storage::{PluginConfigurationRecord, PluginPreferencesRecord, Store};
 
 use crate::authorization::{
     AuthorizationError, AuthorizationGrantLifetime, AuthorizationRuntime, AuthorizationService,
@@ -32,6 +32,10 @@ const SHUTDOWN_TIMEOUT: Duration = Duration::from_millis(750);
 const SNAPSHOT_POLL_INTERVAL: Duration = Duration::from_secs(1);
 const MODEL_WEATHER_REFRESH_INTERVAL: Duration = Duration::from_secs(15 * 60);
 const RADAR_WEATHER_REFRESH_INTERVAL: Duration = Duration::from_secs(5 * 60);
+const FORECAST_REFRESH_SETTING_KEY: &str = "forecast_refresh_minutes";
+const RADAR_REFRESH_SETTING_KEY: &str = "radar_refresh_minutes";
+const FORECAST_REFRESH_OPTIONS: [u16; 4] = [15, 30, 60, 120];
+const RADAR_REFRESH_OPTIONS: [u16; 4] = [5, 10, 15, 30];
 const AIRPORT_WEATHER_RESPONSE_TIMEOUT: Duration = Duration::from_secs(20);
 const GLOBAL_WEATHER_RESPONSE_TIMEOUT: Duration = Duration::from_secs(90);
 const MAX_WEATHER_LAYERS_PER_PLUGIN: usize = 4;
@@ -71,6 +75,8 @@ pub enum PluginError {
     UnsupportedCapability,
     #[error("Approve every requested capability before starting this plugin.")]
     PermissionRequired,
+    #[error("Choose standing access before enabling automatic plugin startup.")]
+    StandingPermissionRequired,
     #[error("That plugin is already running.")]
     AlreadyRunning,
     #[error("That plugin is not running.")]
@@ -85,6 +91,10 @@ pub enum PluginError {
     ProtocolViolation,
     #[error("The local plugin supervisor is unavailable.")]
     StateUnavailable,
+    #[error("That plugin setting is not available.")]
+    UnknownConfiguration,
+    #[error("That plugin setting value is not supported.")]
+    InvalidConfiguration,
 }
 
 #[derive(Debug, Error, Clone, Copy, PartialEq, Eq)]
@@ -134,11 +144,37 @@ pub struct PluginView {
     pub granted_permissions: Vec<Permission>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub grant_lifetime: Option<AuthorizationGrantLifetime>,
+    pub start_with_wyrmgrid: bool,
+    pub configuration: Vec<PluginSettingView>,
     pub state: PluginProcessState,
     pub published_layer_count: usize,
     pub published_weather_layer_count: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_error: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct PluginSettingChoice {
+    pub value: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct PluginSettingView {
+    pub key: String,
+    pub value: String,
+    pub choices: Vec<PluginSettingChoice>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct PluginAutoStartFailure {
+    pub plugin_id: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct PluginAutoStartOutcome {
+    pub started_plugin_ids: Vec<String>,
+    pub failures: Vec<PluginAutoStartFailure>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -174,9 +210,11 @@ struct PluginServiceInner {
     root: Option<PathBuf>,
     initialization_error: Option<String>,
     authorization: AuthorizationService<Store>,
+    preferences: Store,
     onair: OnAirSession,
     simulator: SimulatorBridgeService,
     runtimes: Mutex<BTreeMap<String, Arc<RunningPlugin>>>,
+    startup_failures: Mutex<BTreeMap<String, String>>,
 }
 
 struct RunningPlugin {
@@ -188,6 +226,7 @@ struct RunningPlugin {
     weather_layers: Mutex<BTreeMap<String, GlobalWeatherLayerSnapshot>>,
     pending_weather: Mutex<BTreeMap<String, PendingWeatherRequest>>,
     last_weather_requests: Mutex<BTreeMap<WeatherCapability, Instant>>,
+    weather_refresh_intervals: Mutex<BTreeMap<WeatherCapability, Duration>>,
     weather_request_sequence: Mutex<u64>,
     outgoing_sequence: Mutex<u64>,
     last_fleet_observation: Mutex<Option<String>>,
@@ -208,6 +247,14 @@ struct InstalledPlugin {
     manifest: PluginManifest,
     directory: PathBuf,
     entry_point: PathBuf,
+}
+
+#[derive(Clone, Copy)]
+struct PluginSettingDefinition {
+    key: &'static str,
+    capability: WeatherCapability,
+    default_minutes: u16,
+    options: &'static [u16],
 }
 
 impl PluginService {
@@ -250,10 +297,15 @@ impl PluginService {
             inner: Arc::new(PluginServiceInner {
                 root,
                 initialization_error,
-                authorization: AuthorizationService::with_runtime(store, authorization_runtime),
+                authorization: AuthorizationService::with_runtime(
+                    store.clone(),
+                    authorization_runtime,
+                ),
+                preferences: store,
                 onair,
                 simulator,
                 runtimes: Mutex::new(BTreeMap::new()),
+                startup_failures: Mutex::new(BTreeMap::new()),
             }),
         }
     }
@@ -273,6 +325,11 @@ impl PluginService {
         let runtimes = self
             .inner
             .runtimes
+            .lock()
+            .map_err(|_| PluginError::StateUnavailable)?;
+        let startup_failures = self
+            .inner
+            .startup_failures
             .lock()
             .map_err(|_| PluginError::StateUnavailable)?;
         let mut plugins = Vec::with_capacity(installed.len());
@@ -304,7 +361,12 @@ impl PluginService {
                         .map_err(|_| PluginError::StateUnavailable)?
                         .len(),
                 ),
-                None => (PluginProcessState::Stopped, None, 0, 0),
+                None => (
+                    PluginProcessState::Stopped,
+                    startup_failures.get(&plugin.manifest.id).cloned(),
+                    0,
+                    0,
+                ),
             };
             let granted_permissions = runtime
                 .filter(|_| state.is_active())
@@ -340,6 +402,8 @@ impl PluginService {
                     });
                 }
             }
+            let start_with_wyrmgrid = self.start_with_wyrmgrid(&plugin.manifest)?;
+            let configuration = self.configuration_for(&plugin.manifest)?;
             plugins.push(PluginView {
                 id: plugin.manifest.id,
                 name: plugin.manifest.name,
@@ -351,6 +415,8 @@ impl PluginService {
                 requested_permissions: plugin.manifest.permissions,
                 granted_permissions: granted_permissions.iter().copied().collect(),
                 grant_lifetime,
+                start_with_wyrmgrid,
+                configuration,
                 state,
                 published_layer_count: layer_count,
                 published_weather_layer_count: weather_layer_count,
@@ -392,6 +458,13 @@ impl PluginService {
             .authorization
             .approve_with_lifetime(&subject, &revision, &permission_names, lifetime)
             .map_err(plugin_authorization_error)?;
+        if lifetime != AuthorizationGrantLifetime::Standing {
+            self.inner
+                .preferences
+                .delete_plugin_preferences_record(plugin_id)
+                .map_err(|_| PluginError::StorageUnavailable)?;
+            self.clear_startup_failure(plugin_id)?;
+        }
         self.status()
     }
 
@@ -406,7 +479,125 @@ impl PluginService {
             .authorization
             .revoke(&subject, &revision)
             .map_err(plugin_authorization_error)?;
+        self.inner
+            .preferences
+            .delete_plugin_preferences_record(plugin_id)
+            .map_err(|_| PluginError::StorageUnavailable)?;
+        self.clear_startup_failure(plugin_id)?;
         self.status()
+    }
+
+    pub fn set_start_with_wyrmgrid(
+        &self,
+        plugin_id: &str,
+        enabled: bool,
+    ) -> Result<PluginHostView, PluginError> {
+        let plugin = self.find_plugin(plugin_id)?;
+        if enabled {
+            ensure_supported_permissions(&plugin.manifest.permissions)?;
+            if plugin.manifest.runtime != Some(PluginRuntime::Python) {
+                return Err(PluginError::UnsupportedRuntime);
+            }
+            if self.grant_lifetime_for(&plugin.manifest)?
+                != Some(AuthorizationGrantLifetime::Standing)
+            {
+                return Err(PluginError::StandingPermissionRequired);
+            }
+            self.inner
+                .preferences
+                .save_plugin_preferences_record(&PluginPreferencesRecord {
+                    plugin_id: plugin.manifest.id.clone(),
+                    scope_revision: plugin_scope_revision(&plugin.manifest),
+                    start_with_wyrmgrid: true,
+                })
+                .map_err(|_| PluginError::StorageUnavailable)?;
+        } else {
+            self.inner
+                .preferences
+                .delete_plugin_preferences_record(plugin_id)
+                .map_err(|_| PluginError::StorageUnavailable)?;
+            self.clear_startup_failure(plugin_id)?;
+        }
+        self.status()
+    }
+
+    pub fn set_configuration(
+        &self,
+        plugin_id: &str,
+        setting_key: &str,
+        value: &str,
+    ) -> Result<PluginHostView, PluginError> {
+        let plugin = self.find_plugin(plugin_id)?;
+        let definition = plugin_setting_definition(&plugin.manifest, setting_key)
+            .ok_or(PluginError::UnknownConfiguration)?;
+        let minutes = value
+            .parse::<u16>()
+            .ok()
+            .filter(|value| definition.options.contains(value))
+            .ok_or(PluginError::InvalidConfiguration)?;
+        self.inner
+            .preferences
+            .save_plugin_configuration_record(&PluginConfigurationRecord {
+                plugin_id: plugin.manifest.id.clone(),
+                setting_key: setting_key.to_owned(),
+                value: minutes.to_string(),
+            })
+            .map_err(|_| PluginError::StorageUnavailable)?;
+
+        if let Some(runtime) = self
+            .inner
+            .runtimes
+            .lock()
+            .map_err(|_| PluginError::StateUnavailable)?
+            .get(plugin_id)
+            .cloned()
+        {
+            runtime
+                .weather_refresh_intervals
+                .lock()
+                .map_err(|_| PluginError::StateUnavailable)?
+                .insert(
+                    definition.capability,
+                    Duration::from_secs(u64::from(minutes) * 60),
+                );
+        }
+        self.status()
+    }
+
+    pub fn start_enabled(&self) -> Result<PluginAutoStartOutcome, PluginError> {
+        let root = self
+            .inner
+            .root
+            .as_deref()
+            .ok_or(PluginError::RootUnavailable)?;
+        let (installed, _) = discover_plugins(root)?;
+        let mut enabled = Vec::new();
+        for plugin in installed {
+            if self.start_with_wyrmgrid(&plugin.manifest)? {
+                enabled.push(plugin.manifest.id);
+            }
+        }
+        let mut outcome = PluginAutoStartOutcome {
+            started_plugin_ids: Vec::new(),
+            failures: Vec::new(),
+        };
+        for plugin_id in enabled {
+            match self.start(&plugin_id) {
+                Ok(_) => outcome.started_plugin_ids.push(plugin_id),
+                Err(error) => {
+                    let message = error.to_string();
+                    self.inner
+                        .startup_failures
+                        .lock()
+                        .map_err(|_| PluginError::StateUnavailable)?
+                        .insert(plugin_id.clone(), message.clone());
+                    outcome
+                        .failures
+                        .push(PluginAutoStartFailure { plugin_id, message });
+                }
+            }
+        }
+        Ok(outcome)
     }
 
     pub fn start(&self, plugin_id: &str) -> Result<PluginHostView, PluginError> {
@@ -432,6 +623,7 @@ impl PluginService {
         let mut child = spawn_python(&plugin)?;
         let stdin = child.stdin.take().ok_or(PluginError::LaunchFailed)?;
         let stdout = child.stdout.take().ok_or(PluginError::LaunchFailed)?;
+        let weather_refresh_intervals = self.weather_refresh_intervals(&plugin.manifest)?;
         let runtime = Arc::new(RunningPlugin {
             child: Mutex::new(child),
             stdin: Mutex::new(stdin),
@@ -441,6 +633,7 @@ impl PluginService {
             weather_layers: Mutex::new(BTreeMap::new()),
             pending_weather: Mutex::new(BTreeMap::new()),
             last_weather_requests: Mutex::new(BTreeMap::new()),
+            weather_refresh_intervals: Mutex::new(weather_refresh_intervals),
             weather_request_sequence: Mutex::new(1),
             outgoing_sequence: Mutex::new(1),
             last_fleet_observation: Mutex::new(None),
@@ -504,6 +697,7 @@ impl PluginService {
             .state
             .lock()
             .map_err(|_| PluginError::StateUnavailable)? = PluginProcessState::Running;
+        self.clear_startup_failure(plugin_id)?;
         self.send_fleet_if_changed(&runtime)?;
         self.send_simulator_if_changed(&runtime)?;
         self.send_global_weather_if_due(&runtime)?;
@@ -626,6 +820,84 @@ impl PluginService {
             .grants(&subject, &revision, &requested)
             .map_err(plugin_authorization_error)
             .map(capability_names_to_permissions)
+    }
+
+    fn start_with_wyrmgrid(&self, manifest: &PluginManifest) -> Result<bool, PluginError> {
+        self.inner
+            .preferences
+            .load_plugin_preferences_record(&manifest.id)
+            .map_err(|_| PluginError::StorageUnavailable)
+            .map(|record| {
+                record.is_some_and(|record| {
+                    record.start_with_wyrmgrid
+                        && record.scope_revision == plugin_scope_revision(manifest)
+                })
+            })
+    }
+
+    fn configuration_for(
+        &self,
+        manifest: &PluginManifest,
+    ) -> Result<Vec<PluginSettingView>, PluginError> {
+        plugin_setting_definitions(manifest)
+            .into_iter()
+            .map(|definition| {
+                let value = self.configured_minutes(manifest, definition)?;
+                Ok(PluginSettingView {
+                    key: definition.key.to_owned(),
+                    value: value.to_string(),
+                    choices: definition
+                        .options
+                        .iter()
+                        .map(|minutes| PluginSettingChoice {
+                            value: minutes.to_string(),
+                        })
+                        .collect(),
+                })
+            })
+            .collect()
+    }
+
+    fn weather_refresh_intervals(
+        &self,
+        manifest: &PluginManifest,
+    ) -> Result<BTreeMap<WeatherCapability, Duration>, PluginError> {
+        plugin_setting_definitions(manifest)
+            .into_iter()
+            .map(|definition| {
+                self.configured_minutes(manifest, definition)
+                    .map(|minutes| {
+                        (
+                            definition.capability,
+                            Duration::from_secs(u64::from(minutes) * 60),
+                        )
+                    })
+            })
+            .collect()
+    }
+
+    fn configured_minutes(
+        &self,
+        manifest: &PluginManifest,
+        definition: PluginSettingDefinition,
+    ) -> Result<u16, PluginError> {
+        let configured = self
+            .inner
+            .preferences
+            .load_plugin_configuration_record(&manifest.id, definition.key)
+            .map_err(|_| PluginError::StorageUnavailable)?
+            .and_then(|record| record.value.parse::<u16>().ok())
+            .filter(|value| definition.options.contains(value));
+        Ok(configured.unwrap_or(definition.default_minutes))
+    }
+
+    fn clear_startup_failure(&self, plugin_id: &str) -> Result<(), PluginError> {
+        self.inner
+            .startup_failures
+            .lock()
+            .map_err(|_| PluginError::StateUnavailable)?
+            .remove(plugin_id);
+        Ok(())
     }
 
     fn grant_lifetime_for(
@@ -857,11 +1129,13 @@ impl PluginService {
             if has_pending {
                 continue;
             }
-            let refresh_interval = match capability {
-                WeatherCapability::ForecastGrid => MODEL_WEATHER_REFRESH_INTERVAL,
-                WeatherCapability::RadarTiles => RADAR_WEATHER_REFRESH_INTERVAL,
-                WeatherCapability::AirportReports => continue,
-            };
+            let refresh_interval = runtime
+                .weather_refresh_intervals
+                .lock()
+                .map_err(|_| PluginError::StateUnavailable)?
+                .get(&capability)
+                .copied()
+                .unwrap_or_else(|| default_weather_refresh_interval(capability));
             let due = runtime
                 .last_weather_requests
                 .lock()
@@ -1081,6 +1355,50 @@ fn capability_names_to_permissions(capabilities: BTreeSet<String>) -> BTreeSet<P
         .iter()
         .filter_map(|capability| Permission::from_name(capability))
         .collect()
+}
+
+fn plugin_setting_definitions(manifest: &PluginManifest) -> Vec<PluginSettingDefinition> {
+    let mut definitions = Vec::new();
+    if manifest
+        .weather_capabilities
+        .contains(&WeatherCapability::ForecastGrid)
+    {
+        definitions.push(PluginSettingDefinition {
+            key: FORECAST_REFRESH_SETTING_KEY,
+            capability: WeatherCapability::ForecastGrid,
+            default_minutes: 15,
+            options: &FORECAST_REFRESH_OPTIONS,
+        });
+    }
+    if manifest
+        .weather_capabilities
+        .contains(&WeatherCapability::RadarTiles)
+    {
+        definitions.push(PluginSettingDefinition {
+            key: RADAR_REFRESH_SETTING_KEY,
+            capability: WeatherCapability::RadarTiles,
+            default_minutes: 5,
+            options: &RADAR_REFRESH_OPTIONS,
+        });
+    }
+    definitions
+}
+
+fn plugin_setting_definition(
+    manifest: &PluginManifest,
+    key: &str,
+) -> Option<PluginSettingDefinition> {
+    plugin_setting_definitions(manifest)
+        .into_iter()
+        .find(|definition| definition.key == key)
+}
+
+fn default_weather_refresh_interval(capability: WeatherCapability) -> Duration {
+    match capability {
+        WeatherCapability::ForecastGrid => MODEL_WEATHER_REFRESH_INTERVAL,
+        WeatherCapability::RadarTiles => RADAR_WEATHER_REFRESH_INTERVAL,
+        WeatherCapability::AirportReports => MODEL_WEATHER_REFRESH_INTERVAL,
+    }
 }
 
 fn plugin_scope_revision(manifest: &PluginManifest) -> String {

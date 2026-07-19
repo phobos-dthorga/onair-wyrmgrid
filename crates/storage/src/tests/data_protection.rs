@@ -221,6 +221,75 @@ fn existing_destination_and_active_source_fail_closed() {
     ));
 }
 
+#[test]
+fn pending_local_data_reset_removes_only_database_sets_and_reopens_empty() {
+    let directory = tempdir().expect("temporary directory should exist");
+    let database_path = directory.path().join("wyrmgrid.db");
+    let key = DatabaseKey::from_bytes([41; 32]);
+    let store = Store::open(&database_path, &key).expect("database should open");
+    store
+        .save_display_preferences_record(&preferences("metres", "litres"))
+        .expect("preferences should save");
+    store
+        .prepare_local_data_reset()
+        .expect("reset should be scheduled");
+    drop(store);
+
+    for path in [
+        companion_path(&database_path, "-wal"),
+        companion_path(&database_path, "-shm"),
+        pending_path(&database_path),
+        companion_path(&pending_path(&database_path), "-wal"),
+        rollback_path(&database_path),
+        companion_path(&rollback_path(&database_path), "-shm"),
+    ] {
+        fs::write(path, b"database companion").expect("companion should save");
+    }
+    let backup = directory.path().join("saved.wyrmbackup");
+    let plugin = directory.path().join("plugins").join("example.py");
+    fs::create_dir_all(plugin.parent().unwrap()).expect("plugin directory should create");
+    fs::write(&backup, b"portable backup").expect("backup should save");
+    fs::write(&plugin, b"plugin source").expect("plugin should save");
+
+    assert!(apply_pending_local_data_reset(&database_path).unwrap());
+    assert!(!database_path.exists());
+    assert!(!pending_path(&database_path).exists());
+    assert!(!rollback_path(&database_path).exists());
+    assert!(!reset_marker_path(&database_path).exists());
+    assert_eq!(fs::read(&backup).unwrap(), b"portable backup");
+    assert_eq!(fs::read(&plugin).unwrap(), b"plugin source");
+    assert!(!apply_pending_local_data_reset(&database_path).unwrap());
+
+    let reopened = Store::open(&database_path, &key).expect("empty database should reopen");
+    assert_eq!(reopened.schema_version().unwrap(), CURRENT_SCHEMA_VERSION);
+    assert_eq!(reopened.load_display_preferences_record().unwrap(), None);
+}
+
+#[test]
+fn invalid_local_data_reset_marker_fails_without_deleting_data() {
+    let directory = tempdir().expect("temporary directory should exist");
+    let database_path = directory.path().join("wyrmgrid.db");
+    fs::write(&database_path, b"keep database").expect("database fixture should save");
+    fs::write(reset_marker_path(&database_path), b"invalid reset request")
+        .expect("invalid marker should save");
+
+    assert!(matches!(
+        apply_pending_local_data_reset(&database_path),
+        Err(StorageError::InvalidRecord)
+    ));
+    assert_eq!(fs::read(&database_path).unwrap(), b"keep database");
+    assert!(reset_marker_path(&database_path).exists());
+}
+
+#[test]
+fn in_memory_store_cannot_schedule_a_local_data_reset() {
+    let store = Store::open_in_memory().expect("store should open");
+    assert!(matches!(
+        store.prepare_local_data_reset(),
+        Err(StorageError::PersistentStorageRequired)
+    ));
+}
+
 fn preferences(altitude_unit: &str, fuel_unit: &str) -> DisplayPreferencesRecord {
     DisplayPreferencesRecord {
         altitude_unit: altitude_unit.into(),
