@@ -34,7 +34,9 @@ const ATLAS_RENDERING_PREFERENCES_SCHEMA: &str =
 const ATLAS_WEATHER_GRAPHICS_PREFERENCES_SCHEMA: &str =
     include_str!("../migrations/0015_atlas_weather_graphics_preferences.sql");
 const PLUGIN_PREFERENCES_SCHEMA: &str = include_str!("../migrations/0016_plugin_preferences.sql");
-pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 16;
+const ATLAS_AND_PLUGIN_CONFIGURATION_SCHEMA: &str =
+    include_str!("../migrations/0017_atlas_and_plugin_configuration.sql");
+pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 17;
 
 #[derive(Debug, Error)]
 pub enum StorageError {
@@ -110,6 +112,13 @@ pub struct PluginPreferencesRecord {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PluginConfigurationRecord {
+    pub plugin_id: String,
+    pub setting_key: String,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ThemePreferencesRecord {
     pub selected_theme_id: String,
 }
@@ -127,6 +136,26 @@ pub struct DisplayPreferencesRecord {
     pub weather_lightning_effects: bool,
     pub weather_dust_effects: bool,
     pub reduce_weather_flashes: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AtlasPreferencesRecord {
+    pub automatic_sync_minutes: u16,
+    pub daylight_visible: bool,
+    pub regions_visible: bool,
+    pub route_visible: bool,
+    pub fleet_visible: bool,
+    pub fbos_visible: bool,
+    pub airport_weather_visible: bool,
+    pub global_weather_visible: bool,
+    pub weather_coverage_visible: bool,
+    pub plugin_layers_visible: bool,
+    pub restore_last_view: bool,
+    pub last_longitude: Option<f64>,
+    pub last_latitude: Option<f64>,
+    pub last_zoom: Option<f64>,
+    pub last_bearing: Option<f64>,
+    pub last_pitch: Option<f64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -281,6 +310,7 @@ impl Store {
         connection.execute_batch(ATLAS_RENDERING_PREFERENCES_SCHEMA)?;
         connection.execute_batch(ATLAS_WEATHER_GRAPHICS_PREFERENCES_SCHEMA)?;
         connection.execute_batch(PLUGIN_PREFERENCES_SCHEMA)?;
+        connection.execute_batch(ATLAS_AND_PLUGIN_CONFIGURATION_SCHEMA)?;
         if path.is_some() {
             data_protection::mark_wyrmgrid_database(&connection)?;
         }
@@ -683,6 +713,148 @@ impl Store {
             ],
         )?;
         transaction.commit().map_err(StorageError::from)
+    }
+
+    pub fn load_atlas_preferences_record(
+        &self,
+    ) -> Result<Option<AtlasPreferencesRecord>, StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection
+            .query_row(
+                "SELECT automatic_sync_minutes,
+                        daylight_visible,
+                        regions_visible,
+                        route_visible,
+                        fleet_visible,
+                        fbos_visible,
+                        airport_weather_visible,
+                        global_weather_visible,
+                        weather_coverage_visible,
+                        plugin_layers_visible,
+                        restore_last_view,
+                        last_longitude,
+                        last_latitude,
+                        last_zoom,
+                        last_bearing,
+                        last_pitch
+                 FROM atlas_preferences
+                 WHERE singleton_id = 1",
+                [],
+                |row| {
+                    Ok(AtlasPreferencesRecord {
+                        automatic_sync_minutes: row.get(0)?,
+                        daylight_visible: row.get(1)?,
+                        regions_visible: row.get(2)?,
+                        route_visible: row.get(3)?,
+                        fleet_visible: row.get(4)?,
+                        fbos_visible: row.get(5)?,
+                        airport_weather_visible: row.get(6)?,
+                        global_weather_visible: row.get(7)?,
+                        weather_coverage_visible: row.get(8)?,
+                        plugin_layers_visible: row.get(9)?,
+                        restore_last_view: row.get(10)?,
+                        last_longitude: row.get(11)?,
+                        last_latitude: row.get(12)?,
+                        last_zoom: row.get(13)?,
+                        last_bearing: row.get(14)?,
+                        last_pitch: row.get(15)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(StorageError::from)
+    }
+
+    pub fn save_atlas_preferences_record(
+        &self,
+        preferences: &AtlasPreferencesRecord,
+    ) -> Result<(), StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection.execute(
+            "INSERT INTO atlas_preferences (
+                singleton_id,
+                automatic_sync_minutes,
+                daylight_visible,
+                regions_visible,
+                route_visible,
+                fleet_visible,
+                fbos_visible,
+                airport_weather_visible,
+                global_weather_visible,
+                weather_coverage_visible,
+                plugin_layers_visible,
+                restore_last_view
+             ) VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+             ON CONFLICT(singleton_id) DO UPDATE SET
+                automatic_sync_minutes = excluded.automatic_sync_minutes,
+                daylight_visible = excluded.daylight_visible,
+                regions_visible = excluded.regions_visible,
+                route_visible = excluded.route_visible,
+                fleet_visible = excluded.fleet_visible,
+                fbos_visible = excluded.fbos_visible,
+                airport_weather_visible = excluded.airport_weather_visible,
+                global_weather_visible = excluded.global_weather_visible,
+                weather_coverage_visible = excluded.weather_coverage_visible,
+                plugin_layers_visible = excluded.plugin_layers_visible,
+                restore_last_view = excluded.restore_last_view,
+                last_longitude = CASE WHEN excluded.restore_last_view = 0
+                    THEN NULL ELSE atlas_preferences.last_longitude END,
+                last_latitude = CASE WHEN excluded.restore_last_view = 0
+                    THEN NULL ELSE atlas_preferences.last_latitude END,
+                last_zoom = CASE WHEN excluded.restore_last_view = 0
+                    THEN NULL ELSE atlas_preferences.last_zoom END,
+                last_bearing = CASE WHEN excluded.restore_last_view = 0
+                    THEN NULL ELSE atlas_preferences.last_bearing END,
+                last_pitch = CASE WHEN excluded.restore_last_view = 0
+                    THEN NULL ELSE atlas_preferences.last_pitch END,
+                updated_at = CURRENT_TIMESTAMP",
+            params![
+                preferences.automatic_sync_minutes,
+                preferences.daylight_visible,
+                preferences.regions_visible,
+                preferences.route_visible,
+                preferences.fleet_visible,
+                preferences.fbos_visible,
+                preferences.airport_weather_visible,
+                preferences.global_weather_visible,
+                preferences.weather_coverage_visible,
+                preferences.plugin_layers_visible,
+                preferences.restore_last_view,
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn save_atlas_view_record(
+        &self,
+        longitude: f64,
+        latitude: f64,
+        zoom: f64,
+        bearing: f64,
+        pitch: f64,
+    ) -> Result<(), StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection.execute(
+            "UPDATE atlas_preferences
+             SET last_longitude = ?1,
+                 last_latitude = ?2,
+                 last_zoom = ?3,
+                 last_bearing = ?4,
+                 last_pitch = ?5,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE singleton_id = 1 AND restore_last_view = 1",
+            params![longitude, latitude, zoom, bearing, pitch],
+        )?;
+        Ok(())
     }
 
     pub fn load_simulator_preferences_record(
@@ -1631,6 +1803,52 @@ impl Store {
         connection.execute(
             "DELETE FROM plugin_preferences WHERE plugin_id = ?1",
             [plugin_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn load_plugin_configuration_record(
+        &self,
+        plugin_id: &str,
+        setting_key: &str,
+    ) -> Result<Option<PluginConfigurationRecord>, StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection
+            .query_row(
+                "SELECT plugin_id, setting_key, value
+                 FROM plugin_configuration
+                 WHERE plugin_id = ?1 AND setting_key = ?2",
+                params![plugin_id, setting_key],
+                |row| {
+                    Ok(PluginConfigurationRecord {
+                        plugin_id: row.get(0)?,
+                        setting_key: row.get(1)?,
+                        value: row.get(2)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(StorageError::from)
+    }
+
+    pub fn save_plugin_configuration_record(
+        &self,
+        record: &PluginConfigurationRecord,
+    ) -> Result<(), StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection.execute(
+            "INSERT INTO plugin_configuration (plugin_id, setting_key, value)
+             VALUES (?1, ?2, ?3)
+             ON CONFLICT(plugin_id, setting_key) DO UPDATE SET
+                value = excluded.value,
+                updated_at = CURRENT_TIMESTAMP",
+            params![record.plugin_id, record.setting_key, record.value],
         )?;
         Ok(())
     }

@@ -36,6 +36,18 @@ export function updatePluginStartupPreference(
   });
 }
 
+export function updatePluginConfiguration(
+  pluginId: string,
+  settingKey: string,
+  value: string,
+): Promise<PluginHostView> {
+  return invokeDesktop<PluginHostView>("update_plugin_configuration", {
+    pluginId,
+    settingKey,
+    value,
+  });
+}
+
 export function startPlugin(pluginId: string): Promise<PluginHostView> {
   return invokeDesktop<PluginHostView>("start_plugin", { pluginId });
 }

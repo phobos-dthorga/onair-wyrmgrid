@@ -7,7 +7,7 @@ use thiserror::Error;
 use wyrmgrid_storage::{AuthorizationDecisionRecord, AuthorizationGrantRecord, Store};
 
 pub const TERMS_VERSION: &str = "2026-07-15";
-pub const PRIVACY_NOTICE_VERSION: &str = "2026-07-19.1";
+pub const PRIVACY_NOTICE_VERSION: &str = "2026-07-19.2";
 
 const MAX_SUBJECT_ID_BYTES: usize = 256;
 const MAX_SCOPE_REVISION_BYTES: usize = 1_024;

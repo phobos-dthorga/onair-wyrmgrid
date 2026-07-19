@@ -1,5 +1,6 @@
 //! Application-level orchestration independent of Tauri and other interfaces.
 
+mod atlas_preferences;
 mod authorization;
 mod credentials;
 mod data_protection;
@@ -14,6 +15,7 @@ mod simulator;
 mod simulator_debrief;
 mod simulator_recording;
 
+pub use atlas_preferences::*;
 pub use authorization::{
     AUTHORIZATION_DECISION_RETENTION_LIMIT, AuthorizationGrantLifetime, AuthorizationRuntime,
     LegalPreferencesRepository, LegalSettingsError, LegalSettingsService, LegalStatus,
@@ -964,6 +966,24 @@ impl From<DisplaySettingsError> for OperationError {
     }
 }
 
+impl From<AtlasPreferencesError> for OperationError {
+    fn from(error: AtlasPreferencesError) -> Self {
+        let (code, retryable) = match error {
+            AtlasPreferencesError::StorageUnavailable => {
+                ("atlas.preferences_storage_unavailable", true)
+            }
+            AtlasPreferencesError::InvalidPreference => ("atlas.invalid_preference", false),
+        };
+        Self {
+            code,
+            message: error.to_string(),
+            retryable,
+            reportable: false,
+            report_id: None,
+        }
+    }
+}
+
 impl From<LanguageSettingsError> for OperationError {
     fn from(error: LanguageSettingsError) -> Self {
         let (code, retryable) = match error {
@@ -1007,6 +1027,8 @@ impl From<PluginError> for OperationError {
             PluginError::HandshakeFailed => ("plugin.handshake_failed", true, false),
             PluginError::ProtocolViolation => ("plugin.protocol_violation", false, false),
             PluginError::StateUnavailable => ("plugin.state_unavailable", true, true),
+            PluginError::UnknownConfiguration => ("plugin.unknown_configuration", false, false),
+            PluginError::InvalidConfiguration => ("plugin.invalid_configuration", false, false),
         };
         Self {
             code,

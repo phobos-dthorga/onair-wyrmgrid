@@ -49,6 +49,70 @@ fn installs_all_bundled_plugins_with_no_implicit_grants() {
 }
 
 #[test]
+fn host_owned_weather_configuration_is_bounded_and_persistent() {
+    let directory = tempfile::tempdir().expect("temporary directory should open");
+    let store = Store::open_in_memory().expect("store should open");
+    let service = PluginService::new(
+        Some(directory.path().to_path_buf()),
+        store.clone(),
+        OnAirSession::with_default_store(store.clone()),
+        SimulatorBridgeService::new(Vec::new()),
+    );
+
+    let status = service.status().expect("plugin status should load");
+    let forecast = &plugin_view(&status, OPEN_METEO_PLUGIN_ID).configuration[0];
+    assert_eq!(forecast.key, FORECAST_REFRESH_SETTING_KEY);
+    assert_eq!(forecast.value, "15");
+    assert_eq!(forecast.choices.len(), 4);
+    let radar = &plugin_view(&status, RAINVIEWER_PLUGIN_ID).configuration[0];
+    assert_eq!(radar.key, RADAR_REFRESH_SETTING_KEY);
+    assert_eq!(radar.value, "5");
+    assert!(
+        plugin_view(&status, BUNDLED_PLUGIN_ID)
+            .configuration
+            .is_empty()
+    );
+
+    let revised = service
+        .set_configuration(OPEN_METEO_PLUGIN_ID, FORECAST_REFRESH_SETTING_KEY, "60")
+        .expect("host setting should save");
+    assert_eq!(
+        plugin_view(&revised, OPEN_METEO_PLUGIN_ID).configuration[0].value,
+        "60"
+    );
+    let manifest = service
+        .find_plugin(OPEN_METEO_PLUGIN_ID)
+        .expect("bundled weather plugin should exist")
+        .manifest;
+    assert_eq!(
+        service
+            .weather_refresh_intervals(&manifest)
+            .unwrap()
+            .get(&WeatherCapability::ForecastGrid),
+        Some(&Duration::from_secs(60 * 60))
+    );
+    assert!(matches!(
+        service.set_configuration(OPEN_METEO_PLUGIN_ID, FORECAST_REFRESH_SETTING_KEY, "7"),
+        Err(PluginError::InvalidConfiguration)
+    ));
+    assert!(matches!(
+        service.set_configuration(OPEN_METEO_PLUGIN_ID, "provider_api_key", "secret"),
+        Err(PluginError::UnknownConfiguration)
+    ));
+
+    let reopened = PluginService::new(
+        Some(directory.path().to_path_buf()),
+        store.clone(),
+        OnAirSession::with_default_store(store),
+        SimulatorBridgeService::new(Vec::new()),
+    );
+    assert_eq!(
+        plugin_view(&reopened.status().unwrap(), OPEN_METEO_PLUGIN_ID).configuration[0].value,
+        "60"
+    );
+}
+
+#[test]
 fn automatic_start_requires_and_remembers_current_standing_access() {
     let directory = tempfile::tempdir().expect("temporary directory should open");
     let store = Store::open_in_memory().expect("store should open");

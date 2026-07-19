@@ -53,6 +53,15 @@ core application from starting. The preference belongs to WyrmGrid's encrypted
 database rather than `plugin.json`, so a plugin cannot enable itself. Revoking
 access removes the corresponding automatic-start choice.
 
+Forge also exposes host-owned configuration for bounded, non-secret behaviour.
+The first settings control how often WyrmGrid asks forecast-grid and RADAR
+providers for refreshed layers. Definitions, allowed choices, validation,
+scheduling, and rendering remain in the host; plugins cannot declare arbitrary
+controls, read these records, write them, or use this mechanism for credentials.
+The values live in the encrypted WyrmGrid database and do not alter plugin API
+version 1 or its messages. This provides a safe base for future host-controlled
+plugin options without making `plugin.json` an application-settings surface.
+
 The complete framing, lifecycle, limit, and compatibility contract is in
 [protocol version 1](protocol-v1.md).
 

@@ -5,6 +5,10 @@
   } from "$lib/authorization/presentation";
   import ExplorationSummary from "$lib/exploration/ExplorationSummary.svelte";
   import { translation } from "$lib/i18n/runtime";
+  import {
+    pluginSettingChoiceKey,
+    pluginSettingPresentation,
+  } from "./configuration";
   import type {
     AuthorizationGrantLifetime,
     PluginHostView,
@@ -30,6 +34,7 @@
     onstart,
     onstop,
     onstartupchange,
+    onconfigurationchange,
     onclose,
   }: {
     open: boolean;
@@ -41,6 +46,11 @@
     onstart: (pluginId: string) => void;
     onstop: (pluginId: string) => void;
     onstartupchange: (pluginId: string, enabled: boolean) => void;
+    onconfigurationchange: (
+      pluginId: string,
+      settingKey: string,
+      value: string,
+    ) => void;
     onclose: () => void;
   } = $props();
 
@@ -253,6 +263,44 @@
                 </div>
               {/if}
 
+              {#if plugin.configuration.length > 0}
+                <div class="configuration-panel">
+                  <span class="panel-label"
+                    >{$translation("forge-host-settings")}</span
+                  >
+                  <p>{$translation("forge-host-settings-detail")}</p>
+                  <div class="configuration-grid">
+                    {#each plugin.configuration as setting (setting.key)}
+                      {@const presentation = pluginSettingPresentation(
+                        setting.key,
+                      )}
+                      <label>
+                        <span>{$translation(presentation.label)}</span>
+                        <select
+                          value={setting.value}
+                          disabled={busy}
+                          onchange={(event) =>
+                            onconfigurationchange(
+                              plugin.id,
+                              setting.key,
+                              event.currentTarget.value,
+                            )}
+                        >
+                          {#each setting.choices as choice (choice.value)}
+                            <option value={choice.value}
+                              >{$translation(
+                                pluginSettingChoiceKey(choice.value),
+                              )}</option
+                            >
+                          {/each}
+                        </select>
+                        <small>{$translation(presentation.detail)}</small>
+                      </label>
+                    {/each}
+                  </div>
+                </div>
+              {/if}
+
               {#if plugin.last_error}<p class="plugin-error" role="alert">
                   {plugin.last_error}
                 </p>{/if}
@@ -273,7 +321,9 @@
                         onstartupchange(plugin.id, event.currentTarget.checked)}
                     />
                     <span>
-                      <strong>{$translation("forge-start-with-wyrmgrid")}</strong>
+                      <strong
+                        >{$translation("forge-start-with-wyrmgrid")}</strong
+                      >
                       <small
                         >{$translation(
                           plugin.grant_lifetime === "standing"
@@ -570,6 +620,43 @@
     font-family: inherit;
     font-size: 9px;
     overflow-wrap: anywhere;
+  }
+  .configuration-panel {
+    display: grid;
+    gap: 7px;
+    margin: 10px 18px 0;
+    padding: 12px 13px;
+    border: 1px solid var(--color-line-faint);
+    background: var(--color-surface-soft);
+  }
+  .configuration-panel > p {
+    margin: 0;
+    color: var(--color-text-muted);
+    font-size: 10px;
+  }
+  .configuration-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+  }
+  .configuration-grid label {
+    display: grid;
+    gap: 5px;
+    color: var(--color-text);
+    font-size: 10px;
+  }
+  .configuration-grid select {
+    min-width: 0;
+    border: 1px solid var(--color-line-soft);
+    border-radius: 4px;
+    padding: 8px 9px;
+    color: var(--color-text);
+    background: var(--color-surface);
+    font: inherit;
+  }
+  .configuration-grid small {
+    color: var(--color-text-muted);
+    line-height: 1.45;
   }
   ul {
     display: grid;

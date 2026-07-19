@@ -91,7 +91,7 @@ It deliberately does not erase:
 
 - portable `.wyrmbackup` files wherever you saved them;
 - installed plugin files, simulator sidecars, application diagnostics, or the
-  automatic synchronization interval kept in the desktop webview; or
+  desktop webview itself; or
 - the OnAir API key or other credentials held separately by the operating
   system.
 
@@ -100,6 +100,10 @@ OnAir key. Delete portable backups separately when you no longer want them.
 Filesystem snapshots, synchronisation providers, system backups, and
 deleted-file recovery may retain prior copies, so this reset is not a promise of
 forensic secure erasure.
+
+The automatic synchronization interval, remembered Atlas layer visibility,
+optional last-map view, and host-owned plugin settings are part of the encrypted
+database. They are erased by this reset and included in a portable backup.
 
 ## Where Windows keeps local data
 

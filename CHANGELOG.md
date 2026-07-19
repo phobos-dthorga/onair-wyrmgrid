@@ -64,6 +64,12 @@ major application version.
   while leaving portable backups, installed plugins, diagnostics, simulator
   sidecars, browser-webview local storage, and separately stored operating-system
   credentials alone.
+- Added encrypted Atlas continuity preferences for automatic synchronization
+  and layer visibility, plus an opt-in **Restore my last Atlas view** choice
+  that clears its bounded camera values when disabled.
+- Added host-owned Forge settings with bounded refresh choices for forecast-grid
+  and RADAR plugins. Plugins cannot declare, read, or write these non-secret
+  records, and plugin API version 1 remains unchanged.
 
 ### Changes
 

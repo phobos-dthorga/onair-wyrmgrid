@@ -1,7 +1,7 @@
 # OnAir WyrmGrid Privacy Notice
 
-**Version and effective date:** 2026-07-19.1 (plugin startup choices and local
-database reset)
+**Version and effective date:** 2026-07-19.2 (persisted Atlas and host-owned
+plugin preferences)
 
 This preliminary notice describes information handled by official builds of
 OnAir WyrmGrid distributed by Phobos A. D'thorga. It does not describe an
@@ -56,6 +56,13 @@ professionally reviewed before a stable or commercial release.
 - A plugin can start on future WyrmGrid launches only when you separately choose
   automatic start after granting it standing access. The choice is stored in the
   encrypted local database and is invalidated by material plugin-scope changes.
+- Atlas layer visibility and the automatic synchronization interval are stored
+  in the encrypted local database. If you opt into **Restore my last Atlas
+  view**, WyrmGrid also stores the last map centre, zoom, bearing, and pitch on
+  this device; turning the option off deletes those saved camera values.
+- Host-owned plugin settings use bounded, non-secret choices stored in the
+  encrypted local database. Plugins cannot read or change those records
+  directly.
 - **Erase the WyrmGrid database** can replace the active encrypted database with
   an empty one after an acknowledgement, exact typed phrase, and restart. It
   does not erase portable backups, installed plugins, diagnostics, simulator
@@ -74,9 +81,12 @@ WyrmGrid currently keeps the following information on the user's device:
   imported community language-pack manifests in WyrmGrid's encrypted database. A
   language-pack manifest includes its translated text and may include the
   author name supplied by the pack creator;
-- interface preferences, such as the selected automatic synchronization
-  interval, in the desktop webview's local storage, and the responsive-surface
-  motion choice in WyrmGrid's encrypted database; and
+- interface preferences, including the selected automatic synchronization
+  interval, Atlas layer visibility, responsive-surface motion choice, and an
+  optional last Atlas map centre, zoom, bearing, and pitch, in WyrmGrid's
+  encrypted database. Last-view values are retained only while restoration is
+  enabled. An older webview synchronization choice is migrated once and removed
+  from webview storage after the encrypted save succeeds; and
 - while the application is running, the supplied OnAir company ID, API key,
   translated company details, and current fleet, FBO, pending-job, and staff
   observations in process memory. If the user selects **Remember this
@@ -114,6 +124,9 @@ WyrmGrid currently keeps the following information on the user's device:
 - a host-owned per-plugin automatic-start choice, when enabled. It is associated
   with the plugin identifier and exact reviewed scope and is removed when access
   is revoked;
+- host-owned, bounded, non-secret per-plugin configuration values, such as
+  weather refresh cadence. Plugin processes cannot access or write these
+  records;
 - a random 32-byte database key in the operating-system credential service,
   identified by WyrmGrid's application service and key-version label. The key
   is not stored in the database or portable backups; and

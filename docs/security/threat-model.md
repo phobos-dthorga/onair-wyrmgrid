@@ -368,6 +368,15 @@
   only after current legal acknowledgement. SimBrief Pilot IDs and usernames
   are stored only as explicitly selected encrypted metadata and never treated
   as passwords or authorization tokens;
+- automatic synchronization and Atlas layer choices are host-validated,
+  bounded preferences in SQLCipher. Last-map restoration is off by default,
+  accepts only finite camera values within map bounds, and clears the retained
+  camera when disabled. An older webview interval is copied once through the
+  same host validation and removed only after the encrypted save succeeds;
+- per-plugin configuration is defined, validated, scheduled, and rendered by
+  the host using fixed non-secret choices. A plugin cannot declare controls,
+  access the configuration table, write values, or receive them through plugin
+  API version 1, so this store is not a credential or covert host-data channel;
 - portable backup version 1 is a complete SQLCipher export under a distinct
   user password. The host refuses overwrite, validates the encrypted manifest,
   schema and cipher integrity, re-encrypts restored data with the destination
@@ -384,7 +393,8 @@
   files. An invalid marker fails closed without deletion, and the marker is
   removed last so an interrupted reset can safely resume. Portable backups,
   plugin files, diagnostics, sidecars, browser-webview local storage, the device
-  key, and separately stored provider credentials are outside this operation.
+  key, and separately stored provider credentials are outside this operation;
+  Atlas and host-owned plugin preferences inside SQLite are erased.
   Filesystem recovery and external copies remain a disclosed residual risk
   rather than a secure-erasure claim;
 - Hoard Timeline remains read-only, persistently identifies mutually exclusive

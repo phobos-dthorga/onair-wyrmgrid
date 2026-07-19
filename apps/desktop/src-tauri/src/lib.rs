@@ -36,6 +36,7 @@ struct DesktopState {
     themes: wyrmgrid_application::ThemeSettingsService<wyrmgrid_storage::Store>,
     languages: wyrmgrid_application::LanguageSettingsService<wyrmgrid_storage::Store>,
     display: wyrmgrid_application::DisplaySettingsService<wyrmgrid_storage::Store>,
+    atlas_preferences: wyrmgrid_application::AtlasPreferencesService<wyrmgrid_storage::Store>,
     observability: observability::Controller,
 }
 
@@ -476,6 +477,35 @@ fn update_display_preferences(
 }
 
 #[tauri::command]
+fn atlas_preferences(
+    state: tauri::State<'_, DesktopState>,
+) -> Result<wyrmgrid_application::AtlasPreferences, wyrmgrid_application::OperationError> {
+    state.atlas_preferences.status().map_err(operation_error)
+}
+
+#[tauri::command]
+fn update_atlas_preferences(
+    state: tauri::State<'_, DesktopState>,
+    preferences: wyrmgrid_application::AtlasPreferences,
+) -> Result<wyrmgrid_application::AtlasPreferences, wyrmgrid_application::OperationError> {
+    state
+        .atlas_preferences
+        .update(preferences)
+        .map_err(operation_error)
+}
+
+#[tauri::command]
+fn update_atlas_view(
+    state: tauri::State<'_, DesktopState>,
+    view: wyrmgrid_application::AtlasView,
+) -> Result<wyrmgrid_application::AtlasPreferences, wyrmgrid_application::OperationError> {
+    state
+        .atlas_preferences
+        .update_view(view)
+        .map_err(operation_error)
+}
+
+#[tauri::command]
 fn select_theme(
     state: tauri::State<'_, DesktopState>,
     theme_id: String,
@@ -545,6 +575,19 @@ fn update_plugin_startup_preference(
     state
         .plugins
         .set_start_with_wyrmgrid(&plugin_id, enabled)
+        .map_err(operation_error)
+}
+
+#[tauri::command]
+fn update_plugin_configuration(
+    state: tauri::State<'_, DesktopState>,
+    plugin_id: String,
+    setting_key: String,
+    value: String,
+) -> Result<wyrmgrid_application::PluginHostView, wyrmgrid_application::OperationError> {
+    state
+        .plugins
+        .set_configuration(&plugin_id, &setting_key, &value)
         .map_err(operation_error)
 }
 
@@ -793,6 +836,8 @@ pub fn run() {
             let themes = wyrmgrid_application::ThemeSettingsService::new(store.clone());
             let languages = wyrmgrid_application::LanguageSettingsService::new(store.clone());
             let display = wyrmgrid_application::DisplaySettingsService::new(store.clone());
+            let atlas_preferences =
+                wyrmgrid_application::AtlasPreferencesService::new(store.clone());
             let authorization_runtime = wyrmgrid_application::AuthorizationRuntime::default();
             let security = wyrmgrid_application::SecurityCentreService::with_runtime(
                 store.clone(),
@@ -856,6 +901,7 @@ pub fn run() {
                 themes,
                 languages,
                 display,
+                atlas_preferences,
                 observability: observability::Controller::new(legal_status.telemetry_enabled),
             });
             if let Some(provider_id) = automatic_provider {
@@ -933,6 +979,9 @@ pub fn run() {
             theme_status,
             display_preferences,
             update_display_preferences,
+            atlas_preferences,
+            update_atlas_preferences,
+            update_atlas_view,
             select_theme,
             import_theme,
             language_status,
@@ -941,6 +990,7 @@ pub fn run() {
             plugin_host_status,
             approve_plugin_permissions,
             update_plugin_startup_preference,
+            update_plugin_configuration,
             revoke_plugin_permissions,
             start_plugin,
             stop_plugin,

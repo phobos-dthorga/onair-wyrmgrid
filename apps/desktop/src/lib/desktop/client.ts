@@ -61,6 +61,11 @@ const operationErrorMessageKeys: Readonly<Record<string, TranslationKey>> = {
     "error-data-protection-reset-confirmation-required",
   "plugin.standing_permission_required":
     "error-plugin-standing-permission-required",
+  "plugin.unknown_configuration": "error-plugin-unknown-configuration",
+  "plugin.invalid_configuration": "error-plugin-invalid-configuration",
+  "atlas.preferences_storage_unavailable":
+    "error-atlas-preferences-storage-unavailable",
+  "atlas.invalid_preference": "error-atlas-invalid-preference",
 };
 
 function normalizeOperationError(value: unknown): OperationError {

@@ -8,7 +8,7 @@ grammar, plurals, number and date formatting, and bidirectional text.
 
 ## Implemented foundation
 
-- `locales/en-AU.json` is source catalogue version 13.
+- `locales/en-AU.json` is source catalogue version 14.
 - Language-pack manifest schema version 1 is defined in
   `schemas/language-pack-v1.schema.json`.
 - Rust validates and canonicalizes imported packs before SQLite persistence.
@@ -59,12 +59,14 @@ bundled through a future trusted release path.
 Source catalogue version 6 adds the protected `data-protection-` namespace for
 encryption, backup-password, destructive restore, and licence wording. Version
 5 community packs are rejected rather than being silently reinterpreted;
-authors must review the version 13 catalogue, update `source_catalog_version`,
+authors must review the version 14 catalogue, update `source_catalog_version`,
 and import the pack again. Existing ordinary translated message keys keep their
 meaning. Version 5 previously introduced the protected `security-` namespace.
 
-Source catalogue version 13 adds host-controlled plugin automatic-start wording
-and the protected local-database reset warnings and confirmation. Version 12
+Source catalogue version 14 adds Atlas continuity choices, protected last-view
+retention wording, and host-owned plugin-setting guidance. Version 13 added
+host-controlled plugin automatic-start wording and the protected local-database
+reset warnings and confirmation. Version 12
 added the Atlas detailed-weather renderer status,
 fallback, adaptive-quality, and source-boundary messages. Version 11 added the
 weather-graphics quality, phenomenon, and flash-safety preferences. Version 10
