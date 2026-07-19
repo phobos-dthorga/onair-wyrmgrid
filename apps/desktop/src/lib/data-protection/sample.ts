@@ -5,4 +5,5 @@ export const browserDataProtectionStatus: DataProtectionStatus = {
   device_key_protected: true,
   portable_backup_format_version: 1,
   pending_restore: false,
+  local_data_reset_confirmation: "ERASE WYRMGRID DATA",
 };

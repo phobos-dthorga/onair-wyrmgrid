@@ -70,6 +70,37 @@ A normal setup upgrade does not remove application data. Do not delete the
 WyrmGrid application-data directory as part of an update. Older installers are
 blocked from replacing a newer installed version.
 
+## Start over with an empty database
+
+Use **Settings → Encrypted data & backups → Erase the WyrmGrid database** only
+when you deliberately want to start over on this installation. Create a portable
+backup first if you may want any of the current information again.
+
+The control names the information it will erase, requires a separate
+acknowledgement, and then requires the exact phrase `ERASE WYRMGRID DATA`.
+WyrmGrid schedules the reset and restarts. Before opening SQLite again, startup
+removes the active database and any pending or rollback database left by a
+restore, then creates a new empty encrypted database.
+
+The reset erases all records and preferences stored in SQLite, including OnAir
+and Hoard history, flight operations, simulator recordings, remembered provider
+identifiers, customisation choices, plugin permissions and startup choices,
+authorization history, legal acknowledgements, and telemetry consent.
+
+It deliberately does not erase:
+
+- portable `.wyrmbackup` files wherever you saved them;
+- installed plugin files, simulator sidecars, application diagnostics, or the
+  automatic synchronization interval kept in the desktop webview; or
+- the OnAir API key or other credentials held separately by the operating
+  system.
+
+Use **Security & permissions → Forget saved details** to remove a remembered
+OnAir key. Delete portable backups separately when you no longer want them.
+Filesystem snapshots, synchronisation providers, system backups, and
+deleted-file recovery may retain prior copies, so this reset is not a promise of
+forensic secure erasure.
+
 ## Where Windows keeps local data
 
 The persistent application-data directory is:

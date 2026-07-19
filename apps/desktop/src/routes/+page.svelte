@@ -43,6 +43,7 @@
     createPortableBackup,
     loadDataProtectionStatus,
     preparePortableRestore,
+    resetLocalData,
   } from "$lib/data-protection/client";
   import DataProtectionDialog from "$lib/data-protection/DataProtectionDialog.svelte";
   import { browserDataProtectionStatus } from "$lib/data-protection/sample";
@@ -93,6 +94,7 @@
     revokePluginPermissions,
     startPlugin,
     stopPlugin,
+    updatePluginStartupPreference,
   } from "$lib/forge/client";
   import {
     forgePreviewApproved,
@@ -1366,6 +1368,22 @@
     }
   }
 
+  async function runLocalDataReset(confirmation: string): Promise<void> {
+    if (!isDesktopRuntime() || dataProtectionBusy) return;
+    dataProtectionBusy = true;
+    dataProtectionError = "";
+    dataProtectionSuccess = "";
+    try {
+      await resetLocalData(confirmation);
+    } catch (error) {
+      dataProtectionError = operationErrorMessage(
+        error,
+        "WyrmGrid could not schedule the local database reset.",
+      );
+      dataProtectionBusy = false;
+    }
+  }
+
   async function refreshDispatchStatus(): Promise<void> {
     if (!isDesktopRuntime()) return;
     try {
@@ -1595,6 +1613,37 @@
       pluginBusy = false;
       if (showSecurityCentre && isDesktopRuntime())
         void refreshSecurityCentre();
+    }
+  }
+
+  async function updatePluginAutomaticStart(
+    pluginId: string,
+    enabled: boolean,
+  ): Promise<void> {
+    if (pluginBusy) return;
+    pluginBusy = true;
+    pluginError = "";
+    try {
+      if (!isDesktopRuntime()) {
+        pluginHost = {
+          ...pluginHost,
+          plugins: pluginHost.plugins.map((plugin) =>
+            plugin.id === pluginId
+              ? { ...plugin, start_with_wyrmgrid: enabled }
+              : plugin,
+          ),
+        };
+        return;
+      }
+      pluginHost = await updatePluginStartupPreference(pluginId, enabled);
+    } catch (error) {
+      pluginError = operationErrorMessage(
+        error,
+        "WyrmGrid could not save that plugin startup choice.",
+      );
+      await refreshPluginHost();
+    } finally {
+      pluginBusy = false;
     }
   }
 
@@ -3137,6 +3186,7 @@
       void runPortableBackup(destination, password, confirmation)}
     onrestore={(source, password, confirmed) =>
       void runPortableRestore(source, password, confirmed)}
+    onreset={(confirmation) => void runLocalDataReset(confirmation)}
     onlicenses={() => {
       enterDialog("licenses");
     }}
@@ -3228,6 +3278,8 @@
     onrevoke={(pluginId) => void runPluginAction("revoke", pluginId)}
     onstart={(pluginId) => void runPluginAction("start", pluginId)}
     onstop={(pluginId) => void runPluginAction("stop", pluginId)}
+    onstartupchange={(pluginId, enabled) =>
+      void updatePluginAutomaticStart(pluginId, enabled)}
     onclose={leaveDialog}
   />
 {/if}

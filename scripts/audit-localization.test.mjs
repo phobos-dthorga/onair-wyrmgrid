@@ -31,8 +31,8 @@ test("reports unknown literal and constructed translation keys", () => {
 
 test("reads compatibility versions and reports missing Dispatch mappings", () => {
   assert.equal(
-    declaredVersion("SOURCE_CATALOG_VERSION: u32 = 12;", /u32 = (\d+)/),
-    12,
+    declaredVersion("SOURCE_CATALOG_VERSION: u32 = 13;", /u32 = (\d+)/),
+    13,
   );
   assert.deepEqual(
     missingDispatchFindingMappings(

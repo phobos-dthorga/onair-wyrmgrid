@@ -1,6 +1,7 @@
 # OnAir WyrmGrid Privacy Notice
 
-**Version and effective date:** 2026-07-17.4 (optional weather provider plugins)
+**Version and effective date:** 2026-07-19.1 (plugin startup choices and local
+database reset)
 
 This preliminary notice describes information handled by official builds of
 OnAir WyrmGrid distributed by Phobos A. D'thorga. It does not describe an
@@ -52,6 +53,14 @@ professionally reviewed before a stable or commercial release.
   operate when both the user and the official build enable Sentry.
 - Imported community language packs, their message text, and optional author
   metadata remain local and are not sent to translation services.
+- A plugin can start on future WyrmGrid launches only when you separately choose
+  automatic start after granting it standing access. The choice is stored in the
+  encrypted local database and is invalidated by material plugin-scope changes.
+- **Erase the WyrmGrid database** can replace the active encrypted database with
+  an empty one after an acknowledgement, exact typed phrase, and restart. It
+  does not erase portable backups, installed plugins, diagnostics, simulator
+  sidecars, browser-webview local storage, or credentials held separately by
+  the operating system.
 - WyrmGrid does not sell personal information.
 
 ## Information kept locally
@@ -101,7 +110,10 @@ WyrmGrid currently keeps the following information on the user's device:
 - symbolic authorization grant and revoke decisions, including actor ID,
   capability scope revision, capability count, and decision time. These records
   are limited to the newest 4,096 decisions and never contain API keys, raw
-  plugin output, or simulator payloads; and
+  plugin output, or simulator payloads;
+- a host-owned per-plugin automatic-start choice, when enabled. It is associated
+  with the plugin identifier and exact reviewed scope and is removed when access
+  is revoked;
 - a random 32-byte database key in the operating-system credential service,
   identified by WyrmGrid's application service and key-version label. The key
   is not stored in the database or portable backups; and
@@ -219,7 +231,9 @@ Raw responses remain inside the corresponding provider process. Open-Meteo
 publishes bounded numeric samples; RainViewer publishes validated PNG bytes.
 WyrmGrid retains only the most recent valid in-memory layer and removes the
 active contribution when the plugin stops. Neither provider is contacted until
-its requested capabilities are approved and it is started in Forge.
+its requested capabilities are approved and it is started in Forge, or the user
+has separately approved standing access and enabled automatic start. Automatic
+start is off by default and runs only after current legal acknowledgement.
 
 ### Optional Sentry diagnostics
 
@@ -277,6 +291,15 @@ local data. The OnAir key stored by Windows is outside portable backups. Local
 preferences and imported customisation manifests remain until changed, removed
 by a management function, or deleted with the application's local data.
 Version 1 does not yet provide an individual language-pack deletion control.
+The **Erase the WyrmGrid database** control removes the active, pending, and
+rollback SQLite databases during restart and creates a new empty encrypted
+database. This deletes every SQLite-held record and preference, including plugin
+permissions, automatic-start choices, legal acknowledgements, and telemetry
+consent. It deliberately leaves installed files, diagnostics, portable backups,
+browser-webview local storage, and operating-system credentials in place; those
+have their own deletion controls or must be removed separately. Filesystem
+snapshots and recovery tools may still retain deleted data, so this is not
+forensic secure erasure.
 Accepted flight operations and their immutable revisions remain until the local
 database is deleted or a future operation-management control removes them; the
 current foundation does not yet offer per-operation deletion.

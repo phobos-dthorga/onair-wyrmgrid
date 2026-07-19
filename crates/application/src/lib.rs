@@ -898,6 +898,9 @@ impl From<DataProtectionError> for OperationError {
                 false,
                 false,
             ),
+            DataProtectionError::LocalDataResetConfirmationRequired => {
+                ("data_protection.reset_confirmation_required", false, false)
+            }
             DataProtectionError::DestinationExists => {
                 ("data_protection.destination_exists", false, false)
             }
@@ -994,6 +997,9 @@ impl From<PluginError> for OperationError {
             PluginError::UnsupportedRuntime => ("plugin.unsupported_runtime", false, false),
             PluginError::UnsupportedCapability => ("plugin.unsupported_capability", false, false),
             PluginError::PermissionRequired => ("plugin.permission_required", false, false),
+            PluginError::StandingPermissionRequired => {
+                ("plugin.standing_permission_required", false, false)
+            }
             PluginError::AlreadyRunning => ("plugin.already_running", false, false),
             PluginError::NotRunning => ("plugin.not_running", false, false),
             PluginError::RuntimeUnavailable => ("plugin.runtime_unavailable", false, false),

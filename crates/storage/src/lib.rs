@@ -4,7 +4,7 @@ mod data_protection;
 
 pub use data_protection::{
     DatabaseKey, PORTABLE_BACKUP_FORMAT_VERSION, PortableBackupRecord, PortableRestoreRecord,
-    encrypted_database_state_exists,
+    apply_pending_local_data_reset, encrypted_database_state_exists,
 };
 
 use std::path::{Path, PathBuf};
@@ -33,7 +33,8 @@ const ATLAS_RENDERING_PREFERENCES_SCHEMA: &str =
     include_str!("../migrations/0014_atlas_rendering_preferences.sql");
 const ATLAS_WEATHER_GRAPHICS_PREFERENCES_SCHEMA: &str =
     include_str!("../migrations/0015_atlas_weather_graphics_preferences.sql");
-pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 15;
+const PLUGIN_PREFERENCES_SCHEMA: &str = include_str!("../migrations/0016_plugin_preferences.sql");
+pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 16;
 
 #[derive(Debug, Error)]
 pub enum StorageError {
@@ -99,6 +100,13 @@ pub struct AuthorizationDecisionRecord {
     pub decision: String,
     pub capability_count: u32,
     pub decided_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PluginPreferencesRecord {
+    pub plugin_id: String,
+    pub scope_revision: String,
+    pub start_with_wyrmgrid: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -272,6 +280,7 @@ impl Store {
         connection.execute_batch(FLIGHT_OPERATIONS_SCHEMA)?;
         connection.execute_batch(ATLAS_RENDERING_PREFERENCES_SCHEMA)?;
         connection.execute_batch(ATLAS_WEATHER_GRAPHICS_PREFERENCES_SCHEMA)?;
+        connection.execute_batch(PLUGIN_PREFERENCES_SCHEMA)?;
         if path.is_some() {
             data_protection::mark_wyrmgrid_database(&connection)?;
         }
@@ -284,6 +293,14 @@ impl Store {
 
     pub fn is_persistent(&self) -> bool {
         self.persistent
+    }
+
+    pub fn prepare_local_data_reset(&self) -> Result<(), StorageError> {
+        let path = self
+            .path
+            .as_deref()
+            .ok_or(StorageError::PersistentStorageRequired)?;
+        data_protection::prepare_local_data_reset(path)
     }
 
     pub fn load_active_flight_operation_revision_record(
@@ -1553,6 +1570,69 @@ impl Store {
             )?;
         }
         transaction.commit().map_err(StorageError::from)
+    }
+
+    pub fn load_plugin_preferences_record(
+        &self,
+        plugin_id: &str,
+    ) -> Result<Option<PluginPreferencesRecord>, StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection
+            .query_row(
+                "SELECT plugin_id, scope_revision, start_with_wyrmgrid
+                 FROM plugin_preferences
+                 WHERE plugin_id = ?1",
+                [plugin_id],
+                |row| {
+                    Ok(PluginPreferencesRecord {
+                        plugin_id: row.get(0)?,
+                        scope_revision: row.get(1)?,
+                        start_with_wyrmgrid: row.get(2)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(StorageError::from)
+    }
+
+    pub fn save_plugin_preferences_record(
+        &self,
+        record: &PluginPreferencesRecord,
+    ) -> Result<(), StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection.execute(
+            "INSERT INTO plugin_preferences (
+                plugin_id, scope_revision, start_with_wyrmgrid
+             ) VALUES (?1, ?2, ?3)
+             ON CONFLICT(plugin_id) DO UPDATE SET
+                scope_revision = excluded.scope_revision,
+                start_with_wyrmgrid = excluded.start_with_wyrmgrid,
+                updated_at = CURRENT_TIMESTAMP",
+            params![
+                record.plugin_id,
+                record.scope_revision,
+                record.start_with_wyrmgrid
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_plugin_preferences_record(&self, plugin_id: &str) -> Result<(), StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection.execute(
+            "DELETE FROM plugin_preferences WHERE plugin_id = ?1",
+            [plugin_id],
+        )?;
+        Ok(())
     }
 }
 

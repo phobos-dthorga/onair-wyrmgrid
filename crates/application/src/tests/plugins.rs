@@ -30,6 +30,7 @@ fn installs_all_bundled_plugins_with_no_implicit_grants() {
     assert_eq!(status.plugins.len(), 4);
     let bundled = plugin_view(&status, BUNDLED_PLUGIN_ID);
     assert!(bundled.granted_permissions.is_empty());
+    assert!(!bundled.start_with_wyrmgrid);
     assert_eq!(bundled.state, PluginProcessState::Stopped);
     for provider_id in [
         OPEN_METEO_PLUGIN_ID,
@@ -45,6 +46,82 @@ fn installs_all_bundled_plugins_with_no_implicit_grants() {
         service.start(BUNDLED_PLUGIN_ID),
         Err(PluginError::PermissionRequired)
     ));
+}
+
+#[test]
+fn automatic_start_requires_and_remembers_current_standing_access() {
+    let directory = tempfile::tempdir().expect("temporary directory should open");
+    let store = Store::open_in_memory().expect("store should open");
+    let service = PluginService::new(
+        Some(directory.path().to_path_buf()),
+        store.clone(),
+        OnAirSession::with_default_store(store.clone()),
+        SimulatorBridgeService::new(Vec::new()),
+    );
+
+    service
+        .approve_requested_permissions_with_lifetime(
+            BUNDLED_PLUGIN_ID,
+            AuthorizationGrantLifetime::Session,
+        )
+        .expect("session permission should approve");
+    assert!(matches!(
+        service.set_start_with_wyrmgrid(BUNDLED_PLUGIN_ID, true),
+        Err(PluginError::StandingPermissionRequired)
+    ));
+    service
+        .approve_requested_permissions(BUNDLED_PLUGIN_ID)
+        .expect("standing permissions should approve");
+    let enabled = service
+        .set_start_with_wyrmgrid(BUNDLED_PLUGIN_ID, true)
+        .expect("automatic startup should enable");
+    assert!(plugin_view(&enabled, BUNDLED_PLUGIN_ID).start_with_wyrmgrid);
+
+    let reopened = PluginService::new(
+        Some(directory.path().to_path_buf()),
+        store.clone(),
+        OnAirSession::with_default_store(store),
+        SimulatorBridgeService::new(Vec::new()),
+    );
+    assert!(plugin_view(&reopened.status().unwrap(), BUNDLED_PLUGIN_ID).start_with_wyrmgrid);
+
+    let revoked = reopened
+        .revoke_permissions(BUNDLED_PLUGIN_ID)
+        .expect("access should revoke");
+    assert!(!plugin_view(&revoked, BUNDLED_PLUGIN_ID).start_with_wyrmgrid);
+}
+
+#[test]
+fn plugin_scope_changes_disable_automatic_start_until_reviewed_again() {
+    let directory = tempfile::tempdir().expect("temporary directory should open");
+    let store = Store::open_in_memory().expect("store should open");
+    let service = PluginService::new(
+        Some(directory.path().to_path_buf()),
+        store.clone(),
+        OnAirSession::with_default_store(store),
+        SimulatorBridgeService::new(Vec::new()),
+    );
+    service
+        .approve_requested_permissions(BUNDLED_PLUGIN_ID)
+        .expect("permissions should approve");
+    service
+        .set_start_with_wyrmgrid(BUNDLED_PLUGIN_ID, true)
+        .expect("automatic startup should enable");
+
+    let manifest_path = directory.path().join(BUNDLED_PLUGIN_ID).join("plugin.json");
+    let mut manifest: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(&manifest_path).expect("manifest should read"),
+    )
+    .expect("manifest should parse");
+    manifest["version"] = serde_json::Value::String("0.2.0".into());
+    std::fs::write(
+        manifest_path,
+        serde_json::to_vec_pretty(&manifest).expect("manifest should serialize"),
+    )
+    .expect("manifest should save");
+
+    let status = service.status().expect("status should load");
+    assert!(!plugin_view(&status, BUNDLED_PLUGIN_ID).start_with_wyrmgrid);
 }
 
 #[test]
@@ -184,6 +261,99 @@ fn one_launch_permission_is_not_shown_as_active_after_the_plugin_stops() {
         service.start(BUNDLED_PLUGIN_ID),
         Err(PluginError::PermissionRequired)
     ));
+}
+
+#[test]
+fn manual_stop_preserves_the_saved_automatic_start_choice() {
+    let directory = tempfile::tempdir().expect("temporary directory should open");
+    let store = Store::open_in_memory().expect("store should open");
+    let service = PluginService::new(
+        Some(directory.path().to_path_buf()),
+        store.clone(),
+        OnAirSession::with_default_store(store),
+        SimulatorBridgeService::new(Vec::new()),
+    );
+    service
+        .approve_requested_permissions(BUNDLED_PLUGIN_ID)
+        .expect("permissions should approve");
+    service
+        .set_start_with_wyrmgrid(BUNDLED_PLUGIN_ID, true)
+        .expect("automatic startup should enable");
+    match service.start(BUNDLED_PLUGIN_ID) {
+        Ok(_) => {}
+        Err(PluginError::RuntimeUnavailable) => return,
+        Err(error) => panic!("plugin should start: {error}"),
+    }
+
+    let stopped = service.stop(BUNDLED_PLUGIN_ID).expect("plugin should stop");
+    let plugin = plugin_view(&stopped, BUNDLED_PLUGIN_ID);
+    assert_eq!(plugin.state, PluginProcessState::Stopped);
+    assert!(plugin.start_with_wyrmgrid);
+}
+
+#[test]
+fn automatic_start_isolates_a_failed_plugin_from_the_others() {
+    const FAILED_PLUGIN_ID: &str = "org.wyrmgrid.test.failed-startup";
+    let directory = tempfile::tempdir().expect("temporary directory should open");
+    let failed_root = directory.path().join(FAILED_PLUGIN_ID);
+    let failed_source = failed_root.join("src");
+    std::fs::create_dir_all(&failed_source).expect("test plugin directory should create");
+    std::fs::write(
+        failed_root.join("plugin.json"),
+        r#"{
+          "id":"org.wyrmgrid.test.failed-startup",
+          "name":"Failed Startup Test",
+          "version":"0.1.0",
+          "api_version":1,
+          "author":"WyrmGrid tests",
+          "runtime":"python",
+          "entry_point":"src/main.py",
+          "permissions":["map_layers_publish"]
+        }"#,
+    )
+    .expect("test manifest should write");
+    std::fs::write(failed_source.join("main.py"), "raise SystemExit(1)\n")
+        .expect("test entry point should write");
+
+    let store = Store::open_in_memory().expect("store should open");
+    let service = PluginService::new(
+        Some(directory.path().to_path_buf()),
+        store.clone(),
+        OnAirSession::with_default_store(store),
+        SimulatorBridgeService::new(Vec::new()),
+    );
+    for plugin_id in [BUNDLED_PLUGIN_ID, FAILED_PLUGIN_ID] {
+        service
+            .approve_requested_permissions(plugin_id)
+            .expect("standing permissions should approve");
+        service
+            .set_start_with_wyrmgrid(plugin_id, true)
+            .expect("automatic startup should enable");
+    }
+
+    let outcome = service
+        .start_enabled()
+        .expect("individual startup failures should be contained");
+    if outcome
+        .started_plugin_ids
+        .contains(&BUNDLED_PLUGIN_ID.to_owned())
+    {
+        assert_eq!(outcome.started_plugin_ids, vec![BUNDLED_PLUGIN_ID]);
+        assert_eq!(outcome.failures.len(), 1);
+        assert_eq!(outcome.failures[0].plugin_id, FAILED_PLUGIN_ID);
+        let status = service.status().expect("status should remain available");
+        assert!(plugin_view(&status, FAILED_PLUGIN_ID).last_error.is_some());
+        service.stop(BUNDLED_PLUGIN_ID).expect("plugin should stop");
+    } else {
+        assert!(outcome.started_plugin_ids.is_empty());
+        assert_eq!(outcome.failures.len(), 2);
+        assert!(
+            outcome
+                .failures
+                .iter()
+                .all(|failure| failure.message == PluginError::RuntimeUnavailable.to_string())
+        );
+    }
 }
 
 #[test]

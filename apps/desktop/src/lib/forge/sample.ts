@@ -16,6 +16,7 @@ const previewPlugin: PluginView = {
   network_origins: [],
   requested_permissions: [...requestedPermissions],
   granted_permissions: [],
+  start_with_wyrmgrid: false,
   state: "stopped",
   published_layer_count: 0,
   published_weather_layer_count: 0,

@@ -1,6 +1,7 @@
 use std::ffi::c_void;
 use std::fmt;
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use rusqlite::{Connection, OpenFlags, OptionalExtension, ffi, params};
@@ -10,6 +11,9 @@ use crate::{CURRENT_SCHEMA_VERSION, StorageError, Store};
 
 pub const PORTABLE_BACKUP_FORMAT_VERSION: u32 = 1;
 const DATABASE_KEY_BYTES: usize = 32;
+const LOCAL_DATA_RESET_MARKER: &[u8] = b"wyrmgrid-local-data-reset-v1\n";
+const LOCAL_DATA_RESET_SUFFIX: &str = ".reset-pending";
+const LOCAL_DATA_RESET_PARTIAL_SUFFIX: &str = ".reset-pending.partial";
 const WYRMGRID_APPLICATION_ID: i64 = 1_465_471_565;
 
 #[derive(Zeroize, ZeroizeOnDrop)]
@@ -186,6 +190,52 @@ pub fn encrypted_database_state_exists(active_path: impl AsRef<Path>) -> bool {
     active_path.exists()
         || pending_path(active_path).exists()
         || rollback_path(active_path).exists()
+}
+
+pub(crate) fn prepare_local_data_reset(active_path: &Path) -> Result<(), StorageError> {
+    let marker = reset_marker_path(active_path);
+    if marker.exists() {
+        return validate_reset_marker(&marker);
+    }
+    let partial = sibling_path(active_path, LOCAL_DATA_RESET_PARTIAL_SUFFIX);
+    remove_file_if_present(&partial)?;
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&partial)
+        .map_err(StorageError::FileOperation)?;
+    file.write_all(LOCAL_DATA_RESET_MARKER)
+        .and_then(|_| file.sync_all())
+        .map_err(StorageError::FileOperation)?;
+    fs::rename(&partial, marker).map_err(StorageError::FileOperation)
+}
+
+pub fn apply_pending_local_data_reset(active_path: impl AsRef<Path>) -> Result<bool, StorageError> {
+    let active_path = active_path.as_ref();
+    let marker = reset_marker_path(active_path);
+    if !marker.exists() {
+        return Ok(false);
+    }
+    validate_reset_marker(&marker)?;
+    remove_database_set(&pending_path(active_path))?;
+    remove_database_set(&rollback_path(active_path))?;
+    remove_database_set(active_path)?;
+    remove_file_if_present(&sibling_path(active_path, LOCAL_DATA_RESET_PARTIAL_SUFFIX))?;
+    remove_file_if_present(&marker)?;
+    Ok(true)
+}
+
+fn validate_reset_marker(path: &Path) -> Result<(), StorageError> {
+    let marker = fs::read(path).map_err(StorageError::FileOperation)?;
+    if marker == LOCAL_DATA_RESET_MARKER {
+        Ok(())
+    } else {
+        Err(StorageError::InvalidRecord)
+    }
+}
+
+fn reset_marker_path(active_path: &Path) -> PathBuf {
+    sibling_path(active_path, LOCAL_DATA_RESET_SUFFIX)
 }
 
 pub(crate) fn open_encrypted_connection(

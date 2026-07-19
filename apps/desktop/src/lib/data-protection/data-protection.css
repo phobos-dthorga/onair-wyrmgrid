@@ -132,6 +132,59 @@
   border-color: var(--color-danger-border);
 }
 
+.local-data-reset {
+  display: grid;
+  gap: 14px;
+  margin: 0 24px 22px;
+  border: 1px solid var(--color-danger-border);
+  padding: 18px;
+  background: var(--color-danger-soft);
+}
+
+.local-data-reset > div:first-child p,
+.reset-losses p,
+.reset-losses li {
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+.reset-losses {
+  display: grid;
+  gap: 7px;
+  border: 1px solid var(--color-line-faint);
+  padding: 12px 14px;
+  background: var(--color-surface-soft-translucent);
+  font-size: 10px;
+}
+
+.reset-losses strong {
+  color: var(--color-danger);
+}
+
+.reset-losses ul {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 5px;
+  padding-left: 18px;
+}
+
+.local-data-reset > label:not(.reset-acknowledgement) {
+  display: grid;
+  gap: 6px;
+  color: var(--color-text-muted);
+  font-size: 10px;
+}
+
+.local-data-reset input[type="text"] {
+  border: 1px solid var(--color-danger-border);
+  border-radius: 4px;
+  padding: 10px;
+  color: var(--color-text);
+  background: var(--color-surface);
+  font: inherit;
+  letter-spacing: 0.06em;
+}
+
 .protection-workflow label {
   display: grid;
   gap: 6px;
@@ -168,6 +221,7 @@
 .file-choice,
 .primary-action,
 .restore-action,
+.reset-action,
 .data-protection-dialog > footer button,
 .data-protection-loading button {
   border: 1px solid var(--color-line-soft);
@@ -197,6 +251,14 @@
   border-color: var(--color-danger-border) !important;
   color: var(--color-danger) !important;
   background: var(--color-danger-soft) !important;
+}
+
+.reset-action {
+  justify-self: start;
+  border-color: var(--color-danger) !important;
+  color: var(--color-canvas) !important;
+  background: var(--color-danger) !important;
+  font-weight: 700 !important;
 }
 
 .password-warning {

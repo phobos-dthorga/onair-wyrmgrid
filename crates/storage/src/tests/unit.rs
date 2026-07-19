@@ -6,7 +6,54 @@ fn initializes_the_database_schema() {
     let store = Store::open_in_memory().expect("in-memory database should open");
     assert_eq!(
         store.schema_version().expect("version should be readable"),
-        15
+        16
+    );
+}
+
+#[test]
+fn plugin_startup_preferences_round_trip_and_delete() {
+    let store = Store::open_in_memory().expect("store should initialize");
+    let record = PluginPreferencesRecord {
+        plugin_id: "org.wyrmgrid.test.weather".into(),
+        scope_revision: "plugin:org.wyrmgrid.test.weather:v1".into(),
+        start_with_wyrmgrid: true,
+    };
+
+    assert_eq!(
+        store
+            .load_plugin_preferences_record(&record.plugin_id)
+            .unwrap(),
+        None
+    );
+    store.save_plugin_preferences_record(&record).unwrap();
+    assert_eq!(
+        store
+            .load_plugin_preferences_record(&record.plugin_id)
+            .unwrap(),
+        Some(record.clone())
+    );
+
+    let revised = PluginPreferencesRecord {
+        scope_revision: "plugin:org.wyrmgrid.test.weather:v2".into(),
+        start_with_wyrmgrid: false,
+        ..record.clone()
+    };
+    store.save_plugin_preferences_record(&revised).unwrap();
+    assert_eq!(
+        store
+            .load_plugin_preferences_record(&record.plugin_id)
+            .unwrap(),
+        Some(revised)
+    );
+
+    store
+        .delete_plugin_preferences_record(&record.plugin_id)
+        .unwrap();
+    assert_eq!(
+        store
+            .load_plugin_preferences_record(&record.plugin_id)
+            .unwrap(),
+        None
     );
 }
 

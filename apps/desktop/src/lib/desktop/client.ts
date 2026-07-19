@@ -57,6 +57,10 @@ export function operationErrorMessage(
 
 const operationErrorMessageKeys: Readonly<Record<string, TranslationKey>> = {
   "onair.rate_limited": "error-onair-rate-limited",
+  "data_protection.reset_confirmation_required":
+    "error-data-protection-reset-confirmation-required",
+  "plugin.standing_permission_required":
+    "error-plugin-standing-permission-required",
 };
 
 function normalizeOperationError(value: unknown): OperationError {

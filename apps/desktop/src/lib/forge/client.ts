@@ -26,6 +26,16 @@ export function revokePluginPermissions(
   });
 }
 
+export function updatePluginStartupPreference(
+  pluginId: string,
+  enabled: boolean,
+): Promise<PluginHostView> {
+  return invokeDesktop<PluginHostView>("update_plugin_startup_preference", {
+    pluginId,
+    enabled,
+  });
+}
+
 export function startPlugin(pluginId: string): Promise<PluginHostView> {
   return invokeDesktop<PluginHostView>("start_plugin", { pluginId });
 }

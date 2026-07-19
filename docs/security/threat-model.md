@@ -377,6 +377,16 @@
   strings after the operation, never persisted, logged, sent to plugins, or
   recoverable by WyrmGrid. Restore requires a separate momentary destructive
   confirmation and runs outside the interface thread;
+- a whole-database reset requires both an explicit acknowledgement and an exact
+  host-validated phrase. The application service writes a versioned marker,
+  restart closes every database user, and startup validates the marker before
+  deleting only the active, pending, rollback, WAL, and shared-memory database
+  files. An invalid marker fails closed without deletion, and the marker is
+  removed last so an interrupted reset can safely resume. Portable backups,
+  plugin files, diagnostics, sidecars, browser-webview local storage, the device
+  key, and separately stored provider credentials are outside this operation.
+  Filesystem recovery and external copies remain a disclosed residual risk
+  rather than a secure-erasure claim;
 - Hoard Timeline remains read-only, persistently identifies mutually exclusive
   LIVE or HISTORICAL workspace mode separately from data availability, shows
   the selected time and each resource's actual observation time, and offers an
@@ -663,6 +673,11 @@ to an external report.
 - Grants are denied by default and bound to actor kind, actor ID, exact
   capabilities, a scope revision, and an explicit lifetime. Plugin version or
   permission-set changes require a fresh review.
+- plugin automatic start is a separate default-off preference available only
+  with a standing grant. It is stored by the host, bound to the plugin version,
+  capabilities, weather products, and network origins, evaluated only after
+  current legal acknowledgement, and cleared on revocation. Each startup is
+  isolated so one plugin failure cannot block the core or another plugin;
 - `Once` is consumed at the privileged launch boundary, `Session` exists only
   in the shared in-memory authorization runtime, and only `Standing` is written
   to encrypted storage. A new process therefore starts without temporary

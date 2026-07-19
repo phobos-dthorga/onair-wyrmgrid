@@ -9,6 +9,7 @@ struct MemoryDataProtectionRepository {
     pending: bool,
     exported: Mutex<Option<PathBuf>>,
     restored: Mutex<Option<PathBuf>>,
+    reset_prepared: Mutex<bool>,
 }
 
 impl DataProtectionRepository for MemoryDataProtectionRepository {
@@ -51,6 +52,11 @@ impl DataProtectionRepository for MemoryDataProtectionRepository {
             restart_required: true,
         })
     }
+
+    fn prepare_local_data_reset(&self) -> Result<(), DataProtectionError> {
+        *self.reset_prepared.lock().unwrap() = true;
+        Ok(())
+    }
 }
 
 #[test]
@@ -67,6 +73,7 @@ fn status_reports_encrypted_device_bound_storage() {
             device_key_protected: true,
             portable_backup_format_version: 1,
             pending_restore: true,
+            local_data_reset_confirmation: LOCAL_DATA_RESET_CONFIRMATION,
         }
     );
 }
@@ -139,4 +146,34 @@ fn in_memory_fallback_cannot_claim_database_protection() {
         service.status(),
         Err(DataProtectionError::PersistentStorageRequired)
     );
+}
+
+#[test]
+fn local_data_reset_requires_exact_confirmation_and_persistent_storage() {
+    let repository = MemoryDataProtectionRepository {
+        persistent: true,
+        ..Default::default()
+    };
+    let service = DataProtectionService::new(repository);
+
+    for confirmation in ["", "erase wyrmgrid data", "ERASE WYRMGRID DATA "] {
+        assert_eq!(
+            service.prepare_local_data_reset(confirmation),
+            Err(DataProtectionError::LocalDataResetConfirmationRequired)
+        );
+    }
+    assert!(
+        service
+            .prepare_local_data_reset(LOCAL_DATA_RESET_CONFIRMATION)
+            .unwrap()
+            .restart_required
+    );
+    assert!(*service.repository.reset_prepared.lock().unwrap());
+
+    let in_memory = DataProtectionService::new(MemoryDataProtectionRepository::default());
+    assert_eq!(
+        in_memory.prepare_local_data_reset(LOCAL_DATA_RESET_CONFIRMATION),
+        Err(DataProtectionError::PersistentStorageRequired)
+    );
+    assert!(!*in_memory.repository.reset_prepared.lock().unwrap());
 }

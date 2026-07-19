@@ -18,7 +18,7 @@ use wyrmgrid_plugin_protocol::{
     WeatherCapability, WeatherGridRequestPoint, WeatherQuery, WeatherRequest, WeatherTileAddress,
     WeatherUnavailableCode, read_frame, write_frame,
 };
-use wyrmgrid_storage::Store;
+use wyrmgrid_storage::{PluginPreferencesRecord, Store};
 
 use crate::authorization::{
     AuthorizationError, AuthorizationGrantLifetime, AuthorizationRuntime, AuthorizationService,
@@ -71,6 +71,8 @@ pub enum PluginError {
     UnsupportedCapability,
     #[error("Approve every requested capability before starting this plugin.")]
     PermissionRequired,
+    #[error("Choose standing access before enabling automatic plugin startup.")]
+    StandingPermissionRequired,
     #[error("That plugin is already running.")]
     AlreadyRunning,
     #[error("That plugin is not running.")]
@@ -134,11 +136,24 @@ pub struct PluginView {
     pub granted_permissions: Vec<Permission>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub grant_lifetime: Option<AuthorizationGrantLifetime>,
+    pub start_with_wyrmgrid: bool,
     pub state: PluginProcessState,
     pub published_layer_count: usize,
     pub published_weather_layer_count: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_error: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct PluginAutoStartFailure {
+    pub plugin_id: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct PluginAutoStartOutcome {
+    pub started_plugin_ids: Vec<String>,
+    pub failures: Vec<PluginAutoStartFailure>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -174,9 +189,11 @@ struct PluginServiceInner {
     root: Option<PathBuf>,
     initialization_error: Option<String>,
     authorization: AuthorizationService<Store>,
+    preferences: Store,
     onair: OnAirSession,
     simulator: SimulatorBridgeService,
     runtimes: Mutex<BTreeMap<String, Arc<RunningPlugin>>>,
+    startup_failures: Mutex<BTreeMap<String, String>>,
 }
 
 struct RunningPlugin {
@@ -250,10 +267,15 @@ impl PluginService {
             inner: Arc::new(PluginServiceInner {
                 root,
                 initialization_error,
-                authorization: AuthorizationService::with_runtime(store, authorization_runtime),
+                authorization: AuthorizationService::with_runtime(
+                    store.clone(),
+                    authorization_runtime,
+                ),
+                preferences: store,
                 onair,
                 simulator,
                 runtimes: Mutex::new(BTreeMap::new()),
+                startup_failures: Mutex::new(BTreeMap::new()),
             }),
         }
     }
@@ -273,6 +295,11 @@ impl PluginService {
         let runtimes = self
             .inner
             .runtimes
+            .lock()
+            .map_err(|_| PluginError::StateUnavailable)?;
+        let startup_failures = self
+            .inner
+            .startup_failures
             .lock()
             .map_err(|_| PluginError::StateUnavailable)?;
         let mut plugins = Vec::with_capacity(installed.len());
@@ -304,7 +331,12 @@ impl PluginService {
                         .map_err(|_| PluginError::StateUnavailable)?
                         .len(),
                 ),
-                None => (PluginProcessState::Stopped, None, 0, 0),
+                None => (
+                    PluginProcessState::Stopped,
+                    startup_failures.get(&plugin.manifest.id).cloned(),
+                    0,
+                    0,
+                ),
             };
             let granted_permissions = runtime
                 .filter(|_| state.is_active())
@@ -340,6 +372,7 @@ impl PluginService {
                     });
                 }
             }
+            let start_with_wyrmgrid = self.start_with_wyrmgrid(&plugin.manifest)?;
             plugins.push(PluginView {
                 id: plugin.manifest.id,
                 name: plugin.manifest.name,
@@ -351,6 +384,7 @@ impl PluginService {
                 requested_permissions: plugin.manifest.permissions,
                 granted_permissions: granted_permissions.iter().copied().collect(),
                 grant_lifetime,
+                start_with_wyrmgrid,
                 state,
                 published_layer_count: layer_count,
                 published_weather_layer_count: weather_layer_count,
@@ -392,6 +426,13 @@ impl PluginService {
             .authorization
             .approve_with_lifetime(&subject, &revision, &permission_names, lifetime)
             .map_err(plugin_authorization_error)?;
+        if lifetime != AuthorizationGrantLifetime::Standing {
+            self.inner
+                .preferences
+                .delete_plugin_preferences_record(plugin_id)
+                .map_err(|_| PluginError::StorageUnavailable)?;
+            self.clear_startup_failure(plugin_id)?;
+        }
         self.status()
     }
 
@@ -406,7 +447,82 @@ impl PluginService {
             .authorization
             .revoke(&subject, &revision)
             .map_err(plugin_authorization_error)?;
+        self.inner
+            .preferences
+            .delete_plugin_preferences_record(plugin_id)
+            .map_err(|_| PluginError::StorageUnavailable)?;
+        self.clear_startup_failure(plugin_id)?;
         self.status()
+    }
+
+    pub fn set_start_with_wyrmgrid(
+        &self,
+        plugin_id: &str,
+        enabled: bool,
+    ) -> Result<PluginHostView, PluginError> {
+        let plugin = self.find_plugin(plugin_id)?;
+        if enabled {
+            ensure_supported_permissions(&plugin.manifest.permissions)?;
+            if plugin.manifest.runtime != Some(PluginRuntime::Python) {
+                return Err(PluginError::UnsupportedRuntime);
+            }
+            if self.grant_lifetime_for(&plugin.manifest)?
+                != Some(AuthorizationGrantLifetime::Standing)
+            {
+                return Err(PluginError::StandingPermissionRequired);
+            }
+            self.inner
+                .preferences
+                .save_plugin_preferences_record(&PluginPreferencesRecord {
+                    plugin_id: plugin.manifest.id.clone(),
+                    scope_revision: plugin_scope_revision(&plugin.manifest),
+                    start_with_wyrmgrid: true,
+                })
+                .map_err(|_| PluginError::StorageUnavailable)?;
+        } else {
+            self.inner
+                .preferences
+                .delete_plugin_preferences_record(plugin_id)
+                .map_err(|_| PluginError::StorageUnavailable)?;
+            self.clear_startup_failure(plugin_id)?;
+        }
+        self.status()
+    }
+
+    pub fn start_enabled(&self) -> Result<PluginAutoStartOutcome, PluginError> {
+        let root = self
+            .inner
+            .root
+            .as_deref()
+            .ok_or(PluginError::RootUnavailable)?;
+        let (installed, _) = discover_plugins(root)?;
+        let mut enabled = Vec::new();
+        for plugin in installed {
+            if self.start_with_wyrmgrid(&plugin.manifest)? {
+                enabled.push(plugin.manifest.id);
+            }
+        }
+        let mut outcome = PluginAutoStartOutcome {
+            started_plugin_ids: Vec::new(),
+            failures: Vec::new(),
+        };
+        for plugin_id in enabled {
+            match self.start(&plugin_id) {
+                Ok(_) => outcome.started_plugin_ids.push(plugin_id),
+                Err(error) => {
+                    let message = error.to_string();
+                    self.inner
+                        .startup_failures
+                        .lock()
+                        .map_err(|_| PluginError::StateUnavailable)?
+                        .insert(plugin_id.clone(), message.clone());
+                    outcome
+                        .failures
+                        .push(PluginAutoStartFailure { plugin_id, message });
+                }
+            }
+        }
+        Ok(outcome)
     }
 
     pub fn start(&self, plugin_id: &str) -> Result<PluginHostView, PluginError> {
@@ -504,6 +620,7 @@ impl PluginService {
             .state
             .lock()
             .map_err(|_| PluginError::StateUnavailable)? = PluginProcessState::Running;
+        self.clear_startup_failure(plugin_id)?;
         self.send_fleet_if_changed(&runtime)?;
         self.send_simulator_if_changed(&runtime)?;
         self.send_global_weather_if_due(&runtime)?;
@@ -626,6 +743,28 @@ impl PluginService {
             .grants(&subject, &revision, &requested)
             .map_err(plugin_authorization_error)
             .map(capability_names_to_permissions)
+    }
+
+    fn start_with_wyrmgrid(&self, manifest: &PluginManifest) -> Result<bool, PluginError> {
+        self.inner
+            .preferences
+            .load_plugin_preferences_record(&manifest.id)
+            .map_err(|_| PluginError::StorageUnavailable)
+            .map(|record| {
+                record.is_some_and(|record| {
+                    record.start_with_wyrmgrid
+                        && record.scope_revision == plugin_scope_revision(manifest)
+                })
+            })
+    }
+
+    fn clear_startup_failure(&self, plugin_id: &str) -> Result<(), PluginError> {
+        self.inner
+            .startup_failures
+            .lock()
+            .map_err(|_| PluginError::StateUnavailable)?
+            .remove(plugin_id);
+        Ok(())
     }
 
     fn grant_lifetime_for(

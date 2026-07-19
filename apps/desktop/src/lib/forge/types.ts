@@ -32,6 +32,7 @@ export type PluginView = {
   requested_permissions: PluginPermission[];
   granted_permissions: PluginPermission[];
   grant_lifetime?: AuthorizationGrantLifetime;
+  start_with_wyrmgrid: boolean;
   state: PluginProcessState;
   published_layer_count: number;
   published_weather_layer_count: number;

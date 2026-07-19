@@ -2,6 +2,7 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 import { invokeDesktop } from "$lib/desktop/client";
 import type {
   DataProtectionStatus,
+  LocalDataResetView,
   PortableBackupView,
   PortableRestoreView,
 } from "./types";
@@ -13,6 +14,14 @@ const backupFilter = {
 
 export function loadDataProtectionStatus(): Promise<DataProtectionStatus> {
   return invokeDesktop("data_protection_status");
+}
+
+export function resetLocalData(
+  confirmation: string,
+): Promise<LocalDataResetView> {
+  return invokeDesktop<LocalDataResetView>("reset_local_data", {
+    confirmation,
+  });
 }
 
 export async function choosePortableBackupDestination(): Promise<

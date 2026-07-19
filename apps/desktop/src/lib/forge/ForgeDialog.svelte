@@ -29,6 +29,7 @@
     onrevoke,
     onstart,
     onstop,
+    onstartupchange,
     onclose,
   }: {
     open: boolean;
@@ -39,6 +40,7 @@
     onrevoke: (pluginId: string) => void;
     onstart: (pluginId: string) => void;
     onstop: (pluginId: string) => void;
+    onstartupchange: (pluginId: string, enabled: boolean) => void;
     onclose: () => void;
   } = $props();
 
@@ -262,6 +264,25 @@
                     : "Python 3 runtime · framed protocol v1"}
                 </span>
                 <div>
+                  <label class="startup-choice">
+                    <input
+                      type="checkbox"
+                      checked={plugin.start_with_wyrmgrid}
+                      disabled={busy || plugin.grant_lifetime !== "standing"}
+                      onchange={(event) =>
+                        onstartupchange(plugin.id, event.currentTarget.checked)}
+                    />
+                    <span>
+                      <strong>{$translation("forge-start-with-wyrmgrid")}</strong>
+                      <small
+                        >{$translation(
+                          plugin.grant_lifetime === "standing"
+                            ? "forge-start-with-wyrmgrid-detail"
+                            : "forge-start-with-wyrmgrid-standing-required",
+                        )}</small
+                      >
+                    </span>
+                  </label>
                   {#if allRequestedGranted(plugin)}
                     <button
                       class="secondary"
@@ -596,7 +617,33 @@
   }
   article footer div {
     display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
     gap: 8px;
+  }
+  .startup-choice {
+    display: grid;
+    grid-template-columns: auto minmax(150px, 220px);
+    align-items: start;
+    gap: 7px;
+    color: var(--color-text-muted);
+    font-size: 9px;
+  }
+  .startup-choice input {
+    margin-top: 2px;
+    accent-color: var(--color-accent);
+  }
+  .startup-choice span {
+    display: grid;
+    gap: 2px;
+  }
+  .startup-choice strong {
+    color: var(--color-text);
+    font-size: 10px;
+  }
+  .startup-choice small {
+    line-height: 1.35;
   }
   .lifetime-choice {
     display: grid;

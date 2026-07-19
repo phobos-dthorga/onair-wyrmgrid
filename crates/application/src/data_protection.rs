@@ -10,6 +10,7 @@ use wyrmgrid_storage::{
 
 const MINIMUM_BACKUP_PASSWORD_CHARACTERS: usize = 12;
 const MAXIMUM_BACKUP_PASSWORD_BYTES: usize = 1_024;
+pub const LOCAL_DATA_RESET_CONFIRMATION: &str = "ERASE WYRMGRID DATA";
 
 pub trait DataProtectionRepository: Send + Sync + 'static {
     fn persistent(&self) -> bool;
@@ -27,6 +28,7 @@ pub trait DataProtectionRepository: Send + Sync + 'static {
         password: &str,
         device_key: &DatabaseKey,
     ) -> Result<PortableRestoreRecord, DataProtectionError>;
+    fn prepare_local_data_reset(&self) -> Result<(), DataProtectionError>;
 }
 
 impl DataProtectionRepository for Store {
@@ -59,6 +61,10 @@ impl DataProtectionRepository for Store {
         self.prepare_portable_restore(source, password, device_key)
             .map_err(DataProtectionError::from)
     }
+
+    fn prepare_local_data_reset(&self) -> Result<(), DataProtectionError> {
+        Store::prepare_local_data_reset(self).map_err(DataProtectionError::from)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -67,6 +73,7 @@ pub struct DataProtectionStatus {
     pub device_key_protected: bool,
     pub portable_backup_format_version: u32,
     pub pending_restore: bool,
+    pub local_data_reset_confirmation: &'static str,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -86,6 +93,11 @@ pub struct PortableRestoreView {
     pub restart_required: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct LocalDataResetView {
+    pub restart_required: bool,
+}
+
 #[derive(Debug, Error, Clone, Copy, PartialEq, Eq)]
 pub enum DataProtectionError {
     #[error("Use at least 12 characters for the portable-backup password.")]
@@ -96,6 +108,10 @@ pub enum DataProtectionError {
     PasswordConfirmationMismatch,
     #[error("Confirm that restoring will replace current local data after WyrmGrid restarts.")]
     RestoreConfirmationRequired,
+    #[error(
+        "Type the displayed confirmation phrase exactly to confirm permanent local-data deletion."
+    )]
+    LocalDataResetConfirmationRequired,
     #[error("Choose a new filename; WyrmGrid will not overwrite an existing backup.")]
     DestinationExists,
     #[error(
@@ -141,6 +157,7 @@ impl<R: DataProtectionRepository> DataProtectionService<R> {
             device_key_protected: true,
             portable_backup_format_version: PORTABLE_BACKUP_FORMAT_VERSION,
             pending_restore: self.repository.pending_restore()?,
+            local_data_reset_confirmation: LOCAL_DATA_RESET_CONFIRMATION,
         })
     }
 
@@ -179,6 +196,22 @@ impl<R: DataProtectionRepository> DataProtectionService<R> {
         self.repository
             .prepare_restore(source, password, device_key)
             .map(portable_restore_view)
+    }
+
+    pub fn prepare_local_data_reset(
+        &self,
+        confirmation: &str,
+    ) -> Result<LocalDataResetView, DataProtectionError> {
+        if confirmation != LOCAL_DATA_RESET_CONFIRMATION {
+            return Err(DataProtectionError::LocalDataResetConfirmationRequired);
+        }
+        if !self.repository.persistent() {
+            return Err(DataProtectionError::PersistentStorageRequired);
+        }
+        self.repository.prepare_local_data_reset()?;
+        Ok(LocalDataResetView {
+            restart_required: true,
+        })
     }
 }
 
