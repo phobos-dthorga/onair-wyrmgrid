@@ -36,6 +36,12 @@ major application version.
   merge, release, workflow, or protected-path authority.
 - Added durable, revisioned flight operations built from an imported SimBrief
   plan, an optional read-only OnAir job, and retained manifest evidence.
+- Added read-only fleet reconciliation to accepted flight operations. WyrmGrid
+  derives a deterministic registration or unique-model candidate from the
+  current OnAir fleet, compares its model and airport with the accepted plan,
+  reports manifest coverage and fleet freshness, and keeps unverified seats,
+  payload capacity, configuration, and operational availability explicitly
+  unavailable rather than treating the candidate as an assignment.
 - Added independent first-party AviationWeather.gov, Open-Meteo, and RainViewer
   provider plugins with bounded weather requests and publications.
 - Added sourced airport, global-model, and radar weather presentation in Atlas,

@@ -9,9 +9,13 @@ use wyrmgrid_domain::{
 };
 use wyrmgrid_storage::{FlightOperationRevisionRecord, Store};
 
-use crate::{DispatchJobSelection, DispatchStatus, SnapshotAvailability};
+use crate::{
+    DispatchFinding, DispatchFindingCategory, DispatchFindingStatus, DispatchJobSelection,
+    DispatchStatus, FleetSnapshotView, MatchedFleetAircraft, SnapshotAvailability,
+};
 
 pub const FLIGHT_OPERATION_JOURNEY_SCHEMA_VERSION: u32 = 1;
+pub const FLEET_RECONCILIATION_SCHEMA_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -72,12 +76,33 @@ pub struct FlightOperationView {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub selected_job_id: Option<String>,
     pub manifest: FlightManifest,
+    pub fleet_reconciliation: FlightOperationFleetReconciliationView,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct FlightOperationManifestCoverageView {
+    pub leg_count: usize,
+    pub passenger_legs_reported: usize,
+    pub freight_legs_reported: usize,
+    pub source_gaps_present: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct FlightOperationFleetReconciliationView {
+    pub schema_version: u32,
+    pub fleet_available: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fleet_observed_at: Option<DateTime<Utc>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub candidate: Option<MatchedFleetAircraft>,
+    pub manifest_coverage: FlightOperationManifestCoverageView,
+    pub findings: Vec<DispatchFinding>,
+    pub provenance: OperationalProvenance,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FlightOperationAvailability {
     pub jobs: bool,
-    pub fleet: bool,
     pub staff: bool,
 }
 
@@ -111,6 +136,7 @@ impl FlightOperationService {
         &self,
         status: &mut DispatchStatus,
         availability: FlightOperationAvailability,
+        fleet: Option<&FleetSnapshotView>,
     ) -> Result<(), FlightOperationError> {
         let revision = self.load_active_revision()?;
         status.operation_change = revision
@@ -118,7 +144,13 @@ impl FlightOperationService {
             .map_or(FlightOperationContextChange::None, |revision| {
                 context_change(revision, status)
             });
-        status.operation = revision.as_ref().map(operation_view);
+        let fleet_reconciliation = revision
+            .as_ref()
+            .map(|revision| build_fleet_reconciliation(revision, fleet));
+        status.operation = revision
+            .as_ref()
+            .zip(fleet_reconciliation.as_ref())
+            .map(|(revision, reconciliation)| operation_view(revision, reconciliation));
 
         let operation_matches_plan = revision.as_ref().is_some_and(|revision| {
             status
@@ -143,7 +175,9 @@ impl FlightOperationService {
             operation_available: revision.is_some(),
             manifest_available: manifest.is_some_and(|manifest| !manifest.legs.is_empty()),
             manifest_needs_attention: manifest.is_some_and(FlightManifest::needs_attention),
-            fleet_available: availability.fleet,
+            fleet_state: fleet_reconciliation
+                .as_ref()
+                .map_or(FlightOperationStageState::Unavailable, fleet_stage_state),
             staff_available: availability.staff,
             atlas_available: status.atlas_plan.is_some(),
         });
@@ -307,7 +341,7 @@ struct LifecycleJourneyEvidence {
     operation_available: bool,
     manifest_available: bool,
     manifest_needs_attention: bool,
-    fleet_available: bool,
+    fleet_state: FlightOperationStageState,
     staff_available: bool,
     atlas_available: bool,
 }
@@ -327,7 +361,7 @@ pub(crate) fn build_initial_flight_operation_journey(
         operation_available: false,
         manifest_available: false,
         manifest_needs_attention: false,
-        fleet_available: false,
+        fleet_state: FlightOperationStageState::Unavailable,
         staff_available: false,
         atlas_available: evidence.atlas_available,
     })
@@ -377,12 +411,10 @@ fn build_flight_operation_journey(
     } else {
         FlightOperationStageState::Available
     };
-    let fleet = if !evidence.operation_available {
-        FlightOperationStageState::NotStarted
-    } else if evidence.fleet_available {
-        FlightOperationStageState::Available
+    let fleet = if evidence.operation_available {
+        evidence.fleet_state
     } else {
-        FlightOperationStageState::Unavailable
+        FlightOperationStageState::NotStarted
     };
     let staff = if !evidence.operation_available {
         FlightOperationStageState::NotStarted
@@ -463,7 +495,10 @@ fn context_change(
     }
 }
 
-fn operation_view(revision: &FlightOperationRevision) -> FlightOperationView {
+fn operation_view(
+    revision: &FlightOperationRevision,
+    fleet_reconciliation: &FlightOperationFleetReconciliationView,
+) -> FlightOperationView {
     FlightOperationView {
         schema_version: revision.schema_version,
         id: revision.operation_id.0.to_string(),
@@ -479,6 +514,185 @@ fn operation_view(revision: &FlightOperationRevision) -> FlightOperationView {
             .as_ref()
             .map(|job| job.value.id.0.to_string()),
         manifest: revision.manifest.clone(),
+        fleet_reconciliation: fleet_reconciliation.clone(),
+    }
+}
+
+fn build_fleet_reconciliation(
+    revision: &FlightOperationRevision,
+    fleet: Option<&FleetSnapshotView>,
+) -> FlightOperationFleetReconciliationView {
+    let comparison = crate::compare_plan_to_fleet_aircraft(&revision.plan, fleet);
+    let manifest_coverage = FlightOperationManifestCoverageView {
+        leg_count: revision.manifest.legs.len(),
+        passenger_legs_reported: revision
+            .manifest
+            .legs
+            .iter()
+            .filter(|leg| leg.passengers.is_some())
+            .count(),
+        freight_legs_reported: revision
+            .manifest
+            .legs
+            .iter()
+            .filter(|leg| leg.freight.is_some())
+            .count(),
+        source_gaps_present: revision.manifest.needs_attention(),
+    };
+    let mut findings = comparison
+        .findings
+        .iter()
+        .filter(|finding| {
+            matches!(
+                finding.category,
+                DispatchFindingCategory::AircraftIdentity
+                    | DispatchFindingCategory::AircraftModel
+                    | DispatchFindingCategory::AircraftPosition
+            )
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    findings.push(manifest_coverage_finding(&manifest_coverage));
+    findings.extend(capability_gap_findings(&manifest_coverage));
+
+    FlightOperationFleetReconciliationView {
+        schema_version: FLEET_RECONCILIATION_SCHEMA_VERSION,
+        fleet_available: comparison.fleet_available,
+        fleet_observed_at: comparison.fleet_observed_at,
+        candidate: comparison.matched_aircraft,
+        manifest_coverage,
+        findings,
+        provenance: comparison.provenance,
+    }
+}
+
+fn fleet_stage_state(
+    reconciliation: &FlightOperationFleetReconciliationView,
+) -> FlightOperationStageState {
+    if !reconciliation.fleet_available {
+        return FlightOperationStageState::Unavailable;
+    }
+    if reconciliation.provenance.freshness == SnapshotFreshness::Stale {
+        return FlightOperationStageState::Stale;
+    }
+    if reconciliation.candidate.is_none()
+        || reconciliation.findings.iter().any(|finding| {
+            matches!(
+                finding.status,
+                DispatchFindingStatus::Difference | DispatchFindingStatus::Unavailable
+            )
+        })
+    {
+        FlightOperationStageState::NeedsAttention
+    } else {
+        FlightOperationStageState::Ready
+    }
+}
+
+fn manifest_coverage_finding(coverage: &FlightOperationManifestCoverageView) -> DispatchFinding {
+    let summary = format!(
+        "{} legs; passenger facts on {}; freight facts on {}",
+        coverage.leg_count, coverage.passenger_legs_reported, coverage.freight_legs_reported
+    );
+    if coverage.leg_count == 0 {
+        return reconciliation_finding(
+            DispatchFindingCategory::ManifestCoverage,
+            DispatchFindingStatus::Information,
+            "fleet-reconciliation-manifest-empty",
+            "No job manifest attached",
+            "This operation can still compare aircraft identity and position, but it has no retained job load to reconcile.",
+            Some(summary),
+            None,
+        );
+    }
+    if coverage.source_gaps_present {
+        return reconciliation_finding(
+            DispatchFindingCategory::ManifestCoverage,
+            DispatchFindingStatus::Unavailable,
+            "fleet-reconciliation-manifest-gaps",
+            "Manifest has source gaps",
+            "One or more job legs did not report their expected passenger count or freight weight.",
+            Some(summary),
+            None,
+        );
+    }
+    reconciliation_finding(
+        DispatchFindingCategory::ManifestCoverage,
+        DispatchFindingStatus::Match,
+        "fleet-reconciliation-manifest-retained",
+        "Manifest evidence retained",
+        "The accepted operation retains the reported passenger and freight facts without turning them into an aircraft-capacity claim.",
+        Some(summary),
+        None,
+    )
+}
+
+fn capability_gap_findings(coverage: &FlightOperationManifestCoverageView) -> [DispatchFinding; 4] {
+    let passenger_context = (coverage.passenger_legs_reported > 0).then(|| {
+        format!(
+            "Passenger facts on {} legs",
+            coverage.passenger_legs_reported
+        )
+    });
+    let freight_context = (coverage.freight_legs_reported > 0)
+        .then(|| format!("Freight facts on {} legs", coverage.freight_legs_reported));
+    [
+        reconciliation_finding(
+            DispatchFindingCategory::AircraftSeats,
+            DispatchFindingStatus::Unavailable,
+            "fleet-reconciliation-seats-unavailable",
+            "Seat check unavailable",
+            "The verified OnAir fleet contract does not currently provide a certified seat count.",
+            passenger_context,
+            None,
+        ),
+        reconciliation_finding(
+            DispatchFindingCategory::AircraftPayloadCapacity,
+            DispatchFindingStatus::Unavailable,
+            "fleet-reconciliation-payload-capacity-unavailable",
+            "Payload-capacity check unavailable",
+            "The verified OnAir fleet contract does not currently provide certified payload or cargo capacity.",
+            freight_context,
+            None,
+        ),
+        reconciliation_finding(
+            DispatchFindingCategory::AircraftConfiguration,
+            DispatchFindingStatus::Unavailable,
+            "fleet-reconciliation-configuration-unavailable",
+            "Configuration check unavailable",
+            "The current fleet evidence does not prove the selected airframe's passenger or cargo configuration.",
+            None,
+            None,
+        ),
+        reconciliation_finding(
+            DispatchFindingCategory::AircraftAvailability,
+            DispatchFindingStatus::Unavailable,
+            "fleet-reconciliation-availability-unavailable",
+            "Operational availability unavailable",
+            "Location is an observed fact; it does not prove maintenance condition, scheduling availability, or readiness for flight.",
+            None,
+            None,
+        ),
+    ]
+}
+
+fn reconciliation_finding(
+    category: DispatchFindingCategory,
+    status: DispatchFindingStatus,
+    message_key: &'static str,
+    title: &str,
+    explanation: &str,
+    plan_value: Option<String>,
+    onair_value: Option<String>,
+) -> DispatchFinding {
+    DispatchFinding {
+        category,
+        status,
+        message_key,
+        title: title.into(),
+        explanation: explanation.into(),
+        plan_value,
+        onair_value,
     }
 }
 

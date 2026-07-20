@@ -298,6 +298,7 @@ export const dispatchPreviewReady: DispatchStatus = {
     fleet_available: true,
     fleet_observed_at: "2026-07-14T00:00:00Z",
     matched_aircraft: {
+      id: "11111111-1111-4111-8111-111111111111",
       basis: "registration",
       registration: "WYR-101",
       model: "Example Turboprop",

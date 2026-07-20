@@ -1530,7 +1530,12 @@
       return;
     }
     if (stage === "fleet") {
+      timelineMode = "live";
+      historicalData = null;
+      timelineCursor = Math.max(0, timeline.observation_times.length - 1);
       setAtlasLayerVisibility("fleet", true);
+      selectedAircraftId =
+        dispatchStatus.operation?.fleet_reconciliation.candidate?.id ?? null;
       activeWorkspace = "atlas";
       return;
     }

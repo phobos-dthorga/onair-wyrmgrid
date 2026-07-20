@@ -55,4 +55,24 @@ export type FlightOperationView = {
       unavailable_fields: ManifestUnavailableField[];
     }>;
   };
+  fleet_reconciliation: {
+    schema_version: number;
+    fleet_available: boolean;
+    fleet_observed_at?: string;
+    candidate?: {
+      id: string;
+      basis: "registration" | "exact_model";
+      registration?: string;
+      model?: string;
+      current_airport_icao?: string;
+    };
+    manifest_coverage: {
+      leg_count: number;
+      passenger_legs_reported: number;
+      freight_legs_reported: number;
+      source_gaps_present: boolean;
+    };
+    findings: import("$lib/dispatch/types").DispatchFinding[];
+    provenance: import("$lib/operational/types").OperationalProvenance;
+  };
 };

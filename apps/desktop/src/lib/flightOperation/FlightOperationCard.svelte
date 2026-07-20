@@ -29,6 +29,7 @@
   const handoffState = $derived(
     manifestHandoffState(operation, operationChange, selectedJob?.id),
   );
+  const fleetReconciliation = $derived(operation?.fleet_reconciliation);
 
   function unavailableLabel(value: ManifestUnavailableField): string {
     return value === "passenger_count"
@@ -76,6 +77,23 @@
     if (jobSelection?.availability === "cached") return "Cached snapshot";
     if (jobSelection?.availability === "offline") return "Offline snapshot";
     return "Retained revision";
+  }
+
+  function reconciliationFreshness(): string {
+    if (!fleetReconciliation?.fleet_available) return "Fleet unavailable";
+    if (fleetReconciliation.provenance.freshness === "stale") {
+      return "Stale fleet evidence";
+    }
+    return "Current fleet evidence";
+  }
+
+  function candidateLabel(): string {
+    const candidate = fleetReconciliation?.candidate;
+    return (
+      candidate?.registration ??
+      candidate?.model ??
+      "No deterministic candidate"
+    );
   }
 </script>
 
@@ -151,6 +169,87 @@
       <span><b>{operation.reason.replaceAll("_", " ")}</b> revision reason</span
       >
     </div>
+
+    {#if fleetReconciliation}
+      <section class="dispatch-fleet-reconciliation">
+        <div class="dispatch-card-heading">
+          <div>
+            <span class="eyebrow">Fleet reconciliation</span>
+            <h3>{candidateLabel()}</h3>
+          </div>
+          <strong>{reconciliationFreshness()}</strong>
+        </div>
+        <p>
+          This is a read-only evidence comparison, not an aircraft assignment or
+          an OnAir action. Capacity remains unavailable until the live provider
+          contract proves those fields.
+        </p>
+        <dl class="dispatch-fleet-reconciliation-summary">
+          <div>
+            <dt>Match basis</dt>
+            <dd>
+              {fleetReconciliation.candidate?.basis.replaceAll("_", " ") ??
+                "Unavailable"}
+            </dd>
+          </div>
+          <div>
+            <dt>Current airport</dt>
+            <dd>
+              {fleetReconciliation.candidate?.current_airport_icao ??
+                "Unavailable"}
+            </dd>
+          </div>
+          <div>
+            <dt>Fleet observed</dt>
+            <dd>
+              {fleetReconciliation.fleet_observed_at
+                ? formatLocalDateTime(
+                    fleetReconciliation.fleet_observed_at,
+                    "Observation time unavailable",
+                    mediumDateShortTime,
+                  )
+                : "Unavailable"}
+            </dd>
+          </div>
+          <div>
+            <dt>Manifest coverage</dt>
+            <dd>
+              {fleetReconciliation.manifest_coverage.leg_count} legs ·
+              {fleetReconciliation.manifest_coverage.passenger_legs_reported} passenger
+              ·
+              {fleetReconciliation.manifest_coverage.freight_legs_reported} freight
+            </dd>
+          </div>
+        </dl>
+        <ul
+          class="dispatch-finding-list"
+          aria-label="Fleet reconciliation findings"
+        >
+          {#each fleetReconciliation.findings as finding}
+            <li class={`dispatch-finding-${finding.status}`}>
+              <div class="dispatch-finding-heading">
+                <span>{finding.category.replaceAll("_", " ")}</span>
+                <b>{finding.status}</b>
+              </div>
+              <strong>{finding.title}</strong>
+              <p>{finding.explanation}</p>
+              {#if finding.plan_value || finding.onair_value}
+                <dl>
+                  <div>
+                    <dt>Operation evidence</dt>
+                    <dd>{finding.plan_value ?? "Unavailable"}</dd>
+                  </div>
+                  <div>
+                    <dt>OnAir fleet evidence</dt>
+                    <dd>{finding.onair_value ?? "Unavailable"}</dd>
+                  </div>
+                </dl>
+              {/if}
+            </li>
+          {/each}
+        </ul>
+      </section>
+    {/if}
 
     {#if operationChange !== "none"}
       <div class="dispatch-operation-revision">
