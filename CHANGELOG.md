@@ -8,6 +8,24 @@ major application version.
 
 ### New features
 
+- None.
+
+### Changes
+
+- None.
+
+### Removed
+
+- None.
+
+### 🚨 Breaking changes
+
+- None.
+
+## [0.3.0] - 2026-07-20
+
+### New features
+
 - Added data-only theme export, safe local deletion, visual duplicate
   detection, explicit bundled-versus-local provenance, and a complete theme
   authoring preview with live Rust-matched contrast thresholds. Manifest author
@@ -123,6 +141,9 @@ major application version.
 
 ### Changes
 
+- Refined the Simulator audio-recording panel with clearer grouped consent
+  controls, unavailable and empty states, session hierarchy, focus treatment,
+  and responsive layouts for narrow and short windows.
 - Unified the local formatting commands across Rust, frontend, and documentation
   files. Rust formatting now uses the repository's LF newline policy on every
   operating system, so `npm run format` repairs the recurring Windows mismatch
@@ -347,6 +368,7 @@ major application version.
 
 - None.
 
-[Unreleased]: https://github.com/phobos-dthorga/onair-wyrmgrid/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/phobos-dthorga/onair-wyrmgrid/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/phobos-dthorga/onair-wyrmgrid/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/phobos-dthorga/onair-wyrmgrid/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/phobos-dthorga/onair-wyrmgrid/releases/tag/v0.1.0
