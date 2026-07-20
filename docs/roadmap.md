@@ -10,8 +10,9 @@
   opt-in privacy-filtered Rust and Svelte error monitoring (implemented);
   public Sentry operational review and native symbol upload remain
 - Semantic styling, four built-in appearances, and a persisted, contrast-checked,
-  data-only community theme manifest (implemented); authoring, export, deletion,
-  and any curated distribution remain later ecosystem work
+  data-only community theme manifest with local provenance, duplicate detection,
+  export, deletion, and contrast-preview authoring (implemented); any curated
+  distribution remains later ecosystem work
 - Canonical `en-AU` Fluent catalogue, persisted language preference, bounded
   data-only community language packs, per-message English fallback, and initial
   shell/Theme/Dispatch migration (implemented); complete string extraction,
@@ -196,6 +197,9 @@ not replace completion of the current vertical slice.
   evidence-derived slice; identities and roles remain)
 - Explainable reconciliation across jobs, load, seats, payload, aircraft and
   staff location, sourced qualifications, weather, schedule, and plan evidence
+  (read-only aircraft identity, model, current-airport, fleet-freshness, and
+  manifest-coverage reconciliation implemented; assignment and certified seat,
+  capacity, configuration, and availability evidence remain)
 - Explicit invalidation and user-reviewed revisions instead of silent cascading
   changes when a plan, manifest, aircraft, staff assignment, or observation
   changes

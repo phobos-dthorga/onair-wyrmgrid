@@ -8,6 +8,11 @@ major application version.
 
 ### New features
 
+- Added data-only theme export, safe local deletion, visual duplicate
+  detection, explicit bundled-versus-local provenance, and a complete theme
+  authoring preview with live Rust-matched contrast thresholds. Manifest author
+  fields remain visibly unverified, and the independently versioned theme
+  schema remains at version 1.
 - Added the non-shipping simulator-audio application slices: independently
   default-off master, manual, automatic, and source-specific consent; explicit
   permission requests; fake-provider orchestration; schema-18 metadata;
@@ -17,7 +22,7 @@ major application version.
   export. The deterministic fake remains a debug-only protocol tool: no
   microphone, native provider, audible playback, packaged capture, or live-
   support claim is enabled. The source language catalogue advances to version
-  18 for the audio controls and recording-state labels.
+  19 for the audio controls and recording-state labels.
 - Added an optional, profile-driven local development-task framework for
   change-impact dossiers, test matrices, documentation synchronization,
   synthetic fixture variants, sanitized failure triage, and release curation.
@@ -40,6 +45,12 @@ major application version.
   merge, release, workflow, or protected-path authority.
 - Added durable, revisioned flight operations built from an imported SimBrief
   plan, an optional read-only OnAir job, and retained manifest evidence.
+- Added read-only fleet reconciliation to accepted flight operations. WyrmGrid
+  derives a deterministic registration or unique-model candidate from the
+  current OnAir fleet, compares its model and airport with the accepted plan,
+  reports manifest coverage and fleet freshness, and keeps unverified seats,
+  payload capacity, configuration, and operational availability explicitly
+  unavailable rather than treating the candidate as an assignment.
 - Added independent first-party AviationWeather.gov, Open-Meteo, and RainViewer
   provider plugins with bounded weather requests and publications.
 - Added sourced airport, global-model, and radar weather presentation in Atlas,
@@ -168,6 +179,11 @@ major application version.
   forecast-validity, current-context, and observation-only RADAR wording.
 - Advanced the source language catalogue to version 17 for explicit historical
   route-weather and Atlas wording.
+- Advanced the source language catalogue to version 18 for theme provenance,
+  lifecycle controls, authoring, contrast-preview, and duplicate guidance.
+- Advanced the source language catalogue to version 19 for audio consent,
+  source state, recording state, authenticated inspection, export, deletion,
+  and backup/reset wording.
 
 - Documented a proposal-only hosted-platform architecture and staged delivery
   plan for the public website, WyrmGrid Aerie catalogue, signed community

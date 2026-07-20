@@ -1,8 +1,9 @@
 use super::*;
 use uuid::Uuid;
 use wyrmgrid_domain::{
-    FlightPlanAirports, FlightPlanIdentity, FlightPlanSnapshot, FlightPlanSnapshotId, JobSnapshot,
-    OperationalObservation,
+    AircraftId, AircraftSummary, AirportId, AirportSummary, FlightPlanAirports, FlightPlanIdentity,
+    FlightPlanSnapshot, FlightPlanSnapshotId, JobSnapshot, Observed, OperationalObservation,
+    PlannedAircraft, Provenance,
 };
 use wyrmgrid_storage::Store;
 
@@ -63,6 +64,54 @@ fn selected_job() -> DispatchJobSelection {
         job: jobs.jobs[0].clone(),
         observed_at: Utc::now(),
         availability: SnapshotAvailability::Cached,
+    }
+}
+
+fn plan_with_aircraft(destination: &str, registration: &str) -> FlightPlanSnapshot {
+    let mut plan = plan(destination);
+    plan.aircraft = Some(OperationalObservation {
+        value: PlannedAircraft {
+            icao_type: Some("B738".into()),
+            registration: Some(registration.into()),
+            model: Some("Boeing 737-800".into()),
+        },
+        provenance: plan.identity.provenance.clone(),
+    });
+    plan
+}
+
+fn fleet(
+    registration: &str,
+    current_airport: Option<&str>,
+    availability: SnapshotAvailability,
+) -> FleetSnapshotView {
+    let observed_at = DateTime::from_timestamp(1_784_236_800, 0).unwrap();
+    FleetSnapshotView {
+        company: crate::ConnectedCompany {
+            name: "Synthetic Air".into(),
+            airline_code: "WYR".into(),
+        },
+        snapshot: Observed {
+            value: vec![AircraftSummary {
+                id: AircraftId(Uuid::from_u128(42)),
+                registration: Some(registration.into()),
+                model: Some("Boeing 737-800".into()),
+                location: None,
+                current_airport: current_airport.map(|icao| AirportSummary {
+                    id: AirportId(Uuid::from_u128(84)),
+                    icao: Some(icao.into()),
+                    name: None,
+                    location: None,
+                }),
+            }],
+            provenance: Provenance {
+                kind: ProvenanceKind::OnAirFact,
+                source: "OnAir".into(),
+                observed_at,
+            },
+        },
+        availability,
+        storage: crate::SnapshotStorage::Hoard,
     }
 }
 
@@ -196,9 +245,9 @@ fn starting_an_operation_persists_a_manifest_without_inventing_missing_loads() {
             &mut dispatch,
             FlightOperationAvailability {
                 jobs: true,
-                fleet: true,
                 staff: true,
             },
+            None,
         )
         .unwrap();
 
@@ -230,9 +279,9 @@ fn selecting_session_job_marks_jobs_ready_without_claiming_a_manifest() {
             &mut dispatch,
             FlightOperationAvailability {
                 jobs: true,
-                fleet: true,
                 staff: true,
             },
+            None,
         )
         .unwrap();
 
@@ -290,9 +339,9 @@ fn revisions_keep_the_operation_identity_and_capture_plan_and_job_changes() {
             &mut revised,
             FlightOperationAvailability {
                 jobs: true,
-                fleet: false,
                 staff: false,
             },
+            None,
         )
         .unwrap();
 
@@ -320,9 +369,9 @@ fn a_same_id_job_fact_change_is_still_presented_for_explicit_revision() {
             &mut changed,
             FlightOperationAvailability {
                 jobs: true,
-                fleet: true,
                 staff: true,
             },
+            None,
         )
         .unwrap();
 
@@ -341,9 +390,9 @@ fn a_plan_only_operation_can_reach_review_without_inventing_a_manifest() {
             &mut dispatch,
             FlightOperationAvailability {
                 jobs: true,
-                fleet: false,
                 staff: false,
             },
+            None,
         )
         .unwrap();
 
@@ -380,9 +429,9 @@ fn the_same_job_identity_from_another_company_requires_review() {
             &mut changed,
             FlightOperationAvailability {
                 jobs: true,
-                fleet: true,
                 staff: true,
             },
+            None,
         )
         .unwrap();
 
@@ -403,9 +452,9 @@ fn restart_without_session_context_does_not_claim_the_operation_changed() {
             &mut restarted,
             FlightOperationAvailability {
                 jobs: true,
-                fleet: true,
                 staff: true,
             },
+            None,
         )
         .unwrap();
 
@@ -413,5 +462,132 @@ fn restart_without_session_context_does_not_claim_the_operation_changed() {
     assert_eq!(
         restarted.operation_change,
         FlightOperationContextChange::None
+    );
+}
+
+#[test]
+fn fleet_reconciliation_uses_the_accepted_plan_and_marks_unverified_capacity() {
+    let service = FlightOperationService::new(Store::open_in_memory().unwrap());
+    let accepted = status(
+        Some(plan_with_aircraft("NZAA", "VH-WYR")),
+        Some(selected_job()),
+    );
+    service.start_from_dispatch(&accepted).unwrap();
+
+    let current_fleet = fleet("VH-WYR", Some("YSSY"), SnapshotAvailability::Live);
+    let mut changed_session = status(
+        Some(plan_with_aircraft("NZAA", "VH-NEW")),
+        Some(selected_job()),
+    );
+    service
+        .enrich_dispatch_status(
+            &mut changed_session,
+            FlightOperationAvailability {
+                jobs: true,
+                staff: false,
+            },
+            Some(&current_fleet),
+        )
+        .unwrap();
+
+    let reconciliation = &changed_session
+        .operation
+        .as_ref()
+        .unwrap()
+        .fleet_reconciliation;
+    assert_eq!(
+        reconciliation.candidate.as_ref().unwrap().registration,
+        Some("VH-WYR".into())
+    );
+    assert_eq!(
+        reconciliation.candidate.as_ref().unwrap().id,
+        Uuid::from_u128(42).to_string()
+    );
+    assert!(reconciliation.findings.iter().any(|finding| {
+        finding.category == DispatchFindingCategory::AircraftPayloadCapacity
+            && finding.status == DispatchFindingStatus::Unavailable
+    }));
+    assert_eq!(
+        stage_state(&changed_session, FlightOperationStage::Fleet),
+        FlightOperationStageState::NeedsAttention
+    );
+}
+
+#[test]
+fn stale_fleet_evidence_keeps_reconciliation_distinct_from_current_attention() {
+    let service = FlightOperationService::new(Store::open_in_memory().unwrap());
+    let mut dispatch = status(Some(plan_with_aircraft("NZAA", "VH-WYR")), None);
+    service.start_from_dispatch(&dispatch).unwrap();
+    let current_fleet = fleet("VH-WYR", Some("YSSY"), SnapshotAvailability::Offline);
+
+    service
+        .enrich_dispatch_status(
+            &mut dispatch,
+            FlightOperationAvailability {
+                jobs: false,
+                staff: false,
+            },
+            Some(&current_fleet),
+        )
+        .unwrap();
+
+    assert_eq!(
+        stage_state(&dispatch, FlightOperationStage::Fleet),
+        FlightOperationStageState::Stale
+    );
+    assert_eq!(
+        dispatch
+            .operation
+            .unwrap()
+            .fleet_reconciliation
+            .provenance
+            .freshness,
+        SnapshotFreshness::Stale
+    );
+}
+
+#[test]
+fn missing_or_unmatched_fleet_evidence_never_claims_reconciliation_ready() {
+    let service = FlightOperationService::new(Store::open_in_memory().unwrap());
+    let mut dispatch = status(Some(plan_with_aircraft("NZAA", "VH-WYR")), None);
+    service.start_from_dispatch(&dispatch).unwrap();
+
+    service
+        .enrich_dispatch_status(
+            &mut dispatch,
+            FlightOperationAvailability {
+                jobs: false,
+                staff: false,
+            },
+            None,
+        )
+        .unwrap();
+    assert_eq!(
+        stage_state(&dispatch, FlightOperationStage::Fleet),
+        FlightOperationStageState::Unavailable
+    );
+
+    let unmatched_fleet = fleet("VH-OTHER", Some("YSSY"), SnapshotAvailability::Live);
+    service
+        .enrich_dispatch_status(
+            &mut dispatch,
+            FlightOperationAvailability {
+                jobs: false,
+                staff: false,
+            },
+            Some(&unmatched_fleet),
+        )
+        .unwrap();
+    assert_eq!(
+        stage_state(&dispatch, FlightOperationStage::Fleet),
+        FlightOperationStageState::NeedsAttention
+    );
+    assert!(
+        dispatch
+            .operation
+            .unwrap()
+            .fleet_reconciliation
+            .candidate
+            .is_none()
     );
 }

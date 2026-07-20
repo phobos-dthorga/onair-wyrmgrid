@@ -55,6 +55,25 @@ uses host-derived states:
 These labels are planning assistance, not airworthiness, regulatory, staffing,
 or commercial approval.
 
+## Review fleet evidence
+
+After an operation begins, its **Fleet reconciliation** section compares the
+accepted plan with the current OnAir fleet snapshot. An exact registration can
+identify one candidate airframe. When no registration is available, a unique
+exact model may be shown as a weaker candidate; WyrmGrid does not treat that as
+proof that it is the intended airframe.
+
+The comparison reports the candidate's model, current airport, fleet observation
+time, and how many manifest legs contain passenger or freight facts. Selecting
+**Fleet** in the journey opens Atlas with the candidate selected when one exists.
+This is a read-only inspection: it does not assign an aircraft or change OnAir.
+
+The currently verified OnAir fleet response does not establish seats, payload
+capacity, passenger/cargo configuration, maintenance condition, or scheduling
+availability. Those findings therefore remain **Unavailable**, and the Fleet
+stage normally remains **Needs attention** even when identity and airport match.
+An offline retained fleet observation is labelled **Stale** instead.
+
 ## Restart, backup, and current limitations
 
 The accepted operation survives restart and remains visible in Dispatch even
@@ -63,11 +82,12 @@ to compare or revise it. Encrypted portable backups include the operation and
 all retained revisions because they copy the complete WyrmGrid database.
 
 This foundation records only sanitized plan evidence, an optional selected job,
-and job-derived aggregate manifest facts. It does not yet assign aircraft or
-staff, identify individual passengers or consignments, bind a Bridge recording,
-open operation history, or create a Hoard debrief association. Those stages
-remain visible as honest availability states while their reviewed core models
-are implemented.
+and job-derived aggregate manifest facts. Fleet reconciliation is derived from
+the accepted plan and current fleet observation; it is not persisted as an
+aircraft assignment. WyrmGrid does not yet assign aircraft or staff, identify
+individual passengers or consignments, bind a Bridge recording, open operation
+history, or create a Hoard debrief association. Those stages remain visible as
+honest availability states while their reviewed core models are implemented.
 
 ## Suggested local test
 
@@ -81,3 +101,6 @@ are implemented.
    revision number increments.
 6. Restart WyrmGrid and open Dispatch before importing a plan. Confirm the
    accepted revision is still visible.
+7. With current fleet evidence available, open Fleet reconciliation. Confirm an
+   exact registration candidate and airport comparison appear, while seats,
+   capacity, configuration, and operational availability remain unavailable.

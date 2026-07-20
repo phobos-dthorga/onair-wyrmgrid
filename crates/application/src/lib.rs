@@ -90,11 +90,16 @@ pub fn platform_status() -> PlatformStatus {
 pub const THEME_SCHEMA_VERSION: u32 = 1;
 pub const DEFAULT_THEME_ID: &str = "wyrmgrid-classic";
 const MAX_THEME_MANIFEST_BYTES: usize = 32 * 1024;
+const THEME_TEXT_MINIMUM_CONTRAST: f64 = 4.5;
+const THEME_GRAPHIC_MINIMUM_CONTRAST: f64 = 3.0;
+const THEME_DIVIDER_MINIMUM_CONTRAST: f64 = 1.5;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PersistedCustomTheme {
     pub theme_id: String,
     pub manifest_json: String,
+    pub imported_at: String,
+    pub updated_at: String,
 }
 
 pub trait ThemeRepository: Send + Sync + 'static {
@@ -105,6 +110,11 @@ pub trait ThemeRepository: Send + Sync + 'static {
         &self,
         theme_id: &str,
         manifest_json: &str,
+    ) -> Result<(), ThemeSettingsError>;
+    fn delete_custom_theme(
+        &self,
+        theme_id: &str,
+        fallback_theme_id: &str,
     ) -> Result<(), ThemeSettingsError>;
 }
 
@@ -128,6 +138,8 @@ impl ThemeRepository for Store {
                     .map(|record| PersistedCustomTheme {
                         theme_id: record.theme_id,
                         manifest_json: record.manifest_json,
+                        imported_at: record.imported_at,
+                        updated_at: record.updated_at,
                     })
                     .collect()
             })
@@ -140,6 +152,15 @@ impl ThemeRepository for Store {
         manifest_json: &str,
     ) -> Result<(), ThemeSettingsError> {
         self.save_custom_theme_record(theme_id, manifest_json)
+            .map_err(|_| ThemeSettingsError::StorageUnavailable)
+    }
+
+    fn delete_custom_theme(
+        &self,
+        theme_id: &str,
+        fallback_theme_id: &str,
+    ) -> Result<(), ThemeSettingsError> {
+        self.delete_custom_theme_record(theme_id, fallback_theme_id)
             .map_err(|_| ThemeSettingsError::StorageUnavailable)
     }
 }
@@ -176,10 +197,26 @@ pub struct ThemeColors {
     pub map_halo: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ThemeSource {
+    Bundled,
+    LocalImport,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ThemeProvenance {
+    pub source: ThemeSource,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub imported_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub updated_at: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct AvailableTheme {
     pub manifest: ThemeManifest,
-    pub built_in: bool,
+    pub provenance: ThemeProvenance,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -187,6 +224,13 @@ pub struct ThemeStatus {
     pub selected_theme_id: String,
     pub active_theme: ThemeManifest,
     pub themes: Vec<AvailableTheme>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ThemeExport {
+    pub filename: String,
+    pub media_type: &'static str,
+    pub content: String,
 }
 
 #[derive(Debug, Error, Clone, Copy, PartialEq, Eq)]
@@ -209,6 +253,10 @@ pub enum ThemeSettingsError {
     InsufficientContrast,
     #[error("Choose a theme that is currently available.")]
     UnknownTheme,
+    #[error("That theme is already installed or duplicates an available theme's colours.")]
+    DuplicateTheme,
+    #[error("Themes bundled with WyrmGrid cannot be deleted.")]
+    BundledThemeCannotBeDeleted,
 }
 
 pub struct ThemeSettingsService<R> {
@@ -225,7 +273,11 @@ impl<R: ThemeRepository> ThemeSettingsService<R> {
             .into_iter()
             .map(|manifest| AvailableTheme {
                 manifest,
-                built_in: true,
+                provenance: ThemeProvenance {
+                    source: ThemeSource::Bundled,
+                    imported_at: None,
+                    updated_at: None,
+                },
             })
             .collect::<Vec<_>>();
 
@@ -235,7 +287,11 @@ impl<R: ThemeRepository> ThemeSettingsService<R> {
             {
                 themes.push(AvailableTheme {
                     manifest,
-                    built_in: false,
+                    provenance: ThemeProvenance {
+                        source: ThemeSource::LocalImport,
+                        imported_at: Some(stored.imported_at),
+                        updated_at: Some(stored.updated_at),
+                    },
                 });
             }
         }
@@ -278,6 +334,15 @@ impl<R: ThemeRepository> ThemeSettingsService<R> {
 
     pub fn import(&self, manifest_json: &str) -> Result<ThemeStatus, ThemeSettingsError> {
         let manifest = parse_custom_theme(manifest_json)?;
+        let status = self.status()?;
+        if status.themes.iter().any(|available| {
+            same_theme_appearance(&available.manifest, &manifest)
+                && (available.manifest.id != manifest.id
+                    || (available.manifest.name == manifest.name
+                        && available.manifest.author == manifest.author))
+        }) {
+            return Err(ThemeSettingsError::DuplicateTheme);
+        }
         let canonical_json =
             serde_json::to_string(&manifest).map_err(|_| ThemeSettingsError::InvalidManifest)?;
         self.repository
@@ -285,6 +350,74 @@ impl<R: ThemeRepository> ThemeSettingsService<R> {
         self.repository.save_selected_theme(&manifest.id)?;
         self.status()
     }
+
+    pub fn export(&self, theme_id: &str) -> Result<ThemeExport, ThemeSettingsError> {
+        let status = self.status()?;
+        let manifest = status
+            .themes
+            .into_iter()
+            .find(|theme| theme.manifest.id == theme_id)
+            .ok_or(ThemeSettingsError::UnknownTheme)?
+            .manifest;
+        let mut content = serde_json::to_string_pretty(&manifest)
+            .map_err(|_| ThemeSettingsError::InvalidManifest)?;
+        content.push('\n');
+        Ok(ThemeExport {
+            filename: format!("{}.wyrmgrid-theme.json", manifest.id),
+            media_type: "application/json",
+            content,
+        })
+    }
+
+    pub fn delete(&self, theme_id: &str) -> Result<ThemeStatus, ThemeSettingsError> {
+        let status = self.status()?;
+        let theme = status
+            .themes
+            .iter()
+            .find(|theme| theme.manifest.id == theme_id)
+            .ok_or(ThemeSettingsError::UnknownTheme)?;
+        if theme.provenance.source == ThemeSource::Bundled {
+            return Err(ThemeSettingsError::BundledThemeCannotBeDeleted);
+        }
+        self.repository
+            .delete_custom_theme(theme_id, DEFAULT_THEME_ID)?;
+        self.status()
+    }
+}
+
+fn same_theme_appearance(first: &ThemeManifest, second: &ThemeManifest) -> bool {
+    let first_colours = theme_colour_values(&first.colors);
+    let second_colours = theme_colour_values(&second.colors);
+    first_colours
+        .iter()
+        .zip(second_colours)
+        .all(|(first, second)| first.eq_ignore_ascii_case(second))
+        && first.chart_palette.len() == second.chart_palette.len()
+        && first
+            .chart_palette
+            .iter()
+            .zip(&second.chart_palette)
+            .all(|(first, second)| first.eq_ignore_ascii_case(second))
+}
+
+fn theme_colour_values(colors: &ThemeColors) -> [&str; 15] {
+    [
+        &colors.canvas,
+        &colors.surface,
+        &colors.surface_elevated,
+        &colors.surface_soft,
+        &colors.text,
+        &colors.text_muted,
+        &colors.line,
+        &colors.accent,
+        &colors.highlight,
+        &colors.danger,
+        &colors.success,
+        &colors.map_aircraft,
+        &colors.map_fbo,
+        &colors.map_label,
+        &colors.map_halo,
+    ]
 }
 
 pub fn built_in_themes() -> Vec<ThemeManifest> {
@@ -427,24 +560,9 @@ fn validate_theme(
         return Err(ThemeSettingsError::InvalidMetadata);
     }
 
-    let colors = [
-        &manifest.colors.canvas,
-        &manifest.colors.surface,
-        &manifest.colors.surface_elevated,
-        &manifest.colors.surface_soft,
-        &manifest.colors.text,
-        &manifest.colors.text_muted,
-        &manifest.colors.line,
-        &manifest.colors.accent,
-        &manifest.colors.highlight,
-        &manifest.colors.danger,
-        &manifest.colors.success,
-        &manifest.colors.map_aircraft,
-        &manifest.colors.map_fbo,
-        &manifest.colors.map_label,
-        &manifest.colors.map_halo,
-    ];
-    if colors.into_iter().any(|colour| !valid_hex_colour(colour))
+    if theme_colour_values(&manifest.colors)
+        .into_iter()
+        .any(|colour| !valid_hex_colour(colour))
         || !(3..=8).contains(&manifest.chart_palette.len())
         || manifest
             .chart_palette
@@ -459,21 +577,31 @@ fn validate_theme(
         manifest.colors.surface_elevated.as_str(),
         manifest.colors.surface_soft.as_str(),
     ];
-    if !contrasts_with_all(&manifest.colors.text, &interface_surfaces, 4.5)
-        || !contrasts_with_all(&manifest.colors.text_muted, &interface_surfaces, 4.5)
-        || !contrasts_with_all(&manifest.colors.accent, &interface_surfaces, 4.5)
-        || !contrasts_with_all(&manifest.colors.highlight, &interface_surfaces, 4.5)
-        || !contrasts_with_all(&manifest.colors.danger, &interface_surfaces, 4.5)
-        || !contrasts_with_all(&manifest.colors.success, &interface_surfaces, 4.5)
-        || contrast_ratio(&manifest.colors.line, &manifest.colors.surface) < 1.5
-        || contrast_ratio(&manifest.colors.map_label, &manifest.colors.map_halo) < 4.5
-        || contrast_ratio(&manifest.colors.map_aircraft, &manifest.colors.map_halo) < 3.0
-        || contrast_ratio(&manifest.colors.map_fbo, &manifest.colors.map_halo) < 3.0
-        || contrast_ratio(&manifest.colors.highlight, &manifest.colors.map_halo) < 3.0
-        || manifest
-            .chart_palette
-            .iter()
-            .any(|colour| contrast_ratio(colour, &manifest.colors.surface) < 3.0)
+    let interface_foregrounds = [
+        manifest.colors.text.as_str(),
+        manifest.colors.text_muted.as_str(),
+        manifest.colors.accent.as_str(),
+        manifest.colors.highlight.as_str(),
+        manifest.colors.danger.as_str(),
+        manifest.colors.success.as_str(),
+    ];
+    let map_markers = [
+        manifest.colors.map_aircraft.as_str(),
+        manifest.colors.map_fbo.as_str(),
+        manifest.colors.highlight.as_str(),
+    ];
+    if interface_foregrounds.into_iter().any(|foreground| {
+        !contrasts_with_all(foreground, &interface_surfaces, THEME_TEXT_MINIMUM_CONTRAST)
+    }) || contrast_ratio(&manifest.colors.line, &manifest.colors.surface)
+        < THEME_DIVIDER_MINIMUM_CONTRAST
+        || contrast_ratio(&manifest.colors.map_label, &manifest.colors.map_halo)
+            < THEME_TEXT_MINIMUM_CONTRAST
+        || map_markers.into_iter().any(|marker| {
+            contrast_ratio(marker, &manifest.colors.map_halo) < THEME_GRAPHIC_MINIMUM_CONTRAST
+        })
+        || manifest.chart_palette.iter().any(|colour| {
+            contrast_ratio(colour, &manifest.colors.surface) < THEME_GRAPHIC_MINIMUM_CONTRAST
+        })
     {
         return Err(ThemeSettingsError::InsufficientContrast);
     }
@@ -947,6 +1075,10 @@ impl From<ThemeSettingsError> for OperationError {
             ThemeSettingsError::InvalidColour => ("theme.invalid_colour", false),
             ThemeSettingsError::InsufficientContrast => ("theme.insufficient_contrast", false),
             ThemeSettingsError::UnknownTheme => ("theme.unknown_theme", false),
+            ThemeSettingsError::DuplicateTheme => ("theme.duplicate", false),
+            ThemeSettingsError::BundledThemeCannotBeDeleted => {
+                ("theme.bundled_delete_forbidden", false)
+            }
         };
         Self {
             code,

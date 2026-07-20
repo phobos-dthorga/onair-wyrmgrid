@@ -60,6 +60,38 @@ fn built_in_themes_satisfy_the_same_safety_rules() {
     }
 }
 
+struct UnavailableThemeRepository;
+
+impl ThemeRepository for UnavailableThemeRepository {
+    fn load_selected_theme(&self) -> Result<Option<String>, ThemeSettingsError> {
+        Err(ThemeSettingsError::StorageUnavailable)
+    }
+
+    fn save_selected_theme(&self, _theme_id: &str) -> Result<(), ThemeSettingsError> {
+        Err(ThemeSettingsError::StorageUnavailable)
+    }
+
+    fn list_custom_themes(&self) -> Result<Vec<PersistedCustomTheme>, ThemeSettingsError> {
+        Err(ThemeSettingsError::StorageUnavailable)
+    }
+
+    fn save_custom_theme(
+        &self,
+        _theme_id: &str,
+        _manifest_json: &str,
+    ) -> Result<(), ThemeSettingsError> {
+        Err(ThemeSettingsError::StorageUnavailable)
+    }
+
+    fn delete_custom_theme(
+        &self,
+        _theme_id: &str,
+        _fallback_theme_id: &str,
+    ) -> Result<(), ThemeSettingsError> {
+        Err(ThemeSettingsError::StorageUnavailable)
+    }
+}
+
 #[test]
 fn imports_and_selects_a_data_only_custom_theme() {
     let service =
@@ -70,11 +102,139 @@ fn imports_and_selects_a_data_only_custom_theme() {
     assert_eq!(status.selected_theme_id, "midnight-cargo");
     assert_eq!(status.active_theme.name, "Midnight Cargo");
     assert_eq!(status.themes.len(), 5);
+    let imported = status
+        .themes
+        .iter()
+        .find(|theme| theme.manifest.id == "midnight-cargo")
+        .expect("imported theme should be listed");
+    assert_eq!(imported.provenance.source, ThemeSource::LocalImport);
+    assert!(
+        imported
+            .provenance
+            .imported_at
+            .as_deref()
+            .is_some_and(|value| value.ends_with('Z'))
+    );
 
     let selected = service
         .select(DEFAULT_THEME_ID)
         .expect("built-in theme should be selectable");
     assert_eq!(selected.selected_theme_id, DEFAULT_THEME_ID);
+}
+
+#[test]
+fn detects_exact_and_visual_theme_duplicates_but_allows_revisions() {
+    let service =
+        ThemeSettingsService::new(Store::open_in_memory().expect("theme store should initialize"));
+    let fixture = include_str!("../../../../schemas/fixtures/theme-manifest-v1.json");
+    service
+        .import(fixture)
+        .expect("first import should succeed");
+
+    assert_eq!(
+        service.import(fixture),
+        Err(ThemeSettingsError::DuplicateTheme)
+    );
+
+    let mut case_only_duplicate = parse_custom_theme(fixture).expect("fixture should parse");
+    case_only_duplicate.colors.accent.make_ascii_lowercase();
+    let case_only_json =
+        serde_json::to_string(&case_only_duplicate).expect("theme should serialize");
+    assert_eq!(
+        service.import(&case_only_json),
+        Err(ThemeSettingsError::DuplicateTheme)
+    );
+
+    let mut duplicate = parse_custom_theme(fixture).expect("fixture should parse");
+    duplicate.id = "midnight-cargo-copy".into();
+    duplicate.name = "Midnight Cargo Copy".into();
+    duplicate.colors.accent.make_ascii_lowercase();
+    let duplicate_json = serde_json::to_string(&duplicate).expect("theme should serialize");
+    assert_eq!(
+        service.import(&duplicate_json),
+        Err(ThemeSettingsError::DuplicateTheme)
+    );
+
+    let mut revision = parse_custom_theme(fixture).expect("fixture should parse");
+    revision.name = "Midnight Cargo Revised".into();
+    let revision_json = serde_json::to_string(&revision).expect("theme should serialize");
+    let revised = service
+        .import(&revision_json)
+        .expect("same-identifier revision should succeed");
+    assert_eq!(revised.active_theme.name, "Midnight Cargo Revised");
+    assert_eq!(revised.themes.len(), 5);
+}
+
+#[test]
+fn exports_any_available_theme_without_host_provenance() {
+    let service =
+        ThemeSettingsService::new(Store::open_in_memory().expect("theme store should initialize"));
+    service
+        .import(include_str!(
+            "../../../../schemas/fixtures/theme-manifest-v1.json"
+        ))
+        .expect("fixture should import");
+
+    let exported = service
+        .export("midnight-cargo")
+        .expect("custom theme should export");
+    assert_eq!(exported.filename, "midnight-cargo.wyrmgrid-theme.json");
+    assert_eq!(exported.media_type, "application/json");
+    assert!(exported.content.ends_with('\n'));
+    let manifest: ThemeManifest =
+        serde_json::from_str(&exported.content).expect("export should remain a theme manifest");
+    assert_eq!(manifest.id, "midnight-cargo");
+    assert!(!exported.content.contains("provenance"));
+    assert!(service.export(DEFAULT_THEME_ID).is_ok());
+}
+
+#[test]
+fn deletes_only_local_themes_and_falls_back_when_the_active_theme_is_deleted() {
+    let service =
+        ThemeSettingsService::new(Store::open_in_memory().expect("theme store should initialize"));
+    service
+        .import(include_str!(
+            "../../../../schemas/fixtures/theme-manifest-v1.json"
+        ))
+        .expect("fixture should import");
+
+    assert_eq!(
+        service.delete(DEFAULT_THEME_ID),
+        Err(ThemeSettingsError::BundledThemeCannotBeDeleted)
+    );
+    let status = service
+        .delete("midnight-cargo")
+        .expect("local theme should delete");
+    assert_eq!(status.selected_theme_id, DEFAULT_THEME_ID);
+    assert_eq!(status.active_theme.id, DEFAULT_THEME_ID);
+    assert_eq!(status.themes.len(), 4);
+    assert_eq!(
+        service.delete("midnight-cargo"),
+        Err(ThemeSettingsError::UnknownTheme)
+    );
+    assert_eq!(
+        service.export("midnight-cargo"),
+        Err(ThemeSettingsError::UnknownTheme)
+    );
+}
+
+#[test]
+fn theme_management_reports_unavailable_storage_without_partial_results() {
+    let service = ThemeSettingsService::new(UnavailableThemeRepository);
+    let fixture = include_str!("../../../../schemas/fixtures/theme-manifest-v1.json");
+
+    assert_eq!(
+        service.import(fixture),
+        Err(ThemeSettingsError::StorageUnavailable)
+    );
+    assert_eq!(
+        service.export(DEFAULT_THEME_ID),
+        Err(ThemeSettingsError::StorageUnavailable)
+    );
+    assert_eq!(
+        service.delete(DEFAULT_THEME_ID),
+        Err(ThemeSettingsError::StorageUnavailable)
+    );
 }
 
 #[test]
@@ -595,5 +755,13 @@ fn exposes_stable_safe_operation_errors() {
     assert_eq!(
         OperationError::from(LanguageSettingsError::ProtectedMessage).code,
         "language.protected_message"
+    );
+    assert_eq!(
+        OperationError::from(ThemeSettingsError::DuplicateTheme).code,
+        "theme.duplicate"
+    );
+    assert_eq!(
+        OperationError::from(ThemeSettingsError::BundledThemeCannotBeDeleted).code,
+        "theme.bundled_delete_forbidden"
     );
 }

@@ -283,9 +283,9 @@ fn dispatch_status(
             &mut status,
             wyrmgrid_application::FlightOperationAvailability {
                 jobs: jobs.is_some(),
-                fleet: fleet.is_some(),
                 staff: staff.is_some(),
             },
+            fleet.as_ref(),
         )
         .map_err(operation_error)?;
     state
@@ -604,6 +604,22 @@ fn import_theme(
     manifest_json: String,
 ) -> Result<wyrmgrid_application::ThemeStatus, wyrmgrid_application::OperationError> {
     state.themes.import(&manifest_json).map_err(operation_error)
+}
+
+#[tauri::command]
+fn export_theme(
+    state: tauri::State<'_, DesktopState>,
+    theme_id: String,
+) -> Result<wyrmgrid_application::ThemeExport, wyrmgrid_application::OperationError> {
+    state.themes.export(&theme_id).map_err(operation_error)
+}
+
+#[tauri::command]
+fn delete_theme(
+    state: tauri::State<'_, DesktopState>,
+    theme_id: String,
+) -> Result<wyrmgrid_application::ThemeStatus, wyrmgrid_application::OperationError> {
+    state.themes.delete(&theme_id).map_err(operation_error)
 }
 
 #[tauri::command]
@@ -1233,6 +1249,8 @@ pub fn run() {
             update_atlas_view,
             select_theme,
             import_theme,
+            export_theme,
+            delete_theme,
             language_status,
             select_language_pack,
             import_language_pack,
