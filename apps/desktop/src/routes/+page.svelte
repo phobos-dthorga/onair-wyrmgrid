@@ -224,6 +224,8 @@
   import ThemeDialog from "$lib/theme/ThemeDialog.svelte";
   import {
     browserThemeStatus,
+    deleteTheme,
+    exportTheme,
     importTheme,
     loadThemeStatus,
     selectTheme,
@@ -1978,6 +1980,47 @@
     }
   }
 
+  async function exportThemeFile(themeId: string): Promise<void> {
+    if (!isDesktopRuntime() || themeBusy) return;
+    themeBusy = true;
+    themeError = "";
+    try {
+      const exported = await exportTheme(themeId);
+      const url = URL.createObjectURL(
+        new Blob([exported.content], { type: exported.media_type }),
+      );
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = exported.filename;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      themeError = operationErrorMessage(
+        error,
+        $translation("error-theme-export"),
+      );
+    } finally {
+      themeBusy = false;
+    }
+  }
+
+  async function removeTheme(themeId: string): Promise<void> {
+    if (!isDesktopRuntime() || themeBusy) return;
+    themeBusy = true;
+    themeError = "";
+    try {
+      themeStatus = await deleteTheme(themeId);
+      applyTheme(themeStatus.active_theme);
+    } catch (error) {
+      themeError = operationErrorMessage(
+        error,
+        $translation("error-theme-delete"),
+      );
+    } finally {
+      themeBusy = false;
+    }
+  }
+
   async function initializeApplication(): Promise<void> {
     try {
       startupOptions = await loadStartupOptions();
@@ -3400,6 +3443,8 @@
     errorMessage={themeError}
     onselect={(themeId) => void chooseTheme(themeId)}
     onimport={(manifestJson) => void addTheme(manifestJson)}
+    onexport={(themeId) => void exportThemeFile(themeId)}
+    ondelete={(themeId) => void removeTheme(themeId)}
     onclose={leaveDialog}
   />
 

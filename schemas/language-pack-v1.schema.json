@@ -32,7 +32,7 @@
     "name": { "type": "string", "minLength": 1, "maxLength": 80 },
     "author": { "type": "string", "minLength": 1, "maxLength": 80 },
     "source_locale": { "const": "en-AU" },
-    "source_catalog_version": { "const": 17 },
+    "source_catalog_version": { "const": 18 },
     "direction": { "enum": ["left_to_right", "right_to_left"] },
     "messages": {
       "type": "object",

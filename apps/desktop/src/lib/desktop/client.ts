@@ -66,6 +66,8 @@ const operationErrorMessageKeys: Readonly<Record<string, TranslationKey>> = {
   "atlas.preferences_storage_unavailable":
     "error-atlas-preferences-storage-unavailable",
   "atlas.invalid_preference": "error-atlas-invalid-preference",
+  "theme.duplicate": "error-theme-duplicate",
+  "theme.bundled_delete_forbidden": "error-theme-bundled-delete",
 };
 
 function normalizeOperationError(value: unknown): OperationError {
