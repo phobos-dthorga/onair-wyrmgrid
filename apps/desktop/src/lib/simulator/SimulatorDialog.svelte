@@ -12,6 +12,7 @@
   } from "$lib/settings/units";
   import "./simulator.css";
   import RecordingHistory from "./RecordingHistory.svelte";
+  import AudioRecordingPanel from "./AudioRecordingPanel.svelte";
   import {
     providerConnectionStateMessageKeys,
     providerDetailFallbackMessageKey,
@@ -21,6 +22,10 @@
   import type {
     ProviderConnectionState,
     SimulatorBridgeView,
+    AudioPlaybackView,
+    AudioRecordingPreferences,
+    AudioRecordingView,
+    AudioSourceSelection,
     SimulatorProviderView,
     SimulatorRecordingView,
     SimulatorSessionDebrief,
@@ -37,6 +42,9 @@
     recordingSession,
     recordingDebrief,
     recordingBusy = false,
+    audioStatus,
+    audioPlayback,
+    audioBusy = false,
     onrefresh,
     onstart,
     onstop,
@@ -49,6 +57,13 @@
     onpage,
     onexport,
     onviewatlas,
+    onaudiopreferences,
+    onaudiorefresh,
+    onaudiopermission,
+    onaudiosource,
+    onaudioplayback,
+    onaudioexport,
+    onaudiodelete,
     onclose,
   }: {
     open: boolean;
@@ -60,6 +75,9 @@
     recordingSession?: SimulatorSessionView;
     recordingDebrief?: SimulatorSessionDebrief;
     recordingBusy?: boolean;
+    audioStatus: AudioRecordingView;
+    audioPlayback?: AudioPlaybackView;
+    audioBusy?: boolean;
     onrefresh: () => void;
     onstart: (providerId: string) => void;
     onstop: (providerId: string) => void;
@@ -72,6 +90,13 @@
     onpage: (sessionId: string, sampleOffset: number) => void;
     onexport: (sessionId: string, format: "json" | "csv") => void;
     onviewatlas: (route: AtlasFlightRoute) => void;
+    onaudiopreferences: (preferences: AudioRecordingPreferences) => void;
+    onaudiorefresh: () => void;
+    onaudiopermission: (sourceId: string) => void;
+    onaudiosource: (selection: AudioSourceSelection) => void;
+    onaudioplayback: (sessionId: string) => void;
+    onaudioexport: (sessionId: string, trackId: string) => void;
+    onaudiodelete: (sessionId: string) => void;
     onclose: () => void;
   } = $props();
 
@@ -397,6 +422,19 @@
         {onpage}
         {onexport}
         {onviewatlas}
+      />
+
+      <AudioRecordingPanel
+        status={audioStatus}
+        playback={audioPlayback}
+        busy={audioBusy}
+        onpreferences={onaudiopreferences}
+        onrefresh={onaudiorefresh}
+        onpermission={onaudiopermission}
+        onsource={onaudiosource}
+        onplayback={onaudioplayback}
+        onexport={onaudioexport}
+        ondelete={onaudiodelete}
       />
 
       <footer class="simulator-footer">

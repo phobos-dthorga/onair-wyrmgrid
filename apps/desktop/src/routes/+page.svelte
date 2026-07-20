@@ -161,11 +161,20 @@
     type OnAirConnectionStatus,
   } from "$lib/onair/types";
   import {
+    chooseAudioExportDestination,
+    deleteAudioRecording,
+    exportAudioTrack,
+    loadAudioPlayback,
+    loadAudioRecording,
     loadSimulatorBridge,
     loadSimulatorPreferences,
     loadSimulatorRecording,
     loadSimulatorRecordingDebrief,
     loadSimulatorRecordingSession,
+    refreshAudioSources,
+    requestAudioSourcePermission,
+    saveAudioRecordingPreferences,
+    saveAudioSourceSelection,
     saveSimulatorPreferences,
     saveSimulatorRecordingPreferences,
     startSimulatorProvider,
@@ -179,6 +188,7 @@
   } from "$lib/simulator/client";
   import SimulatorDialog from "$lib/simulator/SimulatorDialog.svelte";
   import {
+    emptyAudioRecording,
     emptySimulatorBridge,
     emptySimulatorRecording,
     defaultSimulatorPreferences,
@@ -188,6 +198,10 @@
     type SimulatorRecordingView,
     type SimulatorSessionDebrief,
     type SimulatorSessionView,
+    type AudioPlaybackView,
+    type AudioRecordingPreferences,
+    type AudioRecordingView,
+    type AudioSourceSelection,
   } from "$lib/simulator/types";
   import {
     simulatorRecordingPreview,
@@ -317,6 +331,9 @@
   );
   let simulatorRecordingSession = $state<SimulatorSessionView>();
   let simulatorRecordingDebrief = $state<SimulatorSessionDebrief>();
+  let audioRecording = $state<AudioRecordingView>(emptyAudioRecording);
+  let audioPlayback = $state<AudioPlaybackView>();
+  let audioBusy = $state(false);
   let atlasFlightRoute = $state<AtlasFlightRoute>();
   let atlasWeather = $state<FlightWeatherMapView>();
   let selectedAdministrativeRegion = $state<AtlasAdministrativeRegion>();
@@ -977,10 +994,38 @@
     }
   }
 
+  async function refreshAudioRecording(): Promise<void> {
+    if (!isDesktopRuntime()) {
+      audioRecording = emptyAudioRecording;
+      audioPlayback = undefined;
+      return;
+    }
+    try {
+      audioRecording = await loadAudioRecording();
+      if (
+        audioPlayback &&
+        !audioRecording.sessions.some(
+          (session) => session.id === audioPlayback?.session_id,
+        )
+      ) {
+        audioPlayback = undefined;
+      }
+    } catch (error) {
+      simulatorError = operationErrorMessage(
+        error,
+        "WyrmGrid could not read local audio recording status.",
+      );
+    }
+  }
+
   function openSimulator(): void {
     simulatorError = "";
     openRootDialog("simulator");
-    void Promise.all([refreshSimulatorBridge(), refreshSimulatorRecording()]);
+    void Promise.all([
+      refreshSimulatorBridge(),
+      refreshSimulatorRecording(),
+      refreshAudioRecording(),
+    ]);
   }
 
   async function runRecordingAction(
@@ -1002,6 +1047,7 @@
       simulatorRecordingSession = undefined;
       simulatorRecordingDebrief = undefined;
       await refreshSimulatorRecording();
+      await refreshAudioRecording();
     } catch (error) {
       simulatorError = operationErrorMessage(
         error,
@@ -1010,6 +1056,131 @@
       await refreshSimulatorRecording();
     } finally {
       simulatorRecordingBusy = false;
+    }
+  }
+
+  async function saveAudioPreferences(
+    preferences: AudioRecordingPreferences,
+  ): Promise<void> {
+    if (!isDesktopRuntime() || audioBusy) return;
+    audioBusy = true;
+    simulatorError = "";
+    try {
+      audioRecording = await saveAudioRecordingPreferences(preferences);
+    } catch (error) {
+      simulatorError = operationErrorMessage(
+        error,
+        "WyrmGrid could not save the audio recording choice.",
+      );
+    } finally {
+      audioBusy = false;
+    }
+  }
+
+  async function discoverAudioSources(): Promise<void> {
+    if (!isDesktopRuntime() || audioBusy) return;
+    audioBusy = true;
+    simulatorError = "";
+    try {
+      audioRecording = await refreshAudioSources();
+    } catch (error) {
+      simulatorError = operationErrorMessage(
+        error,
+        "WyrmGrid could not refresh audio sources.",
+      );
+    } finally {
+      audioBusy = false;
+    }
+  }
+
+  async function reviewAudioPermission(sourceId: string): Promise<void> {
+    if (!isDesktopRuntime() || audioBusy) return;
+    audioBusy = true;
+    simulatorError = "";
+    try {
+      audioRecording = await requestAudioSourcePermission(sourceId);
+    } catch (error) {
+      simulatorError = operationErrorMessage(
+        error,
+        "WyrmGrid could not complete the audio permission request.",
+      );
+    } finally {
+      audioBusy = false;
+    }
+  }
+
+  async function persistAudioSource(
+    selection: AudioSourceSelection,
+  ): Promise<void> {
+    if (!isDesktopRuntime() || audioBusy) return;
+    audioBusy = true;
+    simulatorError = "";
+    try {
+      audioRecording = await saveAudioSourceSelection(selection);
+    } catch (error) {
+      simulatorError = operationErrorMessage(
+        error,
+        "WyrmGrid could not save that audio source choice.",
+      );
+    } finally {
+      audioBusy = false;
+    }
+  }
+
+  async function openAudioPlayback(sessionId: string): Promise<void> {
+    if (!isDesktopRuntime() || audioBusy) return;
+    audioBusy = true;
+    simulatorError = "";
+    try {
+      audioPlayback = await loadAudioPlayback(sessionId);
+    } catch (error) {
+      simulatorError = operationErrorMessage(
+        error,
+        "WyrmGrid could not authenticate that audio recording.",
+      );
+    } finally {
+      audioBusy = false;
+    }
+  }
+
+  async function exportAudioPackets(
+    sessionId: string,
+    trackId: string,
+  ): Promise<void> {
+    if (!isDesktopRuntime() || audioBusy) return;
+    if (!window.confirm(translate("audio-export-warning"))) return;
+    const destination = await chooseAudioExportDestination(sessionId);
+    if (!destination) return;
+    audioBusy = true;
+    simulatorError = "";
+    try {
+      await exportAudioTrack(sessionId, trackId, destination);
+    } catch (error) {
+      simulatorError = operationErrorMessage(
+        error,
+        "WyrmGrid could not export that audio track.",
+      );
+    } finally {
+      audioBusy = false;
+    }
+  }
+
+  async function removeAudioRecording(sessionId: string): Promise<void> {
+    if (!isDesktopRuntime() || audioBusy) return;
+    if (!window.confirm(translate("audio-delete-warning"))) return;
+    audioBusy = true;
+    simulatorError = "";
+    try {
+      audioRecording = await deleteAudioRecording(sessionId);
+      audioPlayback = undefined;
+    } catch (error) {
+      simulatorError = operationErrorMessage(
+        error,
+        "WyrmGrid could not delete that audio recording.",
+      );
+      await refreshAudioRecording();
+    } finally {
+      audioBusy = false;
     }
   }
 
@@ -2022,12 +2193,17 @@
   async function initializeSimulatorPreferences(): Promise<void> {
     if (!isDesktopRuntime()) return;
     try {
-      [simulatorPreferences, simulatorBridge, simulatorRecording] =
-        await Promise.all([
-          loadSimulatorPreferences(),
-          loadSimulatorBridge(),
-          loadSimulatorRecording(),
-        ]);
+      [
+        simulatorPreferences,
+        simulatorBridge,
+        simulatorRecording,
+        audioRecording,
+      ] = await Promise.all([
+        loadSimulatorPreferences(),
+        loadSimulatorBridge(),
+        loadSimulatorRecording(),
+        loadAudioRecording(),
+      ]);
     } catch (error) {
       settingsError = operationErrorMessage(
         error,
@@ -2189,6 +2365,7 @@
         void Promise.all([
           refreshSimulatorBridge(),
           refreshSimulatorRecording(),
+          refreshAudioRecording(),
         ]),
       1000,
     );
@@ -3252,6 +3429,13 @@
     </footer>
   </main>
 
+  {#if audioRecording.recording_active}
+    <div class="global-audio-indicator" role="status" aria-live="polite">
+      <span aria-hidden="true">●</span>
+      {$translation("audio-recording-active")}
+    </div>
+  {/if}
+
   <ConnectionDialog
     open={showConnectionDialog}
     status={connection}
@@ -3281,6 +3465,9 @@
     recordingSession={simulatorRecordingSession}
     recordingDebrief={simulatorRecordingDebrief}
     recordingBusy={simulatorRecordingBusy}
+    audioStatus={audioRecording}
+    {audioPlayback}
+    {audioBusy}
     onrefresh={() => void refreshSimulatorBridge()}
     onstart={(providerId) => void runSimulatorAction("start", providerId)}
     onstop={(providerId) => void runSimulatorAction("stop", providerId)}
@@ -3295,6 +3482,14 @@
       void pageRecordingSession(sessionId, sampleOffset)}
     onexport={(sessionId, format) => void exportRecording(sessionId, format)}
     onviewatlas={openRecordingRouteInAtlas}
+    onaudiopreferences={(preferences) => void saveAudioPreferences(preferences)}
+    onaudiorefresh={() => void discoverAudioSources()}
+    onaudiopermission={(sourceId) => void reviewAudioPermission(sourceId)}
+    onaudiosource={(selection) => void persistAudioSource(selection)}
+    onaudioplayback={(sessionId) => void openAudioPlayback(sessionId)}
+    onaudioexport={(sessionId, trackId) =>
+      void exportAudioPackets(sessionId, trackId)}
+    onaudiodelete={(sessionId) => void removeAudioRecording(sessionId)}
     onclose={leaveDialog}
   />
 

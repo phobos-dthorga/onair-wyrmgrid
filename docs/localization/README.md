@@ -8,7 +8,7 @@ grammar, plurals, number and date formatting, and bidirectional text.
 
 ## Implemented foundation
 
-- `locales/en-AU.json` is source catalogue version 16.
+- `locales/en-AU.json` is source catalogue version 18.
 - Language-pack manifest schema version 1 is defined in
   `schemas/language-pack-v1.schema.json`.
 - Rust validates and canonicalizes imported packs before SQLite persistence.
@@ -59,11 +59,14 @@ bundled through a future trusted release path.
 Source catalogue version 6 adds the protected `data-protection-` namespace for
 encryption, backup-password, destructive restore, and licence wording. Version
 5 community packs are rejected rather than being silently reinterpreted;
-authors must review the version 16 catalogue, update `source_catalog_version`,
+authors must review the version 18 catalogue, update `source_catalog_version`,
 and import the pack again. Existing ordinary translated message keys keep their
 meaning. Version 5 previously introduced the protected `security-` namespace.
 
-Source catalogue version 16 adds planned route ETA, forecast-validity,
+Source catalogue version 18 adds the consent, source-state, recording-state,
+authenticated-packet inspection, export, deletion, and backup/reset wording for
+the non-shipping audio application slices. Version 17 added explicit historical
+route-weather and Atlas wording. Source catalogue version 16 adds planned route ETA, forecast-validity,
 current-context, and observation-only RADAR wording. Version 15 added the Atlas
 RADAR history controls, timestamp, motion-safe static state, no-coverage key,
 and Dispatch route-weather presentation. Version 14 adds Atlas continuity choices, protected last-view

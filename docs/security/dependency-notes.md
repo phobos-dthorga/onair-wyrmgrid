@@ -1,5 +1,20 @@
 # Dependency security notes
 
+## 2026-07-20: RustCrypto authenticated audio media
+
+External audio segments use RustCrypto `chacha20poly1305` 0.11
+`XChaCha20Poly1305`, `hkdf` 0.13, and `sha2` 0.11. XChaCha supplies a 192-bit
+nonce for independently encrypted segments; HKDF-SHA256 separates the media key
+from the SQLCipher database purpose. WyrmGrid still generates every nonce from
+the operating-system random source and authenticates versioned storage and
+timeline context rather than relying on the envelope digest alone.
+
+The RustCrypto implementation is pure Rust and its project documentation
+reports an NCC Group audit with no significant findings. That does not turn
+WyrmGrid into an audited cryptographic product or provide FIPS validation.
+Envelope fixtures, wrong-context and tamper rejection, key zeroization,
+dependency audit, and release review remain required.
+
 ## 2026-07-15: SQLCipher Community Edition and vendored OpenSSL
 
 `rusqlite` is built with `bundled-sqlcipher-vendored-openssl` so persistent

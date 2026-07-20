@@ -1,6 +1,6 @@
 # Audio Capture Provider protocol version 1
 
-Status: foundation implemented; no native capture or user-facing availability
+Status: protocol and non-native application services implemented; no native capture or live availability
 
 The Audio Capture Provider protocol is the supervised, language-neutral boundary
 for future microphone, application-output, endpoint-output, simulator-mix, and
@@ -10,9 +10,11 @@ media or receives an audio capability.
 
 The implementation consists of the `wyrmgrid-audio-provider-protocol` crate,
 stable source and Opus-profile models in `wyrmgrid-domain`, version-one schemas
-and sanitized fixtures, and a deterministic development-only fake provider.
-There is no application service, persisted consent, media store, native device
-access, playback, interface, installer entry, or live-support claim yet.
+and sanitized fixtures, a deterministic development-only fake provider, and
+application services for default-off consent, fake-provider orchestration,
+encrypted packet segments, lifecycle policy, and authenticated packet
+inspection/export. There is no native device access, audible decoding,
+installer entry, packaged provider, or live-support claim.
 
 ## Compatibility decision
 
@@ -20,6 +22,11 @@ Audio provider protocol version 1 is a new contract with no predecessor to
 preserve. It does not change the application semantic version, Bridge protocol
 version 1, plugin protocol version 1, simulator telemetry schemas, database
 migrations, existing provider manifests, or installer identity.
+
+Application schema 18 and English source catalogue 18 implement the new local
+metadata and interface without changing audio provider protocol version 1,
+Bridge protocol version 1, plugin protocol version 1, portable-backup format
+version 1, application version 0.2.0, or installer identity.
 
 Version-one JSON rejects unknown fields and unknown enum values. Adding or
 removing a message, field, enum value, framing rule, or interpretation therefore
@@ -30,9 +37,9 @@ machine-readable errors do not include source labels or encoded bytes.
 ## Process boundary
 
 A future native provider is a separately supervised sidecar. Starting that
-process does not authorize capture. The application will select exact sources
-and profiles only after the separate Slice 2 consent and orchestration rules are
-implemented. The provider reports capabilities and facts; it does not choose
+process does not authorize capture. The implemented application service selects
+exact sources and profiles only after the separate default-off consent and
+explicit permission rules are satisfied. The provider reports capabilities and facts; it does not choose
 retention, fallback devices, storage, disclosure, or user policy.
 
 The development-only `wyrmgrid-fake-audio-provider` is a protocol test tool. It

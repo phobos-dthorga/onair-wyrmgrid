@@ -26,13 +26,15 @@ choices.
 WyrmGrid will treat simulator-synchronised audio as an optional core recording
 capability with these fixed boundaries:
 
-- **Opus is the implementation codec.** Segmented Ogg Opus is the preferred
-  working representation. A future explicit export may offer another container
-  or a lossless format without changing the stored default.
+- **Opus is the implementation codec.** Working storage begins with bounded,
+  authenticated WyrmGrid Opus-packet segments rather than claiming an Ogg
+  container before native encoding and decoding fixtures exist. A future
+  explicit export may offer a standard container or a lossless format without
+  changing the stored codec decision.
 - **SQLite stores metadata only.** Encoded audio remains in encrypted, bounded
-  local media segments addressed by opaque storage identifiers. A future
-  append-only migration may add session, track, segment, event, retention, and
-  integrity metadata; no released migration is edited.
+  local media segments addressed by opaque storage identifiers. Append-only
+  migration 18 adds session, track, segment, event, retention, and integrity
+  metadata; no released migration is edited.
 - **Audio media does not use WyrmGrid Bridge protocol version 1.** Bridge remains
   the source of translated simulator and radio facts. A separately versioned,
   supervised Audio Capture Provider boundary will negotiate sources and control
@@ -78,10 +80,11 @@ bounded while preserving useful speech and simulator sound. Segmented external
 storage improves crash recovery and keeps ordinary database operations and
 default portable backups bounded.
 
-The feature requires a new provider contract, encrypted-media format, storage
-quota and backup policy, platform capture implementations, append-only
-migration, interface, tests, Privacy Notice revision, legal review, and
-outside-repository live certification before it can ship. X-Plane per-bus
+The provider contract, encrypted-media format, storage quota and backup policy,
+append-only metadata, non-native interface, and deterministic service tests are
+implemented. The feature still requires platform capture implementations,
+Privacy Notice revision, legal review, packaged permission/indicator testing,
+and outside-repository live certification before native capture can ship. X-Plane per-bus
 capture remains a candidate rather than an availability claim. The current
 application, Bridge protocol, telemetry recording, plugin permissions, and
 Privacy Notice remain unchanged by this decision.
@@ -89,9 +92,13 @@ Privacy Notice remain unchanged by this decision.
 ## Implementation note — 2026-07-20
 
 The independently versioned Audio Capture Provider protocol version-one
-foundation is implemented with stable source and Opus-profile models, bounded
-JSON control headers, separately bounded encoded-packet bodies, schemas,
-sanitized fixtures, and a deterministic development-only fake provider. This
-resolves the deferred provider media-transport shape without changing Bridge
-version 1. It does not implement consent, storage, native capture, packaging, or
-user-facing availability; all remaining decision boundaries above stay in force.
+foundation and non-native application Slices 2–4 are implemented. They add
+default-off consent, explicit permissions, fake-provider orchestration,
+schema-18 metadata, purpose-keyed XChaCha20-Poly1305 segments, retention,
+tombstoned deletion, backup omission, authenticated packet inspection, and
+plaintext packet export warnings. The host monotonic origin remains nullable
+until a stored clock-correlation exchange supplies it; the fake path does not
+invent that evidence. Audio protocol 1, Bridge 1, plugin protocol
+1, portable-backup format 1, application 0.2.0, installer identity, and the
+Privacy Notice version remain unchanged. Native capture, packaging, audible
+playback, legal approval, and live availability remain unresolved.

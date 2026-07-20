@@ -8,12 +8,16 @@ major application version.
 
 ### New features
 
-- Added the non-shipping simulator-audio foundation: an independently versioned
-  Audio Capture Provider contract, bounded JSON control and raw encoded-packet
-  framing, stable capability-labelled source and Opus-profile models, schemas,
-  sanitized fixtures, and a deterministic development-only fake provider. No
-  microphone, native capture, consent persistence, media storage, interface, or
-  live-support claim is enabled by this foundation.
+- Added the non-shipping simulator-audio application slices: independently
+  default-off master, manual, automatic, and source-specific consent; explicit
+  permission requests; fake-provider orchestration; schema-18 metadata;
+  purpose-keyed authenticated external segments; retention, pinned-session
+  protection, tombstoned deletion, portable-backup omission, bounded
+  authenticated packet inspection, and separately warned plaintext packet
+  export. The deterministic fake remains a debug-only protocol tool: no
+  microphone, native provider, audible playback, packaged capture, or live-
+  support claim is enabled. The source language catalogue advances to version
+  18 for the audio controls and recording-state labels.
 - Added an optional, profile-driven local development-task framework for
   change-impact dossiers, test matrices, documentation synchronization,
   synthetic fixture variants, sanitized failure triage, and release curation.

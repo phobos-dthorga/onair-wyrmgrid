@@ -1,6 +1,6 @@
 # Simulator-synchronised audio recording
 
-Status: protocol foundation implemented; capture not implemented
+Status: non-native application slices implemented; native capture not implemented
 
 WyrmGrid will offer optional audio recording aligned with a local simulator
 telemetry session. The selected implementation codec is **Opus**. This document
@@ -25,16 +25,18 @@ WyrmGrid Bridge protocol version 1 remains a bounded 64 KiB JSON control and
 telemetry boundary. It is unsuitable for continuous PCM or encoded media. Audio
 Capture Provider protocol version 1 is independently versioned and uses bounded
 JSON control headers plus a separately bounded raw binary body for encoded Opus
-packets. It is exercised by a deterministic development-only fake provider. No
-native provider or application capture service exists yet. A provider may fail
-or be absent without taking down WyrmGrid or the simulator.
+packets. It is exercised by a deterministic development-only fake provider.
+Default-off consent, application orchestration, encrypted media lifecycle, and
+authenticated packet inspection/export now exist, but no native or packaged
+provider exists. A provider may fail or be absent without taking down WyrmGrid
+or the simulator.
 
 The Rust application service is authoritative for consent, source selection,
 session lifecycle, time correlation, storage policy, deletion, and export.
 Native providers enumerate and capture approved sources. Interface controls
 display state and delegate actions; they do not decide recording policy.
 
-## Implemented foundation
+## Implemented non-native slices
 
 Slice 1 implements the provider manifest, version-one control and encoded-packet
 contract, stable source capabilities, fixed Opus profiles, schemas, sanitized
@@ -42,9 +44,13 @@ fixtures, bounded framing, and deterministic fake-provider tests. The exact
 framing and compatibility decision are documented in the
 [Audio Capture Provider protocol reference](audio-capture-provider-protocol.md).
 
-This foundation does not enable recording. Independent consent and application
-orchestration, encrypted media, SQLite metadata, retention, playback, export,
-native devices, packaging, and live certification remain later slices.
+Slices 2–4 implement independent persisted consent, explicit permission
+requests, debug fake-provider orchestration, schema-18 metadata, authenticated
+external packet segments, recovery, retention, tombstoned deletion, portable-
+backup omission, bounded authenticated packet inspection, and separately
+warned plaintext packet export. These slices do not enable a microphone or
+native simulator capture and do not establish audible playback, packaging, or
+live certification.
 
 ## Simulator and operating-system support
 
@@ -174,6 +180,10 @@ The audio session links to one `SimulatorSession` but retains its own lifecycle.
 The host establishes a monotonic session origin. Every track records its start
 offset, sample rate, first sample-frame index, segment frame range, and provider
 sequence. UTC is display metadata and never the sole synchronisation clock.
+The schema keeps the host monotonic origin nullable: the current fake-provider
+orchestration leaves it unavailable because it has not yet performed and stored
+the version-one clock-correlation exchange. It does not substitute zero or UTC
+for unavailable monotonic evidence.
 
 The following remain explicit:
 
@@ -232,13 +242,14 @@ the same versioned profile catalogue.
 
 ## External media and SQLite metadata
 
-Working media uses independently recoverable segmented Ogg Opus tracks. A
-five-minute segment is the starting design target; live tests may justify a
-different bounded duration. Segmentation limits crash damage, permits per-track
-gaps, and avoids rewriting a multi-hour file.
+Working media uses independently recoverable authenticated WyrmGrid Opus-packet
+segments. The initial envelope is deliberately not described as Ogg or
+Matroska. A five-minute segment remains the native-provider starting target;
+live tests may justify a different bounded duration. Segmentation limits crash
+damage, permits per-track gaps, and avoids rewriting a multi-hour file.
 
-Audio bytes never become a SQLite BLOB. A future append-only migration is
-expected to add application-owned records equivalent to:
+Audio bytes never become a SQLite BLOB. Append-only migration 18 adds
+application-owned records equivalent to:
 
 - `AudioRecordingPreferences`: separate consent and automation choices,
   retention, and storage budget;
@@ -255,10 +266,13 @@ Absolute local paths, PCM, Opus packets, voices, and device or application
 labels are not copied into the database. Display labels may remain session-only
 unless a reviewed usability need justifies bounded encrypted persistence.
 
-The media envelope uses a distinct purpose-derived encryption key rather than
-reusing a raw database key. The exact derivation, authenticated-encryption
-format, nonce rules, key version, atomic write/finalise sequence, and recovery
-test vectors require a focused design before implementation.
+The version-one media envelope uses XChaCha20-Poly1305 with a fresh random
+24-byte nonce per segment. HKDF-SHA256 derives a purpose-separated media key
+from the installation's uniformly random database key using fixed versioned
+salt and info labels. Authenticated data binds the envelope header, opaque
+storage key, session, track, segment index, first frame, and frame count. A
+stored SHA-256 envelope digest provides early corruption evidence; successful
+AEAD authentication remains authoritative.
 
 The writer creates a pending segment, writes and authenticates bounded content,
 finalises it atomically, and then marks the metadata complete. Startup detects
@@ -369,26 +383,29 @@ does not establish another.
 ## Delivery sequence
 
 1. Define Audio Capture Provider protocol version 1, fake-provider fixtures,
-   application models, consent rules, Opus profile catalogue, and encrypted
-   media-envelope design. (The protocol, domain capability/profile models,
-   schemas, fixtures, and deterministic fake provider are implemented; consent,
-   application orchestration, and the encrypted envelope remain.)
-2. Add the append-only metadata migration, segmented media store, retention,
-   deletion, backup omission, and playback/export services without native
-   capture.
-3. Deliver the Windows provider for microphone and explicitly selected MSFS or
+   application models, and Opus profile catalogue. (Implemented.)
+2. Add independently default-off master, manual, automatic, and source-specific
+   consent plus explicit permission and fake-provider orchestration. (Implemented
+   without a native provider.)
+3. Add append-only metadata, independently authenticated external segments,
+   startup recovery, retention, pinned-session protection, tombstoned deletion,
+   and portable-backup omission. (Implemented in schema 18.)
+4. Add bounded authenticated packet inspection and separately warned plaintext
+   track export without claiming decoding or a standard media container.
+   (Implemented.)
+5. Deliver the Windows provider for microphone and explicitly selected MSFS or
    application output, with SimConnect COM facts presented as metadata only.
-4. Complete the X-Plane local Web API telemetry provider across WyrmGrid's
+6. Complete the X-Plane local Web API telemetry provider across WyrmGrid's
    supported Windows, macOS, and Linux targets.
-5. Deliver approved microphone and mixed-output capture for those X-Plane
+7. Deliver approved microphone and mixed-output capture for those X-Plane
    targets where platform certification passes.
-6. Run the X-Plane named-audio-group feasibility spike. Add isolated COM1,
+8. Run the X-Plane named-audio-group feasibility spike. Add isolated COM1,
    COM2, pilot, or copilot sources only after the separate review succeeds.
-7. Add explicitly selected external ATC application capture where each platform
+9. Add explicitly selected external ATC application capture where each platform
    can enforce truthful source selection and current service rules permit it.
-8. Update the Privacy Notice, legal versions, threat model, user guide, licence
-   bundle, installers, and release notes only for capabilities actually ready to
-   ship.
+10. Update the Privacy Notice, legal versions, threat model, user guide, licence
+    bundle, installers, and release notes only for capabilities actually ready to
+    ship.
 
 No stage changes the application semantic version or claims live simulator
 support without maintainer authorization and the required release evidence.
@@ -398,7 +415,7 @@ support without maintainer authorization and the required release evidence.
 - native audio libraries and minimum operating-system versions;
 - native provider supervision and platform pipe integration;
 - whether X-Plane FMOD tapping is stable and distributable;
-- media-envelope cryptography and segment duration after benchmarks;
+- native-provider segment duration after benchmarks and live certification;
 - media-inclusive portable backup;
 - initial playback editing, waveform, transcription, or voice analysis; and
 - capture of multiplayer or online-network voices beyond an explicitly selected

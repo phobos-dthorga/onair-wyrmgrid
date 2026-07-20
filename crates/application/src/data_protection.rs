@@ -202,16 +202,21 @@ impl<R: DataProtectionRepository> DataProtectionService<R> {
         &self,
         confirmation: &str,
     ) -> Result<LocalDataResetView, DataProtectionError> {
+        self.validate_local_data_reset(confirmation)?;
+        self.repository.prepare_local_data_reset()?;
+        Ok(LocalDataResetView {
+            restart_required: true,
+        })
+    }
+
+    pub fn validate_local_data_reset(&self, confirmation: &str) -> Result<(), DataProtectionError> {
         if confirmation != LOCAL_DATA_RESET_CONFIRMATION {
             return Err(DataProtectionError::LocalDataResetConfirmationRequired);
         }
         if !self.repository.persistent() {
             return Err(DataProtectionError::PersistentStorageRequired);
         }
-        self.repository.prepare_local_data_reset()?;
-        Ok(LocalDataResetView {
-            restart_required: true,
-        })
+        Ok(())
     }
 }
 
