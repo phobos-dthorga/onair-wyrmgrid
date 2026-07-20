@@ -134,6 +134,7 @@ fn snapshot(destination: &str) -> FlightPlanSnapshot {
 
 fn fleet() -> FleetSnapshotView {
     FleetSnapshotView {
+        company_id: CompanyId(Uuid::new_v4()),
         company: crate::ConnectedCompany {
             name: "Synthetic".into(),
             airline_code: "WYR".into(),

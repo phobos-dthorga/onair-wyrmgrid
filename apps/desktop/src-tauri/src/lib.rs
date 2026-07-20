@@ -320,6 +320,30 @@ fn revise_flight_operation(
 }
 
 #[tauri::command]
+fn assign_flight_operation_aircraft(
+    state: tauri::State<'_, DesktopState>,
+    aircraft_id: String,
+) -> Result<wyrmgrid_application::DispatchStatus, wyrmgrid_application::OperationError> {
+    let fleet = state.onair.fleet_snapshot().map_err(operation_error)?;
+    state
+        .flight_operations
+        .assign_aircraft(&aircraft_id, fleet.as_ref())
+        .map_err(operation_error)?;
+    dispatch_status(state)
+}
+
+#[tauri::command]
+fn clear_flight_operation_aircraft(
+    state: tauri::State<'_, DesktopState>,
+) -> Result<wyrmgrid_application::DispatchStatus, wyrmgrid_application::OperationError> {
+    state
+        .flight_operations
+        .clear_aircraft_assignment()
+        .map_err(operation_error)?;
+    dispatch_status(state)
+}
+
+#[tauri::command]
 fn select_dispatch_job(
     state: tauri::State<'_, DesktopState>,
     job_id: String,
@@ -1225,6 +1249,8 @@ pub fn run() {
             dispatch_status,
             start_flight_operation,
             revise_flight_operation,
+            assign_flight_operation_aircraft,
+            clear_flight_operation_aircraft,
             select_dispatch_job,
             clear_dispatch_job,
             import_simbrief_latest,

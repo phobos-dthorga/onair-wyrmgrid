@@ -6,7 +6,7 @@ fn initializes_the_database_schema() {
     let store = Store::open_in_memory().expect("in-memory database should open");
     assert_eq!(
         store.schema_version().expect("version should be readable"),
-        18
+        19
     );
 }
 
@@ -262,6 +262,55 @@ fn atlas_and_plugin_configuration_migration_preserves_version_16_preferences() {
 }
 
 #[test]
+fn aircraft_assignment_migration_preserves_existing_operation_revisions() {
+    let connection = Connection::open_in_memory().expect("database should open");
+    connection
+        .execute_batch(INITIAL_SCHEMA)
+        .expect("initial schema should apply");
+    connection
+        .execute_batch(FLIGHT_OPERATIONS_SCHEMA)
+        .expect("flight-operation schema should apply");
+    connection
+        .execute(
+            "INSERT INTO flight_operations (
+                operation_id, created_at, current_revision, updated_at
+             ) VALUES ('operation-a', '2026-07-20T00:00:00Z', 1, '2026-07-20T00:00:00Z')",
+            [],
+        )
+        .unwrap();
+    connection
+        .execute(
+            "INSERT INTO flight_operation_revisions (
+                operation_id, revision, reason, created_at, snapshot_json
+             ) VALUES ('operation-a', 1, 'initial', '2026-07-20T00:00:00Z', '{}')",
+            [],
+        )
+        .unwrap();
+
+    connection
+        .execute_batch(FLIGHT_OPERATION_AIRCRAFT_ASSIGNMENTS_SCHEMA)
+        .expect("aircraft-assignment schema should apply");
+    connection
+        .execute_batch(FLIGHT_OPERATION_AIRCRAFT_ASSIGNMENTS_SCHEMA)
+        .expect("aircraft-assignment schema should be idempotent");
+
+    let operation_revisions: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM flight_operation_revisions",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(operation_revisions, 1);
+    assert_eq!(
+        connection
+            .query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0))
+            .unwrap(),
+        19
+    );
+}
+
+#[test]
 fn plugin_startup_preferences_round_trip_and_delete() {
     let store = Store::open_in_memory().expect("store should initialize");
     let record = PluginPreferencesRecord {
@@ -437,6 +486,59 @@ fn flight_operation_revision_rejects_a_stale_expected_revision() {
         store.append_flight_operation_revision_record(2, &stale),
         Err(StorageError::InvalidRecord)
     ));
+}
+
+#[test]
+fn aircraft_assignment_revisions_are_append_only_and_bound_to_the_active_operation() {
+    let store = Store::open_in_memory().expect("store should initialize");
+    let operation = FlightOperationRevisionRecord {
+        operation_id: "operation-a".into(),
+        operation_created_at: "2026-07-20T00:00:00Z".into(),
+        revision: 1,
+        reason: "initial".into(),
+        revision_created_at: "2026-07-20T00:00:00Z".into(),
+        snapshot_json: "{}".into(),
+    };
+    store.create_flight_operation_record(&operation).unwrap();
+    assert_eq!(
+        store
+            .load_active_flight_operation_aircraft_assignment_revision_record()
+            .unwrap(),
+        None
+    );
+
+    let assigned = FlightOperationAircraftAssignmentRevisionRecord {
+        operation_id: operation.operation_id.clone(),
+        revision: 1,
+        reason: "assigned".into(),
+        reviewed_at: "2026-07-20T00:01:00Z".into(),
+        snapshot_json: "{\"revision\":1}".into(),
+    };
+    store
+        .append_flight_operation_aircraft_assignment_revision_record(None, &assigned)
+        .unwrap();
+    assert!(
+        store
+            .append_flight_operation_aircraft_assignment_revision_record(None, &assigned)
+            .is_err()
+    );
+
+    let cleared = FlightOperationAircraftAssignmentRevisionRecord {
+        revision: 2,
+        reason: "cleared".into(),
+        reviewed_at: "2026-07-20T00:02:00Z".into(),
+        snapshot_json: "{\"revision\":2}".into(),
+        ..assigned
+    };
+    store
+        .append_flight_operation_aircraft_assignment_revision_record(Some(1), &cleared)
+        .unwrap();
+    assert_eq!(
+        store
+            .load_active_flight_operation_aircraft_assignment_revision_record()
+            .unwrap(),
+        Some(cleared)
+    );
 }
 
 #[test]

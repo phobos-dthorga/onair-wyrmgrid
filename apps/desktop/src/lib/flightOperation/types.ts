@@ -55,17 +55,31 @@ export type FlightOperationView = {
       unavailable_fields: ManifestUnavailableField[];
     }>;
   };
+  aircraft_assignment?: {
+    revision: number;
+    reviewed_at: string;
+    id: string;
+    registration?: string;
+    model?: string;
+    evidence_observed_at: string;
+  };
   fleet_reconciliation: {
     schema_version: number;
     fleet_available: boolean;
     fleet_observed_at?: string;
     candidate?: {
       id: string;
-      basis: "registration" | "exact_model";
+      basis: "registration" | "exact_model" | "reviewed_assignment";
       registration?: string;
       model?: string;
       current_airport_icao?: string;
     };
+    assignable_aircraft: Array<{
+      id: string;
+      registration?: string;
+      model?: string;
+      current_airport_icao?: string;
+    }>;
     manifest_coverage: {
       leg_count: number;
       passenger_legs_reported: number;

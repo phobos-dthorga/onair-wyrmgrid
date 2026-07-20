@@ -17,6 +17,18 @@ export function reviseFlightOperation(): Promise<DispatchStatus> {
   return invokeDesktop<DispatchStatus>("revise_flight_operation");
 }
 
+export function assignFlightOperationAircraft(
+  aircraftId: string,
+): Promise<DispatchStatus> {
+  return invokeDesktop<DispatchStatus>("assign_flight_operation_aircraft", {
+    aircraftId,
+  });
+}
+
+export function clearFlightOperationAircraft(): Promise<DispatchStatus> {
+  return invokeDesktop<DispatchStatus>("clear_flight_operation_aircraft");
+}
+
 export function importLatestSimBriefPlan(
   referenceKind: SimBriefReferenceKind,
   reference: string,

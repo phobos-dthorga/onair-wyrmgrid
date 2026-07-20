@@ -59,6 +59,8 @@
   import { browserDataProtectionStatus } from "$lib/data-protection/sample";
   import type { DataProtectionStatus } from "$lib/data-protection/types";
   import {
+    assignFlightOperationAircraft,
+    clearFlightOperationAircraft,
     clearDispatchPlan,
     importLatestSimBriefPlan,
     loadDispatchStatus,
@@ -1688,6 +1690,29 @@
     }
   }
 
+  async function reviewAircraftAssignment(aircraftId?: string): Promise<void> {
+    if (dispatchBusy || !isDesktopRuntime()) return;
+    dispatchBusy = true;
+    dispatchError = "";
+    try {
+      acceptDispatchStatus(
+        aircraftId
+          ? await assignFlightOperationAircraft(aircraftId)
+          : await clearFlightOperationAircraft(),
+      );
+    } catch (error) {
+      dispatchError = operationErrorMessage(
+        error,
+        aircraftId
+          ? "WyrmGrid could not save that reviewed aircraft assignment."
+          : "WyrmGrid could not clear the reviewed aircraft assignment.",
+      );
+      await refreshDispatchStatus();
+    } finally {
+      dispatchBusy = false;
+    }
+  }
+
   function openFlightOperationStage(stage: FlightOperationStage): void {
     if (stage === "jobs") {
       const airports = dispatchStatus.snapshot?.airports.value;
@@ -1708,7 +1733,9 @@
       timelineCursor = Math.max(0, timeline.observation_times.length - 1);
       setAtlasLayerVisibility("fleet", true);
       selectedAircraftId =
-        dispatchStatus.operation?.fleet_reconciliation.candidate?.id ?? null;
+        dispatchStatus.operation?.aircraft_assignment?.id ??
+        dispatchStatus.operation?.fleet_reconciliation.candidate?.id ??
+        null;
       activeWorkspace = "atlas";
       return;
     }
@@ -3458,6 +3485,8 @@
         onweather={() => void refreshCurrentDispatchWeather()}
         onclear={() => void clearCurrentDispatchPlan()}
         onoperation={(action) => void runFlightOperationAction(action)}
+        onaircraftassignment={(aircraftId) =>
+          void reviewAircraftAssignment(aircraftId)}
         onjourney={openFlightOperationStage}
         onviewweatheratlas={openDispatchWeatherInAtlas}
         onviewroute={() => requestAtlasRouteFocus()}

@@ -1,8 +1,9 @@
 use super::*;
-use chrono::Utc;
+use chrono::{Duration, Utc};
 
 use crate::{
-    AirportId, JobId, JobLeg, JobSnapshot, OperationalProvenance, ProvenanceKind, SnapshotFreshness,
+    AircraftId, AirportId, JobId, JobLeg, JobSnapshot, OperationalProvenance, Provenance,
+    ProvenanceKind, SnapshotFreshness,
 };
 
 fn airport(icao: &str) -> AirportSummary {
@@ -200,4 +201,61 @@ fn job_snapshot_fixture_remains_valid() {
         },
     };
     assert!(observation.provenance.is_valid());
+}
+
+#[test]
+fn reviewed_aircraft_assignment_revision_validates_identity_provenance_and_tombstones() {
+    let reviewed_at = Utc::now();
+    let assignment = ReviewedAircraftAssignment {
+        schema_version: REVIEWED_AIRCRAFT_ASSIGNMENT_SCHEMA_VERSION,
+        company_id: CompanyId(Uuid::new_v4()),
+        aircraft: Observed {
+            value: AircraftSummary {
+                id: AircraftId(Uuid::new_v4()),
+                registration: Some("VH-WYR".into()),
+                model: Some("Boeing 737-800".into()),
+                location: None,
+                current_airport: Some(airport("YSSY")),
+            },
+            provenance: Provenance {
+                kind: ProvenanceKind::OnAirFact,
+                source: "OnAir".into(),
+                observed_at: reviewed_at - Duration::minutes(1),
+            },
+        },
+    };
+    let assigned = ReviewedAircraftAssignmentRevision {
+        schema_version: REVIEWED_AIRCRAFT_ASSIGNMENT_REVISION_SCHEMA_VERSION,
+        operation_id: FlightOperationId(Uuid::new_v4()),
+        revision: 1,
+        reason: ReviewedAircraftAssignmentRevisionReason::Assigned,
+        reviewed_at,
+        assignment: Some(assignment.clone()),
+    };
+    assigned.validate().unwrap();
+
+    let mut cleared = assigned.clone();
+    cleared.revision = 2;
+    cleared.reason = ReviewedAircraftAssignmentRevisionReason::Cleared;
+    cleared.assignment = None;
+    cleared.validate().unwrap();
+
+    cleared.assignment = Some(assignment.clone());
+    assert_eq!(
+        cleared.validate(),
+        Err(FlightOperationValidationError::InvalidAircraftAssignment)
+    );
+
+    let mut future_evidence = assigned;
+    future_evidence
+        .assignment
+        .as_mut()
+        .unwrap()
+        .aircraft
+        .provenance
+        .observed_at = reviewed_at + Duration::minutes(1);
+    assert_eq!(
+        future_evidence.validate(),
+        Err(FlightOperationValidationError::InvalidAircraftAssignment)
+    );
 }

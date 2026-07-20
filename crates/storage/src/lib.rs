@@ -39,7 +39,9 @@ const PLUGIN_PREFERENCES_SCHEMA: &str = include_str!("../migrations/0016_plugin_
 const ATLAS_AND_PLUGIN_CONFIGURATION_SCHEMA: &str =
     include_str!("../migrations/0017_atlas_and_plugin_configuration.sql");
 const AUDIO_RECORDINGS_SCHEMA: &str = include_str!("../migrations/0018_audio_recordings.sql");
-pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 18;
+const FLIGHT_OPERATION_AIRCRAFT_ASSIGNMENTS_SCHEMA: &str =
+    include_str!("../migrations/0019_flight_operation_aircraft_assignments.sql");
+pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 19;
 
 #[derive(Debug, Error)]
 pub enum StorageError {
@@ -197,6 +199,27 @@ pub struct FlightOperationRevisionRecord {
     pub snapshot_json: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FlightOperationAircraftAssignmentRevisionRecord {
+    pub operation_id: String,
+    pub revision: u32,
+    pub reason: String,
+    pub reviewed_at: String,
+    pub snapshot_json: String,
+}
+
+fn flight_operation_aircraft_assignment_record_from_row(
+    row: &rusqlite::Row<'_>,
+) -> rusqlite::Result<FlightOperationAircraftAssignmentRevisionRecord> {
+    Ok(FlightOperationAircraftAssignmentRevisionRecord {
+        operation_id: row.get(0)?,
+        revision: row.get(1)?,
+        reason: row.get(2)?,
+        reviewed_at: row.get(3)?,
+        snapshot_json: row.get(4)?,
+    })
+}
+
 fn flight_operation_record_from_row(
     row: &rusqlite::Row<'_>,
 ) -> rusqlite::Result<FlightOperationRevisionRecord> {
@@ -317,6 +340,7 @@ impl Store {
         connection.execute_batch(PLUGIN_PREFERENCES_SCHEMA)?;
         connection.execute_batch(ATLAS_AND_PLUGIN_CONFIGURATION_SCHEMA)?;
         connection.execute_batch(AUDIO_RECORDINGS_SCHEMA)?;
+        connection.execute_batch(FLIGHT_OPERATION_AIRCRAFT_ASSIGNMENTS_SCHEMA)?;
         if path.is_some() {
             data_protection::mark_wyrmgrid_database(&connection)?;
         }
@@ -464,6 +488,88 @@ impl Store {
                 record.operation_id,
                 expected_revision
             ],
+        )? != 1
+        {
+            return Err(StorageError::InvalidRecord);
+        }
+        transaction.commit().map_err(StorageError::from)
+    }
+
+    pub fn load_active_flight_operation_aircraft_assignment_revision_record(
+        &self,
+    ) -> Result<Option<FlightOperationAircraftAssignmentRevisionRecord>, StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection
+            .query_row(
+                "SELECT assignment.operation_id,
+                        assignment.assignment_revision,
+                        assignment.reason,
+                        assignment.reviewed_at,
+                        assignment.snapshot_json
+                 FROM active_flight_operation AS active
+                 JOIN flight_operation_aircraft_assignment_revisions AS assignment
+                   ON assignment.operation_id = active.operation_id
+                 WHERE active.singleton_id = 1
+                 ORDER BY assignment.assignment_revision DESC
+                 LIMIT 1",
+                [],
+                flight_operation_aircraft_assignment_record_from_row,
+            )
+            .optional()
+            .map_err(StorageError::from)
+    }
+
+    pub fn append_flight_operation_aircraft_assignment_revision_record(
+        &self,
+        expected_revision: Option<u32>,
+        record: &FlightOperationAircraftAssignmentRevisionRecord,
+    ) -> Result<(), StorageError> {
+        if record.revision != expected_revision.unwrap_or(0).saturating_add(1) {
+            return Err(StorageError::InvalidRecord);
+        }
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        let transaction = connection.transaction()?;
+        let active_operation = transaction
+            .query_row(
+                "SELECT operation_id FROM active_flight_operation WHERE singleton_id = 1",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?;
+        if active_operation.as_deref() != Some(record.operation_id.as_str()) {
+            return Err(StorageError::InvalidRecord);
+        }
+        let current_revision = transaction.query_row(
+            "SELECT MAX(assignment_revision)
+             FROM flight_operation_aircraft_assignment_revisions
+             WHERE operation_id = ?1",
+            [&record.operation_id],
+            |row| row.get::<_, Option<u32>>(0),
+        )?;
+        if current_revision != expected_revision {
+            return Err(StorageError::InvalidRecord);
+        }
+        transaction.execute(
+            "INSERT INTO flight_operation_aircraft_assignment_revisions (
+                operation_id, assignment_revision, reason, reviewed_at, snapshot_json
+             ) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                record.operation_id,
+                record.revision,
+                record.reason,
+                record.reviewed_at,
+                record.snapshot_json
+            ],
+        )?;
+        if transaction.execute(
+            "UPDATE flight_operations SET updated_at = ?1 WHERE operation_id = ?2",
+            params![record.reviewed_at, record.operation_id],
         )? != 1
         {
             return Err(StorageError::InvalidRecord);

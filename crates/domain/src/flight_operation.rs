@@ -5,12 +5,14 @@ use thiserror::Error;
 use uuid::Uuid;
 
 use crate::{
-    AirportSummary, CompanyId, FlightPlanSnapshot, JobLegId, JobLegKind, JobSummary,
-    OperationalObservation, ProvenanceKind,
+    AircraftSummary, AirportSummary, CompanyId, FlightPlanSnapshot, JobLegId, JobLegKind,
+    JobSummary, Observed, OperationalObservation, ProvenanceKind, valid_code, valid_text,
 };
 
 pub const FLIGHT_OPERATION_SCHEMA_VERSION: u32 = 1;
 pub const FLIGHT_MANIFEST_SCHEMA_VERSION: u32 = 1;
+pub const REVIEWED_AIRCRAFT_ASSIGNMENT_SCHEMA_VERSION: u32 = 1;
+pub const REVIEWED_AIRCRAFT_ASSIGNMENT_REVISION_SCHEMA_VERSION: u32 = 1;
 pub const MAX_FLIGHT_MANIFEST_LEGS: usize = 256;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -24,6 +26,100 @@ pub enum FlightOperationRevisionReason {
     PlanChanged,
     JobChanged,
     PlanAndJobChanged,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ReviewedAircraftAssignment {
+    pub schema_version: u32,
+    pub company_id: CompanyId,
+    pub aircraft: Observed<AircraftSummary>,
+}
+
+impl ReviewedAircraftAssignment {
+    pub fn validate(&self) -> Result<(), FlightOperationValidationError> {
+        let aircraft = &self.aircraft.value;
+        let airport_valid = aircraft.current_airport.as_ref().is_none_or(|airport| {
+            !airport.id.0.is_nil()
+                && airport
+                    .icao
+                    .as_deref()
+                    .is_none_or(|icao| valid_code(icao, 3, 8))
+                && airport
+                    .name
+                    .as_deref()
+                    .is_none_or(|name| valid_text(name, 160))
+                && airport.location.is_none_or(|location| location.is_valid())
+        });
+        if self.schema_version != REVIEWED_AIRCRAFT_ASSIGNMENT_SCHEMA_VERSION
+            || self.company_id.0.is_nil()
+            || aircraft.id.0.is_nil()
+            || aircraft
+                .registration
+                .as_deref()
+                .is_some_and(|value| !valid_text(value, 64))
+            || aircraft
+                .model
+                .as_deref()
+                .is_some_and(|value| !valid_text(value, 160))
+            || aircraft
+                .location
+                .is_some_and(|location| !location.is_valid())
+            || !airport_valid
+            || self.aircraft.provenance.kind != ProvenanceKind::OnAirFact
+            || !valid_text(&self.aircraft.provenance.source, 64)
+        {
+            return Err(FlightOperationValidationError::InvalidAircraftAssignment);
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReviewedAircraftAssignmentRevisionReason {
+    Assigned,
+    Reassigned,
+    Cleared,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ReviewedAircraftAssignmentRevision {
+    pub schema_version: u32,
+    pub operation_id: FlightOperationId,
+    pub revision: u32,
+    pub reason: ReviewedAircraftAssignmentRevisionReason,
+    pub reviewed_at: DateTime<Utc>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub assignment: Option<ReviewedAircraftAssignment>,
+}
+
+impl ReviewedAircraftAssignmentRevision {
+    pub fn validate(&self) -> Result<(), FlightOperationValidationError> {
+        if self.schema_version != REVIEWED_AIRCRAFT_ASSIGNMENT_REVISION_SCHEMA_VERSION
+            || self.operation_id.0.is_nil()
+            || self.revision == 0
+            || (self.revision == 1)
+                != (self.reason == ReviewedAircraftAssignmentRevisionReason::Assigned)
+            || matches!(
+                (self.reason, self.assignment.is_some()),
+                (ReviewedAircraftAssignmentRevisionReason::Cleared, true)
+                    | (
+                        ReviewedAircraftAssignmentRevisionReason::Assigned
+                            | ReviewedAircraftAssignmentRevisionReason::Reassigned,
+                        false
+                    )
+            )
+        {
+            return Err(FlightOperationValidationError::InvalidAircraftAssignment);
+        }
+        if let Some(assignment) = &self.assignment {
+            assignment.validate()?;
+            if assignment.aircraft.provenance.observed_at > self.reviewed_at {
+                return Err(FlightOperationValidationError::InvalidAircraftAssignment);
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -200,6 +296,8 @@ pub enum FlightOperationValidationError {
     InvalidJob,
     #[error("invalid flight-operation manifest")]
     InvalidManifest,
+    #[error("invalid reviewed aircraft assignment")]
+    InvalidAircraftAssignment,
 }
 
 #[cfg(test)]

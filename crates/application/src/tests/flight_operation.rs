@@ -1,9 +1,10 @@
 use super::*;
+use crate::AircraftMatchBasis;
 use uuid::Uuid;
 use wyrmgrid_domain::{
-    AircraftId, AircraftSummary, AirportId, AirportSummary, FlightPlanAirports, FlightPlanIdentity,
-    FlightPlanSnapshot, FlightPlanSnapshotId, JobSnapshot, Observed, OperationalObservation,
-    PlannedAircraft, Provenance,
+    AircraftId, AircraftSummary, AirportId, AirportSummary, CompanyId, FlightPlanAirports,
+    FlightPlanIdentity, FlightPlanSnapshot, FlightPlanSnapshotId, JobSnapshot, Observed,
+    OperationalObservation, PlannedAircraft, Provenance,
 };
 use wyrmgrid_storage::Store;
 
@@ -87,6 +88,7 @@ fn fleet(
 ) -> FleetSnapshotView {
     let observed_at = DateTime::from_timestamp(1_784_236_800, 0).unwrap();
     FleetSnapshotView {
+        company_id: CompanyId(Uuid::from_u128(7)),
         company: crate::ConnectedCompany {
             name: "Synthetic Air".into(),
             airline_code: "WYR".into(),
@@ -589,5 +591,174 @@ fn missing_or_unmatched_fleet_evidence_never_claims_reconciliation_ready() {
             .fleet_reconciliation
             .candidate
             .is_none()
+    );
+}
+
+#[test]
+fn reviewed_aircraft_assignment_survives_restart_and_later_plan_revisions() {
+    let store = Store::open_in_memory().unwrap();
+    let service = FlightOperationService::new(store.clone());
+    let mut dispatch = status(Some(plan_with_aircraft("NZAA", "VH-WYR")), None);
+    service.start_from_dispatch(&dispatch).unwrap();
+    let current_fleet = fleet("VH-WYR", Some("YSSY"), SnapshotAvailability::Live);
+    let aircraft_id = Uuid::from_u128(42).to_string();
+    service
+        .assign_aircraft(&aircraft_id, Some(&current_fleet))
+        .unwrap();
+
+    dispatch.snapshot = Some(plan_with_aircraft("NZAA", "VH-NEW"));
+    service.revise_from_dispatch(&dispatch).unwrap();
+
+    let restarted = FlightOperationService::new(store);
+    let mut restarted_status = status(None, None);
+    restarted
+        .enrich_dispatch_status(
+            &mut restarted_status,
+            FlightOperationAvailability {
+                jobs: false,
+                staff: false,
+            },
+            Some(&current_fleet),
+        )
+        .unwrap();
+    let operation = restarted_status.operation.unwrap();
+    let assignment = operation.aircraft_assignment.unwrap();
+    assert_eq!(assignment.revision, 1);
+    assert_eq!(assignment.id, aircraft_id);
+    assert_eq!(operation.revision, 2);
+    assert_eq!(
+        operation
+            .fleet_reconciliation
+            .candidate
+            .as_ref()
+            .unwrap()
+            .basis,
+        AircraftMatchBasis::ReviewedAssignment
+    );
+}
+
+#[test]
+fn aircraft_reassignment_and_clearing_are_append_only_reviewed_decisions() {
+    let service = FlightOperationService::new(Store::open_in_memory().unwrap());
+    let mut dispatch = status(Some(plan_with_aircraft("NZAA", "VH-WYR")), None);
+    service.start_from_dispatch(&dispatch).unwrap();
+    let first_fleet = fleet("VH-WYR", Some("YSSY"), SnapshotAvailability::Live);
+    service
+        .assign_aircraft(&Uuid::from_u128(42).to_string(), Some(&first_fleet))
+        .unwrap();
+
+    let mut second_fleet = first_fleet.clone();
+    second_fleet.snapshot.value[0].id = AircraftId(Uuid::from_u128(43));
+    second_fleet.snapshot.value[0].registration = Some("VH-NEW".into());
+    service
+        .assign_aircraft(&Uuid::from_u128(43).to_string(), Some(&second_fleet))
+        .unwrap();
+    service
+        .enrich_dispatch_status(
+            &mut dispatch,
+            FlightOperationAvailability {
+                jobs: false,
+                staff: false,
+            },
+            Some(&second_fleet),
+        )
+        .unwrap();
+    assert_eq!(
+        dispatch
+            .operation
+            .as_ref()
+            .unwrap()
+            .aircraft_assignment
+            .as_ref()
+            .unwrap()
+            .revision,
+        2
+    );
+
+    service.clear_aircraft_assignment().unwrap();
+    assert_eq!(
+        service.clear_aircraft_assignment(),
+        Err(FlightOperationError::NoAircraftAssignment)
+    );
+    service
+        .enrich_dispatch_status(
+            &mut dispatch,
+            FlightOperationAvailability {
+                jobs: false,
+                staff: false,
+            },
+            Some(&second_fleet),
+        )
+        .unwrap();
+    let operation = dispatch.operation.unwrap();
+    assert!(operation.aircraft_assignment.is_none());
+    assert!(
+        operation
+            .fleet_reconciliation
+            .findings
+            .iter()
+            .any(|finding| {
+                finding.category == DispatchFindingCategory::AircraftAssignment
+                    && finding.status == DispatchFindingStatus::Unavailable
+            })
+    );
+}
+
+#[test]
+fn aircraft_assignment_rejects_stale_missing_duplicate_and_unobserved_evidence() {
+    let service = FlightOperationService::new(Store::open_in_memory().unwrap());
+    let mut dispatch = status(Some(plan_with_aircraft("NZAA", "VH-WYR")), None);
+    service.start_from_dispatch(&dispatch).unwrap();
+    assert_eq!(
+        service.assign_aircraft(&Uuid::from_u128(42).to_string(), None),
+        Err(FlightOperationError::FleetUnavailable)
+    );
+    let stale_fleet = fleet("VH-WYR", Some("YSSY"), SnapshotAvailability::Offline);
+    assert_eq!(
+        service.assign_aircraft(&Uuid::from_u128(42).to_string(), Some(&stale_fleet)),
+        Err(FlightOperationError::FleetEvidenceStale)
+    );
+    let cached_fleet = fleet("VH-WYR", Some("YSSY"), SnapshotAvailability::Cached);
+    assert_eq!(
+        service.assign_aircraft(&Uuid::from_u128(42).to_string(), Some(&cached_fleet)),
+        Err(FlightOperationError::FleetEvidenceStale)
+    );
+    let current_fleet = fleet("VH-WYR", Some("YSSY"), SnapshotAvailability::Live);
+    assert_eq!(
+        service.assign_aircraft(&Uuid::from_u128(99).to_string(), Some(&current_fleet)),
+        Err(FlightOperationError::AircraftNotFound)
+    );
+    service
+        .assign_aircraft(&Uuid::from_u128(42).to_string(), Some(&current_fleet))
+        .unwrap();
+    assert_eq!(
+        service.assign_aircraft(&Uuid::from_u128(42).to_string(), Some(&current_fleet)),
+        Err(FlightOperationError::AircraftAlreadyAssigned)
+    );
+
+    let mut missing_fleet = fleet("VH-OTHER", Some("YSSY"), SnapshotAvailability::Live);
+    missing_fleet.snapshot.value[0].id = AircraftId(Uuid::from_u128(99));
+    service
+        .enrich_dispatch_status(
+            &mut dispatch,
+            FlightOperationAvailability {
+                jobs: false,
+                staff: false,
+            },
+            Some(&missing_fleet),
+        )
+        .unwrap();
+    let operation = dispatch.operation.unwrap();
+    assert!(operation.aircraft_assignment.is_some());
+    assert!(operation.fleet_reconciliation.candidate.is_none());
+    assert!(
+        operation
+            .fleet_reconciliation
+            .findings
+            .iter()
+            .any(|finding| {
+                finding.category == DispatchFindingCategory::AircraftAssignment
+                    && finding.status == DispatchFindingStatus::Difference
+            })
     );
 }

@@ -28,6 +28,7 @@
     onweather,
     onclear,
     onoperation,
+    onaircraftassignment,
     onjourney,
     onviewweatheratlas,
     onviewroute,
@@ -46,6 +47,7 @@
     onweather: () => void;
     onclear: () => void;
     onoperation: (action: "start" | "revise") => void;
+    onaircraftassignment: (aircraftId?: string) => void;
     onjourney: (stage: FlightOperationStage) => void;
     onviewweatheratlas: (stationId?: string) => void;
     onviewroute: () => void;
@@ -599,6 +601,7 @@
         jobSelection={status.selected_job}
         {busy}
         {onoperation}
+        {onaircraftassignment}
       />
 
       <div class="dispatch-plan-grid">
@@ -911,6 +914,7 @@
           jobSelection={status.selected_job}
           {busy}
           {onoperation}
+          {onaircraftassignment}
         />
         <p>
           This accepted revision remains available after restart. Import a
