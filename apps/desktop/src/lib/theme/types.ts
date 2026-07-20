@@ -27,11 +27,21 @@ export type ThemeManifest = {
 
 export type AvailableTheme = {
   manifest: ThemeManifest;
-  built_in: boolean;
+  provenance: {
+    source: "bundled" | "local_import";
+    imported_at?: string;
+    updated_at?: string;
+  };
 };
 
 export type ThemeStatus = {
   selected_theme_id: string;
   active_theme: ThemeManifest;
   themes: AvailableTheme[];
+};
+
+export type ThemeExport = {
+  filename: string;
+  media_type: "application/json";
+  content: string;
 };

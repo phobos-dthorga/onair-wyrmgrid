@@ -850,21 +850,75 @@ fn persists_custom_themes_and_the_selected_theme() {
         .save_selected_theme_record("night-flight")
         .expect("theme selection should save");
 
+    let themes = store
+        .list_custom_theme_records()
+        .expect("custom themes should be readable");
+    assert_eq!(themes.len(), 1);
+    assert_eq!(themes[0].theme_id, "night-flight");
+    assert_eq!(themes[0].manifest_json, "{\"schema_version\":1}");
+    assert!(themes[0].imported_at.ends_with('Z'));
+    assert!(themes[0].updated_at.ends_with('Z'));
+
+    {
+        let connection = store.connection.lock().expect("database should lock");
+        connection
+            .execute(
+                "UPDATE custom_themes
+                 SET imported_at = '2020-01-02 03:04:05',
+                     updated_at = '2020-01-02 03:04:05'
+                 WHERE theme_id = 'night-flight'",
+                [],
+            )
+            .expect("theme timestamps should be adjustable for the fixture");
+    }
+    store
+        .save_custom_theme_record("night-flight", "{\"schema_version\":1,\"revision\":2}")
+        .expect("custom theme revision should save");
+    let revised = store
+        .list_custom_theme_records()
+        .expect("custom themes should be readable");
+    assert_eq!(revised[0].imported_at, "2020-01-02T03:04:05Z");
     assert_eq!(
-        store
-            .list_custom_theme_records()
-            .expect("custom themes should be readable"),
-        vec![CustomThemeRecord {
-            theme_id: "night-flight".into(),
-            manifest_json: "{\"schema_version\":1}".into(),
-        }]
+        revised[0].manifest_json,
+        "{\"schema_version\":1,\"revision\":2}"
     );
+    assert_ne!(revised[0].updated_at, revised[0].imported_at);
     assert_eq!(
         store
             .load_theme_preferences_record()
             .expect("theme preference should be readable"),
         Some(ThemePreferencesRecord {
             selected_theme_id: "night-flight".into(),
+        })
+    );
+}
+
+#[test]
+fn deletes_a_custom_theme_and_resets_its_selection_atomically() {
+    let store = Store::open_in_memory().expect("in-memory database should open");
+    store
+        .save_custom_theme_record("night-flight", "{\"schema_version\":1}")
+        .expect("custom theme should save");
+    store
+        .save_selected_theme_record("night-flight")
+        .expect("theme selection should save");
+
+    store
+        .delete_custom_theme_record("night-flight", "wyrmgrid-classic")
+        .expect("custom theme should be deleted");
+
+    assert!(
+        store
+            .list_custom_theme_records()
+            .expect("custom themes should be readable")
+            .is_empty()
+    );
+    assert_eq!(
+        store
+            .load_theme_preferences_record()
+            .expect("theme preference should be readable"),
+        Some(ThemePreferencesRecord {
+            selected_theme_id: "wyrmgrid-classic".into(),
         })
     );
 }

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { translation } from "$lib/i18n/runtime";
-  import type { ThemeStatus } from "./types";
+  import ThemeAuthoringTool from "./ThemeAuthoringTool.svelte";
+  import type { AvailableTheme, ThemeManifest, ThemeStatus } from "./types";
 
   let {
     open,
@@ -10,6 +11,8 @@
     errorMessage,
     onselect,
     onimport,
+    onexport,
+    ondelete,
     onclose,
   }: {
     open: boolean;
@@ -19,14 +22,25 @@
     errorMessage: string;
     onselect: (themeId: string) => void;
     onimport: (manifestJson: string) => void;
+    onexport: (themeId: string) => void;
+    ondelete: (themeId: string) => void;
     onclose: () => void;
   } = $props();
 
   let fileInput = $state<HTMLInputElement>();
+  let authoringSource = $state<ThemeManifest>();
+  let authoringCopy = $state(true);
   const MAX_MANIFEST_READ_BYTES = 32 * 1024 + 1;
 
+  $effect(() => {
+    if (!open) authoringSource = undefined;
+  });
+
   function handleKeydown(event: KeyboardEvent): void {
-    if (open && event.key === "Escape" && !busy) onclose();
+    if (open && event.key === "Escape" && !busy) {
+      if (authoringSource) authoringSource = undefined;
+      else onclose();
+    }
   }
 
   async function handleFile(event: Event): Promise<void> {
@@ -34,6 +48,45 @@
     const file = input.files?.[0];
     input.value = "";
     if (file) onimport(await file.slice(0, MAX_MANIFEST_READ_BYTES).text());
+  }
+
+  function beginAuthoring(theme: ThemeManifest, copy: boolean): void {
+    authoringCopy = copy;
+    authoringSource = theme;
+  }
+
+  function saveAuthoredTheme(manifestJson: string): void {
+    authoringSource = undefined;
+    onimport(manifestJson);
+  }
+
+  function confirmDelete(theme: ThemeManifest): void {
+    if (
+      window.confirm(
+        $translation("destructive-theme-delete-confirm", { name: theme.name }),
+      )
+    ) {
+      ondelete(theme.id);
+    }
+  }
+
+  function activeAvailableTheme(): AvailableTheme {
+    return (
+      status.themes.find(
+        (theme) => theme.manifest.id === status.selected_theme_id,
+      ) ?? status.themes[0]
+    );
+  }
+
+  function localDate(value: string | undefined): string {
+    if (!value) return $translation("security-theme-provenance-time-unknown");
+    const date = new Date(value);
+    return Number.isNaN(date.valueOf())
+      ? $translation("security-theme-provenance-time-unknown")
+      : new Intl.DateTimeFormat(undefined, {
+          dateStyle: "medium",
+          timeStyle: "short",
+        }).format(date);
   }
 </script>
 
@@ -43,11 +96,12 @@
   <div class="dialog-backdrop">
     <div
       class="theme-dialog"
+      class:authoring-dialog={authoringSource}
       role="dialog"
       aria-modal="true"
       aria-labelledby="theme-title"
     >
-      <header>
+      <header class="dialog-header">
         <div>
           <span class="eyebrow">{$translation("theme-eyebrow")}</span>
           <h2 id="theme-title">{$translation("theme-title")}</h2>
@@ -61,74 +115,153 @@
         >
       </header>
 
-      <p class="introduction">
-        {$translation("theme-introduction")}
-      </p>
-
-      <div class="theme-list" aria-label={$translation("theme-list-label")}>
-        {#each status.themes as theme}
+      {#if authoringSource}
+        {#key `${authoringSource.id}:${authoringCopy}`}
+          <ThemeAuthoringTool
+            source={authoringSource}
+            copy={authoringCopy}
+            themes={status.themes}
+            {desktopRuntime}
+            {busy}
+            onsave={saveAuthoredTheme}
+            onclose={() => (authoringSource = undefined)}
+          />
+        {/key}
+      {:else}
+        <div class="introduction-row">
+          <p class="introduction">
+            {$translation("theme-introduction")}
+          </p>
           <button
-            class="theme-card"
-            class:selected={theme.manifest.id === status.selected_theme_id}
+            class="author-button"
             type="button"
             disabled={busy}
-            aria-pressed={theme.manifest.id === status.selected_theme_id}
-            onclick={() => onselect(theme.manifest.id)}
+            onclick={() =>
+              beginAuthoring(activeAvailableTheme().manifest, true)}
           >
-            <span class="swatches" aria-hidden="true">
-              {#each [theme.manifest.colors.canvas, theme.manifest.colors.surface, theme.manifest.colors.accent, theme.manifest.colors.highlight, theme.manifest.colors.text] as colour}
-                <i style:background={colour}></i>
-              {/each}
-            </span>
-            <span class="theme-copy">
-              <strong>{theme.manifest.name}</strong>
-              <small>
-                {theme.built_in
-                  ? $translation("theme-built-in")
-                  : $translation("theme-community", {
+            {$translation("theme-authoring-open")}
+          </button>
+        </div>
+
+        <div class="theme-list" aria-label={$translation("theme-list-label")}>
+          {#each status.themes as theme}
+            <article
+              class="theme-card"
+              class:selected={theme.manifest.id === status.selected_theme_id}
+            >
+              <button
+                class="theme-choice"
+                type="button"
+                disabled={busy}
+                aria-pressed={theme.manifest.id === status.selected_theme_id}
+                onclick={() => onselect(theme.manifest.id)}
+              >
+                <span class="swatches" aria-hidden="true">
+                  {#each [theme.manifest.colors.canvas, theme.manifest.colors.surface, theme.manifest.colors.accent, theme.manifest.colors.highlight, theme.manifest.colors.text] as colour}
+                    <i style:background={colour}></i>
+                  {/each}
+                </span>
+                <span class="theme-copy">
+                  <strong>{theme.manifest.name}</strong>
+                  <small>
+                    {theme.provenance.source === "bundled"
+                      ? $translation("security-theme-provenance-bundled")
+                      : $translation("security-theme-provenance-imported", {
+                          date: localDate(theme.provenance.imported_at),
+                        })}
+                  </small>
+                  {#if theme.provenance.source === "local_import" && theme.provenance.updated_at !== theme.provenance.imported_at}
+                    <small>
+                      {$translation("security-theme-provenance-updated", {
+                        date: localDate(theme.provenance.updated_at),
+                      })}
+                    </small>
+                  {/if}
+                  <small>
+                    {$translation("security-theme-author-claim", {
                       author:
                         theme.manifest.author ??
                         $translation("theme-unknown-author"),
                     })}
-              </small>
-            </span>
-            {#if theme.manifest.id === status.selected_theme_id}
-              <span class="selected-label">{$translation("theme-active")}</span>
-            {/if}
-          </button>
-        {/each}
-      </div>
+                  </small>
+                </span>
+                {#if theme.manifest.id === status.selected_theme_id}
+                  <span class="selected-label"
+                    >{$translation("theme-active")}</span
+                  >
+                {/if}
+              </button>
+              <div class="theme-actions">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onclick={() =>
+                    beginAuthoring(
+                      theme.manifest,
+                      theme.provenance.source === "bundled",
+                    )}
+                >
+                  {$translation(
+                    theme.provenance.source === "bundled"
+                      ? "theme-create-copy"
+                      : "theme-edit",
+                  )}
+                </button>
+                <button
+                  type="button"
+                  disabled={busy || !desktopRuntime}
+                  onclick={() => onexport(theme.manifest.id)}
+                >
+                  {$translation("theme-export")}
+                </button>
+                {#if theme.provenance.source === "local_import"}
+                  <button
+                    class="delete-button"
+                    type="button"
+                    disabled={busy || !desktopRuntime}
+                    onclick={() => confirmDelete(theme.manifest)}
+                  >
+                    {$translation("destructive-theme-delete")}
+                  </button>
+                {/if}
+              </div>
+            </article>
+          {/each}
+        </div>
+      {/if}
 
       {#if errorMessage}<p class="error-message" role="alert">
           {errorMessage}
         </p>{/if}
 
-      <footer>
-        <div>
-          <strong>{$translation("theme-community-files")}</strong>
-          <span>{$translation("theme-community-files-detail")}</span>
-        </div>
-        <input
-          bind:this={fileInput}
-          class="file-input"
-          type="file"
-          accept="application/json,.json"
-          onchange={(event) => void handleFile(event)}
-        />
-        <button
-          class="import-button"
-          type="button"
-          disabled={busy || !desktopRuntime}
-          title={desktopRuntime
-            ? $translation("theme-import-title")
-            : $translation("theme-import-desktop-only")}
-          onclick={() => fileInput?.click()}
-        >
-          {busy
-            ? $translation("theme-applying")
-            : $translation("theme-import")}
-        </button>
-      </footer>
+      {#if !authoringSource}
+        <footer>
+          <div>
+            <strong>{$translation("theme-community-files")}</strong>
+            <span>{$translation("theme-community-files-detail")}</span>
+          </div>
+          <input
+            bind:this={fileInput}
+            class="file-input"
+            type="file"
+            accept="application/json,.json"
+            onchange={(event) => void handleFile(event)}
+          />
+          <button
+            class="import-button"
+            type="button"
+            disabled={busy || !desktopRuntime}
+            title={desktopRuntime
+              ? $translation("theme-import-title")
+              : $translation("theme-import-desktop-only")}
+            onclick={() => fileInput?.click()}
+          >
+            {busy
+              ? $translation("theme-applying")
+              : $translation("theme-import")}
+          </button>
+        </footer>
+      {/if}
     </div>
   </div>
 {/if}
@@ -145,7 +278,7 @@
     backdrop-filter: blur(9px);
   }
   .theme-dialog {
-    width: min(680px, calc(100vw - 48px));
+    width: min(760px, calc(100vw - 48px));
     max-height: calc(100vh - 48px);
     overflow: auto;
     border: 1px solid var(--color-line-soft);
@@ -154,15 +287,19 @@
     background: var(--color-surface-elevated);
     box-shadow: 0 28px 90px var(--color-shadow);
   }
-  header,
-  footer {
+  .theme-dialog.authoring-dialog {
+    width: min(1080px, calc(100vw - 48px));
+  }
+  .dialog-header,
+  footer,
+  .introduction-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 18px;
     padding: 20px 22px;
   }
-  header {
+  .dialog-header {
     border-bottom: 1px solid var(--color-line-faint);
   }
   h2 {
@@ -178,12 +315,26 @@
     font-size: 26px;
     cursor: pointer;
   }
+  .introduction-row {
+    align-items: start;
+    padding-bottom: 5px;
+  }
   .introduction {
+    max-width: 520px;
     margin: 0;
-    padding: 17px 22px 5px;
     color: var(--color-text-muted);
     font-size: 12px;
     line-height: 1.55;
+  }
+  .author-button,
+  .import-button {
+    flex: none;
+    padding: 9px 13px;
+    border: 1px solid var(--color-accent-border);
+    border-radius: 4px;
+    color: var(--color-accent);
+    background: var(--color-accent-soft);
+    cursor: pointer;
   }
   .theme-list {
     display: grid;
@@ -192,27 +343,35 @@
   }
   .theme-card {
     display: grid;
-    grid-template-columns: 104px 1fr auto;
-    align-items: center;
-    gap: 14px;
-    width: 100%;
-    padding: 13px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: stretch;
+    overflow: hidden;
     border: 1px solid var(--color-line-faint);
     border-radius: 6px;
-    color: var(--color-text);
-    text-align: left;
     background: var(--color-surface);
-    cursor: pointer;
   }
   .theme-card:hover,
   .theme-card.selected {
     border-color: var(--color-accent-border);
     background: var(--color-accent-soft);
   }
+  .theme-choice {
+    display: grid;
+    grid-template-columns: 104px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 14px;
+    min-width: 0;
+    padding: 13px;
+    border: 0;
+    color: var(--color-text);
+    text-align: left;
+    background: transparent;
+    cursor: pointer;
+  }
   .swatches {
     display: grid;
     grid-template-columns: repeat(5, 1fr);
-    height: 38px;
+    height: 42px;
     overflow: hidden;
     border: 1px solid var(--color-line-soft);
     border-radius: 4px;
@@ -222,7 +381,8 @@
   }
   .theme-copy {
     display: grid;
-    gap: 4px;
+    gap: 3px;
+    min-width: 0;
   }
   .theme-copy strong,
   footer strong {
@@ -230,8 +390,11 @@
   }
   .theme-copy small,
   footer span {
+    overflow: hidden;
     color: var(--color-text-muted);
-    font-size: 10px;
+    font-size: 9px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .selected-label {
     color: var(--color-accent);
@@ -239,6 +402,28 @@
     font-weight: 700;
     letter-spacing: 0.12em;
     text-transform: uppercase;
+  }
+  .theme-actions {
+    display: grid;
+    align-content: center;
+    min-width: 88px;
+    border-left: 1px solid var(--color-line-faint);
+  }
+  .theme-actions button {
+    padding: 6px 10px;
+    border: 0;
+    color: var(--color-text-muted);
+    background: transparent;
+    font-size: 9px;
+    cursor: pointer;
+  }
+  .theme-actions button:hover {
+    color: var(--color-accent);
+    background: var(--color-accent-soft);
+  }
+  .theme-actions .delete-button:hover {
+    color: var(--color-danger);
+    background: var(--color-danger-soft);
   }
   .error-message {
     margin: 0 22px 16px;
@@ -264,16 +449,24 @@
     overflow: hidden;
     clip: rect(0, 0, 0, 0);
   }
-  .import-button {
-    padding: 9px 13px;
-    border: 1px solid var(--color-accent-border);
-    border-radius: 4px;
-    color: var(--color-accent);
-    background: var(--color-accent-soft);
-    cursor: pointer;
-  }
   button:disabled {
     opacity: 0.55;
     cursor: not-allowed;
+  }
+  @media (max-width: 650px) {
+    .theme-card {
+      grid-template-columns: 1fr;
+    }
+    .theme-choice {
+      grid-template-columns: 76px minmax(0, 1fr);
+    }
+    .selected-label {
+      display: none;
+    }
+    .theme-actions {
+      grid-template-columns: repeat(3, 1fr);
+      border-top: 1px solid var(--color-line-faint);
+      border-left: 0;
+    }
   }
 </style>

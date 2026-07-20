@@ -542,6 +542,22 @@ fn import_theme(
 }
 
 #[tauri::command]
+fn export_theme(
+    state: tauri::State<'_, DesktopState>,
+    theme_id: String,
+) -> Result<wyrmgrid_application::ThemeExport, wyrmgrid_application::OperationError> {
+    state.themes.export(&theme_id).map_err(operation_error)
+}
+
+#[tauri::command]
+fn delete_theme(
+    state: tauri::State<'_, DesktopState>,
+    theme_id: String,
+) -> Result<wyrmgrid_application::ThemeStatus, wyrmgrid_application::OperationError> {
+    state.themes.delete(&theme_id).map_err(operation_error)
+}
+
+#[tauri::command]
 fn language_status(
     state: tauri::State<'_, DesktopState>,
 ) -> Result<wyrmgrid_application::LanguageStatus, wyrmgrid_application::OperationError> {
@@ -996,6 +1012,8 @@ pub fn run() {
             update_atlas_view,
             select_theme,
             import_theme,
+            export_theme,
+            delete_theme,
             language_status,
             select_language_pack,
             import_language_pack,

@@ -259,6 +259,8 @@ pub struct SimulatorSessionEventRecord {
 pub struct CustomThemeRecord {
     pub theme_id: String,
     pub manifest_json: String,
+    pub imported_at: String,
+    pub updated_at: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2048,13 +2050,21 @@ impl Store {
             .connection
             .lock()
             .map_err(|_| StorageError::StateUnavailable)?;
-        let mut statement = connection
-            .prepare("SELECT theme_id, manifest_json FROM custom_themes ORDER BY theme_id ASC")?;
+        let mut statement = connection.prepare(
+            "SELECT theme_id,
+                    manifest_json,
+                    strftime('%Y-%m-%dT%H:%M:%SZ', imported_at),
+                    strftime('%Y-%m-%dT%H:%M:%SZ', updated_at)
+             FROM custom_themes
+             ORDER BY theme_id ASC",
+        )?;
         let records = statement
             .query_map([], |row| {
                 Ok(CustomThemeRecord {
                     theme_id: row.get(0)?,
                     manifest_json: row.get(1)?,
+                    imported_at: row.get(2)?,
+                    updated_at: row.get(3)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -2081,6 +2091,26 @@ impl Store {
             )
             .map(|_| ())
             .map_err(StorageError::from)
+    }
+
+    pub fn delete_custom_theme_record(
+        &self,
+        theme_id: &str,
+        fallback_theme_id: &str,
+    ) -> Result<(), StorageError> {
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        let transaction = connection.transaction()?;
+        transaction.execute("DELETE FROM custom_themes WHERE theme_id = ?1", [theme_id])?;
+        transaction.execute(
+            "UPDATE theme_preferences
+             SET selected_theme_id = ?1, updated_at = CURRENT_TIMESTAMP
+             WHERE singleton_id = 1 AND selected_theme_id = ?2",
+            params![fallback_theme_id, theme_id],
+        )?;
+        transaction.commit().map_err(StorageError::from)
     }
 }
 

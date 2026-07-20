@@ -473,7 +473,12 @@
   versioned schema, restricted to fixed hexadecimal colour roles and a bounded
   chart palette, and contrast-checked in Rust. Unknown fields, arbitrary CSS,
   code, markup, URLs, fonts, images, paths, selectors, layout, and reserved host
-  identifiers are rejected before persistence.
+  identifiers are rejected before persistence. The authoring preview is
+  advisory and cannot bypass the shared Rust validator; exact or visually
+  duplicate imports are rejected. Host-owned bundled/local provenance and local
+  timestamps are displayed separately from the unverified manifest author
+  claim and are excluded from exports. Only local imports can be deleted, and
+  deleting an active theme atomically restores the bundled default selection.
 - community language packs are data-only, limited to 256 KiB, parsed and
   canonicalized in Rust, restricted to known source-catalogue keys, and checked
   for schema/source version, metadata, Fluent syntax, variable parity, message
