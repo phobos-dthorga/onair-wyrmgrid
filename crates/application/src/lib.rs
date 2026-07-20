@@ -580,6 +580,8 @@ pub enum SnapshotStorage {
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct FleetSnapshotView {
+    #[serde(skip)]
+    pub company_id: CompanyId,
     pub company: ConnectedCompany,
     pub snapshot: Observed<Vec<AircraftSummary>>,
     pub availability: SnapshotAvailability,
@@ -1204,6 +1206,19 @@ impl From<FlightOperationError> for OperationError {
             }
             FlightOperationError::NoRevisionChange => {
                 ("operation.no_revision_change", false, false)
+            }
+            FlightOperationError::FleetUnavailable => ("operation.fleet_unavailable", true, false),
+            FlightOperationError::FleetEvidenceStale => {
+                ("operation.fleet_evidence_stale", true, false)
+            }
+            FlightOperationError::AircraftNotFound => {
+                ("operation.aircraft_not_found", false, false)
+            }
+            FlightOperationError::AircraftAlreadyAssigned => {
+                ("operation.aircraft_already_assigned", false, false)
+            }
+            FlightOperationError::NoAircraftAssignment => {
+                ("operation.no_aircraft_assignment", false, false)
             }
             FlightOperationError::InvalidStoredOperation => {
                 ("operation.invalid_stored_state", false, true)
@@ -2069,6 +2084,7 @@ fn fleet_view(
     storage: SnapshotStorage,
 ) -> FleetSnapshotView {
     FleetSnapshotView {
+        company_id: stored.company.id.clone(),
         company: ConnectedCompany::from(&stored.company),
         snapshot: stored.snapshot,
         availability,

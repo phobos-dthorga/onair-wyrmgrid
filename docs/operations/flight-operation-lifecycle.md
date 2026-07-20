@@ -1,8 +1,8 @@
 # Flight operation lifecycle
 
 Status: staged implementation; schema-1 persistent operation identity,
-append-only revisions, job-derived aggregate manifest, and journey summary
-implemented.
+append-only plan/job and reviewed-aircraft-assignment revisions, job-derived
+aggregate manifest, and journey summary implemented.
 
 This document defines the long-term WyrmGrid journey from an attributed flight
 plan to a recorded and reviewed operation. It joins plan, weather, OnAir work,
@@ -46,6 +46,12 @@ schema-1 contracts. Append-only database migration 13 stores immutable revision
 snapshots under a stable operation identity and points to one active operation.
 These domain schemas, database migration number, Bridge protocol, and plugin
 protocol are independent compatibility markers.
+
+Append-only migration 19 adds an independently numbered reviewed-aircraft-
+assignment stream. The separation prevents an aircraft decision from being
+mislabelled as a plan or job revision. Assignment schema 1 retains stable
+company/aircraft identity and attributed OnAir evidence; a clear action writes
+an explicit tombstone revision rather than deleting history.
 
 The implemented manifest is deliberately narrow: it deterministically copies
 per-leg aggregate passenger counts and freight weights from the explicitly
@@ -313,14 +319,15 @@ not alter that boundary:
    per-leg aggregate passenger/freight facts. Source gaps remain explicit.
    Individual people, company travellers, avatar presence, consignments, and
    per-leg roles remain future evidence-gated work.
-3. **Fleet reconciliation** — foundation implemented: compare the accepted
+3. **Fleet reconciliation and assignment** — implemented: compare the accepted
    plan with current fleet evidence using exact registration or a unique exact
    model candidate, show model and airport findings, preserve fleet freshness,
-   and summarize retained manifest coverage. The candidate is read-only and is
-   not an assignment. Seats, payload capacity, configuration, maintenance, and
-   operational availability remain explicitly unavailable until authenticated
-   provider evidence proves those fields; persisted user-reviewed assignment
-   remains the next fleet slice.
+   summarize retained manifest coverage, and let the user explicitly confirm,
+   change, or clear a company aircraft. Assignment decisions are append-only,
+   survive restart and later plan/job revisions, and never write to OnAir.
+   Seats, payload capacity, configuration, maintenance, and operational
+   availability remain explicitly unavailable until authenticated provider
+   evidence proves those fields.
 4. **Staff reconciliation** — add only live-contract staff facts proven by
    fixtures, then distinguish operating assignments from transported people.
 5. **Operational review** — implement explainable cross-source findings,

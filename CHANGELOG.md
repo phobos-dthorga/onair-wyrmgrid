@@ -42,6 +42,11 @@ major application version.
   reports manifest coverage and fleet freshness, and keeps unverified seats,
   payload capacity, configuration, and operational availability explicitly
   unavailable rather than treating the candidate as an assignment.
+- Added explicit reviewed aircraft assignment for active flight operations.
+  Users can confirm, change, or clear a current company aircraft without an
+  OnAir write; each decision is retained in a separate append-only assignment
+  revision stream. Current fleet evidence is reconciled by stable aircraft and
+  company identity, while stale, missing, or changed evidence remains visible.
 - Added independent first-party AviationWeather.gov, Open-Meteo, and RainViewer
   provider plugins with bounded weather requests and publications.
 - Added sourced airport, global-model, and radar weather presentation in Atlas,

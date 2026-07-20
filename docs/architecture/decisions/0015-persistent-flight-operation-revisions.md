@@ -37,8 +37,21 @@ revisions in the core domain.
   schema 1, manifest schema 1, journey schema 1, and database migration 13 are
   independent compatibility markers.
 - Provider credentials, raw responses, inferred people, invented consignments,
-  aircraft assignments, staff assignments, and readiness guarantees are not
-  part of this slice.
+  staff assignments, and readiness guarantees are not part of this slice.
+
+### Reviewed aircraft-assignment extension
+
+Append-only migration 19 adds a separate assignment-revision stream linked to
+the active operation. It does not rewrite migration 13 or mutate accepted
+plan/job revisions. Each revision records an explicit assigned, reassigned, or
+cleared decision; an assignment retains stable company and aircraft identities,
+the sanitized aircraft facts shown during review, and their OnAir provenance.
+
+The current assignment follows later plan/job revisions until the user changes
+or clears it. New fleet evidence can mark the retained decision stale, missing,
+or different, but cannot silently replace it. Assignment schema 1, assignment-
+revision schema 1, and database migration 19 are internal compatibility markers;
+the public plugin and Bridge protocols are unchanged.
 
 The application service derives journey states and context-change notices.
 Tauri commands delegate to that service, and Svelte only displays the resulting
@@ -55,6 +68,6 @@ key.
 The active pointer is not deletion or archival policy. Earlier operations and
 revisions remain retained until a later, separately designed management flow
 can list, archive, export, or delete them safely. Bridge recording association,
-full people and consignment identities, fleet and staff assignment, operational
+full people and consignment identities, staff assignment, operational
 review, and Hoard debrief linkage remain later revisions of the lifecycle
 model rather than assumptions hidden in schema 1.

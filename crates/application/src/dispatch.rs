@@ -9,8 +9,9 @@ use std::sync::{
 use std::time::{Duration, Instant};
 use thiserror::Error;
 use wyrmgrid_domain::{
-    AircraftSummary, CompanyId, Coordinates, FlightPlanAirport, FlightPlanSnapshot, JobSummary,
-    Mass, MassUnit, OperationalProvenance, ProvenanceKind, SnapshotFreshness, WeatherSnapshot,
+    AircraftId, AircraftSummary, CompanyId, Coordinates, FlightPlanAirport, FlightPlanSnapshot,
+    JobSummary, Mass, MassUnit, OperationalProvenance, ProvenanceKind, SnapshotFreshness,
+    WeatherSnapshot,
 };
 use wyrmgrid_plugin_protocol::{WeatherCapability, WeatherTimeWindow};
 use wyrmgrid_simbrief_api::{ClientError, SimBriefClient, UserReference, UserReferenceKind};
@@ -70,6 +71,7 @@ pub enum DispatchFindingCategory {
     AircraftPayloadCapacity,
     AircraftConfiguration,
     AircraftAvailability,
+    AircraftAssignment,
     Payload,
     Schedule,
     JobRoute,
@@ -80,6 +82,7 @@ pub enum DispatchFindingCategory {
 pub enum AircraftMatchBasis {
     Registration,
     ExactModel,
+    ReviewedAssignment,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -826,6 +829,22 @@ pub(crate) fn compare_plan_to_fleet_aircraft(
     plan: &FlightPlanSnapshot,
     fleet: Option<&FleetSnapshotView>,
 ) -> DispatchComparison {
+    compare_plan_to_fleet_aircraft_with_assignment(plan, fleet, None)
+}
+
+pub(crate) fn compare_plan_to_assigned_fleet_aircraft(
+    plan: &FlightPlanSnapshot,
+    fleet: Option<&FleetSnapshotView>,
+    aircraft_id: &AircraftId,
+) -> DispatchComparison {
+    compare_plan_to_fleet_aircraft_with_assignment(plan, fleet, Some(aircraft_id))
+}
+
+fn compare_plan_to_fleet_aircraft_with_assignment(
+    plan: &FlightPlanSnapshot,
+    fleet: Option<&FleetSnapshotView>,
+    assigned_aircraft_id: Option<&AircraftId>,
+) -> DispatchComparison {
     let compared_at = Utc::now();
     let fleet_observed_at = fleet.map(|fleet| fleet.snapshot.provenance.observed_at);
     let freshness = match fleet.map(|fleet| fleet.availability) {
@@ -834,8 +853,12 @@ pub(crate) fn compare_plan_to_fleet_aircraft(
         None => SnapshotFreshness::Unknown,
     };
     let mut findings = Vec::new();
-    let matched =
-        fleet.and_then(|fleet| match_aircraft(plan, &fleet.snapshot.value, &mut findings));
+    let matched = fleet.and_then(|fleet| match assigned_aircraft_id {
+        Some(aircraft_id) => {
+            match_assigned_aircraft(aircraft_id, &fleet.snapshot.value, &mut findings)
+        }
+        None => match_aircraft(plan, &fleet.snapshot.value, &mut findings),
+    });
 
     if fleet.is_none() {
         findings.push(finding(
@@ -876,6 +899,42 @@ pub(crate) fn compare_plan_to_fleet_aircraft(
             freshness,
         },
     }
+}
+
+fn match_assigned_aircraft<'a>(
+    assigned_aircraft_id: &AircraftId,
+    fleet: &'a [AircraftSummary],
+    findings: &mut Vec<DispatchFinding>,
+) -> Option<(&'a AircraftSummary, AircraftMatchBasis)> {
+    let assigned = fleet
+        .iter()
+        .find(|aircraft| aircraft.id == *assigned_aircraft_id);
+    let Some(aircraft) = assigned else {
+        findings.push(finding(
+            DispatchFindingCategory::AircraftIdentity,
+            DispatchFindingStatus::Difference,
+            "fleet-reconciliation-assigned-aircraft-missing",
+            "Assigned aircraft not in current fleet",
+            "The reviewed aircraft identity remains assigned, but it is absent from the current company fleet evidence.",
+            Some(assigned_aircraft_id.0.to_string()),
+            None,
+        ));
+        return None;
+    };
+    findings.push(finding(
+        DispatchFindingCategory::AircraftIdentity,
+        DispatchFindingStatus::Match,
+        "fleet-reconciliation-assigned-aircraft-current",
+        "Reviewed assignment found",
+        "The current company fleet contains the exact aircraft identity retained by the reviewed assignment.",
+        Some(assigned_aircraft_id.0.to_string()),
+        aircraft
+            .registration
+            .clone()
+            .or_else(|| aircraft.model.clone())
+            .or_else(|| Some(aircraft.id.0.to_string())),
+    ));
+    Some((aircraft, AircraftMatchBasis::ReviewedAssignment))
 }
 
 fn append_job_findings(

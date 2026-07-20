@@ -17,12 +17,14 @@
     jobSelection,
     busy = false,
     onoperation,
+    onaircraftassignment,
   }: {
     operation?: FlightOperationView;
     operationChange: FlightOperationContextChange;
     jobSelection?: DispatchStatus["selected_job"];
     busy?: boolean;
     onoperation: (action: "start" | "revise") => void;
+    onaircraftassignment: (aircraftId?: string) => void;
   } = $props();
 
   const selectedJob = $derived(jobSelection?.job);
@@ -30,6 +32,15 @@
     manifestHandoffState(operation, operationChange, selectedJob?.id),
   );
   const fleetReconciliation = $derived(operation?.fleet_reconciliation);
+  let assignmentAircraftId = $state("");
+
+  $effect(() => {
+    assignmentAircraftId =
+      operation?.aircraft_assignment?.id ??
+      fleetReconciliation?.candidate?.id ??
+      fleetReconciliation?.assignable_aircraft[0]?.id ??
+      "";
+  });
 
   function unavailableLabel(value: ManifestUnavailableField): string {
     return value === "passenger_count"
@@ -88,8 +99,11 @@
   }
 
   function candidateLabel(): string {
+    const assignment = operation?.aircraft_assignment;
     const candidate = fleetReconciliation?.candidate;
     return (
+      assignment?.registration ??
+      assignment?.model ??
       candidate?.registration ??
       candidate?.model ??
       "No deterministic candidate"
@@ -180,9 +194,11 @@
           <strong>{reconciliationFreshness()}</strong>
         </div>
         <p>
-          This is a read-only evidence comparison, not an aircraft assignment or
-          an OnAir action. Capacity remains unavailable until the live provider
-          contract proves those fields.
+          {operation.aircraft_assignment
+            ? "This reviewed assignment is retained locally with the operation. It does not assign or change the aircraft in OnAir."
+            : "The suggested match is evidence only until you explicitly review and assign an aircraft."}
+          Capacity remains unavailable until the live provider contract proves those
+          fields.
         </p>
         <dl class="dispatch-fleet-reconciliation-summary">
           <div>
@@ -190,6 +206,14 @@
             <dd>
               {fleetReconciliation.candidate?.basis.replaceAll("_", " ") ??
                 "Unavailable"}
+            </dd>
+          </div>
+          <div>
+            <dt>Reviewed assignment</dt>
+            <dd>
+              {operation.aircraft_assignment
+                ? `Revision ${operation.aircraft_assignment.revision}`
+                : "Not assigned"}
             </dd>
           </div>
           <div>
@@ -221,6 +245,63 @@
             </dd>
           </div>
         </dl>
+        <form
+          class="dispatch-aircraft-assignment"
+          onsubmit={(event) => {
+            event.preventDefault();
+            onaircraftassignment(assignmentAircraftId);
+          }}
+        >
+          <label>
+            <span>Company aircraft</span>
+            <select
+              bind:value={assignmentAircraftId}
+              disabled={busy ||
+                !fleetReconciliation.fleet_available ||
+                fleetReconciliation.provenance.freshness === "stale" ||
+                !fleetReconciliation.assignable_aircraft.length}
+            >
+              {#each fleetReconciliation.assignable_aircraft as aircraft}
+                <option value={aircraft.id}>
+                  {aircraft.registration ?? aircraft.model ?? aircraft.id}
+                  {aircraft.registration && aircraft.model
+                    ? ` · ${aircraft.model}`
+                    : ""}
+                  {aircraft.current_airport_icao
+                    ? ` · ${aircraft.current_airport_icao}`
+                    : ""}
+                </option>
+              {/each}
+            </select>
+          </label>
+          <div>
+            <button
+              type="submit"
+              disabled={busy ||
+                !assignmentAircraftId ||
+                assignmentAircraftId === operation.aircraft_assignment?.id ||
+                !fleetReconciliation.fleet_available ||
+                fleetReconciliation.provenance.freshness === "stale"}
+            >
+              {operation.aircraft_assignment
+                ? "Change reviewed assignment"
+                : "Confirm aircraft assignment"}
+            </button>
+            {#if operation.aircraft_assignment}
+              <button
+                type="button"
+                disabled={busy}
+                onclick={() => onaircraftassignment()}
+              >
+                Clear assignment
+              </button>
+            {/if}
+          </div>
+          <small>
+            Every confirmation or clearing action creates an append-only local
+            assignment revision. No request is sent to OnAir.
+          </small>
+        </form>
         <ul
           class="dispatch-finding-list"
           aria-label="Fleet reconciliation findings"

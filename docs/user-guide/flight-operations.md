@@ -66,7 +66,17 @@ proof that it is the intended airframe.
 The comparison reports the candidate's model, current airport, fleet observation
 time, and how many manifest legs contain passenger or freight facts. Selecting
 **Fleet** in the journey opens Atlas with the candidate selected when one exists.
-This is a read-only inspection: it does not assign an aircraft or change OnAir.
+The suggested candidate remains evidence only until you explicitly confirm it.
+
+Use **Company aircraft** to confirm the suggestion or choose another aircraft
+from current fleet evidence. **Change reviewed assignment** and **Clear
+assignment** are also explicit actions. Each action appends a local assignment
+revision; it never assigns an aircraft in OnAir or sends a write request. The
+reviewed identity survives restart and later plan/job revisions. If that exact
+aircraft disappears from the current company fleet, WyrmGrid retains the
+assignment and shows the evidence difference instead of silently substituting
+another aircraft. Cached or offline fleet evidence must be synchronized before
+confirming a new assignment.
 
 The currently verified OnAir fleet response does not establish seats, payload
 capacity, passenger/cargo configuration, maintenance condition, or scheduling
@@ -81,13 +91,14 @@ before a new session plan is imported. Re-import a current plan when you want
 to compare or revise it. Encrypted portable backups include the operation and
 all retained revisions because they copy the complete WyrmGrid database.
 
-This foundation records only sanitized plan evidence, an optional selected job,
-and job-derived aggregate manifest facts. Fleet reconciliation is derived from
-the accepted plan and current fleet observation; it is not persisted as an
-aircraft assignment. WyrmGrid does not yet assign aircraft or staff, identify
-individual passengers or consignments, bind a Bridge recording, open operation
-history, or create a Hoard debrief association. Those stages remain visible as
-honest availability states while their reviewed core models are implemented.
+This foundation records sanitized plan evidence, an optional selected job,
+job-derived aggregate manifest facts, and explicit reviewed aircraft-assignment
+revisions. The assignment is WyrmGrid planning data, not an OnAir mutation or a
+claim of capacity, maintenance condition, or operational readiness. WyrmGrid
+does not yet assign staff, identify individual passengers or consignments, bind
+a Bridge recording, open operation history, or create a Hoard debrief
+association. Those stages remain visible as honest availability states while
+their reviewed core models are implemented.
 
 ## Suggested local test
 
@@ -104,3 +115,9 @@ honest availability states while their reviewed core models are implemented.
 7. With current fleet evidence available, open Fleet reconciliation. Confirm an
    exact registration candidate and airport comparison appear, while seats,
    capacity, configuration, and operational availability remain unavailable.
+8. Confirm the suggested aircraft, restart WyrmGrid, and verify the reviewed
+   assignment remains. Change the current plan and create a plan revision;
+   verify the aircraft assignment remains independently revisioned.
+9. Change or clear the assignment and verify WyrmGrid never changes OnAir. With
+   cached or offline evidence, verify a new assignment is refused until
+   synchronization.

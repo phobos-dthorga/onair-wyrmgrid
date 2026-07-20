@@ -3,11 +3,16 @@ use serde::Serialize;
 use thiserror::Error;
 use uuid::Uuid;
 use wyrmgrid_domain::{
-    FLIGHT_OPERATION_SCHEMA_VERSION, FlightManifest, FlightOperationId, FlightOperationRevision,
-    FlightOperationRevisionReason, OperationalObservation, OperationalProvenance, ProvenanceKind,
+    AircraftId, FLIGHT_OPERATION_SCHEMA_VERSION, FlightManifest, FlightOperationId,
+    FlightOperationRevision, FlightOperationRevisionReason, Observed, OperationalObservation,
+    OperationalProvenance, ProvenanceKind, REVIEWED_AIRCRAFT_ASSIGNMENT_REVISION_SCHEMA_VERSION,
+    REVIEWED_AIRCRAFT_ASSIGNMENT_SCHEMA_VERSION, ReviewedAircraftAssignment,
+    ReviewedAircraftAssignmentRevision, ReviewedAircraftAssignmentRevisionReason,
     SnapshotFreshness,
 };
-use wyrmgrid_storage::{FlightOperationRevisionRecord, Store};
+use wyrmgrid_storage::{
+    FlightOperationAircraftAssignmentRevisionRecord, FlightOperationRevisionRecord, Store,
+};
 
 use crate::{
     DispatchFinding, DispatchFindingCategory, DispatchFindingStatus, DispatchJobSelection,
@@ -76,7 +81,32 @@ pub struct FlightOperationView {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub selected_job_id: Option<String>,
     pub manifest: FlightManifest,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub aircraft_assignment: Option<FlightOperationAircraftAssignmentView>,
     pub fleet_reconciliation: FlightOperationFleetReconciliationView,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct FlightOperationAircraftAssignmentView {
+    pub revision: u32,
+    pub reviewed_at: DateTime<Utc>,
+    pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub registration: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    pub evidence_observed_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct AssignableFleetAircraftView {
+    pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub registration: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_airport_icao: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -95,6 +125,7 @@ pub struct FlightOperationFleetReconciliationView {
     pub fleet_observed_at: Option<DateTime<Utc>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub candidate: Option<MatchedFleetAircraft>,
+    pub assignable_aircraft: Vec<AssignableFleetAircraftView>,
     pub manifest_coverage: FlightOperationManifestCoverageView,
     pub findings: Vec<DispatchFinding>,
     pub provenance: OperationalProvenance,
@@ -116,6 +147,16 @@ pub enum FlightOperationError {
     NoActiveOperation,
     #[error("The Dispatch context has not changed since the current revision.")]
     NoRevisionChange,
+    #[error("Current fleet evidence is unavailable.")]
+    FleetUnavailable,
+    #[error("Synchronize current fleet evidence before reviewing an aircraft assignment.")]
+    FleetEvidenceStale,
+    #[error("That aircraft is not present in the current company fleet evidence.")]
+    AircraftNotFound,
+    #[error("That aircraft is already assigned to this operation.")]
+    AircraftAlreadyAssigned,
+    #[error("This operation does not have a reviewed aircraft assignment to clear.")]
+    NoAircraftAssignment,
     #[error("The saved flight operation is invalid or unsupported.")]
     InvalidStoredOperation,
     #[error("The flight-operation store is unavailable.")]
@@ -139,18 +180,24 @@ impl FlightOperationService {
         fleet: Option<&FleetSnapshotView>,
     ) -> Result<(), FlightOperationError> {
         let revision = self.load_active_revision()?;
+        let assignment_revision = revision
+            .as_ref()
+            .map(|revision| self.load_active_aircraft_assignment(&revision.operation_id))
+            .transpose()?
+            .flatten();
         status.operation_change = revision
             .as_ref()
             .map_or(FlightOperationContextChange::None, |revision| {
                 context_change(revision, status)
             });
-        let fleet_reconciliation = revision
-            .as_ref()
-            .map(|revision| build_fleet_reconciliation(revision, fleet));
-        status.operation = revision
-            .as_ref()
-            .zip(fleet_reconciliation.as_ref())
-            .map(|(revision, reconciliation)| operation_view(revision, reconciliation));
+        let fleet_reconciliation = revision.as_ref().map(|revision| {
+            build_fleet_reconciliation(revision, assignment_revision.as_ref(), fleet)
+        });
+        status.operation = revision.as_ref().zip(fleet_reconciliation.as_ref()).map(
+            |(revision, reconciliation)| {
+                operation_view(revision, assignment_revision.as_ref(), reconciliation)
+            },
+        );
 
         let operation_matches_plan = revision.as_ref().is_some_and(|revision| {
             status
@@ -266,6 +313,86 @@ impl FlightOperationService {
         self.append_revision(&revision, current.revision)
     }
 
+    pub fn assign_aircraft(
+        &self,
+        aircraft_id: &str,
+        fleet: Option<&FleetSnapshotView>,
+    ) -> Result<(), FlightOperationError> {
+        let operation = self
+            .load_active_revision()?
+            .ok_or(FlightOperationError::NoActiveOperation)?;
+        let fleet = fleet.ok_or(FlightOperationError::FleetUnavailable)?;
+        if fleet.availability != SnapshotAvailability::Live {
+            return Err(FlightOperationError::FleetEvidenceStale);
+        }
+        let aircraft_id = AircraftId(
+            Uuid::parse_str(aircraft_id).map_err(|_| FlightOperationError::AircraftNotFound)?,
+        );
+        let aircraft = fleet
+            .snapshot
+            .value
+            .iter()
+            .find(|aircraft| aircraft.id == aircraft_id)
+            .cloned()
+            .ok_or(FlightOperationError::AircraftNotFound)?;
+        let current = self.load_active_aircraft_assignment(&operation.operation_id)?;
+        if current
+            .as_ref()
+            .and_then(|revision| revision.assignment.as_ref())
+            .is_some_and(|assignment| {
+                assignment.company_id == fleet.company_id
+                    && assignment.aircraft.value.id == aircraft_id
+            })
+        {
+            return Err(FlightOperationError::AircraftAlreadyAssigned);
+        }
+        let reviewed_at = std::cmp::max(Utc::now(), fleet.snapshot.provenance.observed_at);
+        let revision = ReviewedAircraftAssignmentRevision {
+            schema_version: REVIEWED_AIRCRAFT_ASSIGNMENT_REVISION_SCHEMA_VERSION,
+            operation_id: operation.operation_id,
+            revision: current
+                .as_ref()
+                .map_or(1, |revision| revision.revision.saturating_add(1)),
+            reason: if current.is_some() {
+                ReviewedAircraftAssignmentRevisionReason::Reassigned
+            } else {
+                ReviewedAircraftAssignmentRevisionReason::Assigned
+            },
+            reviewed_at,
+            assignment: Some(ReviewedAircraftAssignment {
+                schema_version: REVIEWED_AIRCRAFT_ASSIGNMENT_SCHEMA_VERSION,
+                company_id: fleet.company_id.clone(),
+                aircraft: Observed {
+                    value: aircraft,
+                    provenance: fleet.snapshot.provenance.clone(),
+                },
+            }),
+        };
+        self.append_aircraft_assignment_revision(
+            &revision,
+            current.as_ref().map(|value| value.revision),
+        )
+    }
+
+    pub fn clear_aircraft_assignment(&self) -> Result<(), FlightOperationError> {
+        let operation = self
+            .load_active_revision()?
+            .ok_or(FlightOperationError::NoActiveOperation)?;
+        let current = self
+            .load_active_aircraft_assignment(&operation.operation_id)?
+            .filter(|revision| revision.assignment.is_some())
+            .ok_or(FlightOperationError::NoAircraftAssignment)?;
+        let revision = ReviewedAircraftAssignmentRevision {
+            schema_version: REVIEWED_AIRCRAFT_ASSIGNMENT_REVISION_SCHEMA_VERSION,
+            operation_id: operation.operation_id,
+            revision: current.revision.saturating_add(1),
+            reason: ReviewedAircraftAssignmentRevisionReason::Cleared,
+            reviewed_at: std::cmp::max(Utc::now(), current.reviewed_at),
+            assignment: None,
+        };
+        self.append_aircraft_assignment_revision(&revision, Some(current.revision))
+    }
+
     fn load_active_revision(
         &self,
     ) -> Result<Option<FlightOperationRevision>, FlightOperationError> {
@@ -286,6 +413,34 @@ impl FlightOperationService {
             || revision_reason_name(revision.reason) != record.reason
             || revision.operation_created_at.to_rfc3339() != record.operation_created_at
             || revision.revised_at.to_rfc3339() != record.revision_created_at
+        {
+            return Err(FlightOperationError::InvalidStoredOperation);
+        }
+        Ok(Some(revision))
+    }
+
+    fn load_active_aircraft_assignment(
+        &self,
+        operation_id: &FlightOperationId,
+    ) -> Result<Option<ReviewedAircraftAssignmentRevision>, FlightOperationError> {
+        let Some(record) = self
+            .store
+            .load_active_flight_operation_aircraft_assignment_revision_record()
+            .map_err(|_| FlightOperationError::StorageUnavailable)?
+        else {
+            return Ok(None);
+        };
+        let revision: ReviewedAircraftAssignmentRevision =
+            serde_json::from_str(&record.snapshot_json)
+                .map_err(|_| FlightOperationError::InvalidStoredOperation)?;
+        revision
+            .validate()
+            .map_err(|_| FlightOperationError::InvalidStoredOperation)?;
+        if revision.operation_id != *operation_id
+            || record.operation_id != operation_id.0.to_string()
+            || record.revision != revision.revision
+            || record.reason != aircraft_assignment_reason_name(revision.reason)
+            || record.reviewed_at != revision.reviewed_at.to_rfc3339()
         {
             return Err(FlightOperationError::InvalidStoredOperation);
         }
@@ -316,6 +471,20 @@ impl FlightOperationService {
         let record = storage_record(revision)?;
         self.store
             .append_flight_operation_revision_record(expected_revision, &record)
+            .map_err(|_| FlightOperationError::StorageUnavailable)
+    }
+
+    fn append_aircraft_assignment_revision(
+        &self,
+        revision: &ReviewedAircraftAssignmentRevision,
+        expected_revision: Option<u32>,
+    ) -> Result<(), FlightOperationError> {
+        revision
+            .validate()
+            .map_err(|_| FlightOperationError::InvalidStoredOperation)?;
+        let record = aircraft_assignment_storage_record(revision)?;
+        self.store
+            .append_flight_operation_aircraft_assignment_revision_record(expected_revision, &record)
             .map_err(|_| FlightOperationError::StorageUnavailable)
     }
 }
@@ -497,6 +666,7 @@ fn context_change(
 
 fn operation_view(
     revision: &FlightOperationRevision,
+    assignment_revision: Option<&ReviewedAircraftAssignmentRevision>,
     fleet_reconciliation: &FlightOperationFleetReconciliationView,
 ) -> FlightOperationView {
     FlightOperationView {
@@ -514,15 +684,45 @@ fn operation_view(
             .as_ref()
             .map(|job| job.value.id.0.to_string()),
         manifest: revision.manifest.clone(),
+        aircraft_assignment: assignment_revision
+            .and_then(|revision| {
+                revision
+                    .assignment
+                    .as_ref()
+                    .map(|assignment| (revision, assignment))
+            })
+            .map(
+                |(revision, assignment)| FlightOperationAircraftAssignmentView {
+                    revision: revision.revision,
+                    reviewed_at: revision.reviewed_at,
+                    id: assignment.aircraft.value.id.0.to_string(),
+                    registration: assignment.aircraft.value.registration.clone(),
+                    model: assignment.aircraft.value.model.clone(),
+                    evidence_observed_at: assignment.aircraft.provenance.observed_at,
+                },
+            ),
         fleet_reconciliation: fleet_reconciliation.clone(),
     }
 }
 
 fn build_fleet_reconciliation(
     revision: &FlightOperationRevision,
+    assignment_revision: Option<&ReviewedAircraftAssignmentRevision>,
     fleet: Option<&FleetSnapshotView>,
 ) -> FlightOperationFleetReconciliationView {
-    let comparison = crate::compare_plan_to_fleet_aircraft(&revision.plan, fleet);
+    let assignment = assignment_revision.and_then(|revision| revision.assignment.as_ref());
+    let assignment_fleet = assignment
+        .and_then(|assignment| fleet.filter(|fleet| fleet.company_id == assignment.company_id));
+    let comparison = assignment.map_or_else(
+        || crate::compare_plan_to_fleet_aircraft(&revision.plan, fleet),
+        |assignment| {
+            crate::compare_plan_to_assigned_fleet_aircraft(
+                &revision.plan,
+                assignment_fleet,
+                &assignment.aircraft.value.id,
+            )
+        },
+    );
     let manifest_coverage = FlightOperationManifestCoverageView {
         leg_count: revision.manifest.legs.len(),
         passenger_legs_reported: revision
@@ -539,19 +739,25 @@ fn build_fleet_reconciliation(
             .count(),
         source_gaps_present: revision.manifest.needs_attention(),
     };
-    let mut findings = comparison
-        .findings
-        .iter()
-        .filter(|finding| {
-            matches!(
-                finding.category,
-                DispatchFindingCategory::AircraftIdentity
-                    | DispatchFindingCategory::AircraftModel
-                    | DispatchFindingCategory::AircraftPosition
-            )
-        })
-        .cloned()
-        .collect::<Vec<_>>();
+    let mut findings = vec![aircraft_assignment_finding(
+        assignment_revision,
+        fleet,
+        comparison.matched_aircraft.as_ref(),
+    )];
+    findings.extend(
+        comparison
+            .findings
+            .iter()
+            .filter(|finding| {
+                matches!(
+                    finding.category,
+                    DispatchFindingCategory::AircraftIdentity
+                        | DispatchFindingCategory::AircraftModel
+                        | DispatchFindingCategory::AircraftPosition
+                )
+            })
+            .cloned(),
+    );
     findings.push(manifest_coverage_finding(&manifest_coverage));
     findings.extend(capability_gap_findings(&manifest_coverage));
 
@@ -560,10 +766,111 @@ fn build_fleet_reconciliation(
         fleet_available: comparison.fleet_available,
         fleet_observed_at: comparison.fleet_observed_at,
         candidate: comparison.matched_aircraft,
+        assignable_aircraft: assignable_aircraft(fleet),
         manifest_coverage,
         findings,
         provenance: comparison.provenance,
     }
+}
+
+fn assignable_aircraft(fleet: Option<&FleetSnapshotView>) -> Vec<AssignableFleetAircraftView> {
+    let mut aircraft = fleet
+        .into_iter()
+        .flat_map(|fleet| &fleet.snapshot.value)
+        .map(|aircraft| AssignableFleetAircraftView {
+            id: aircraft.id.0.to_string(),
+            registration: aircraft.registration.clone(),
+            model: aircraft.model.clone(),
+            current_airport_icao: aircraft
+                .current_airport
+                .as_ref()
+                .and_then(|airport| airport.icao.clone()),
+        })
+        .collect::<Vec<_>>();
+    aircraft.sort_by(|left, right| {
+        left.registration
+            .as_deref()
+            .unwrap_or("")
+            .cmp(right.registration.as_deref().unwrap_or(""))
+            .then_with(|| {
+                left.model
+                    .as_deref()
+                    .unwrap_or("")
+                    .cmp(right.model.as_deref().unwrap_or(""))
+            })
+            .then_with(|| left.id.cmp(&right.id))
+    });
+    aircraft
+}
+
+fn aircraft_assignment_finding(
+    assignment_revision: Option<&ReviewedAircraftAssignmentRevision>,
+    fleet: Option<&FleetSnapshotView>,
+    matched: Option<&MatchedFleetAircraft>,
+) -> DispatchFinding {
+    let Some(revision) = assignment_revision else {
+        return reconciliation_finding(
+            DispatchFindingCategory::AircraftAssignment,
+            DispatchFindingStatus::Unavailable,
+            "fleet-reconciliation-assignment-unreviewed",
+            "Aircraft assignment not reviewed",
+            "Choose and confirm a company aircraft before treating any suggested match as the operation's assignment.",
+            None,
+            None,
+        );
+    };
+    let Some(assignment) = revision.assignment.as_ref() else {
+        return reconciliation_finding(
+            DispatchFindingCategory::AircraftAssignment,
+            DispatchFindingStatus::Unavailable,
+            "fleet-reconciliation-assignment-cleared",
+            "Aircraft assignment cleared",
+            "The previous reviewed assignment was explicitly cleared and no aircraft is currently assigned.",
+            Some(format!("Assignment revision {}", revision.revision)),
+            None,
+        );
+    };
+    if fleet.is_some_and(|fleet| fleet.company_id != assignment.company_id) {
+        return reconciliation_finding(
+            DispatchFindingCategory::AircraftAssignment,
+            DispatchFindingStatus::Difference,
+            "fleet-reconciliation-assignment-company-difference",
+            "Assignment belongs to another company",
+            "The reviewed assignment remains retained, but the current fleet evidence belongs to a different OnAir company.",
+            assignment.aircraft.value.registration.clone(),
+            fleet.map(|fleet| fleet.company.name.clone()),
+        );
+    }
+    reconciliation_finding(
+        DispatchFindingCategory::AircraftAssignment,
+        if matched.is_some() {
+            DispatchFindingStatus::Match
+        } else {
+            DispatchFindingStatus::Difference
+        },
+        if matched.is_some() {
+            "fleet-reconciliation-assignment-current"
+        } else {
+            "fleet-reconciliation-assignment-missing"
+        },
+        if matched.is_some() {
+            "Reviewed aircraft assignment current"
+        } else {
+            "Reviewed aircraft assignment not observed"
+        },
+        if matched.is_some() {
+            "The exact retained aircraft identity is present in the current company fleet evidence."
+        } else {
+            "The assignment remains stable, but its aircraft identity is absent from the available fleet evidence."
+        },
+        Some(format!("Assignment revision {}", revision.revision)),
+        matched.and_then(|aircraft| {
+            aircraft
+                .registration
+                .clone()
+                .or_else(|| aircraft.model.clone())
+        }),
+    )
 }
 
 fn fleet_stage_state(
@@ -708,6 +1015,29 @@ fn storage_record(
         snapshot_json: serde_json::to_string(revision)
             .map_err(|_| FlightOperationError::InvalidStoredOperation)?,
     })
+}
+
+fn aircraft_assignment_storage_record(
+    revision: &ReviewedAircraftAssignmentRevision,
+) -> Result<FlightOperationAircraftAssignmentRevisionRecord, FlightOperationError> {
+    Ok(FlightOperationAircraftAssignmentRevisionRecord {
+        operation_id: revision.operation_id.0.to_string(),
+        revision: revision.revision,
+        reason: aircraft_assignment_reason_name(revision.reason).into(),
+        reviewed_at: revision.reviewed_at.to_rfc3339(),
+        snapshot_json: serde_json::to_string(revision)
+            .map_err(|_| FlightOperationError::InvalidStoredOperation)?,
+    })
+}
+
+fn aircraft_assignment_reason_name(
+    reason: ReviewedAircraftAssignmentRevisionReason,
+) -> &'static str {
+    match reason {
+        ReviewedAircraftAssignmentRevisionReason::Assigned => "assigned",
+        ReviewedAircraftAssignmentRevisionReason::Reassigned => "reassigned",
+        ReviewedAircraftAssignmentRevisionReason::Cleared => "cleared",
+    }
 }
 
 fn revision_reason_name(reason: FlightOperationRevisionReason) -> &'static str {

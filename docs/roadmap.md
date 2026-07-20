@@ -197,8 +197,9 @@ not replace completion of the current vertical slice.
 - Explainable reconciliation across jobs, load, seats, payload, aircraft and
   staff location, sourced qualifications, weather, schedule, and plan evidence
   (read-only aircraft identity, model, current-airport, fleet-freshness, and
-  manifest-coverage reconciliation implemented; assignment and certified seat,
-  capacity, configuration, and availability evidence remain)
+  manifest-coverage reconciliation plus append-only user-reviewed aircraft
+  assignment implemented; certified seat, capacity, configuration, and
+  availability evidence remain)
 - Explicit invalidation and user-reviewed revisions instead of silent cascading
   changes when a plan, manifest, aircraft, staff assignment, or observation
   changes
