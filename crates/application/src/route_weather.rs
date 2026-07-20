@@ -2,12 +2,13 @@ use chrono::{DateTime, Duration, Utc};
 use serde::Serialize;
 use wyrmgrid_domain::{
     Coordinates, GlobalWeatherGridPoint, GlobalWeatherLayerData, GlobalWeatherLayerSnapshot,
-    OperationalProvenance, PlannedSchedule, WeatherCondition,
+    GlobalWeatherTimeScope, OperationalProvenance, PlannedSchedule, WeatherCondition,
 };
+use wyrmgrid_plugin_protocol::WeatherTimeWindow;
 
 use crate::FlightPlanMapView;
 
-pub const ROUTE_WEATHER_ANALYSIS_SCHEMA_VERSION: u32 = 2;
+pub const ROUTE_WEATHER_ANALYSIS_SCHEMA_VERSION: u32 = 3;
 pub const ROUTE_WEATHER_SAMPLE_INTERVAL_NM: f64 = 300.0;
 pub const ROUTE_WEATHER_MAX_SUPPORT_DISTANCE_NM: f64 = 1_200.0;
 pub const ROUTE_WEATHER_MAX_TEMPORAL_SUPPORT_SECONDS: i64 = 3 * 60 * 60;
@@ -15,6 +16,14 @@ pub const MAX_ROUTE_WEATHER_SAMPLES: usize = 64;
 
 const EARTH_RADIUS_NM: f64 = 3_440.065;
 const MAX_ROUTE_DURATION_SECONDS: i64 = 7 * 24 * 60 * 60;
+const HISTORICAL_WEATHER_WINDOW_BUFFER_SECONDS: i64 = 3 * 60 * 60;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RouteWeatherTemporalMode {
+    Live,
+    Historical,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -123,6 +132,8 @@ pub struct RouteWeatherLayerAnalysis {
     pub layer_id: String,
     pub title: String,
     pub provenance: OperationalProvenance,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub time_scope: Option<GlobalWeatherTimeScope>,
     pub availability: RouteWeatherAvailability,
     pub samples: Vec<RouteWeatherSample>,
 }
@@ -137,6 +148,7 @@ pub struct RouteWeatherAnalysis {
     pub mapped_route_point_count: usize,
     pub unresolved_route_point_count: usize,
     pub timing: RouteWeatherTiming,
+    pub temporal_mode: RouteWeatherTemporalMode,
     pub availability: RouteWeatherAvailability,
     pub layers: Vec<RouteWeatherLayerAnalysis>,
     pub radar_contexts: Vec<RouteWeatherRadarContext>,
@@ -167,6 +179,7 @@ pub(crate) fn build_route_weather_analysis(
     let checkpoints = route_checkpoints(&route_points);
     let total_route_distance_nm = route_total_distance_nm(&route_points);
     let timing = route_timing(schedule);
+    let temporal_mode = route_weather_temporal_mode(schedule, Utc::now());
     let radar_contexts = route_radar_contexts(layers);
     if checkpoints.is_empty() {
         return RouteWeatherAnalysis {
@@ -178,6 +191,7 @@ pub(crate) fn build_route_weather_analysis(
             mapped_route_point_count,
             unresolved_route_point_count,
             timing,
+            temporal_mode,
             availability: RouteWeatherAvailability::RouteUnavailable,
             layers: Vec::new(),
             radar_contexts,
@@ -235,6 +249,7 @@ pub(crate) fn build_route_weather_analysis(
                 layer_id: layer.id.clone(),
                 title: layer.title.clone(),
                 provenance: layer.provenance.clone(),
+                time_scope: layer.time_scope.clone(),
                 availability,
                 samples,
             })
@@ -266,9 +281,58 @@ pub(crate) fn build_route_weather_analysis(
         mapped_route_point_count,
         unresolved_route_point_count,
         timing,
+        temporal_mode,
         availability,
         layers: analyses,
         radar_contexts,
+    }
+}
+
+pub fn historical_weather_window(
+    schedule: Option<&PlannedSchedule>,
+    now: DateTime<Utc>,
+) -> Option<WeatherTimeWindow> {
+    if route_weather_temporal_mode(schedule, now) != RouteWeatherTemporalMode::Historical {
+        return None;
+    }
+    let timing = route_timing(schedule);
+    let departure = timing.departure_at?;
+    let duration_seconds = i64::from(timing.duration_seconds?);
+    let arrival = departure.checked_add_signed(Duration::seconds(duration_seconds))?;
+    let starts_at = departure
+        .checked_sub_signed(Duration::seconds(HISTORICAL_WEATHER_WINDOW_BUFFER_SECONDS))?;
+    let ends_at =
+        arrival.checked_add_signed(Duration::seconds(HISTORICAL_WEATHER_WINDOW_BUFFER_SECONDS))?;
+    let target_at = departure.checked_add_signed(Duration::seconds(duration_seconds / 2))?;
+    let window = WeatherTimeWindow {
+        target_at,
+        starts_at,
+        ends_at,
+    };
+    window.is_valid().then_some(window)
+}
+
+pub fn route_weather_temporal_mode(
+    schedule: Option<&PlannedSchedule>,
+    now: DateTime<Utc>,
+) -> RouteWeatherTemporalMode {
+    let timing = route_timing(schedule);
+    let Some((departure, duration_seconds)) = timing.departure_at.zip(timing.duration_seconds)
+    else {
+        return RouteWeatherTemporalMode::Live;
+    };
+    let historical = departure
+        .checked_add_signed(Duration::seconds(i64::from(duration_seconds)))
+        .and_then(|arrival| {
+            arrival.checked_add_signed(Duration::seconds(
+                ROUTE_WEATHER_MAX_TEMPORAL_SUPPORT_SECONDS,
+            ))
+        })
+        .is_some_and(|support_ends_at| support_ends_at < now);
+    if historical {
+        RouteWeatherTemporalMode::Historical
+    } else {
+        RouteWeatherTemporalMode::Live
     }
 }
 

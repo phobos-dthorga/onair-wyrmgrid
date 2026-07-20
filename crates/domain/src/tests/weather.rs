@@ -117,6 +117,7 @@ fn validates_a_provider_neutral_global_grid() {
         schema_version: GLOBAL_WEATHER_LAYER_SCHEMA_VERSION,
         id: "open-meteo-global".into(),
         title: "Global model weather".into(),
+        time_scope: None,
         data: GlobalWeatherLayerData::Grid {
             points: vec![GlobalWeatherGridPoint {
                 id: "grid-0".into(),
@@ -132,6 +133,7 @@ fn validates_a_provider_neutral_global_grid() {
                 wind_direction_degrees: Some(180.0),
                 wind_speed_kt: Some(17.0),
                 provider_weather_code: Some(61),
+                provider_extent_radius_nm: None,
             }],
         },
         provenance: OperationalProvenance {
@@ -146,6 +148,27 @@ fn validates_a_provider_neutral_global_grid() {
     };
 
     assert_eq!(layer.validate(), Ok(()));
+}
+
+#[test]
+fn accepts_only_bounded_provider_reported_pattern_extent() {
+    let mut layer: GlobalWeatherLayerSnapshot = serde_json::from_str(include_str!(
+        "../../../../schemas/fixtures/global-weather-layer-forecast-v1.json"
+    ))
+    .unwrap();
+    let GlobalWeatherLayerData::Grid { points } = &mut layer.data else {
+        unreachable!();
+    };
+    points[0].provider_extent_radius_nm = Some(42.0);
+    assert_eq!(layer.validate(), Ok(()));
+    let GlobalWeatherLayerData::Grid { points } = &mut layer.data else {
+        unreachable!();
+    };
+    points[0].provider_extent_radius_nm = Some(1_001.0);
+    assert_eq!(
+        layer.validate(),
+        Err(GlobalWeatherValidationError::InvalidGridPoint)
+    );
 }
 
 #[test]
@@ -184,6 +207,7 @@ fn rejects_non_png_and_duplicate_global_raster_tiles() {
         schema_version: GLOBAL_WEATHER_LAYER_SCHEMA_VERSION,
         id: "rainviewer-radar".into(),
         title: "Global precipitation radar".into(),
+        time_scope: None,
         data: GlobalWeatherLayerData::RasterTiles {
             frame_time: at,
             tiles: vec![GlobalWeatherRasterTile {
@@ -239,6 +263,7 @@ fn validates_optional_radar_coverage_masks_and_counts_their_bytes() {
         schema_version: GLOBAL_WEATHER_LAYER_SCHEMA_VERSION,
         id: "rainviewer-radar".into(),
         title: "Global precipitation radar".into(),
+        time_scope: None,
         data: GlobalWeatherLayerData::RasterTiles {
             frame_time: at,
             tiles: vec![GlobalWeatherRasterTile {

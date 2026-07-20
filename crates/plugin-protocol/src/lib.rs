@@ -1,5 +1,6 @@
 //! Versioned, language-neutral contracts for out-of-process plugins.
 
+use chrono::{DateTime, Utc};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -23,6 +24,7 @@ pub const MAX_WEATHER_REQUEST_STATIONS: usize = 10;
 pub const MAX_WEATHER_REQUEST_GRID_POINTS: usize = 512;
 pub const MAX_WEATHER_REQUEST_TILES: usize = 16;
 pub const MAX_PLUGIN_NETWORK_ORIGINS: usize = 8;
+pub const MAX_HISTORICAL_WEATHER_WINDOW_HOURS: i64 = 30;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -188,15 +190,35 @@ pub struct WeatherRequest {
 pub enum WeatherQuery {
     AirportReports {
         stations: Vec<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        window: Option<WeatherTimeWindow>,
     },
     ForecastGrid {
         points: Vec<WeatherGridRequestPoint>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        window: Option<WeatherTimeWindow>,
     },
     RadarTiles {
         tiles: Vec<WeatherTileAddress>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         frame_offset: Option<u8>,
     },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WeatherTimeWindow {
+    pub target_at: DateTime<Utc>,
+    pub starts_at: DateTime<Utc>,
+    pub ends_at: DateTime<Utc>,
+}
+
+impl WeatherTimeWindow {
+    pub fn is_valid(&self) -> bool {
+        self.starts_at <= self.target_at
+            && self.target_at <= self.ends_at
+            && self.ends_at.signed_duration_since(self.starts_at)
+                <= chrono::Duration::hours(MAX_HISTORICAL_WEATHER_WINDOW_HOURS)
+    }
 }
 
 impl WeatherQuery {
@@ -224,6 +246,9 @@ pub struct WeatherTileAddress {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
+// Responses are bounded, transient channel messages. Keeping the product
+// inline preserves the source API for protocol-v1 Rust consumers.
+#[allow(clippy::large_enum_variant)]
 pub enum PluginWeatherResponse {
     Complete { product: PluginWeatherProduct },
     Unavailable { code: WeatherUnavailableCode },
@@ -286,6 +311,8 @@ pub enum WeatherRequestError {
     InvalidTile,
     #[error("weather request contains an invalid RADAR frame offset")]
     InvalidRadarFrameOffset,
+    #[error("weather request contains an invalid historical time window")]
+    InvalidTimeWindow,
 }
 
 impl WeatherRequest {
@@ -294,7 +321,10 @@ impl WeatherRequest {
             return Err(WeatherRequestError::InvalidId);
         }
         match &self.query {
-            WeatherQuery::AirportReports { stations } => {
+            WeatherQuery::AirportReports { stations, window } => {
+                if window.as_ref().is_some_and(|window| !window.is_valid()) {
+                    return Err(WeatherRequestError::InvalidTimeWindow);
+                }
                 if stations.is_empty() {
                     return Err(WeatherRequestError::Empty);
                 }
@@ -313,7 +343,10 @@ impl WeatherRequest {
                     return Err(WeatherRequestError::InvalidStation);
                 }
             }
-            WeatherQuery::ForecastGrid { points } => {
+            WeatherQuery::ForecastGrid { points, window } => {
+                if window.as_ref().is_some_and(|window| !window.is_valid()) {
+                    return Err(WeatherRequestError::InvalidTimeWindow);
+                }
                 if points.is_empty() {
                     return Err(WeatherRequestError::Empty);
                 }

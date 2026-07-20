@@ -1,7 +1,6 @@
 # OnAir WyrmGrid Privacy Notice
 
-**Version and effective date:** 2026-07-19.2 (persisted Atlas and host-owned
-plugin preferences)
+**Version and effective date:** 2026-07-19.3 (bounded local plugin diagnostics)
 
 This preliminary notice describes information handled by official builds of
 OnAir WyrmGrid distributed by Phobos A. D'thorga. It does not describe an
@@ -252,11 +251,13 @@ start is off by default and runs only after current legal acknowledgement.
 
 WyrmGrid also keeps a separate local diagnostic log whether or not optional
 Sentry telemetry is enabled. It contains timestamps, severity, stable error
-codes, operation names, and controlled English messages. It is designed not to
+codes, operation names, controlled English messages, and—when a supervised
+plugin fails—its validated manifest plugin identifier. It is designed not to
 contain OnAir credentials, company identifiers, raw provider responses, local
 paths, plugin output, or user-entered text. The log retains at most 200 entries,
 can be reviewed and cleared from **Diagnostics**, and is never uploaded or
-attached automatically.
+attached automatically. Plugin identifiers remain local and are not included
+in Sentry reports.
 
 If the user opts in and the build has been deliberately configured for public
 telemetry, WyrmGrid may send unexpected Rust failures and unhandled interface

@@ -80,7 +80,10 @@
     SimBriefReferenceKind,
   } from "$lib/dispatch/types";
   import type { FlightWeatherMapView } from "$lib/weather/types";
-  import { pluginWeatherItemCount } from "$lib/weather/pluginWeather";
+  import {
+    pluginWeatherItemCount,
+    weatherLayersForTemporalMode,
+  } from "$lib/weather/pluginWeather";
   import { weatherSupportZoneCount } from "$lib/weather/weatherCoverage";
   import type { FlightOperationStage } from "$lib/flightOperation/types";
   import JobsWorkspace from "$lib/jobs/JobsWorkspace.svelte";
@@ -550,11 +553,17 @@
       0,
     ),
   );
+  const visiblePluginWeatherLayers = $derived(
+    weatherLayersForTemporalMode(
+      pluginHost.weather_layers,
+      dispatchStatus.weather.time_basis,
+    ),
+  );
   const pluginWeatherCount = $derived(
-    pluginWeatherItemCount(pluginHost.weather_layers),
+    pluginWeatherItemCount(visiblePluginWeatherLayers),
   );
   const weatherCoverageCount = $derived(
-    weatherSupportZoneCount(atlasWeather, pluginHost.weather_layers),
+    weatherSupportZoneCount(atlasWeather, visiblePluginWeatherLayers),
   );
   const atlasDaylightAt = $derived(
     timelineMode === "historical" ? historicalData?.selected_at : undefined,
@@ -2490,9 +2499,11 @@
               <div>
                 <p>
                   <strong>Weather support zones</strong><br />
-                  Soft airport rings are indicative observation vicinity only. Compact
-                  grid patches show nearest model samples; gaps remain unknown. RADAR
-                  outlines show received tile footprints.
+                  Soft airport rings are indicative observation vicinity only. Circular
+                  model footprints are centred on validated samples; they vary with
+                  pattern size only when the provider explicitly reports that extent.
+                  Other circles show conservative sample support, gaps remain unknown,
+                  and RADAR outlines show received tile footprints.
                 </p>
                 <div
                   class="weather-zone-key"
@@ -2510,21 +2521,21 @@
             </div>
           {/if}
 
-          {#if pluginWeatherVisible && pluginHost.weather_layers.length > 0}
+          {#if pluginWeatherVisible && visiblePluginWeatherLayers.length > 0}
             <div class="sidebar-note responsive-surface">
               <span class="note-icon">◌</span>
               <p>
                 <strong>External global weather</strong><br />
                 Simulation context only · sourced layers are never a real-world operational
                 briefing.<br />
-                {#if pluginHost.weather_layers.some((published) => published.layer.provenance.provider === "open-meteo.com")}
+                {#if visiblePluginWeatherLayers.some((published) => published.layer.provenance.provider === "open-meteo.com")}
                   <a
                     href="https://open-meteo.com/"
                     target="_blank"
                     rel="noreferrer">Weather data by Open-Meteo.com</a
                   ><br />
                 {/if}
-                {#if pluginHost.weather_layers.some((published) => published.layer.provenance.provider === "rainviewer.com")}
+                {#if visiblePluginWeatherLayers.some((published) => published.layer.provenance.provider === "rainviewer.com")}
                   <a
                     href="https://www.rainviewer.com/"
                     target="_blank"
@@ -2636,7 +2647,7 @@
               {fboVisible}
               pluginLayers={pluginHost.layers}
               {pluginLayersVisible}
-              pluginWeatherLayers={pluginHost.weather_layers}
+              pluginWeatherLayers={visiblePluginWeatherLayers}
               {pluginWeatherVisible}
               flightRoute={atlasFlightRoute}
               weather={atlasWeather}

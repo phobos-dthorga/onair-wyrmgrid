@@ -1138,6 +1138,9 @@ impl From<DispatchError> for OperationError {
             DispatchError::WeatherProviderUnavailable => {
                 ("weather.provider_unavailable", true, false)
             }
+            DispatchError::HistoricalWeatherWindowUnsupported => {
+                ("weather.historical_window_unsupported", false, false)
+            }
             DispatchError::WeatherRefreshInProgress => ("weather.refresh_in_progress", true, false),
             DispatchError::WeatherRefreshTooSoon => ("weather.refresh_too_soon", true, false),
             DispatchError::StateUnavailable => ("application.state_unavailable", true, true),

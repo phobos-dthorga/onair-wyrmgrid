@@ -397,9 +397,19 @@
           <div class="dispatch-card-heading">
             <div>
               <span class="eyebrow"
-                >{$translation("dispatch-route-weather-eyebrow")}</span
+                >{$translation(
+                  routeWeather.temporal_mode === "historical"
+                    ? "dispatch-route-weather-historical-eyebrow"
+                    : "dispatch-route-weather-eyebrow",
+                )}</span
               >
-              <h3>{$translation("dispatch-route-weather-title")}</h3>
+              <h3>
+                {$translation(
+                  routeWeather.temporal_mode === "historical"
+                    ? "dispatch-route-weather-historical-title"
+                    : "dispatch-route-weather-title",
+                )}
+              </h3>
             </div>
             <strong
               >{routeWeatherAvailabilityLabel(
@@ -408,10 +418,18 @@
             >
           </div>
           <p class="dispatch-card-intro">
-            {$translation("dispatch-route-weather-intro", {
-              interval: routeWeather.sample_interval_nm,
-            })}
+            {$translation(
+              routeWeather.temporal_mode === "historical"
+                ? "dispatch-route-weather-historical-intro"
+                : "dispatch-route-weather-intro",
+              { interval: routeWeather.sample_interval_nm },
+            )}
           </p>
+          {#if routeWeather.temporal_mode === "historical"}
+            <p class="dispatch-route-weather-timing">
+              {$translation("dispatch-route-weather-historical-badge")}
+            </p>
+          {/if}
           <p
             class:unavailable={routeWeather.timing.availability !== "ready"}
             class="dispatch-route-weather-timing"

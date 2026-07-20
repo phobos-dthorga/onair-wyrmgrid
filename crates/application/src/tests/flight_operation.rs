@@ -98,6 +98,7 @@ fn status(plan: Option<FlightPlanSnapshot>, job: Option<DispatchJobSelection>) -
             availability: crate::DispatchWeatherAvailability::NotRequested,
             refreshing: false,
             cache: crate::DispatchWeatherCacheState::None,
+            time_basis: crate::RouteWeatherTemporalMode::Live,
             snapshot: None,
         },
     }

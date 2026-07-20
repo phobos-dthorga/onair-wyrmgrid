@@ -140,6 +140,7 @@
           "required": ["kind", "stations"],
           "properties": {
             "kind": { "const": "airport_reports" },
+            "window": { "$ref": "#/$defs/weatherTimeWindow" },
             "stations": {
               "type": "array",
               "minItems": 1,
@@ -155,6 +156,7 @@
           "required": ["kind", "points"],
           "properties": {
             "kind": { "const": "forecast_grid" },
+            "window": { "$ref": "#/$defs/weatherTimeWindow" },
             "points": {
               "type": "array",
               "minItems": 1,
@@ -183,6 +185,16 @@
           }
         }
       ]
+    },
+    "weatherTimeWindow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target_at", "starts_at", "ends_at"],
+      "properties": {
+        "target_at": { "type": "string", "format": "date-time" },
+        "starts_at": { "type": "string", "format": "date-time" },
+        "ends_at": { "type": "string", "format": "date-time" }
+      }
     },
     "weatherRequest": {
       "type": "object",

@@ -4,6 +4,7 @@ import type {
   GlobalWeatherRasterTile,
   PublishedPluginWeatherLayer,
 } from "$lib/forge/types";
+import type { RouteWeatherTemporalMode } from "$lib/dispatch/types";
 
 export type PluginWeatherGridFeatureCollection = {
   type: "FeatureCollection";
@@ -52,6 +53,18 @@ export type PluginRadarTimeline = {
   provider: string;
   frames: PluginRadarFrame[];
 };
+
+export function weatherLayersForTemporalMode(
+  layers: readonly PublishedPluginWeatherLayer[],
+  mode: RouteWeatherTemporalMode,
+): PublishedPluginWeatherLayer[] {
+  return layers.filter(({ layer }) => {
+    const historical =
+      layer.time_scope?.kind === "historical_model" ||
+      layer.time_scope?.kind === "archived_forecast";
+    return mode === "historical" ? historical : !historical;
+  });
+}
 
 export function pluginWeatherGridFeatures(
   publishedLayers: readonly PublishedPluginWeatherLayer[],

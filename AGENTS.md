@@ -26,6 +26,14 @@
 - Native simulator integrations are separate sidecars and must degrade safely
   when MSFS, SimConnect, or FSUIPC is absent.
 
+## Working practice
+
+- Use unavoidable local compilation, test, audit, and other tool wait time for
+  useful independent work such as review, documentation, or implementation.
+  Only overlap work that cannot contend for the same files, processes, caches,
+  build outputs, or external state, and never let parallel activity obscure a
+  failure or weaken its verification.
+
 ## Quality gates
 
 - Rust: formatting, Clippy with warnings denied, unit tests, and dependency audit.

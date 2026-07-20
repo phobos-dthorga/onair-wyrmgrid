@@ -1,12 +1,15 @@
 {
   "id": "org.wyrmgrid.provider.open-meteo",
   "name": "Open-Meteo Global Weather",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "api_version": 1,
   "author": "WyrmGrid contributors",
   "runtime": "python",
   "entry_point": "src/main.py",
   "permissions": ["external_network", "weather_data_publish"],
   "weather_capabilities": ["forecast_grid"],
-  "network_origins": ["https://api.open-meteo.com"]
+  "network_origins": [
+    "https://api.open-meteo.com",
+    "https://historical-forecast-api.open-meteo.com"
+  ]
 }

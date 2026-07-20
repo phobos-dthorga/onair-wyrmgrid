@@ -11,6 +11,7 @@ import type {
 } from "$lib/operational/types";
 import type { FlightWeatherMapView, WeatherSnapshot } from "$lib/weather/types";
 import type { GlobalWeatherCondition } from "$lib/forge/types";
+import type { GlobalWeatherTimeScope } from "$lib/forge/types";
 
 export type {
   Coordinates,
@@ -131,6 +132,7 @@ export type RouteWeatherTiming = {
 };
 
 export type RouteWeatherTemporalSupport = "eta_matched" | "current_context";
+export type RouteWeatherTemporalMode = "live" | "historical";
 
 export type RouteWeatherSourceSample = {
   point_id: string;
@@ -168,6 +170,7 @@ export type RouteWeatherLayerAnalysis = {
   layer_id: string;
   title: string;
   provenance: OperationalProvenance;
+  time_scope?: GlobalWeatherTimeScope;
   availability: RouteWeatherAvailability;
   samples: RouteWeatherSample[];
 };
@@ -181,6 +184,7 @@ export type RouteWeatherAnalysis = {
   mapped_route_point_count: number;
   unresolved_route_point_count: number;
   timing: RouteWeatherTiming;
+  temporal_mode: RouteWeatherTemporalMode;
   availability: RouteWeatherAvailability;
   layers: RouteWeatherLayerAnalysis[];
   radar_contexts: RouteWeatherRadarContext[];
@@ -210,6 +214,7 @@ export type DispatchStatus = {
     availability: "not_requested" | "ready";
     refreshing: boolean;
     cache: "none" | "fresh" | "expired";
+    time_basis: RouteWeatherTemporalMode;
     snapshot?: WeatherSnapshot;
   };
 };

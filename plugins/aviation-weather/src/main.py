@@ -1,12 +1,13 @@
 """Translate AviationWeather.gov METAR and TAF facts into WyrmGrid snapshots."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import math
 import uuid
 
 from wyrmgrid_sdk import Plugin, ProviderError
 
 ORIGIN = "https://aviationweather.gov"
+MAX_HISTORICAL_WINDOW_HOURS = 30
 
 
 def _timestamp(value):
@@ -77,7 +78,24 @@ def _provenance(generated_at, retrieved_at, valid_to=None):
     }
 
 
-def _metars(values, requested, retrieved_at):
+def _historical_window(query):
+    value = query.get("window")
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ProviderError("invalid_response")
+    target = _timestamp(value.get("target_at"))
+    starts = _timestamp(value.get("starts_at"))
+    ends = _timestamp(value.get("ends_at"))
+    if (
+        not starts <= target <= ends
+        or ends - starts > timedelta(hours=MAX_HISTORICAL_WINDOW_HOURS)
+    ):
+        raise ProviderError("invalid_response")
+    return target, starts, ends
+
+
+def _metars(values, requested, retrieved_at, historical=None):
     translated = {}
     if values is None:
         return translated
@@ -88,6 +106,8 @@ def _metars(values, requested, retrieved_at):
         if station not in requested:
             continue
         observed_at = _timestamp(value.get("obsTime"))
+        if historical is not None and not historical[1] <= observed_at <= historical[2]:
+            continue
         direction_value = value.get("wdir")
         direction = None
         if isinstance(direction_value, str) and direction_value.upper() == "VRB":
@@ -122,8 +142,13 @@ def _metars(values, requested, retrieved_at):
             "provenance": _provenance(observed_at, retrieved_at),
         }
         existing = translated.get(station)
-        if existing is None or existing[0] < observed_at:
-            translated[station] = (observed_at, product)
+        rank = (
+            observed_at
+            if historical is None
+            else -abs((observed_at - historical[0]).total_seconds())
+        )
+        if existing is None or existing[0] < rank:
+            translated[station] = (rank, product)
     return {station: product for station, (_, product) in translated.items()}
 
 
@@ -159,6 +184,7 @@ def _tafs(values, requested, retrieved_at):
 
 def airport_reports(weather_request, http):
     query = weather_request.get("query") or {}
+    historical = _historical_window(query)
     stations = query.get("stations")
     if not isinstance(stations, list) or not stations:
         raise ProviderError("invalid_response")
@@ -166,14 +192,25 @@ def airport_reports(weather_request, http):
     if len(requested) != len(stations):
         raise ProviderError("invalid_response")
     ids = ",".join(sorted(requested))
-    metar_values = http.get_json(
-        ORIGIN, "/api/data/metar", {"ids": ids, "format": "json"}
-    )
-    taf_values = http.get_json(
-        ORIGIN, "/api/data/taf", {"ids": ids, "format": "json"}
-    )
     retrieved_at = datetime.now(timezone.utc)
-    metars = _metars(metar_values, requested, retrieved_at)
+    metar_parameters = {"ids": ids, "format": "json"}
+    if historical is not None:
+        _, starts, ends = historical
+        metar_parameters.update(
+            {
+                "date": ends.isoformat().replace("+00:00", "Z"),
+                "hours": max(1, math.ceil((ends - starts).total_seconds() / 3600)),
+            }
+        )
+    metar_values = http.get_json(
+        ORIGIN, "/api/data/metar", metar_parameters
+    )
+    taf_values = (
+        http.get_json(ORIGIN, "/api/data/taf", {"ids": ids, "format": "json"})
+        if historical is None
+        else None
+    )
+    metars = _metars(metar_values, requested, retrieved_at, historical)
     tafs = _tafs(taf_values, requested, retrieved_at)
     airports = []
     for station in sorted(requested):

@@ -30,6 +30,7 @@
   - [SimBrief](integrations/simbrief.md)
   - [SayIntentions.AI](integrations/sayintentions.md)
   - [Aviation weather](integrations/weather.md)
+  - [Near-future ActiveSky weather plugin](integrations/activesky-plugin.md)
   - [VATSIM and IVAO](integrations/online-networks.md)
   - [Navigation data and flight-plan interchange](integrations/navigation-and-interchange.md)
   - [WyrmGrid Bridge and simulator providers](integrations/wyrmgrid-bridge.md)

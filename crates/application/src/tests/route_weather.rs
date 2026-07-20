@@ -62,6 +62,7 @@ fn grid(points: Vec<GlobalWeatherGridPoint>) -> GlobalWeatherLayerSnapshot {
         schema_version: wyrmgrid_domain::GLOBAL_WEATHER_LAYER_SCHEMA_VERSION,
         id: "open-meteo-global".into(),
         title: "Global model weather".into(),
+        time_scope: None,
         data: GlobalWeatherLayerData::Grid { points },
         provenance: provenance(ProvenanceKind::ExternalCalculation),
     }
@@ -87,6 +88,7 @@ fn grid_point(
         wind_direction_degrees: Some(240.0),
         wind_speed_kt: Some(22.0),
         provider_weather_code: Some(61),
+        provider_extent_radius_nm: None,
     }
 }
 
@@ -398,6 +400,7 @@ fn exposes_only_the_latest_factual_radar_frame_as_observation_context() {
         schema_version: wyrmgrid_domain::GLOBAL_WEATHER_LAYER_SCHEMA_VERSION,
         id: "rainviewer-radar".into(),
         title: "Global precipitation RADAR".into(),
+        time_scope: None,
         data: GlobalWeatherLayerData::RasterTiles {
             frame_time,
             tiles: Vec::new(),
@@ -412,4 +415,51 @@ fn exposes_only_the_latest_factual_radar_frame_as_observation_context() {
         analysis.radar_contexts[0].relationship,
         RouteWeatherRadarRelationship::ObservationOnly
     );
+}
+
+#[test]
+fn historical_window_is_bounded_and_only_selected_after_live_support_expires() {
+    let departure = Utc.with_ymd_and_hms(2026, 7, 12, 9, 0, 0).unwrap();
+    let schedule = schedule(departure, Some(2 * 60 * 60));
+    let window = historical_weather_window(
+        Some(&schedule),
+        Utc.with_ymd_and_hms(2026, 7, 20, 0, 0, 0).unwrap(),
+    )
+    .expect("an old completed plan should request historical weather");
+
+    assert_eq!(
+        window.starts_at,
+        Utc.with_ymd_and_hms(2026, 7, 12, 6, 0, 0).unwrap()
+    );
+    assert_eq!(
+        window.target_at,
+        Utc.with_ymd_and_hms(2026, 7, 12, 10, 0, 0).unwrap()
+    );
+    assert_eq!(
+        window.ends_at,
+        Utc.with_ymd_and_hms(2026, 7, 12, 14, 0, 0).unwrap()
+    );
+    let live_support_ends = departure + Duration::hours(5);
+    assert_eq!(
+        route_weather_temporal_mode(Some(&schedule), live_support_ends),
+        RouteWeatherTemporalMode::Live
+    );
+    assert!(historical_weather_window(Some(&schedule), live_support_ends).is_none());
+    assert_eq!(
+        route_weather_temporal_mode(Some(&schedule), live_support_ends + Duration::seconds(1)),
+        RouteWeatherTemporalMode::Historical
+    );
+}
+
+#[test]
+fn an_old_long_route_remains_historical_when_its_request_window_is_rejected() {
+    let departure = Utc.with_ymd_and_hms(2026, 7, 12, 9, 0, 0).unwrap();
+    let schedule = schedule(departure, Some(25 * 60 * 60));
+    let now = Utc.with_ymd_and_hms(2026, 7, 20, 0, 0, 0).unwrap();
+
+    assert_eq!(
+        route_weather_temporal_mode(Some(&schedule), now),
+        RouteWeatherTemporalMode::Historical
+    );
+    assert!(historical_weather_window(Some(&schedule), now).is_none());
 }

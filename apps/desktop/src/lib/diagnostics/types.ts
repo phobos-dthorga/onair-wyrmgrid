@@ -4,6 +4,7 @@ export type DiagnosticEntry = {
   code: string;
   operation: string;
   message: string;
+  plugin_id?: string;
 };
 
 export type DiagnosticLogView = {
