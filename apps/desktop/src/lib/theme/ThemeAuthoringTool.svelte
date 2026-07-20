@@ -16,6 +16,7 @@
     desktopRuntime,
     busy,
     onsave,
+    ondownload,
     onclose,
   }: {
     source: ThemeManifest;
@@ -23,7 +24,8 @@
     themes: AvailableTheme[];
     desktopRuntime: boolean;
     busy: boolean;
-    onsave: (manifestJson: string) => void;
+    onsave: (manifestJson: string) => Promise<void>;
+    ondownload: (manifestJson: string, filename: string) => Promise<void>;
     onclose: () => void;
   } = $props();
 
@@ -71,17 +73,6 @@
 
   function removePaletteColour(index: number): void {
     if (draft.chart_palette.length > 3) draft.chart_palette.splice(index, 1);
-  }
-
-  function downloadDraft(): void {
-    const url = URL.createObjectURL(
-      new Blob([serialiseThemeDraft(draft)], { type: "application/json" }),
-    );
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${draft.id || "wyrmgrid-theme"}.wyrmgrid-theme.json`;
-    link.click();
-    URL.revokeObjectURL(url);
   }
 </script>
 
@@ -297,7 +288,11 @@
           type="button"
           class="quiet-button"
           disabled={busy || !metadataValid}
-          onclick={downloadDraft}
+          onclick={() =>
+            void ondownload(
+              serialiseThemeDraft(draft),
+              `${draft.id || "wyrmgrid-theme"}.wyrmgrid-theme.json`,
+            )}
         >
           {$translation("theme-authoring-download")}
         </button>
@@ -308,7 +303,7 @@
           title={desktopRuntime
             ? $translation("theme-authoring-save-title")
             : $translation("theme-import-desktop-only")}
-          onclick={() => onsave(serialiseThemeDraft(draft))}
+          onclick={() => void onsave(serialiseThemeDraft(draft))}
         >
           {busy
             ? $translation("theme-applying")
