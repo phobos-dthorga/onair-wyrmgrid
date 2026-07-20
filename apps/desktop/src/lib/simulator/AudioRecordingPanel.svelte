@@ -106,49 +106,52 @@
 
   <p class="audio-boundary">{$translation("audio-recording-boundary")}</p>
 
-  <label class="audio-consent-row">
-    <input
-      type="checkbox"
-      checked={status.preferences.enabled}
-      disabled={busy}
-      onchange={(event) =>
-        updatePreferences({ enabled: event.currentTarget.checked })}
-    />
-    <span>
-      <strong>{$translation("audio-recording-enable")}</strong>
-      <small>{$translation("audio-recording-enable-detail")}</small>
-    </span>
-  </label>
+  <div class="audio-preferences">
+    <label class:enabled={status.preferences.enabled} class="audio-consent-row">
+      <input
+        type="checkbox"
+        checked={status.preferences.enabled}
+        disabled={busy}
+        onchange={(event) =>
+          updatePreferences({ enabled: event.currentTarget.checked })}
+      />
+      <span>
+        <strong>{$translation("audio-recording-enable")}</strong>
+        <small>{$translation("audio-recording-enable-detail")}</small>
+      </span>
+    </label>
 
-  <div class="audio-mode-grid">
-    <label>
-      <input
-        type="checkbox"
-        checked={status.preferences.capture_manual}
-        disabled={busy || !status.preferences.enabled}
-        onchange={(event) =>
-          updatePreferences({ capture_manual: event.currentTarget.checked })}
-      />
-      {$translation("audio-recording-manual")}
-    </label>
-    <label>
-      <input
-        type="checkbox"
-        checked={status.preferences.capture_automatic}
-        disabled={busy || !status.preferences.enabled}
-        onchange={(event) =>
-          updatePreferences({
-            capture_automatic: event.currentTarget.checked,
-          })}
-      />
-      {$translation("audio-recording-automatic")}
-    </label>
+    <div class="audio-mode-grid">
+      <label class:disabled={busy || !status.preferences.enabled}>
+        <input
+          type="checkbox"
+          checked={status.preferences.capture_manual}
+          disabled={busy || !status.preferences.enabled}
+          onchange={(event) =>
+            updatePreferences({ capture_manual: event.currentTarget.checked })}
+        />
+        <span>{$translation("audio-recording-manual")}</span>
+      </label>
+      <label class:disabled={busy || !status.preferences.enabled}>
+        <input
+          type="checkbox"
+          checked={status.preferences.capture_automatic}
+          disabled={busy || !status.preferences.enabled}
+          onchange={(event) =>
+            updatePreferences({
+              capture_automatic: event.currentTarget.checked,
+            })}
+        />
+        <span>{$translation("audio-recording-automatic")}</span>
+      </label>
+    </div>
   </div>
 
   {#if !status.provider_available}
-    <p class="audio-unavailable" role="status">
-      {$translation("audio-provider-unavailable")}
-    </p>
+    <div class="audio-unavailable" role="status">
+      <span class="audio-status-mark" aria-hidden="true">!</span>
+      <span>{$translation("audio-provider-unavailable")}</span>
+    </div>
   {:else if status.preferences.enabled}
     <div class="audio-source-heading">
       <strong>{$translation("audio-sources-title")}</strong>
@@ -201,10 +204,17 @@
     {/if}
   {/if}
 
-  <div class="audio-session-list">
-    <strong>{$translation("audio-sessions-title")}</strong>
+  <section class="audio-session-list" aria-labelledby="audio-sessions-title">
+    <div class="audio-section-heading">
+      <strong id="audio-sessions-title"
+        >{$translation("audio-sessions-title")}</strong
+      >
+    </div>
     {#if status.sessions.length === 0}
-      <p>{$translation("audio-sessions-empty")}</p>
+      <p class="audio-empty-state">
+        <span aria-hidden="true">◇</span>
+        <span>{$translation("audio-sessions-empty")}</span>
+      </p>
     {:else}
       {#each status.sessions as session}
         <article class:active={session.status === "active"}>
@@ -246,7 +256,7 @@
         </article>
       {/each}
     {/if}
-  </div>
+  </section>
 
   {#if playback}
     <div class="audio-playback" aria-live="polite">
