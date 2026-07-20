@@ -1,7 +1,9 @@
 //! Local-first SQLite storage and migration ownership.
 
+mod audio_recording;
 mod data_protection;
 
+pub use audio_recording::*;
 pub use data_protection::{
     DatabaseKey, PORTABLE_BACKUP_FORMAT_VERSION, PortableBackupRecord, PortableRestoreRecord,
     apply_pending_local_data_reset, encrypted_database_state_exists,
@@ -36,6 +38,7 @@ const ATLAS_WEATHER_GRAPHICS_PREFERENCES_SCHEMA: &str =
 const PLUGIN_PREFERENCES_SCHEMA: &str = include_str!("../migrations/0016_plugin_preferences.sql");
 const ATLAS_AND_PLUGIN_CONFIGURATION_SCHEMA: &str =
     include_str!("../migrations/0017_atlas_and_plugin_configuration.sql");
+const AUDIO_RECORDINGS_SCHEMA: &str = include_str!("../migrations/0018_audio_recordings.sql");
 const FLIGHT_OPERATION_AIRCRAFT_ASSIGNMENTS_SCHEMA: &str =
     include_str!("../migrations/0019_flight_operation_aircraft_assignments.sql");
 pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 19;
@@ -282,6 +285,8 @@ pub struct SimulatorSessionEventRecord {
 pub struct CustomThemeRecord {
     pub theme_id: String,
     pub manifest_json: String,
+    pub imported_at: String,
+    pub updated_at: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -334,6 +339,7 @@ impl Store {
         connection.execute_batch(ATLAS_WEATHER_GRAPHICS_PREFERENCES_SCHEMA)?;
         connection.execute_batch(PLUGIN_PREFERENCES_SCHEMA)?;
         connection.execute_batch(ATLAS_AND_PLUGIN_CONFIGURATION_SCHEMA)?;
+        connection.execute_batch(AUDIO_RECORDINGS_SCHEMA)?;
         connection.execute_batch(FLIGHT_OPERATION_AIRCRAFT_ASSIGNMENTS_SCHEMA)?;
         if path.is_some() {
             data_protection::mark_wyrmgrid_database(&connection)?;
@@ -2154,13 +2160,21 @@ impl Store {
             .connection
             .lock()
             .map_err(|_| StorageError::StateUnavailable)?;
-        let mut statement = connection
-            .prepare("SELECT theme_id, manifest_json FROM custom_themes ORDER BY theme_id ASC")?;
+        let mut statement = connection.prepare(
+            "SELECT theme_id,
+                    manifest_json,
+                    strftime('%Y-%m-%dT%H:%M:%SZ', imported_at),
+                    strftime('%Y-%m-%dT%H:%M:%SZ', updated_at)
+             FROM custom_themes
+             ORDER BY theme_id ASC",
+        )?;
         let records = statement
             .query_map([], |row| {
                 Ok(CustomThemeRecord {
                     theme_id: row.get(0)?,
                     manifest_json: row.get(1)?,
+                    imported_at: row.get(2)?,
+                    updated_at: row.get(3)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -2187,6 +2201,26 @@ impl Store {
             )
             .map(|_| ())
             .map_err(StorageError::from)
+    }
+
+    pub fn delete_custom_theme_record(
+        &self,
+        theme_id: &str,
+        fallback_theme_id: &str,
+    ) -> Result<(), StorageError> {
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        let transaction = connection.transaction()?;
+        transaction.execute("DELETE FROM custom_themes WHERE theme_id = ?1", [theme_id])?;
+        transaction.execute(
+            "UPDATE theme_preferences
+             SET selected_theme_id = ?1, updated_at = CURRENT_TIMESTAMP
+             WHERE singleton_id = 1 AND selected_theme_id = ?2",
+            params![fallback_theme_id, theme_id],
+        )?;
+        transaction.commit().map_err(StorageError::from)
     }
 }
 

@@ -11,6 +11,137 @@ fn initializes_the_database_schema() {
 }
 
 #[test]
+fn audio_consent_defaults_off_and_round_trips_source_specific_choices() {
+    let store = Store::open_in_memory().expect("store should initialize");
+    assert_eq!(
+        store.load_audio_recording_preferences_record().unwrap(),
+        None
+    );
+
+    let preferences = AudioRecordingPreferencesRecord {
+        enabled: true,
+        capture_manual: true,
+        capture_automatic: false,
+        retention_days: 14,
+        storage_budget_bytes: 64 * 1024 * 1024,
+    };
+    store
+        .save_audio_recording_preferences_record(&preferences)
+        .unwrap();
+    assert_eq!(
+        store.load_audio_recording_preferences_record().unwrap(),
+        Some(preferences)
+    );
+
+    let selection = AudioSourceSelectionRecord {
+        provider_id: "dev.wyrmgrid.fake-audio".into(),
+        source_id: "synthetic.microphone.primary".into(),
+        profile_id: "pilot_microphone_v1".into(),
+        enabled: true,
+        playback_muted: false,
+        playback_solo: false,
+        playback_volume_percent: 85,
+    };
+    store
+        .save_audio_source_selection_record(&selection)
+        .unwrap();
+    assert_eq!(
+        store.list_audio_source_selection_records().unwrap(),
+        vec![selection]
+    );
+}
+
+#[test]
+fn malformed_persisted_audio_consent_fails_closed() {
+    let store = Store::open_in_memory().expect("store should initialize");
+    {
+        let connection = store.connection.lock().unwrap();
+        connection
+            .execute_batch("PRAGMA ignore_check_constraints = ON;")
+            .unwrap();
+        connection.execute(
+            "INSERT INTO audio_recording_preferences
+                (singleton_id, enabled, capture_manual, capture_automatic, retention_days, storage_budget_bytes)
+             VALUES (1, 2, 0, 0, 30, 5368709120)",
+            [],
+        ).unwrap();
+        connection
+            .execute_batch("PRAGMA ignore_check_constraints = OFF;")
+            .unwrap();
+    }
+    assert!(matches!(
+        store.load_audio_recording_preferences_record(),
+        Err(StorageError::InvalidRecord)
+    ));
+}
+
+#[test]
+fn pinned_linked_sessions_are_excluded_from_audio_retention_candidates() {
+    let store = Store::open_in_memory().expect("store should initialize");
+    store
+        .create_simulator_session_record(&SimulatorSessionRecord {
+            id: "sim-pinned".into(),
+            provider_id: "dev.wyrmgrid.simulator".into(),
+            simulator_family: "Test".into(),
+            simulator_version: None,
+            aircraft_title: "Test aircraft".into(),
+            aircraft_registration: None,
+            started_at: "2026-07-01T00:00:00Z".into(),
+            ended_at: Some("2026-07-01T01:00:00Z".into()),
+            origin: "manual".into(),
+            status: "completed".into(),
+            sample_count: 0,
+            pinned: true,
+            plan_snapshot_json: None,
+        })
+        .unwrap();
+    for (id, simulator_session_id) in [
+        ("audio-pinned", Some("sim-pinned".to_owned())),
+        ("audio-unpinned", None),
+    ] {
+        store
+            .create_audio_session_record(
+                &AudioSessionRecord {
+                    id: id.into(),
+                    simulator_session_id,
+                    provider_id: "dev.wyrmgrid.fake-audio".into(),
+                    capture_mode: "manual".into(),
+                    started_at: "2026-07-01T00:00:00Z".into(),
+                    ended_at: Some("2026-07-01T01:00:00Z".into()),
+                    host_start_monotonic_ns: None,
+                    status: "completed".into(),
+                    media_availability: "available".into(),
+                    total_media_bytes: 0,
+                    deletion_requested_at: None,
+                },
+                &[AudioTrackRecord {
+                    id: format!("track-{id}"),
+                    session_id: id.into(),
+                    source_id: "synthetic.microphone.primary".into(),
+                    profile_id: "pilot_microphone_v1".into(),
+                    source_role: "microphone_input".into(),
+                    source_truth: "isolated".into(),
+                    channel_count: 1,
+                    sample_rate_hz: 48_000,
+                    provider_start_monotonic_ns: 100,
+                    packet_count: 0,
+                    frame_count: 0,
+                    last_packet_sequence: None,
+                }],
+            )
+            .unwrap();
+    }
+    let candidates = store.list_audio_deletion_candidate_records().unwrap();
+    assert_eq!(
+        candidates
+            .iter()
+            .map(|session| session.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["audio-unpinned"]
+    );
+}
+
+#[test]
 fn atlas_preferences_and_opt_in_view_round_trip() {
     let store = Store::open_in_memory().expect("store should initialize");
     let preferences = AtlasPreferencesRecord {
@@ -952,21 +1083,75 @@ fn persists_custom_themes_and_the_selected_theme() {
         .save_selected_theme_record("night-flight")
         .expect("theme selection should save");
 
+    let themes = store
+        .list_custom_theme_records()
+        .expect("custom themes should be readable");
+    assert_eq!(themes.len(), 1);
+    assert_eq!(themes[0].theme_id, "night-flight");
+    assert_eq!(themes[0].manifest_json, "{\"schema_version\":1}");
+    assert!(themes[0].imported_at.ends_with('Z'));
+    assert!(themes[0].updated_at.ends_with('Z'));
+
+    {
+        let connection = store.connection.lock().expect("database should lock");
+        connection
+            .execute(
+                "UPDATE custom_themes
+                 SET imported_at = '2020-01-02 03:04:05',
+                     updated_at = '2020-01-02 03:04:05'
+                 WHERE theme_id = 'night-flight'",
+                [],
+            )
+            .expect("theme timestamps should be adjustable for the fixture");
+    }
+    store
+        .save_custom_theme_record("night-flight", "{\"schema_version\":1,\"revision\":2}")
+        .expect("custom theme revision should save");
+    let revised = store
+        .list_custom_theme_records()
+        .expect("custom themes should be readable");
+    assert_eq!(revised[0].imported_at, "2020-01-02T03:04:05Z");
     assert_eq!(
-        store
-            .list_custom_theme_records()
-            .expect("custom themes should be readable"),
-        vec![CustomThemeRecord {
-            theme_id: "night-flight".into(),
-            manifest_json: "{\"schema_version\":1}".into(),
-        }]
+        revised[0].manifest_json,
+        "{\"schema_version\":1,\"revision\":2}"
     );
+    assert_ne!(revised[0].updated_at, revised[0].imported_at);
     assert_eq!(
         store
             .load_theme_preferences_record()
             .expect("theme preference should be readable"),
         Some(ThemePreferencesRecord {
             selected_theme_id: "night-flight".into(),
+        })
+    );
+}
+
+#[test]
+fn deletes_a_custom_theme_and_resets_its_selection_atomically() {
+    let store = Store::open_in_memory().expect("in-memory database should open");
+    store
+        .save_custom_theme_record("night-flight", "{\"schema_version\":1}")
+        .expect("custom theme should save");
+    store
+        .save_selected_theme_record("night-flight")
+        .expect("theme selection should save");
+
+    store
+        .delete_custom_theme_record("night-flight", "wyrmgrid-classic")
+        .expect("custom theme should be deleted");
+
+    assert!(
+        store
+            .list_custom_theme_records()
+            .expect("custom themes should be readable")
+            .is_empty()
+    );
+    assert_eq!(
+        store
+            .load_theme_preferences_record()
+            .expect("theme preference should be readable"),
+        Some(ThemePreferencesRecord {
+            selected_theme_id: "wyrmgrid-classic".into(),
         })
     );
 }

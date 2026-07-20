@@ -1,5 +1,5 @@
 import { invokeDesktop, isDesktopRuntime } from "$lib/desktop/client";
-import type { ThemeManifest, ThemeStatus } from "./types";
+import type { ThemeExport, ThemeManifest, ThemeStatus } from "./types";
 
 export const classicTheme: ThemeManifest = {
   schema_version: 1,
@@ -29,7 +29,12 @@ export const classicTheme: ThemeManifest = {
 export const browserThemeStatus: ThemeStatus = {
   selected_theme_id: classicTheme.id,
   active_theme: classicTheme,
-  themes: [{ manifest: classicTheme, built_in: true }],
+  themes: [
+    {
+      manifest: classicTheme,
+      provenance: { source: "bundled" },
+    },
+  ],
 };
 
 export async function loadThemeStatus(): Promise<ThemeStatus> {
@@ -44,4 +49,12 @@ export async function selectTheme(themeId: string): Promise<ThemeStatus> {
 
 export async function importTheme(manifestJson: string): Promise<ThemeStatus> {
   return invokeDesktop<ThemeStatus>("import_theme", { manifestJson });
+}
+
+export async function exportTheme(themeId: string): Promise<ThemeExport> {
+  return invokeDesktop<ThemeExport>("export_theme", { themeId });
+}
+
+export async function deleteTheme(themeId: string): Promise<ThemeStatus> {
+  return invokeDesktop<ThemeStatus>("delete_theme", { themeId });
 }

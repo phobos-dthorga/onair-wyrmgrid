@@ -8,12 +8,21 @@ major application version.
 
 ### New features
 
-- Added the non-shipping simulator-audio foundation: an independently versioned
-  Audio Capture Provider contract, bounded JSON control and raw encoded-packet
-  framing, stable capability-labelled source and Opus-profile models, schemas,
-  sanitized fixtures, and a deterministic development-only fake provider. No
-  microphone, native capture, consent persistence, media storage, interface, or
-  live-support claim is enabled by this foundation.
+- Added data-only theme export, safe local deletion, visual duplicate
+  detection, explicit bundled-versus-local provenance, and a complete theme
+  authoring preview with live Rust-matched contrast thresholds. Manifest author
+  fields remain visibly unverified, and the independently versioned theme
+  schema remains at version 1.
+- Added the non-shipping simulator-audio application slices: independently
+  default-off master, manual, automatic, and source-specific consent; explicit
+  permission requests; fake-provider orchestration; schema-18 metadata;
+  purpose-keyed authenticated external segments; retention, pinned-session
+  protection, tombstoned deletion, portable-backup omission, bounded
+  authenticated packet inspection, and separately warned plaintext packet
+  export. The deterministic fake remains a debug-only protocol tool: no
+  microphone, native provider, audible playback, packaged capture, or live-
+  support claim is enabled. The source language catalogue advances to version
+  19 for the audio controls and recording-state labels.
 - Added an optional, profile-driven local development-task framework for
   change-impact dossiers, test matrices, documentation synchronization,
   synthetic fixture variants, sanitized failure triage, and release curation.
@@ -175,6 +184,11 @@ major application version.
   forecast-validity, current-context, and observation-only RADAR wording.
 - Advanced the source language catalogue to version 17 for explicit historical
   route-weather and Atlas wording.
+- Advanced the source language catalogue to version 18 for theme provenance,
+  lifecycle controls, authoring, contrast-preview, and duplicate guidance.
+- Advanced the source language catalogue to version 19 for audio consent,
+  source state, recording state, authenticated inspection, export, deletion,
+  and backup/reset wording.
 
 - Documented a proposal-only hosted-platform architecture and staged delivery
   plan for the public website, WyrmGrid Aerie catalogue, signed community

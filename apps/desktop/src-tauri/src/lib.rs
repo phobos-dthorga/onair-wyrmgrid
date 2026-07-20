@@ -4,7 +4,7 @@ mod diagnostic_reporting;
 mod diagnostics;
 mod observability;
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, mpsc};
 use tauri::Manager;
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 use zeroize::Zeroize;
@@ -30,6 +30,8 @@ struct DesktopState {
     simulator: wyrmgrid_application::SimulatorBridgeService,
     simulator_settings: wyrmgrid_application::SimulatorSettingsService<wyrmgrid_storage::Store>,
     simulator_recording: wyrmgrid_application::SimulatorRecordingService,
+    audio_recording: wyrmgrid_application::AudioRecordingService,
+    audio_sender: mpsc::Sender<AudioSyncRequest>,
     legal: wyrmgrid_application::LegalSettingsService<wyrmgrid_storage::Store>,
     security: wyrmgrid_application::SecurityCentreService<wyrmgrid_storage::Store>,
     data_protection: wyrmgrid_application::DataProtectionService<wyrmgrid_storage::Store>,
@@ -39,6 +41,61 @@ struct DesktopState {
     display: wyrmgrid_application::DisplaySettingsService<wyrmgrid_storage::Store>,
     atlas_preferences: wyrmgrid_application::AtlasPreferencesService<wyrmgrid_storage::Store>,
     observability: observability::Controller,
+}
+
+struct RecordingTelemetryObserver {
+    simulator_recording: wyrmgrid_application::SimulatorRecordingService,
+    audio_sender: mpsc::Sender<AudioSyncRequest>,
+    last_audio_request: Mutex<Option<AudioSyncRequest>>,
+}
+
+#[derive(Clone, PartialEq, Eq)]
+struct AudioSyncRequest {
+    session_id: Option<String>,
+    mode: wyrmgrid_application::AudioCaptureMode,
+}
+
+impl wyrmgrid_application::SimulatorTelemetryObserver for RecordingTelemetryObserver {
+    fn observe(&self, provider_id: &str, snapshot: &wyrmgrid_domain::SimulatorTelemetrySnapshot) {
+        wyrmgrid_application::SimulatorTelemetryObserver::observe(
+            &self.simulator_recording,
+            provider_id,
+            snapshot,
+        );
+        let request = audio_sync_request(&self.simulator_recording);
+        if let Ok(mut last_request) = self.last_audio_request.lock()
+            && last_request.as_ref() != Some(&request)
+        {
+            *last_request = Some(request.clone());
+            let _ = self.audio_sender.send(request);
+        }
+    }
+}
+
+fn audio_sync_request(
+    recording: &wyrmgrid_application::SimulatorRecordingService,
+) -> AudioSyncRequest {
+    let active = recording.status().ok().and_then(|view| {
+        let active_id = view.active_session_id?;
+        let mode = view
+            .sessions
+            .iter()
+            .find(|session| session.id == active_id)
+            .map(|session| session.capture_mode)?;
+        Some((active_id, mode))
+    });
+    let (session_id, mode) = match active {
+        Some((session_id, wyrmgrid_application::SimulatorCaptureMode::Automatic)) => (
+            Some(session_id),
+            wyrmgrid_application::AudioCaptureMode::Automatic,
+        ),
+        Some((session_id, wyrmgrid_application::SimulatorCaptureMode::Manual)) => (
+            Some(session_id),
+            wyrmgrid_application::AudioCaptureMode::Manual,
+        ),
+        None => (None, wyrmgrid_application::AudioCaptureMode::Automatic),
+    };
+    AudioSyncRequest { session_id, mode }
 }
 
 #[tauri::command]
@@ -408,6 +465,14 @@ fn reset_local_data(
     state: tauri::State<'_, DesktopState>,
     confirmation: String,
 ) -> Result<wyrmgrid_application::LocalDataResetView, wyrmgrid_application::OperationError> {
+    state
+        .data_protection
+        .validate_local_data_reset(&confirmation)
+        .map_err(operation_error)?;
+    state
+        .audio_recording
+        .erase_all_media_for_local_reset()
+        .map_err(operation_error)?;
     let result = state
         .data_protection
         .prepare_local_data_reset(&confirmation)
@@ -563,6 +628,22 @@ fn import_theme(
     manifest_json: String,
 ) -> Result<wyrmgrid_application::ThemeStatus, wyrmgrid_application::OperationError> {
     state.themes.import(&manifest_json).map_err(operation_error)
+}
+
+#[tauri::command]
+fn export_theme(
+    state: tauri::State<'_, DesktopState>,
+    theme_id: String,
+) -> Result<wyrmgrid_application::ThemeExport, wyrmgrid_application::OperationError> {
+    state.themes.export(&theme_id).map_err(operation_error)
+}
+
+#[tauri::command]
+fn delete_theme(
+    state: tauri::State<'_, DesktopState>,
+    theme_id: String,
+) -> Result<wyrmgrid_application::ThemeStatus, wyrmgrid_application::OperationError> {
+    state.themes.delete(&theme_id).map_err(operation_error)
 }
 
 #[tauri::command]
@@ -751,17 +832,144 @@ fn start_simulator_recording(
     let provider_id = bridge.active_provider_id.ok_or_else(|| {
         operation_error(wyrmgrid_application::SimulatorRecordingError::FreshTelemetryRequired)
     })?;
-    state
+    let view = state
         .simulator_recording
         .start(&provider_id, bridge.latest_snapshot)
-        .map_err(operation_error)
+        .map_err(operation_error)?;
+    let _ = state.audio_sender.send(AudioSyncRequest {
+        session_id: view.active_session_id.clone(),
+        mode: wyrmgrid_application::AudioCaptureMode::Manual,
+    });
+    Ok(view)
 }
 
 #[tauri::command]
 fn stop_simulator_recording(
     state: tauri::State<'_, DesktopState>,
 ) -> Result<wyrmgrid_application::SimulatorRecordingView, wyrmgrid_application::OperationError> {
-    state.simulator_recording.stop().map_err(operation_error)
+    let view = state.simulator_recording.stop().map_err(operation_error)?;
+    let _ = state.audio_sender.send(AudioSyncRequest {
+        session_id: None,
+        mode: wyrmgrid_application::AudioCaptureMode::Manual,
+    });
+    Ok(view)
+}
+
+#[tauri::command]
+fn audio_recording_status(
+    state: tauri::State<'_, DesktopState>,
+) -> Result<wyrmgrid_application::AudioRecordingView, wyrmgrid_application::OperationError> {
+    state.audio_recording.status().map_err(operation_error)
+}
+
+#[tauri::command]
+async fn update_audio_recording_preferences(
+    state: tauri::State<'_, DesktopState>,
+    preferences: wyrmgrid_application::AudioRecordingPreferences,
+) -> Result<wyrmgrid_application::AudioRecordingView, wyrmgrid_application::OperationError> {
+    let audio = state.audio_recording.clone();
+    let audio_sender = state.audio_sender.clone();
+    let simulator_recording = state.simulator_recording.clone();
+    let view = tauri::async_runtime::spawn_blocking(move || audio.update_preferences(preferences))
+        .await
+        .map_err(|_| operation_error(wyrmgrid_application::AudioRecordingError::StateUnavailable))?
+        .map_err(operation_error)?;
+    if view.preferences.enabled {
+        let _ = audio_sender.send(audio_sync_request(&simulator_recording));
+    }
+    Ok(view)
+}
+
+#[tauri::command]
+async fn refresh_audio_sources(
+    state: tauri::State<'_, DesktopState>,
+) -> Result<wyrmgrid_application::AudioRecordingView, wyrmgrid_application::OperationError> {
+    let audio = state.audio_recording.clone();
+    tauri::async_runtime::spawn_blocking(move || audio.refresh_sources())
+        .await
+        .map_err(|_| operation_error(wyrmgrid_application::AudioRecordingError::StateUnavailable))?
+        .map_err(operation_error)
+}
+
+#[tauri::command]
+async fn request_audio_source_permission(
+    state: tauri::State<'_, DesktopState>,
+    source_id: String,
+) -> Result<wyrmgrid_application::AudioRecordingView, wyrmgrid_application::OperationError> {
+    let audio = state.audio_recording.clone();
+    let audio_sender = state.audio_sender.clone();
+    let simulator_recording = state.simulator_recording.clone();
+    let view =
+        tauri::async_runtime::spawn_blocking(move || audio.request_source_permission(&source_id))
+            .await
+            .map_err(|_| {
+                operation_error(wyrmgrid_application::AudioRecordingError::StateUnavailable)
+            })?
+            .map_err(operation_error)?;
+    let _ = audio_sender.send(audio_sync_request(&simulator_recording));
+    Ok(view)
+}
+
+#[tauri::command]
+async fn update_audio_source_selection(
+    state: tauri::State<'_, DesktopState>,
+    selection: wyrmgrid_application::AudioSourceSelection,
+) -> Result<wyrmgrid_application::AudioRecordingView, wyrmgrid_application::OperationError> {
+    let enabled = selection.enabled;
+    let audio = state.audio_recording.clone();
+    let audio_sender = state.audio_sender.clone();
+    let simulator_recording = state.simulator_recording.clone();
+    let view =
+        tauri::async_runtime::spawn_blocking(move || audio.update_source_selection(selection))
+            .await
+            .map_err(|_| {
+                operation_error(wyrmgrid_application::AudioRecordingError::StateUnavailable)
+            })?
+            .map_err(operation_error)?;
+    if enabled {
+        let _ = audio_sender.send(audio_sync_request(&simulator_recording));
+    }
+    Ok(view)
+}
+
+#[tauri::command]
+async fn audio_recording_playback(
+    state: tauri::State<'_, DesktopState>,
+    session_id: String,
+) -> Result<wyrmgrid_application::AudioPlaybackView, wyrmgrid_application::OperationError> {
+    let audio = state.audio_recording.clone();
+    tauri::async_runtime::spawn_blocking(move || audio.playback(&session_id))
+        .await
+        .map_err(|_| operation_error(wyrmgrid_application::AudioRecordingError::StateUnavailable))?
+        .map_err(operation_error)
+}
+
+#[tauri::command]
+async fn export_audio_track(
+    state: tauri::State<'_, DesktopState>,
+    session_id: String,
+    track_id: String,
+    destination: String,
+) -> Result<wyrmgrid_application::AudioExportView, wyrmgrid_application::OperationError> {
+    let audio = state.audio_recording.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        audio.export_track(&session_id, &track_id, std::path::Path::new(&destination))
+    })
+    .await
+    .map_err(|_| operation_error(wyrmgrid_application::AudioRecordingError::StateUnavailable))?
+    .map_err(operation_error)
+}
+
+#[tauri::command]
+async fn delete_audio_recording(
+    state: tauri::State<'_, DesktopState>,
+    session_id: String,
+) -> Result<wyrmgrid_application::AudioRecordingView, wyrmgrid_application::OperationError> {
+    let audio = state.audio_recording.clone();
+    tauri::async_runtime::spawn_blocking(move || audio.delete_session(&session_id))
+        .await
+        .map_err(|_| operation_error(wyrmgrid_application::AudioRecordingError::StateUnavailable))?
+        .map_err(operation_error)
 }
 
 #[tauri::command]
@@ -817,6 +1025,10 @@ fn delete_simulator_recording(
     session_id: String,
 ) -> Result<wyrmgrid_application::SimulatorRecordingView, wyrmgrid_application::OperationError> {
     state
+        .audio_recording
+        .delete_linked_simulator_session(&session_id)
+        .map_err(operation_error)?;
+    state
         .simulator_recording
         .delete_session(&session_id)
         .map_err(operation_error)
@@ -826,6 +1038,19 @@ fn delete_simulator_recording(
 fn delete_all_simulator_recordings(
     state: tauri::State<'_, DesktopState>,
 ) -> Result<wyrmgrid_application::SimulatorRecordingView, wyrmgrid_application::OperationError> {
+    let sessions = state
+        .simulator_recording
+        .status()
+        .map_err(operation_error)?
+        .sessions;
+    for session in sessions.into_iter().filter(|session| {
+        !session.pinned && session.status != wyrmgrid_application::SimulatorRecordingStatus::Active
+    }) {
+        state
+            .audio_recording
+            .delete_linked_simulator_session(&session.id)
+            .map_err(operation_error)?;
+    }
     state
         .simulator_recording
         .delete_all()
@@ -863,6 +1088,11 @@ pub fn run() {
                 wyrmgrid_storage::Store::open(&database_path, &database_key).inspect_err(|_| {
                     show_encrypted_storage_startup_error(app);
                 })?;
+            let audio_media_key = wyrmgrid_application::AudioMediaKey::derive(&database_key)?;
+            let audio_media = wyrmgrid_application::EncryptedAudioMediaStore::new(
+                wyrmgrid_application::audio_media_root(&app_data_directory),
+                audio_media_key,
+            );
             let legal = wyrmgrid_application::LegalSettingsService::new(store.clone());
             let legal_status = legal.status().expect("legal settings should initialize");
             let themes = wyrmgrid_application::ThemeSettingsService::new(store.clone());
@@ -892,9 +1122,30 @@ pub fn run() {
                 .expect("bundled simulator provider manifest should validate");
             let simulator_recording =
                 wyrmgrid_application::SimulatorRecordingService::new(store.clone());
+            let audio_provider = development_audio_provider().map(|provider| {
+                Arc::new(provider) as Arc<dyn wyrmgrid_application::AudioCaptureProvider>
+            });
+            let audio_recording = wyrmgrid_application::AudioRecordingService::new(
+                store.clone(),
+                audio_media,
+                audio_provider,
+            );
+            let _ = audio_recording.recover_interrupted_sessions();
+            let (audio_sender, audio_receiver) = mpsc::channel::<AudioSyncRequest>();
+            let audio_worker = audio_recording.clone();
+            std::thread::spawn(move || {
+                while let Ok(request) = audio_receiver.recv() {
+                    audio_worker
+                        .synchronize_with_simulator_recording(request.session_id, request.mode);
+                }
+            });
             let simulator = wyrmgrid_application::SimulatorBridgeService::with_telemetry_observer(
                 vec![simulator_provider],
-                Some(Arc::new(simulator_recording.clone())),
+                Some(Arc::new(RecordingTelemetryObserver {
+                    simulator_recording: simulator_recording.clone(),
+                    audio_sender: audio_sender.clone(),
+                    last_audio_request: Mutex::new(None),
+                })),
             );
             let simulator_settings = wyrmgrid_application::SimulatorSettingsService::new(
                 store.clone(),
@@ -928,6 +1179,8 @@ pub fn run() {
                 simulator,
                 simulator_settings,
                 simulator_recording,
+                audio_recording,
+                audio_sender,
                 legal,
                 security,
                 data_protection,
@@ -1022,6 +1275,8 @@ pub fn run() {
             update_atlas_view,
             select_theme,
             import_theme,
+            export_theme,
+            delete_theme,
             language_status,
             select_language_pack,
             import_language_pack,
@@ -1046,7 +1301,15 @@ pub fn run() {
             pin_simulator_recording,
             export_simulator_recording,
             delete_simulator_recording,
-            delete_all_simulator_recordings
+            delete_all_simulator_recordings,
+            audio_recording_status,
+            update_audio_recording_preferences,
+            refresh_audio_sources,
+            request_audio_source_permission,
+            update_audio_source_selection,
+            audio_recording_playback,
+            export_audio_track,
+            delete_audio_recording
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -1092,6 +1355,28 @@ fn simulator_provider_path() -> std::path::PathBuf {
         &workspace_root,
         cfg!(debug_assertions),
     )
+}
+
+fn development_audio_provider() -> Option<wyrmgrid_application::FakeAudioProviderProcess> {
+    if !cfg!(debug_assertions) {
+        return None;
+    }
+    let workspace_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let executable = std::env::var_os("WYRMGRID_FAKE_AUDIO_PROVIDER_PATH")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| {
+            workspace_root.join("target/debug").join(if cfg!(windows) {
+                "wyrmgrid-fake-audio-provider.exe"
+            } else {
+                "wyrmgrid-fake-audio-provider"
+            })
+        });
+    let registration = wyrmgrid_application::AudioProviderRegistration::from_manifest_json(
+        include_str!("../../../../providers/fake-audio/provider.json"),
+        executable,
+    )
+    .ok()?;
+    wyrmgrid_application::FakeAudioProviderProcess::new(registration).ok()
 }
 
 const SIMULATOR_PROVIDER_EXECUTABLE: &str = "wyrmgrid-simconnect-provider.exe";

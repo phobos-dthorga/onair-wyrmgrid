@@ -12,7 +12,7 @@ use thiserror::Error;
 use wyrmgrid_storage::Store;
 
 pub const LANGUAGE_PACK_SCHEMA_VERSION: u32 = 1;
-pub const SOURCE_CATALOG_VERSION: u32 = 17;
+pub const SOURCE_CATALOG_VERSION: u32 = 19;
 pub const SOURCE_LOCALE: &str = "en-AU";
 pub const DEFAULT_LANGUAGE_PACK_ID: &str = "wyrmgrid-en-au";
 const MAX_LANGUAGE_PACK_BYTES: usize = 256 * 1024;
