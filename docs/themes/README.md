@@ -44,7 +44,9 @@ Every available theme can be exported as a schema-version-1 JSON document.
 Locally imported themes can also be edited or deleted; deleting the active
 theme selects WyrmGrid Classic atomically with the deletion. Bundled themes
 cannot be deleted, but the authoring tool can create a custom copy with a
-non-reserved identifier.
+non-reserved identifier. Desktop exports and draft downloads use the operating
+system save dialog, then delegate bounded JSON serialization and file writing
+to the Rust theme service rather than relying on webview downloads.
 
 WyrmGrid displays provenance separately from manifest content. A theme is
 identified as either bundled with WyrmGrid or imported locally, with its local
@@ -60,7 +62,11 @@ revision and preserves the original import time.
 The data-only authoring tool starts from an available theme, edits every
 allowlisted role and chart colour, and shows the same contrast thresholds used
 by the Rust validator. Its preview is advisory; saving still passes the complete
-manifest through the shared validation and persistence service.
+manifest through the shared validation and persistence service. A draft may be
+downloaded before every contrast check passes, but it must still satisfy the
+schema, identifier, metadata, colour-shape, palette-size, and 32 KiB boundaries.
+An authored theme remains open when validation or persistence fails so the
+error can be corrected without losing the current edits.
 
 ## Compatibility decision
 
