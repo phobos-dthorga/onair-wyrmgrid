@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wyrmgrid.dev/schemas/audio-source-capability-v1.json",
+  "title": "WyrmGrid audio source capability",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "id",
+    "display_name",
+    "role",
+    "direction",
+    "truth",
+    "availability",
+    "permission",
+    "channels",
+    "native_sample_rate_hz",
+    "supported_profiles",
+    "supports_hot_plug",
+    "origin"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "id": { "$ref": "#/$defs/machineId" },
+    "display_name": { "type": "string", "minLength": 1, "maxLength": 160 },
+    "role": {
+      "enum": [
+        "microphone_input",
+        "application_output",
+        "output_endpoint",
+        "simulator_master_mix",
+        "isolated_com1",
+        "isolated_com2",
+        "pilot_radio",
+        "copilot_radio"
+      ]
+    },
+    "direction": { "enum": ["input", "output"] },
+    "truth": { "enum": ["isolated", "mixed_output", "metadata_only"] },
+    "availability": { "enum": ["available", "unavailable"] },
+    "permission": {
+      "enum": ["not_required", "prompt_required", "granted", "denied"]
+    },
+    "channels": { "type": "integer", "minimum": 1, "maximum": 8 },
+    "native_sample_rate_hz": {
+      "type": "integer",
+      "minimum": 8000,
+      "maximum": 384000
+    },
+    "supported_profiles": {
+      "type": "array",
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/opusProfile" }
+    },
+    "supports_hot_plug": { "type": "boolean" },
+    "origin": { "$ref": "#/$defs/origin" }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "truth": { "const": "metadata_only" } },
+        "required": ["truth"]
+      },
+      "then": { "properties": { "supported_profiles": { "maxItems": 0 } } },
+      "else": { "properties": { "supported_profiles": { "minItems": 1 } } }
+    }
+  ],
+  "$defs": {
+    "machineId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "opusProfile": {
+      "enum": ["pilot_microphone_v1", "isolated_voice_v1", "mixed_stereo_v1"]
+    },
+    "origin": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": { "kind": { "const": "operating_system" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "identifier"],
+          "properties": {
+            "kind": { "const": "simulator" },
+            "identifier": { "$ref": "#/$defs/machineId" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "identifier"],
+          "properties": {
+            "kind": { "const": "external_application" },
+            "identifier": { "$ref": "#/$defs/machineId" }
+          }
+        }
+      ]
+    }
+  }
+}

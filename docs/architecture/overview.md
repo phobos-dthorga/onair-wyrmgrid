@@ -142,7 +142,7 @@ See [ADR-0008](decisions/0008-provider-adapters-and-operational-snapshots.md)
 and [ADR-0011](decisions/0011-core-simulator-capability-provider-sidecars.md),
 plus the [external integrations programme](../integrations/README.md).
 
-## Planned simulator-audio boundary
+## Simulator-audio foundation and planned capture
 
 Simulator-synchronised audio is adjacent to Bridge telemetry rather than part
 of Bridge protocol version 1. The application owns separate default-off audio
@@ -152,11 +152,17 @@ tracks; SQLite stores metadata while encrypted media remains in bounded
 external segments. Audio, device labels, and communications are unavailable to
 ordinary plugins and observability.
 
+The independently versioned provider protocol, bounded control and binary
+packet framing, source/profile domain models, schemas, fixtures, and a
+development-only fake provider are implemented. Application consent, encrypted
+storage, native capture, interface controls, packaging, and live support are not.
+
 MSFS 2024 capture is Windows-specific. X-Plane 12 provides the cross-platform
 Windows, macOS, and supported Linux target, while its named COM audio groups
 remain a feasibility candidate until a thin non-blocking tap is proven. See
 [ADR-0017](decisions/0017-simulator-synchronised-audio-recording.md) and the
-[audio-recording plan](../integrations/simulator-audio-recording.md).
+[audio-recording plan](../integrations/simulator-audio-recording.md), plus the
+[version-one protocol reference](../integrations/audio-capture-provider-protocol.md).
 
 ## Extension boundary
 

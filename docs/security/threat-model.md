@@ -485,9 +485,12 @@
 
 ## Planned simulator-audio controls
 
-Simulator-synchronised audio is approved design work and is not implemented.
-Before any capture path ships, these are mandatory controls rather than claims
-about the current application:
+Simulator-synchronised audio remains unavailable to users. Its independently
+versioned provider contract, bounded control and encoded-packet framing, stable
+source/profile models, schemas, fixtures, and development-only fake provider are
+implemented; consent, storage, native capture, packaging, and live support are
+not. Before any capture path ships, these are mandatory controls rather than
+claims about the current application:
 
 - Opus is the versioned working codec, with bounded profiles and independently
   recoverable encrypted segments. SQLite stores only metadata and opaque media
@@ -495,9 +498,20 @@ about the current application:
 - Audio uses a separately supervised Audio Capture Provider and a bounded media
   path, never Bridge protocol version 1's 64 KiB JSON channel. Audio failure
   cannot block telemetry or the simulator.
+- Version-one framing rejects oversized lengths before allocation, permits a
+  bounded binary body only for an encoded audio-packet message, requires its
+  declared and actual lengths to match, rejects unknown JSON fields, and fails
+  closed on unsupported versions or non-increasing sequences. Protocol errors
+  contain neither source labels nor encoded bytes.
+- The deterministic fake provider is never staged as a live provider and uses
+  only synthetic identities, timestamps, events, and packet bytes. Its tests do
+  not authorize a native provider or establish valid Opus capture.
 - Microphone and communications consent is separate, explicit, default-off,
   source-specific, and visibly active. Telemetry recording and its automation
   grant no audio authority, and full desktop audio is never implicit.
+- The provider protocol keeps operating-system permission requests separate
+  from capture start, preventing automatic recording from implicitly prompting
+  for a microphone or communications source.
 - Providers label sources as isolated, mixed output, or metadata only. COM
   telemetry never proves the provenance of an audible sample. A disappearing
   device cannot silently switch to a default source.

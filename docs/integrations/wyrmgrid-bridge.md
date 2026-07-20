@@ -69,12 +69,13 @@ implemented contract and the FSUIPC/community-provider path.
 
 ## Adjacent audio-recording boundary
 
-Planned simulator-synchronised audio is not a Bridge protocol version 1
-payload. Continuous PCM or encoded media would violate the purpose and limits
-of the 64 KiB JSON telemetry channel and couple audio backpressure to simulator
-facts. Bridge providers continue to supply attributed radio state and session
-evidence; a separately versioned and supervised Audio Capture Provider supplies
-capability-labelled Opus tracks on the same application-owned timeline.
+Simulator-synchronised audio is not a Bridge protocol version 1 payload.
+Continuous PCM or encoded media would violate the purpose and limits of the 64
+KiB JSON telemetry channel and couple audio backpressure to simulator facts.
+Bridge providers continue to supply attributed radio state and session evidence.
+The separate Audio Capture Provider protocol version-one foundation now defines
+capability-labelled sources, bounded control headers, and separately framed
+encoded-packet bodies, but no native capture or user-facing availability exists.
 
 MSFS 2024's documented COM facts do not establish isolated COM audio. X-Plane
 12's named audio groups make isolated capture a feasibility candidate, but its
@@ -84,6 +85,8 @@ to make WyrmGrid policy or storage decisions. The complete planned boundary is
 defined in
 [ADR-0017](../architecture/decisions/0017-simulator-synchronised-audio-recording.md)
 and the [simulator-audio plan](simulator-audio-recording.md).
+The implemented wire contract is documented separately in the
+[Audio Capture Provider protocol reference](audio-capture-provider-protocol.md).
 
 ## MSFS 2024 slice
 

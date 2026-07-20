@@ -37,6 +37,7 @@
   - [Simulator provider authoring and FSUIPC path](integrations/simulator-provider-authoring.md)
   - [Simulator connection, recording, in-game control, and graphs](integrations/simulator-experience-roadmap.md)
   - [Simulator-synchronised audio recording](integrations/simulator-audio-recording.md)
+  - [Audio Capture Provider protocol version 1](integrations/audio-capture-provider-protocol.md)
 - [Observability and Sentry plan](operations/observability.md)
 - [CI/CD hardening and enrichment plan](operations/ci-cd-enhancement-plan.md)
 - [Local review automation and bounded Hoardmind delegation plan](operations/local-review-automation.md)
