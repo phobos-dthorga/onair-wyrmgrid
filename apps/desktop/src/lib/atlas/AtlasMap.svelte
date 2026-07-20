@@ -3371,6 +3371,13 @@
   aria-hidden="true"
 ></canvas>
 
+{#if pluginWeatherVisible && routeWeather?.temporal_mode === "historical"}
+  <section class="historical-weather-status" role="status">
+    <strong>{$translation("atlas-historical-weather-title")}</strong>
+    <span>{$translation("atlas-historical-weather-detail")}</span>
+  </section>
+{/if}
+
 {#if weatherVisible && plottedWeatherStationCount > 0}
   <div class="weather-render-status" role="status">
     <span>{weatherStatusPresentation.title}</span>
@@ -3432,6 +3439,37 @@
 {/if}
 
 <style>
+  .historical-weather-status {
+    pointer-events: none;
+    position: absolute;
+    z-index: 4;
+    top: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: grid;
+    gap: 3px;
+    min-width: min(440px, calc(100% - 40px));
+    border: 1px solid var(--color-highlight-border);
+    border-radius: 4px;
+    padding: 8px 13px;
+    background: color-mix(in srgb, var(--color-surface) 94%, transparent);
+    color: var(--color-text);
+    text-align: center;
+    box-shadow: var(--shadow-panel);
+  }
+
+  .historical-weather-status strong {
+    color: var(--color-highlight);
+    font-family: var(--font-display);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .historical-weather-status span {
+    color: var(--color-muted);
+    font-size: 0.72rem;
+  }
+
   .weather-render-canvas {
     pointer-events: none;
     position: absolute;

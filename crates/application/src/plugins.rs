@@ -11,13 +11,13 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 use thiserror::Error;
-use wyrmgrid_domain::{GlobalWeatherLayerSnapshot, WeatherSnapshot};
+use wyrmgrid_domain::{GlobalWeatherLayerSnapshot, GlobalWeatherTimeKind, WeatherSnapshot};
 use wyrmgrid_plugin_protocol::{
     HostMessage, MAX_MAP_LAYERS_PER_PLUGIN, MapLayerSpec, PLUGIN_API_VERSION, Permission,
     PluginCompany, PluginFleetSnapshot, PluginManifest, PluginMessage, PluginRuntime,
     PluginSnapshotAvailability, PluginWeatherProduct, PluginWeatherResponse, ProtocolEnvelope,
     WeatherCapability, WeatherGridRequestPoint, WeatherQuery, WeatherRequest, WeatherTileAddress,
-    WeatherUnavailableCode, read_frame, write_frame,
+    WeatherTimeWindow, WeatherUnavailableCode, read_frame, write_frame,
 };
 use wyrmgrid_storage::{PluginConfigurationRecord, PluginPreferencesRecord, Store};
 
@@ -607,6 +607,7 @@ impl PluginService {
             .lock()
             .map_err(|_| PluginError::StateUnavailable)?;
         let mut weather_layers = Vec::new();
+        let historical = status.weather.time_basis == crate::RouteWeatherTemporalMode::Historical;
         for runtime in runtimes.values() {
             let histories = runtime
                 .weather_layers
@@ -614,6 +615,16 @@ impl PluginService {
                 .map_err(|_| PluginError::StateUnavailable)?;
             for history in histories.values() {
                 if let Some(layer) = history.last() {
+                    let is_historical_layer = layer.time_scope.as_ref().is_some_and(|scope| {
+                        matches!(
+                            scope.kind,
+                            GlobalWeatherTimeKind::HistoricalModel
+                                | GlobalWeatherTimeKind::ArchivedForecast
+                        )
+                    });
+                    if historical != is_historical_layer {
+                        continue;
+                    }
                     match &layer.data {
                         wyrmgrid_domain::GlobalWeatherLayerData::Grid { .. } => {
                             weather_layers.push(layer.clone());
@@ -968,12 +979,14 @@ impl PluginService {
     pub fn request_airport_weather(
         &self,
         stations: &[String],
+        window: Option<WeatherTimeWindow>,
     ) -> Result<WeatherSnapshot, PluginWeatherError> {
         let runtime = self.weather_runtime(WeatherCapability::AirportReports)?;
         let request = WeatherRequest {
             id: self.next_weather_request_id(&runtime)?,
             query: WeatherQuery::AirportReports {
                 stations: stations.to_vec(),
+                window,
             },
         };
         request
@@ -994,10 +1007,66 @@ impl PluginService {
             }
         };
         match response {
-            PluginWeatherResponse::Complete {
-                product: PluginWeatherProduct::AirportReports { snapshot },
-            } => Ok(snapshot),
-            PluginWeatherResponse::Complete { .. } => Err(PluginWeatherError::InvalidResponse),
+            PluginWeatherResponse::Complete { product } => match product {
+                PluginWeatherProduct::AirportReports { snapshot } => Ok(snapshot),
+                _ => Err(PluginWeatherError::InvalidResponse),
+            },
+            PluginWeatherResponse::Unavailable { code } => Err(weather_unavailable_error(code)),
+        }
+    }
+
+    pub fn request_historical_global_weather(
+        &self,
+        window: WeatherTimeWindow,
+    ) -> Result<GlobalWeatherLayerSnapshot, PluginWeatherError> {
+        let runtime = {
+            let runtimes = self
+                .inner
+                .runtimes
+                .lock()
+                .map_err(|_| PluginWeatherError::StateUnavailable)?;
+            runtimes
+                .get(OPEN_METEO_PLUGIN_ID)
+                .filter(|runtime| {
+                    runtime
+                        .weather_capabilities
+                        .contains(&WeatherCapability::ForecastGrid)
+                        && runtime_state(runtime) == Ok(PluginProcessState::Running)
+                })
+                .cloned()
+                .ok_or(PluginWeatherError::ProviderUnavailable)?
+        };
+        let WeatherQuery::ForecastGrid { points, .. } = default_global_weather_grid() else {
+            unreachable!("the default model query is always a grid")
+        };
+        let request = WeatherRequest {
+            id: self.next_weather_request_id(&runtime)?,
+            query: WeatherQuery::ForecastGrid {
+                points,
+                window: Some(window),
+            },
+        };
+        request
+            .validate()
+            .map_err(|_| PluginWeatherError::InvalidResponse)?;
+        let request_id = request.id.clone();
+        let (sender, receiver) = mpsc::channel();
+        self.queue_weather_request(&runtime, request, Some(sender))
+            .map_err(plugin_weather_service_error)?;
+        let response = match receiver.recv_timeout(GLOBAL_WEATHER_RESPONSE_TIMEOUT) {
+            Ok(response) => response,
+            Err(_) => {
+                if let Ok(mut pending) = runtime.pending_weather.lock() {
+                    pending.remove(&request_id);
+                }
+                return Err(PluginWeatherError::TimedOut);
+            }
+        };
+        match response {
+            PluginWeatherResponse::Complete { product } => match product {
+                PluginWeatherProduct::GlobalLayer { layer } => Ok(layer),
+                _ => Err(PluginWeatherError::InvalidResponse),
+            },
             PluginWeatherResponse::Unavailable { code } => Err(weather_unavailable_error(code)),
         }
     }
@@ -1660,7 +1729,10 @@ fn default_global_weather_grid() -> WeatherQuery {
             });
         }
     }
-    WeatherQuery::ForecastGrid { points }
+    WeatherQuery::ForecastGrid {
+        points,
+        window: None,
+    }
 }
 
 fn default_global_radar_tiles(frame_offset: Option<u8>) -> WeatherQuery {
@@ -1880,9 +1952,8 @@ fn spawn_plugin_reader(
                         fail_runtime(&runtime, failure);
                         return;
                     }
-                    if let PluginWeatherResponse::Complete {
-                        product: PluginWeatherProduct::GlobalLayer { layer },
-                    } = &response
+                    if let PluginWeatherResponse::Complete { product } = &response
+                        && let PluginWeatherProduct::GlobalLayer { layer } = product
                     {
                         let mut layers = match runtime.weather_layers.lock() {
                             Ok(layers) => layers,
@@ -1940,7 +2011,7 @@ fn validate_weather_response_for_request(
     let matches_request = match (product, query) {
         (
             PluginWeatherProduct::AirportReports { snapshot },
-            WeatherQuery::AirportReports { stations },
+            WeatherQuery::AirportReports { stations, window },
         ) => {
             let mut actual = snapshot
                 .airports
@@ -1950,9 +2021,12 @@ fn validate_weather_response_for_request(
             let mut expected = stations.iter().map(String::as_str).collect::<Vec<_>>();
             actual.sort_unstable();
             expected.sort_unstable();
-            actual == expected
+            actual == expected && airport_reports_match_window(snapshot, window.as_ref())
         }
-        (PluginWeatherProduct::GlobalLayer { layer }, WeatherQuery::ForecastGrid { points }) => {
+        (
+            PluginWeatherProduct::GlobalLayer { layer },
+            WeatherQuery::ForecastGrid { points, window },
+        ) => {
             let wyrmgrid_domain::GlobalWeatherLayerData::Grid {
                 points: actual_points,
             } = &layer.data
@@ -1960,6 +2034,7 @@ fn validate_weather_response_for_request(
                 return Err(PluginRuntimeFailure::WeatherProductRequestMismatch);
             };
             forecast_points_match_request(actual_points, points)
+                && forecast_layer_matches_window(layer, window.as_ref())
         }
         (PluginWeatherProduct::GlobalLayer { layer }, WeatherQuery::RadarTiles { tiles, .. }) => {
             let wyrmgrid_domain::GlobalWeatherLayerData::RasterTiles {
@@ -1984,6 +2059,52 @@ fn validate_weather_response_for_request(
         Ok(())
     } else {
         Err(PluginRuntimeFailure::WeatherProductRequestMismatch)
+    }
+}
+
+fn airport_reports_match_window(
+    snapshot: &WeatherSnapshot,
+    window: Option<&WeatherTimeWindow>,
+) -> bool {
+    let Some(window) = window else {
+        return true;
+    };
+    snapshot.airports.iter().all(|airport| {
+        airport.taf.is_none()
+            && airport.metar.as_ref().is_none_or(|metar| {
+                (window.starts_at..=window.ends_at).contains(&metar.value.observed_at)
+            })
+    })
+}
+
+fn forecast_layer_matches_window(
+    layer: &GlobalWeatherLayerSnapshot,
+    window: Option<&WeatherTimeWindow>,
+) -> bool {
+    match window {
+        None => layer
+            .time_scope
+            .as_ref()
+            .is_none_or(|scope| scope.kind == GlobalWeatherTimeKind::CurrentForecast),
+        Some(window) => {
+            let Some(scope) = layer.time_scope.as_ref() else {
+                return false;
+            };
+            scope.kind == GlobalWeatherTimeKind::HistoricalModel
+                && scope.target_at == window.target_at
+                && scope.starts_at == window.starts_at
+                && scope.ends_at == window.ends_at
+                && match &layer.data {
+                    wyrmgrid_domain::GlobalWeatherLayerData::Grid { points } => {
+                        points.iter().all(|point| {
+                            point.valid_at.is_some_and(|valid_at| {
+                                (window.starts_at..=window.ends_at).contains(&valid_at)
+                            })
+                        })
+                    }
+                    wyrmgrid_domain::GlobalWeatherLayerData::RasterTiles { .. } => false,
+                }
+        }
     }
 }
 

@@ -135,6 +135,8 @@
 - compromise of CI-only Sentry upload credentials;
 - stale data presented as current fact;
 - historical operational state mistaken for the present state;
+- a plugin ignoring a historical weather window and current data being
+  accepted under a historical label;
 - recommendations mistaken for OnAir-provided facts;
 - accidental or automated request storms against OnAir's public API;
 - disclosure of locally cached company, fleet, and location history;
@@ -160,6 +162,12 @@
   immutable, application-owned snapshots with freshness and provider revision;
 - provider rate limits, caching, request coalescing, timeouts, bounded retries,
   and offline suspension are enforced in Rust;
+- historical weather requests use bounded UTC windows, exact response-time and
+  layer-classification checks, separate live/historical presentation, and
+  renewed grants when a bundled provider adds a network origin;
+- the zero-dependency Python SDK keeps TLS certificate and hostname validation
+  mandatory and, on Windows, builds server trust from the operating-system root
+  store instead of a separately installed OpenSSL CA file;
 - imported files, compressed feeds, navigation packages, weather geometries,
   and Bridge messages have strict size, count, nesting, numeric, path, and
   decompression limits;

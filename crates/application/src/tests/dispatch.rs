@@ -1,4 +1,5 @@
 use super::*;
+use crate::RouteWeatherTemporalMode;
 use std::sync::atomic::AtomicUsize;
 use uuid::Uuid;
 use wyrmgrid_domain::{
@@ -39,7 +40,11 @@ impl WeatherProvider for FakeWeatherProvider {
         true
     }
 
-    fn fetch_airports<'a>(&'a self, _stations: &'a [String]) -> WeatherProviderFuture<'a> {
+    fn fetch_airports<'a>(
+        &'a self,
+        _stations: &'a [String],
+        _window: Option<WeatherTimeWindow>,
+    ) -> WeatherProviderFuture<'a> {
         Box::pin(async move {
             self.calls.fetch_add(1, Ordering::AcqRel);
             Ok(self.snapshot.clone())
@@ -56,7 +61,11 @@ impl WeatherProvider for FailingWeatherProvider {
         true
     }
 
-    fn fetch_airports<'a>(&'a self, _stations: &'a [String]) -> WeatherProviderFuture<'a> {
+    fn fetch_airports<'a>(
+        &'a self,
+        _stations: &'a [String],
+        _window: Option<WeatherTimeWindow>,
+    ) -> WeatherProviderFuture<'a> {
         Box::pin(async move {
             self.calls.fetch_add(1, Ordering::AcqRel);
             Err(WeatherProviderError::Offline)
@@ -429,6 +438,50 @@ async fn caches_weather_and_clears_it_with_the_session_plan() {
         status.journey.stages[1].state,
         crate::FlightOperationStageState::Unavailable
     );
+}
+
+#[tokio::test]
+async fn refuses_to_replace_an_oversized_historical_window_with_live_weather() {
+    let weather_provider = Arc::new(FakeWeatherProvider {
+        calls: AtomicUsize::new(0),
+        snapshot: WeatherSnapshot {
+            schema_version: WEATHER_SNAPSHOT_SCHEMA_VERSION,
+            id: WeatherSnapshotId(Uuid::new_v4()),
+            airports: vec![],
+        },
+    });
+    let mut old_plan = snapshot("NZAA");
+    let departure = Utc::now() - chrono::Duration::days(8);
+    old_plan.schedule = Some(OperationalObservation {
+        value: PlannedSchedule {
+            scheduled_out: Some(departure - chrono::Duration::minutes(15)),
+            scheduled_off: Some(departure),
+            scheduled_on: None,
+            scheduled_in: None,
+            estimated_enroute_seconds: Some(25 * 60 * 60),
+        },
+        provenance: old_plan.airports.provenance.clone(),
+    });
+    let session = DispatchSession::with_providers(
+        Some(Arc::new(FakeProvider {
+            responses: Mutex::new(vec![old_plan]),
+        })),
+        Some(weather_provider.clone()),
+    );
+    session
+        .import_latest(SimBriefReferenceKind::PilotId, "1234567")
+        .await
+        .unwrap();
+
+    assert_eq!(
+        session.status().unwrap().weather.time_basis,
+        RouteWeatherTemporalMode::Historical
+    );
+    assert_eq!(
+        session.refresh_weather().await,
+        Err(DispatchError::HistoricalWeatherWindowUnsupported)
+    );
+    assert_eq!(weather_provider.calls.load(Ordering::Acquire), 0);
 }
 
 #[tokio::test]

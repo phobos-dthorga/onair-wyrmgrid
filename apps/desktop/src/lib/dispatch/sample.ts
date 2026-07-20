@@ -105,6 +105,7 @@ export const dispatchPreviewEmpty: DispatchStatus = {
     availability: "not_requested",
     refreshing: false,
     cache: "none",
+    time_basis: "live",
   },
 };
 
@@ -366,6 +367,7 @@ export const dispatchPreviewReady: DispatchStatus = {
     availability: "ready",
     refreshing: false,
     cache: "fresh",
+    time_basis: "live",
     snapshot: {
       schema_version: 1,
       id: "f5501d52-b462-4f96-86b0-57e283d19de7",

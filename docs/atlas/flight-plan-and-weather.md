@@ -163,7 +163,7 @@ The intended layers are incremental:
 
 ### Current along-route model projection
 
-`DispatchStatus.route_weather` is now an additive schema-2 application view.
+`DispatchStatus.route_weather` is now an additive schema-3 application view.
 Rust samples continuous mapped plan segments about every 300 nautical miles,
 derives a schedule basis from the validated plan, and assigns a proportional
 ETA to each checkpoint. Scheduled-off precedes scheduled-out; a positive
@@ -195,10 +195,11 @@ movement or substitutes a past frame for future weather. The display remains
 broad simulation-planning context, not an aviation briefing or a claim that
 weather between coarse samples is known.
 
-Schema 2 is an internal regenerated application projection. Adding optional
-`valid_at` to global grid points is backward-compatible in plugin API version
-1: old responses deserialize unchanged, the `forecast_grid` request remains
-identical, and no database migration is required.
+Schema 3 is an internal regenerated application projection. It adds an explicit
+live/historical mode and retains a source layer's optional time scope. Live
+plugin requests and old responses remain compatible. A historical request adds
+a bounded optional window and fails closed unless the response has matching
+timestamps and a `historical_model` scope. No database migration is required.
 
 Absence of a report is not rendered as clear weather. Sparse station
 observations must not be interpolated into a photorealistic atmospheric claim.
@@ -234,9 +235,17 @@ location, extend their valid time, or hide the source and observation controls.
 
 ## Historical weather and Hoard
 
-Historical playback requires a new persisted weather-snapshot contract. The
-current Dispatch weather cache is process-memory-only and is not historical
-evidence.
+On-demand historical reconstruction is implemented for an imported past plan.
+Once the complete planned route falls beyond live temporal support, Dispatch
+requests actual windowed METAR observations and a bounded Open-Meteo Historical
+Forecast grid. Atlas excludes current forecast and RADAR layers, preserves the
+solid route, and labels the weather layer historical. Results remain bounded
+process/session memory and do not rewrite the imported plan or claim to be
+current conditions.
+
+Hoard playback still requires a new persisted weather-snapshot contract. The
+current Dispatch cache is process-memory-only and does not make a durable
+historical record.
 
 When implemented, Hoard should retain bounded translated snapshots and expose
 them through the same time model used by Atlas history:
@@ -321,9 +330,12 @@ warning effects may flash, while the runtime control prevents or reduces them.
   payloads.
 - Community layers cannot access the map object, replace WyrmGrid route/weather
   layers, or counterfeit provenance and freshness labels.
-- A future plugin capability for plan or historical-weather access requires a
-  separate authorization decision; current fleet, map-publication, and live
-  simulator grants do not imply it.
+- Historical providers receive only an exact bounded UTC window through their
+  existing airport-report or forecast-grid capability; adding a provider
+  origin invalidates prior standing consent. Any future capability that exposes
+  plan geometry or other plan content requires a separate authorization
+  decision, and current fleet, map-publication, and simulator grants do not
+  imply it.
 - Remote tiles, imagery, and styles require an approved host allowlist, content
   bounds, attribution, cache policy, and threat-model update.
 
@@ -339,6 +351,8 @@ warning effects may flash, while the runtime control prevents or reduces them.
    The airport projection and linked inspector are implemented; route hazards
    remain later work.
 5. Add append-only bounded weather persistence and Hoard historical playback.
+   On-demand, session-only reconstruction for imported past plans is
+   implemented; persistence remains future work.
 6. Add Compatibility/Enhanced settings and a truthful first GPU airport-weather
    treatment. **Implemented.**
 7. Add Cinematic and phenomenon-specific controls with visible precipitation,

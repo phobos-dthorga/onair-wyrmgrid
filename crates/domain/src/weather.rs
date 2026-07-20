@@ -18,6 +18,7 @@ pub const MAX_GLOBAL_WEATHER_RASTER_TILE_BYTES: usize = 192 * 1_024;
 pub const MAX_GLOBAL_WEATHER_RASTER_BYTES: usize = 640 * 1_024;
 pub const MAX_GLOBAL_WEATHER_TILE_ZOOM: u8 = 8;
 pub const GLOBAL_WEATHER_RASTER_TILE_DIMENSION: u32 = 256;
+pub const MAX_PROVIDER_WEATHER_EXTENT_RADIUS_NM: f64 = 1_000.0;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -99,8 +100,34 @@ pub struct GlobalWeatherLayerSnapshot {
     pub schema_version: u32,
     pub id: String,
     pub title: String,
+    /// The source-time classification for this layer. Older live plugins may
+    /// omit it; historical requests require an exact, validated scope.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub time_scope: Option<GlobalWeatherTimeScope>,
     pub data: GlobalWeatherLayerData,
     pub provenance: OperationalProvenance,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GlobalWeatherTimeKind {
+    CurrentForecast,
+    HistoricalModel,
+    ArchivedForecast,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GlobalWeatherTimeScope {
+    pub kind: GlobalWeatherTimeKind,
+    pub target_at: DateTime<Utc>,
+    pub starts_at: DateTime<Utc>,
+    pub ends_at: DateTime<Utc>,
+}
+
+impl GlobalWeatherTimeScope {
+    fn is_valid(&self) -> bool {
+        self.starts_at <= self.target_at && self.target_at <= self.ends_at
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -149,6 +176,10 @@ pub struct GlobalWeatherGridPoint {
     pub wind_speed_kt: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub provider_weather_code: Option<u16>,
+    /// A circular weather-pattern extent explicitly supplied by the source.
+    /// The host must never infer this value from intensity or point spacing.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider_extent_radius_nm: Option<f64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -200,6 +231,13 @@ impl GlobalWeatherLayerSnapshot {
         {
             return Err(GlobalWeatherValidationError::InvalidProvenance);
         }
+        if self
+            .time_scope
+            .as_ref()
+            .is_some_and(|scope| !scope.is_valid())
+        {
+            return Err(GlobalWeatherValidationError::InvalidProvenance);
+        }
 
         match &self.data {
             GlobalWeatherLayerData::Grid { points } => validate_global_grid(points),
@@ -239,6 +277,10 @@ fn validate_global_grid(
             || point
                 .wind_speed_kt
                 .is_some_and(|value| !value.is_finite() || !(0.0..=500.0).contains(&value))
+            || point.provider_extent_radius_nm.is_some_and(|value| {
+                !value.is_finite()
+                    || !(0.1..=MAX_PROVIDER_WEATHER_EXTENT_RADIUS_NM).contains(&value)
+            })
         {
             return Err(GlobalWeatherValidationError::InvalidGridPoint);
         }

@@ -324,11 +324,24 @@ fn simbrief_account_preference(
 async fn refresh_dispatch_weather(
     state: tauri::State<'_, DesktopState>,
 ) -> Result<wyrmgrid_application::DispatchStatus, wyrmgrid_application::OperationError> {
-    state
+    let historical_window = state
         .dispatch
-        .refresh_weather()
-        .await
+        .historical_weather_window()
         .map_err(operation_error)?;
+    let airport_result = state.dispatch.refresh_weather().await;
+    if let Some(window) = historical_window {
+        let plugins = state.plugins.clone();
+        // Either historical source can provide a truthful partial result when
+        // its companion provider is absent, denied, or temporarily offline.
+        let model_result = tauri::async_runtime::spawn_blocking(move || {
+            plugins.request_historical_global_weather(window)
+        })
+        .await;
+        if airport_result.is_ok() || matches!(model_result, Ok(Ok(_))) {
+            return dispatch_status(state);
+        }
+    }
+    airport_result.map_err(operation_error)?;
     dispatch_status(state)
 }
 

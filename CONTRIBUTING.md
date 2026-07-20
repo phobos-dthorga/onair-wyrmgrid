@@ -16,13 +16,18 @@ plugin examples.
 ## Local checks
 
 ```powershell
-cargo fmt --all -- --check
+npm run format:check
 cargo clippy --workspace --exclude wyrmgrid-desktop --all-targets -- -D warnings
 cargo test --workspace --exclude wyrmgrid-desktop
 npm ci
 npm run check
 npm run build
 ```
+
+Run `npm run format` to repair both Rust and frontend/document formatting
+deterministically. Rust output is always normalized to the repository's LF
+newline policy, including on Windows, so this routine repair does not require an
+AI assistant.
 
 Run `cargo check -p wyrmgrid-desktop` on a machine with Tauri's native
 prerequisites installed.

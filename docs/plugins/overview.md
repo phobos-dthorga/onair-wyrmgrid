@@ -140,6 +140,14 @@ They share the same SDK and stable core weather models. Provider failures are
 independent, the last valid global layer remains visible when a refresh fails,
 and stopping a plugin removes its active contribution.
 
+For a completed imported plan, the host may add a bounded UTC window to the
+existing airport-report and forecast-grid request. The AviationWeather.gov
+provider returns actual METAR observations inside that window and omits TAF;
+the Open-Meteo provider uses its separately approved Historical Forecast
+origin and labels the result `historical_model`. A current request still omits
+the window, preserving the version-one live request shape. The host rejects a
+historical response whose time scope does not match the correlated request.
+
 ## Planned first-party demonstrations
 
 The [Operational Planner concept](operational-planner.md) is a planned flagship

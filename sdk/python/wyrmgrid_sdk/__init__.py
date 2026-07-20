@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import socket
+import ssl
 import struct
 import sys
 from collections.abc import Callable
@@ -15,6 +16,7 @@ PROTOCOL_VERSION = 1
 MAX_FRAME_BYTES = 1024 * 1024
 MAX_HTTP_RESPONSE_BYTES = 768 * 1024
 HTTP_TIMEOUT_SECONDS = 15
+SERVER_AUTH_OID = "1.3.6.1.5.5.7.3.1"
 
 
 class ProtocolError(RuntimeError):
@@ -45,12 +47,45 @@ class _NoRedirect(request.HTTPRedirectHandler):
         return None
 
 
+def _windows_root_pem(certificates) -> str:
+    return "".join(
+        ssl.DER_cert_to_PEM_cert(certificate)
+        for certificate, encoding, trust in certificates
+        if encoding == "x509_asn"
+        and (
+            trust is True
+            or isinstance(trust, (set, frozenset))
+            and SERVER_AUTH_OID in trust
+        )
+    )
+
+
+def _https_context() -> ssl.SSLContext:
+    if sys.platform != "win32" or not hasattr(ssl, "enum_certificates"):
+        return ssl.create_default_context()
+    try:
+        roots = _windows_root_pem(ssl.enum_certificates("ROOT"))
+        if not roots:
+            return ssl.create_default_context()
+        # Use the operating-system trust decision without inheriting a stale
+        # OpenSSL cafile. Certificate and hostname verification stay mandatory.
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        context.check_hostname = True
+        context.verify_mode = ssl.CERT_REQUIRED
+        context.load_verify_locations(cadata=roots)
+        return context
+    except (OSError, ssl.SSLError, ValueError):
+        return ssl.create_default_context()
+
+
 class HttpsClient:
     """Bounded HTTPS access restricted to host-approved exact origins."""
 
     def __init__(self, origins: list[str], user_agent: str) -> None:
         self._origins = {_normalize_origin(origin) for origin in origins}
-        self._opener = request.build_opener(_NoRedirect())
+        self._opener = request.build_opener(
+            _NoRedirect(), request.HTTPSHandler(context=_https_context())
+        )
         self._user_agent = user_agent
 
     def get_json(

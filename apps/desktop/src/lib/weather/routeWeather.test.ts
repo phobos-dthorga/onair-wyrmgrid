@@ -3,7 +3,7 @@ import type { RouteWeatherAnalysis } from "$lib/dispatch/types";
 import { routeWeatherLineFeatures } from "./routeWeather";
 
 const analysis: RouteWeatherAnalysis = {
-  schema_version: 2,
+  schema_version: 3,
   plan_id: "plan-1",
   sample_interval_nm: 300,
   maximum_support_distance_nm: 1200,
@@ -17,6 +17,7 @@ const analysis: RouteWeatherAnalysis = {
     departure_at: "2026-07-19T04:00:00Z",
     duration_seconds: 21600,
   },
+  temporal_mode: "live",
   availability: "partial",
   layers: [
     {

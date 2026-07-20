@@ -106,10 +106,12 @@ Atlas also provides two independent operational-layer switches:
   civil, nautical, astronomical twilight, and night. In Historical mode it
   uses the selected Hoard time rather than the present.
 - **Weather support zones** places soft indicative rings behind airport
-  effects, compact sample patches behind complete regular forecast grids, and
+  effects, compact circular sample footprints behind complete regular forecast grids, and
   outlines around the exact RADAR tiles WyrmGrid received. Airport rings are
-  not measured storm boundaries; compact grid patches identify the nearest
-  validated sample while gaps remain unknown; and RADAR outlines show tile
+  not measured storm boundaries; circular model footprints identify the nearest
+  validated sample while gaps remain unknown. A circle changes to a
+  provider-reported pattern size only when the first-party product explicitly
+  supplies a validated radius—intensity never invents one. RADAR outlines show tile
   footprint rather than station range or proof of measurements in every pixel.
   Each condition also has a distinct
   repeating pattern—such as slanted rain strokes, snow stipple, storm

@@ -92,10 +92,54 @@ fn validates_weather_manifest_scope_and_bounded_requests() {
                     longitude: 151.20,
                 },
             }],
+            window: None,
         },
     };
     assert_eq!(request.validate(), Ok(()));
     assert_eq!(request.query.capability(), WeatherCapability::ForecastGrid);
+}
+
+#[test]
+fn rejects_a_historical_window_even_one_minute_over_the_limit() {
+    let starts_at = chrono::DateTime::parse_from_rfc3339("2026-07-12T00:00:00Z")
+        .unwrap()
+        .with_timezone(&chrono::Utc);
+    let request = WeatherRequest {
+        id: "historical-too-wide".into(),
+        query: WeatherQuery::ForecastGrid {
+            points: vec![WeatherGridRequestPoint {
+                id: "grid-0".into(),
+                location: Coordinates {
+                    latitude: 0.0,
+                    longitude: 0.0,
+                },
+            }],
+            window: Some(WeatherTimeWindow {
+                target_at: starts_at + chrono::Duration::hours(15),
+                starts_at,
+                ends_at: starts_at + chrono::Duration::hours(30) + chrono::Duration::minutes(1),
+            }),
+        },
+    };
+
+    assert_eq!(
+        request.validate(),
+        Err(WeatherRequestError::InvalidTimeWindow)
+    );
+
+    let exact_limit = WeatherTimeWindow {
+        target_at: starts_at,
+        starts_at,
+        ends_at: starts_at + chrono::Duration::hours(30),
+    };
+    assert!(exact_limit.is_valid());
+
+    let target_at_end = WeatherTimeWindow {
+        target_at: starts_at + chrono::Duration::hours(30),
+        starts_at,
+        ends_at: starts_at + chrono::Duration::hours(30),
+    };
+    assert!(target_at_end.is_valid());
 }
 
 #[test]
@@ -253,6 +297,29 @@ fn validates_the_protocol_version_one_fixtures() {
             request.validate().expect("weather request should validate");
         }
         _ => panic!("fixture should contain a weather request"),
+    }
+
+    let historical_request: ProtocolEnvelope<HostMessage> = serde_json::from_str(include_str!(
+        "../../../../schemas/fixtures/plugin-weather-historical-request-v1.json"
+    ))
+    .expect("historical weather request fixture should deserialize");
+    match historical_request.payload {
+        HostMessage::WeatherRequest { request } => request
+            .validate()
+            .expect("historical weather request should validate"),
+        _ => panic!("fixture should contain a historical weather request"),
+    }
+
+    let historical_response: ProtocolEnvelope<PluginMessage> = serde_json::from_str(include_str!(
+        "../../../../schemas/fixtures/plugin-weather-historical-layer-v1.json"
+    ))
+    .expect("historical weather response fixture should deserialize");
+    match historical_response.payload {
+        PluginMessage::PublishWeather {
+            response: PluginWeatherResponse::Complete { product },
+            ..
+        } => assert!(product.validate()),
+        _ => panic!("fixture should contain a complete historical weather product"),
     }
 
     let response: ProtocolEnvelope<PluginMessage> = serde_json::from_str(include_str!(

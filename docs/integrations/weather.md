@@ -34,6 +34,15 @@ responses captured on 2026-07-14. No provider credentials or private operational
 identifiers are present. The cache is currently process-memory only; persistent
 offline weather and route hazard products remain future increments.
 
+An imported plan whose complete route falls beyond the live model-matching
+window now selects an explicit historical request. AviationWeather.gov returns
+the closest actual METAR inside the bounded plan window and does not relabel a
+TAF as an observation. Open-Meteo receives the same fixed 84 host locations and
+the bounded UTC window through its separate Historical Forecast origin, then
+returns at most six samples per point. Historical results stay in bounded
+process/session memory, are labelled **Historical weather**, and never appear
+as live conditions. Missing observations or model coverage remain unknown.
+
 The current Dispatch status also includes a Rust-built, time-aware along-route
 model view. The bundled Open-Meteo plugin requests hourly UTC values for the
 same fixed 84 global locations and publishes six bounded horizons: the first
@@ -58,8 +67,10 @@ checkpoint ETA. Older plugin points without `valid_at` remain compatible but
 are visibly labelled **current context**, never an ETA forecast. Missing plan
 timing, forecast horizon, or spatial support stays explicit.
 
-The fixed global request means the plan and schedule never cross into the
-plugin or Open-Meteo. Atlas draws only the horizon nearest retrieval time for
+The fixed global request means the plan route and airport coordinates never
+cross into the plugin or Open-Meteo. A historical request supplies only the
+bounded plan time window in addition to the same public fixed grid. Atlas draws
+only the horizon nearest retrieval time for
 ordinary global weather graphics, avoiding six overlapping volumes per grid
 location, while the complete temporal product remains available to the Rust
 route analysis. Atlas uses a dashed corridor for current-only context and a
@@ -165,6 +176,14 @@ a storm indication but not fabricated strike locations. The detailed
 source-shaped rendering rule lives in the
 [Atlas flight-plan and weather contract](../atlas/flight-plan-and-weather.md#source-shaped-phenomena).
 
+Global point samples do not establish the size of a weather pattern. Atlas may
+draw a conservative sample-support footprint from fixed host-grid spacing, but
+it labels that footprint as indicative. A footprint may grow or shrink as an
+actual weather-pattern extent only when the first-party product explicitly
+supplies a validated radius. Intensity, precipitation, cloud cover, pressure,
+or visual similarity never supplies that radius. Polygon, raster, or cell
+sources should retain their actual shape rather than being reduced to circles.
+
 ## Required validation
 
 - sanitized fixtures for each adopted product and each response format used;
@@ -191,5 +210,7 @@ rendering profile, and optional GPU-enhanced presentation are defined in the
 - [AviationWeather.gov Data API](https://aviationweather.gov/data/api/)
 - [AviationWeather.gov WIFS](https://aviationweather.gov/wifs/)
 - [Open-Meteo Forecast API](https://open-meteo.com/en/docs)
+- [Open-Meteo Historical Forecast API](https://open-meteo.com/en/docs/historical-forecast-api)
 - [Open-Meteo licence and attribution](https://open-meteo.com/en/license)
 - [RainViewer Weather Maps API](https://www.rainviewer.com/api/weather-maps-api.html)
+- [Near-future ActiveSky plugin case](activesky-plugin.md)

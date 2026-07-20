@@ -12,7 +12,7 @@ use wyrmgrid_domain::{
     AircraftSummary, CompanyId, Coordinates, FlightPlanAirport, FlightPlanSnapshot, JobSummary,
     Mass, MassUnit, OperationalProvenance, ProvenanceKind, SnapshotFreshness, WeatherSnapshot,
 };
-use wyrmgrid_plugin_protocol::WeatherCapability;
+use wyrmgrid_plugin_protocol::{WeatherCapability, WeatherTimeWindow};
 use wyrmgrid_simbrief_api::{ClientError, SimBriefClient, UserReference, UserReferenceKind};
 
 use crate::{FleetSnapshotView, SnapshotAvailability};
@@ -133,6 +133,7 @@ pub struct DispatchWeatherStatus {
     pub availability: DispatchWeatherAvailability,
     pub refreshing: bool,
     pub cache: DispatchWeatherCacheState,
+    pub time_basis: crate::RouteWeatherTemporalMode,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub snapshot: Option<WeatherSnapshot>,
 }
@@ -230,6 +231,8 @@ pub enum DispatchError {
     WeatherNeedsPlan,
     #[error("The aviation weather provider is unavailable in this application session.")]
     WeatherProviderUnavailable,
+    #[error("This historical flight is too long for WyrmGrid's bounded weather request.")]
+    HistoricalWeatherWindowUnsupported,
     #[error("An airport weather refresh is already in progress.")]
     WeatherRefreshInProgress,
     #[error("Wait before requesting airport weather again.")]
@@ -273,7 +276,11 @@ trait FlightPlanProvider: Send + Sync {
 
 trait WeatherProvider: Send + Sync {
     fn is_available(&self) -> bool;
-    fn fetch_airports<'a>(&'a self, stations: &'a [String]) -> WeatherProviderFuture<'a>;
+    fn fetch_airports<'a>(
+        &'a self,
+        stations: &'a [String],
+        window: Option<WeatherTimeWindow>,
+    ) -> WeatherProviderFuture<'a>;
 }
 
 impl FlightPlanProvider for SimBriefClient {
@@ -295,11 +302,15 @@ impl WeatherProvider for crate::PluginService {
             .unwrap_or(false)
     }
 
-    fn fetch_airports<'a>(&'a self, stations: &'a [String]) -> WeatherProviderFuture<'a> {
+    fn fetch_airports<'a>(
+        &'a self,
+        stations: &'a [String],
+        window: Option<WeatherTimeWindow>,
+    ) -> WeatherProviderFuture<'a> {
         let service = self.clone();
         let stations = stations.to_vec();
         Box::pin(async move {
-            tokio::task::spawn_blocking(move || service.request_airport_weather(&stations))
+            tokio::task::spawn_blocking(move || service.request_airport_weather(&stations, window))
                 .await
                 .map_err(|_| WeatherProviderError::ProviderUnavailable)?
                 .map_err(plugin_weather_provider_error)
@@ -309,6 +320,7 @@ impl WeatherProvider for crate::PluginService {
 
 struct CachedWeather {
     stations: Vec<String>,
+    window: Option<WeatherTimeWindow>,
     fetched_at: Instant,
     snapshot: WeatherSnapshot,
 }
@@ -386,7 +398,7 @@ impl DispatchSession {
             .as_ref()
             .map(|snapshot| compare_plan_to_fleet(snapshot, fleet, selected_job.as_ref()));
         let atlas_plan = snapshot.as_ref().map(crate::build_flight_plan_map_view);
-        let weather = self.weather_status()?;
+        let weather = self.weather_status(snapshot.as_ref())?;
         let atlas_weather = snapshot
             .as_ref()
             .zip(weather.snapshot.as_ref())
@@ -468,7 +480,13 @@ impl DispatchSession {
             return Err(DispatchError::WeatherProviderUnavailable);
         }
         let stations = self.weather_stations()?;
-        if let Some(snapshot) = self.fresh_cached_weather(&stations)? {
+        let window = self.historical_weather_window()?;
+        if self.weather_temporal_mode()? == crate::RouteWeatherTemporalMode::Historical
+            && window.is_none()
+        {
+            return Err(DispatchError::HistoricalWeatherWindowUnsupported);
+        }
+        if let Some(snapshot) = self.fresh_cached_weather(&stations, window.as_ref())? {
             return Ok(snapshot);
         }
         if self
@@ -495,7 +513,7 @@ impl DispatchSession {
             *last_attempt = Some(now);
         }
 
-        let snapshot = provider.fetch_airports(&stations).await?;
+        let snapshot = provider.fetch_airports(&stations, window.clone()).await?;
         snapshot
             .validate()
             .map_err(|_| DispatchError::WeatherProvider(WeatherProviderError::InvalidResponse))?;
@@ -505,6 +523,7 @@ impl DispatchSession {
             .write()
             .map_err(|_| DispatchError::StateUnavailable)? = Some(CachedWeather {
             stations,
+            window,
             fetched_at: Instant::now(),
             snapshot: snapshot.clone(),
         });
@@ -568,6 +587,7 @@ impl DispatchSession {
     fn fresh_cached_weather(
         &self,
         stations: &[String],
+        window: Option<&WeatherTimeWindow>,
     ) -> Result<Option<WeatherSnapshot>, DispatchError> {
         Ok(self
             .inner
@@ -576,12 +596,17 @@ impl DispatchSession {
             .map_err(|_| DispatchError::StateUnavailable)?
             .as_ref()
             .filter(|cached| {
-                cached.stations == stations && cached.fetched_at.elapsed() < WEATHER_CACHE_TTL
+                cached.stations == stations
+                    && cached.window.as_ref() == window
+                    && cached.fetched_at.elapsed() < WEATHER_CACHE_TTL
             })
             .map(|cached| cached.snapshot.clone()))
     }
 
-    fn weather_status(&self) -> Result<DispatchWeatherStatus, DispatchError> {
+    fn weather_status(
+        &self,
+        plan: Option<&FlightPlanSnapshot>,
+    ) -> Result<DispatchWeatherStatus, DispatchError> {
         let cache = self
             .inner
             .weather
@@ -611,8 +636,40 @@ impl DispatchSession {
             },
             refreshing: self.inner.weather_refreshing.load(Ordering::Acquire),
             cache: cache_state,
+            time_basis: plan
+                .and_then(|plan| plan.schedule.as_ref())
+                .map_or(crate::RouteWeatherTemporalMode::Live, |schedule| {
+                    crate::route_weather_temporal_mode(Some(&schedule.value), Utc::now())
+                }),
             snapshot,
         })
+    }
+
+    pub fn historical_weather_window(&self) -> Result<Option<WeatherTimeWindow>, DispatchError> {
+        let snapshot = self
+            .inner
+            .snapshot
+            .read()
+            .map_err(|_| DispatchError::StateUnavailable)?;
+        Ok(snapshot.as_ref().and_then(|plan| {
+            plan.schedule.as_ref().and_then(|schedule| {
+                crate::historical_weather_window(Some(&schedule.value), Utc::now())
+            })
+        }))
+    }
+
+    pub fn weather_temporal_mode(&self) -> Result<crate::RouteWeatherTemporalMode, DispatchError> {
+        let snapshot = self
+            .inner
+            .snapshot
+            .read()
+            .map_err(|_| DispatchError::StateUnavailable)?;
+        Ok(snapshot
+            .as_ref()
+            .and_then(|plan| plan.schedule.as_ref())
+            .map_or(crate::RouteWeatherTemporalMode::Live, |schedule| {
+                crate::route_weather_temporal_mode(Some(&schedule.value), Utc::now())
+            }))
     }
 
     fn clear_weather_state(&self) -> Result<(), DispatchError> {
