@@ -93,6 +93,11 @@ export type DispatchFinding = {
     | "aircraft_identity"
     | "aircraft_model"
     | "aircraft_position"
+    | "manifest_coverage"
+    | "aircraft_seats"
+    | "aircraft_payload_capacity"
+    | "aircraft_configuration"
+    | "aircraft_availability"
     | "payload"
     | "schedule"
     | "job_route";
@@ -108,6 +113,7 @@ export type DispatchComparison = {
   fleet_available: boolean;
   fleet_observed_at?: string;
   matched_aircraft?: {
+    id: string;
     basis: "registration" | "exact_model";
     registration?: string;
     model?: string;

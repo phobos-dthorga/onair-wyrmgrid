@@ -313,8 +313,14 @@ not alter that boundary:
    per-leg aggregate passenger/freight facts. Source gaps remain explicit.
    Individual people, company travellers, avatar presence, consignments, and
    per-leg roles remain future evidence-gated work.
-3. **Fleet reconciliation** — compare the manifest and route with observed
-   aircraft capacity, location, configuration, and availability.
+3. **Fleet reconciliation** — foundation implemented: compare the accepted
+   plan with current fleet evidence using exact registration or a unique exact
+   model candidate, show model and airport findings, preserve fleet freshness,
+   and summarize retained manifest coverage. The candidate is read-only and is
+   not an assignment. Seats, payload capacity, configuration, maintenance, and
+   operational availability remain explicitly unavailable until authenticated
+   provider evidence proves those fields; persisted user-reviewed assignment
+   remains the next fleet slice.
 4. **Staff reconciliation** — add only live-contract staff facts proven by
    fixtures, then distinguish operating assignments from transported people.
 5. **Operational review** — implement explainable cross-source findings,

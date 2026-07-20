@@ -65,6 +65,11 @@ pub enum DispatchFindingCategory {
     AircraftIdentity,
     AircraftModel,
     AircraftPosition,
+    ManifestCoverage,
+    AircraftSeats,
+    AircraftPayloadCapacity,
+    AircraftConfiguration,
+    AircraftAvailability,
     Payload,
     Schedule,
     JobRoute,
@@ -79,6 +84,7 @@ pub enum AircraftMatchBasis {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct MatchedFleetAircraft {
+    pub id: String,
     pub basis: AircraftMatchBasis,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub registration: Option<String>,
@@ -807,6 +813,19 @@ fn compare_plan_to_fleet(
     fleet: Option<&FleetSnapshotView>,
     selected_job: Option<&DispatchJobSelection>,
 ) -> DispatchComparison {
+    let mut comparison = compare_plan_to_fleet_aircraft(plan, fleet);
+    append_job_findings(
+        plan,
+        selected_job.map(|selection| &selection.job),
+        &mut comparison.findings,
+    );
+    comparison
+}
+
+pub(crate) fn compare_plan_to_fleet_aircraft(
+    plan: &FlightPlanSnapshot,
+    fleet: Option<&FleetSnapshotView>,
+) -> DispatchComparison {
     let compared_at = Utc::now();
     let fleet_observed_at = fleet.map(|fleet| fleet.snapshot.provenance.observed_at);
     let freshness = match fleet.map(|fleet| fleet.availability) {
@@ -831,13 +850,9 @@ fn compare_plan_to_fleet(
     }
     append_model_finding(plan, matched.map(|(aircraft, _)| aircraft), &mut findings);
     append_position_finding(plan, matched.map(|(aircraft, _)| aircraft), &mut findings);
-    append_job_findings(
-        plan,
-        selected_job.map(|selection| &selection.job),
-        &mut findings,
-    );
 
     let matched_aircraft = matched.map(|(aircraft, basis)| MatchedFleetAircraft {
+        id: aircraft.id.0.to_string(),
         basis,
         registration: aircraft.registration.clone(),
         model: aircraft.model.clone(),

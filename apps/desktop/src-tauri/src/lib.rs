@@ -226,9 +226,9 @@ fn dispatch_status(
             &mut status,
             wyrmgrid_application::FlightOperationAvailability {
                 jobs: jobs.is_some(),
-                fleet: fleet.is_some(),
                 staff: staff.is_some(),
             },
+            fleet.as_ref(),
         )
         .map_err(operation_error)?;
     state
