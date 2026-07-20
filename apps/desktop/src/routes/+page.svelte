@@ -240,12 +240,16 @@
   import ThemeDialog from "$lib/theme/ThemeDialog.svelte";
   import {
     browserThemeStatus,
+    chooseThemeFileDestination,
     deleteTheme,
     exportTheme,
     importTheme,
     loadThemeStatus,
+    saveThemeDraft,
+    saveThemeExport,
     selectTheme,
   } from "$lib/theme/client";
+  import { downloadThemeFile } from "$lib/theme/file";
   import { applyTheme } from "$lib/theme/runtime";
   import type { ThemeStatus } from "$lib/theme/types";
 
@@ -2162,17 +2166,19 @@
     }
   }
 
-  async function addTheme(manifestJson: string): Promise<void> {
+  async function addTheme(manifestJson: string): Promise<boolean> {
     themeBusy = true;
     themeError = "";
     try {
       themeStatus = await importTheme(manifestJson);
       applyTheme(themeStatus.active_theme);
+      return true;
     } catch (error) {
       themeError = operationErrorMessage(
         error,
         "WyrmGrid could not import that theme.",
       );
+      return false;
     } finally {
       themeBusy = false;
     }
@@ -2184,14 +2190,34 @@
     themeError = "";
     try {
       const exported = await exportTheme(themeId);
-      const url = URL.createObjectURL(
-        new Blob([exported.content], { type: exported.media_type }),
+      const destination = await chooseThemeFileDestination(exported.filename);
+      if (!destination) return;
+      await saveThemeExport(themeId, destination);
+    } catch (error) {
+      themeError = operationErrorMessage(
+        error,
+        $translation("error-theme-export"),
       );
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = exported.filename;
-      link.click();
-      URL.revokeObjectURL(url);
+    } finally {
+      themeBusy = false;
+    }
+  }
+
+  async function saveThemeDraftFile(
+    manifestJson: string,
+    filename: string,
+  ): Promise<void> {
+    if (themeBusy) return;
+    themeBusy = true;
+    themeError = "";
+    try {
+      if (!isDesktopRuntime()) {
+        downloadThemeFile(filename, manifestJson);
+        return;
+      }
+      const destination = await chooseThemeFileDestination(filename);
+      if (!destination) return;
+      await saveThemeDraft(manifestJson, destination);
     } catch (error) {
       themeError = operationErrorMessage(
         error,
@@ -3666,8 +3692,9 @@
     busy={themeBusy}
     errorMessage={themeError}
     onselect={(themeId) => void chooseTheme(themeId)}
-    onimport={(manifestJson) => void addTheme(manifestJson)}
-    onexport={(themeId) => void exportThemeFile(themeId)}
+    onimport={addTheme}
+    onexport={exportThemeFile}
+    ondownload={saveThemeDraftFile}
     ondelete={(themeId) => void removeTheme(themeId)}
     onclose={leaveDialog}
   />
