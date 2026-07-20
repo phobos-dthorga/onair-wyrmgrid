@@ -1,5 +1,11 @@
 import { invokeDesktop } from "$lib/desktop/client";
+import { save } from "@tauri-apps/plugin-dialog";
 import type {
+  AudioExportView,
+  AudioPlaybackView,
+  AudioRecordingPreferences,
+  AudioRecordingView,
+  AudioSourceSelection,
   SimulatorBridgeView,
   SimulatorPreferences,
   SimulatorRecordingPreferences,
@@ -8,6 +14,11 @@ import type {
   SimulatorSessionView,
   SimulatorSessionDebrief,
 } from "./types";
+
+const audioPacketFilter = {
+  name: "WyrmGrid authenticated Opus packets",
+  extensions: ["wyrmgrid-opus-packets"],
+};
 
 export function loadSimulatorBridge(): Promise<SimulatorBridgeView> {
   return invokeDesktop("simulator_bridge_status");
@@ -93,4 +104,63 @@ export function deleteSimulatorRecording(
 
 export function deleteAllSimulatorRecordings(): Promise<SimulatorRecordingView> {
   return invokeDesktop("delete_all_simulator_recordings");
+}
+
+export function loadAudioRecording(): Promise<AudioRecordingView> {
+  return invokeDesktop("audio_recording_status");
+}
+
+export function saveAudioRecordingPreferences(
+  preferences: AudioRecordingPreferences,
+): Promise<AudioRecordingView> {
+  return invokeDesktop("update_audio_recording_preferences", { preferences });
+}
+
+export function refreshAudioSources(): Promise<AudioRecordingView> {
+  return invokeDesktop("refresh_audio_sources");
+}
+
+export function requestAudioSourcePermission(
+  sourceId: string,
+): Promise<AudioRecordingView> {
+  return invokeDesktop("request_audio_source_permission", { sourceId });
+}
+
+export function saveAudioSourceSelection(
+  selection: AudioSourceSelection,
+): Promise<AudioRecordingView> {
+  return invokeDesktop("update_audio_source_selection", { selection });
+}
+
+export function loadAudioPlayback(
+  sessionId: string,
+): Promise<AudioPlaybackView> {
+  return invokeDesktop("audio_recording_playback", { sessionId });
+}
+
+export async function chooseAudioExportDestination(
+  sessionId: string,
+): Promise<string | null> {
+  return save({
+    defaultPath: `${sessionId}.wyrmgrid-opus-packets`,
+    filters: [audioPacketFilter],
+  });
+}
+
+export function exportAudioTrack(
+  sessionId: string,
+  trackId: string,
+  destination: string,
+): Promise<AudioExportView> {
+  return invokeDesktop("export_audio_track", {
+    sessionId,
+    trackId,
+    destination,
+  });
+}
+
+export function deleteAudioRecording(
+  sessionId: string,
+): Promise<AudioRecordingView> {
+  return invokeDesktop("delete_audio_recording", { sessionId });
 }

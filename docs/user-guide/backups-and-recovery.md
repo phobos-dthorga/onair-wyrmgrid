@@ -20,12 +20,18 @@ separate Windows credential and provider-metadata boundary.
 4. Keep the resulting file somewhere appropriate for your own recovery plan.
 
 WyrmGrid never overwrites an existing backup and never stores or recovers the
-backup password. A portable backup is encrypted but contains the complete local
-WyrmGrid database: Hoard observations, retained simulator recordings, local
+backup password. A portable backup is encrypted and contains the complete local
+WyrmGrid database: Hoard observations, retained simulator recordings and audio
+metadata, local
 authorisation history, legal choices, display preferences, and imported theme
 and language manifests, plus accepted flight operations and their retained
 plan, selected-job, and aggregate-manifest revisions. Treat it as sensitive
-operational history.
+operational history. External encrypted audio-media files are deliberately not
+copied into portable-backup format 1. Restored audio sessions remain
+inspectable but display **audio not included in backup**; they are not reported
+as damaged media and their omitted byte counts do not consume the local audio
+storage budget. Startup cleanup removes recognised external segments that are
+not backed by available local-media metadata.
 
 The OnAir API key is not included because an optionally remembered key belongs
 to the operating-system credential store, outside the database. The encrypted
@@ -85,7 +91,10 @@ restore, then creates a new empty encrypted database.
 The reset erases all records and preferences stored in SQLite, including OnAir
 and Hoard history, flight operations, simulator recordings, remembered provider
 identifiers, customisation choices, plugin permissions and startup choices,
-authorization history, legal acknowledgements, and telemetry consent.
+authorization history, legal acknowledgements, telemetry consent, audio
+consent, and audio metadata. WyrmGrid also removes recognised audio segments
+from its fixed application-owned media directory before scheduling the reset;
+if that deletion fails, the reset does not proceed.
 
 It deliberately does not erase:
 
@@ -111,8 +120,9 @@ The persistent application-data directory is:
 
 `%APPDATA%\io.github.phobosdthorga.onairwyrmgrid`
 
-This directory is not a cache. It contains the encrypted database and may also
-contain temporary pending or rollback databases during a restore. The matching
+This directory is not a cache. It contains the encrypted database, an
+`audio-media-v1` directory for separately encrypted opaque audio segments, and
+may also contain temporary pending or rollback databases during a restore. The matching
 database key is held separately by Windows Credential Manager, so copying this
 directory alone is not a supported backup or migration method.
 
@@ -127,7 +137,10 @@ slower.
 Portable backups remain wherever you place them until you or the storage
 provider deletes them. WyrmGrid does not track, rotate, upload, or erase those
 copies. Filesystems, synchronisation services, snapshots, and deleted-file
-recovery may retain older copies after apparent deletion.
+recovery may retain older copies after apparent deletion. Separately encrypted
+audio segments are excluded from `.wyrmbackup` files but may be present in
+ordinary whole-system or application-data backups. WyrmGrid does not claim
+forensic secure erasure from either source.
 
 Ordinary whole-system backups can preserve WyrmGrid if they restore both the
 application data and the operating-system credential store consistently, but

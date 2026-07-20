@@ -488,21 +488,21 @@
   destructive-action, or diagnostic namespaces and cannot load resources or
   execute code.
 
-## Planned simulator-audio controls
+## Implemented simulator-audio application controls and remaining release gates
 
-Simulator-synchronised audio remains unavailable to users. Its independently
-versioned provider contract, bounded control and encoded-packet framing, stable
-source/profile models, schemas, fixtures, and development-only fake provider are
-implemented; consent, storage, native capture, packaging, and live support are
-not. Before any capture path ships, these are mandatory controls rather than
-claims about the current application:
+Simulator-synchronised native audio remains unavailable to users. Its
+independently versioned provider contract and non-native application services
+are implemented; native capture, packaging, legal approval, and live support
+are not. Before any native capture path ships, the remaining controls are gates
+rather than claims about the current application:
 
 - Opus is the versioned working codec, with bounded profiles and independently
   recoverable encrypted segments. SQLite stores only metadata and opaque media
   identifiers through a new append-only migration.
 - Audio uses a separately supervised Audio Capture Provider and a bounded media
   path, never Bridge protocol version 1's 64 KiB JSON channel. Audio failure
-  cannot block telemetry or the simulator.
+  cannot block telemetry or simulator operation; coordinated deletion still
+  fails closed when linked audio cannot be removed.
 - Version-one framing rejects oversized lengths before allocation, permits a
   bounded binary body only for an encoded audio-packet message, requires its
   declared and actual lengths to match, rejects unknown JSON fields, and fails
@@ -523,16 +523,23 @@ claims about the current application:
 - Monotonic anchors, sample-frame ranges, gaps, dropouts, drift observations,
   permission delays, source changes, and interruptions remain explicit. Pause
   or disconnection never compresses or silently joins the evidence timeline.
-- Audio segments use a purpose-separated media key and authenticated envelope;
-  exact derivation, nonce, atomic finalisation, tamper, wrong-key, recovery, and
-  key-version fixtures precede implementation.
-- Storage budgets, active-session protection, retention, tombstoned deletion,
-  orphan cleanup, disk-full failure, and the limits of secure erasure are user-
-  visible and tested. Default portable backups omit media and say so; deliberate
-  audio exports warn that their copies are outside WyrmGrid's protection.
-- Audio, labels, identifiers, content, and media paths are excluded from
-  plugins, Sentry, diagnostics, optional-AI packets, support bundles, and public
-  services by construction and regression tests.
+- Audio segments use XChaCha20-Poly1305 with a fresh 24-byte random nonce and a
+  versioned HKDF-SHA256 purpose key derived from the uniformly random device
+  database key. Authenticated data binds the header, opaque key, session,
+  track, segment index, and frame range. Create-new pending writes are synced
+  and renamed before metadata completion; wrong context, digest mismatch, or
+  AEAD failure rejects playback and export.
+- Storage budgets, active- and pinned-session protection, retention,
+  tombstoned deletion, bounded pending/orphan cleanup, and the limits of secure
+  erasure are explicit. Default portable backups retain metadata while marking
+  copied sessions `not_in_backup` and segments `unavailable`; deliberate packet
+  exports warn that their plaintext copies are outside WyrmGrid's protection.
+  Cleanup recognises only correctly sharded opaque media names and rejects a
+  redirected or non-directory media root before reading, writing, or deleting.
+- Project policy excludes audio content, labels, identifiers, and media paths
+  from plugins, Sentry, diagnostics, optional-AI packets, support bundles, and
+  public services. Stable bounded status codes may describe failures without
+  carrying those values.
 - A first-party X-Plane in-process tap can proceed only after stability,
   licensing, signing, installation/removal, local authentication, backpressure,
   third-party-aircraft, and cross-platform review. It has no business logic and

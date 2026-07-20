@@ -4,7 +4,8 @@ use tempfile::tempdir;
 
 use super::*;
 use crate::{
-    DisplayPreferencesRecord, OnAirAccountPreferencesRecord, SimBriefAccountPreferencesRecord,
+    AudioSegmentRecord, AudioSessionRecord, AudioTrackRecord, DisplayPreferencesRecord,
+    OnAirAccountPreferencesRecord, SimBriefAccountPreferencesRecord,
 };
 
 const BACKUP_PASSWORD: &str = "a deliberate migration password";
@@ -25,6 +26,87 @@ fn persistent_database_is_encrypted_and_requires_the_device_key() {
     assert!(Store::open(&path, &wrong_key).is_err());
     assert!(Store::open(&path, &key).is_ok());
     assert_eq!(format!("{key:?}"), "DatabaseKey([REDACTED])");
+}
+
+#[test]
+fn portable_backup_preserves_audio_metadata_but_marks_external_media_omitted() {
+    let directory = tempdir().expect("temporary directory should exist");
+    let database_path = directory.path().join("wyrmgrid.db");
+    let backup_path = directory.path().join("audio-omitted.wyrmbackup");
+    let key = DatabaseKey::from_bytes([17; 32]);
+    let store = Store::open(&database_path, &key).expect("database should open");
+    let session = AudioSessionRecord {
+        id: "audio-session-backup".into(),
+        simulator_session_id: None,
+        provider_id: "dev.wyrmgrid.fake-audio".into(),
+        capture_mode: "manual".into(),
+        started_at: "2026-07-20T00:00:00Z".into(),
+        ended_at: Some("2026-07-20T00:01:00Z".into()),
+        host_start_monotonic_ns: None,
+        status: "completed".into(),
+        media_availability: "available".into(),
+        total_media_bytes: 0,
+        deletion_requested_at: None,
+    };
+    let track = AudioTrackRecord {
+        id: "audio-track-backup".into(),
+        session_id: session.id.clone(),
+        source_id: "synthetic.microphone.primary".into(),
+        profile_id: "pilot_microphone_v1".into(),
+        source_role: "microphone_input".into(),
+        source_truth: "isolated".into(),
+        channel_count: 1,
+        sample_rate_hz: 48_000,
+        provider_start_monotonic_ns: 100,
+        packet_count: 0,
+        frame_count: 0,
+        last_packet_sequence: None,
+    };
+    store
+        .create_audio_session_record(&session, std::slice::from_ref(&track))
+        .unwrap();
+    store
+        .complete_audio_segment_record(
+            &AudioSegmentRecord {
+                track_id: track.id.clone(),
+                segment_index: 0,
+                storage_key: "0123456789abcdef0123456789abcdef".into(),
+                first_frame: 0,
+                frame_count: 960,
+                packet_count: 1,
+                encrypted_bytes: 96,
+                envelope_sha256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+                    .into(),
+                envelope_version: 1,
+                key_version: 1,
+                state: "complete".into(),
+                created_at: "2026-07-20T00:00:00Z".into(),
+                deletion_requested_at: None,
+            },
+            1,
+        )
+        .unwrap();
+    store
+        .export_portable_backup(
+            &backup_path,
+            BACKUP_PASSWORD,
+            "2026-07-20T00:02:00Z",
+            "0.2.0",
+        )
+        .unwrap();
+    store
+        .prepare_portable_restore(&backup_path, BACKUP_PASSWORD, &key)
+        .unwrap();
+    drop(store);
+
+    let restored = Store::open(&database_path, &key).unwrap();
+    let restored_session = restored.list_audio_session_records().unwrap().remove(0);
+    assert_eq!(restored_session.media_availability, "not_in_backup");
+    let restored_segment = restored
+        .list_audio_segment_records(&track.id)
+        .unwrap()
+        .remove(0);
+    assert_eq!(restored_segment.state, "unavailable");
 }
 
 #[test]

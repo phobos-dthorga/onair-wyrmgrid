@@ -24,9 +24,11 @@ repository = "https://github.com/phobos-dthorga/onair-wyrmgrid"
 
 [workspace.dependencies]
 base64 = "0.22.1"
+chacha20poly1305 = "0.11.0"
 chrono = { version = "0.4.41", default-features = false, features = ["clock", "serde"] }
 fluent-syntax = "0.12.0"
 getrandom = "0.4.3"
+hkdf = "0.13.0"
 keyring = "4.1.5"
 libloading = "0.8.9"
 reqwest = { version = "0.12.22", default-features = false, features = ["json", "rustls-tls"] }
@@ -35,6 +37,7 @@ secrecy = "0.10.3"
 sentry = { version = "0.48.5", default-features = false, features = ["backtrace", "contexts", "debug-images", "panic", "reqwest", "rustls"] }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.142"
+sha2 = "0.11.0"
 thiserror = "2.0.12"
 tokio = { version = "1.47.1", features = ["macros", "rt-multi-thread"] }
 url = "2.5.4"

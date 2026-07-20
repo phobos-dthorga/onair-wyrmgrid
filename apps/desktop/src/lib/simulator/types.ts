@@ -241,3 +241,109 @@ export const emptySimulatorRecording: SimulatorRecordingView = {
   preferences: defaultSimulatorRecordingPreferences,
   sessions: [],
 };
+
+export type AudioOpusProfileId =
+  "pilot_microphone_v1" | "isolated_voice_v1" | "mixed_stereo_v1";
+
+export type AudioRecordingPreferences = {
+  enabled: boolean;
+  capture_manual: boolean;
+  capture_automatic: boolean;
+  retention_days: number;
+  storage_budget_bytes: number;
+};
+
+export const defaultAudioRecordingPreferences: AudioRecordingPreferences = {
+  enabled: false,
+  capture_manual: false,
+  capture_automatic: false,
+  retention_days: 30,
+  storage_budget_bytes: 5 * 1024 * 1024 * 1024,
+};
+
+export type AudioSourceSelection = {
+  provider_id: string;
+  source_id: string;
+  profile_id: AudioOpusProfileId;
+  enabled: boolean;
+  playback_muted: boolean;
+  playback_solo: boolean;
+  playback_volume_percent: number;
+};
+
+export type AudioSourceView = {
+  id: string;
+  display_name: string;
+  role: string;
+  availability: "available" | "unavailable";
+  permission: "not_required" | "prompt_required" | "granted" | "denied";
+  supported_profiles: AudioOpusProfileId[];
+  enabled: boolean;
+  playback_muted: boolean;
+  playback_solo: boolean;
+  playback_volume_percent: number;
+  peak_millidbfs?: number;
+  clipped: boolean;
+};
+
+export type AudioSessionSummary = {
+  id: string;
+  simulator_session_id?: string;
+  provider_id: string;
+  capture_mode: "manual" | "automatic";
+  started_at: string;
+  ended_at?: string;
+  status: "active" | "completed" | "interrupted";
+  media_availability: "available" | "not_in_backup" | "missing" | "tombstoned";
+  total_media_bytes: number;
+};
+
+export type AudioRecordingView = {
+  preferences: AudioRecordingPreferences;
+  provider_id?: string;
+  provider_available: boolean;
+  recording_active: boolean;
+  active_session_id?: string;
+  sources: AudioSourceView[];
+  sessions: AudioSessionSummary[];
+  last_code?: string;
+};
+
+export const emptyAudioRecording: AudioRecordingView = {
+  preferences: defaultAudioRecordingPreferences,
+  provider_available: false,
+  recording_active: false,
+  sources: [],
+  sessions: [],
+};
+
+export type EncodedAudioPacketView = {
+  sequence: string;
+  provider_monotonic_ns: string;
+  duration_48khz_frames: number;
+  bytes: number[];
+};
+
+export type AudioTrackPlaybackView = {
+  track_id: string;
+  source_id: string;
+  profile_id: AudioOpusProfileId;
+  playback_muted: boolean;
+  playback_solo: boolean;
+  playback_volume_percent: number;
+  frame_count: number;
+  packets: EncodedAudioPacketView[];
+};
+
+export type AudioPlaybackView = {
+  session_id: string;
+  authenticated: boolean;
+  tracks: AudioTrackPlaybackView[];
+};
+
+export type AudioExportView = {
+  filename: string;
+  media_type: string;
+  plaintext_warning_required: boolean;
+  packet_count: number;
+};

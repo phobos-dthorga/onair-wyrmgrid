@@ -10,3 +10,8 @@ repository.workspace = true
 [dependencies]
 wyrmgrid-audio-provider-protocol = { path = "../../crates/audio-provider-protocol" }
 wyrmgrid-domain = { path = "../../crates/domain" }
+
+[dev-dependencies]
+tempfile = "3.20.0"
+wyrmgrid-application = { path = "../../crates/application" }
+wyrmgrid-storage = { path = "../../crates/storage" }

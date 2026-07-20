@@ -157,6 +157,14 @@ impl Store {
         let operation = (|| {
             connection.query_row("SELECT sqlcipher_export('portable')", [], |_| Ok(()))?;
             connection.execute_batch(
+                "UPDATE portable.audio_recording_sessions
+                 SET media_availability = 'not_in_backup'
+                 WHERE media_availability = 'available';
+                 UPDATE portable.audio_track_segments
+                 SET state = 'unavailable'
+                 WHERE state IN ('pending', 'complete');",
+            )?;
+            connection.execute_batch(
                 "CREATE TABLE portable.wyrmgrid_backup_manifest (
                     singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
                     format_version INTEGER NOT NULL,

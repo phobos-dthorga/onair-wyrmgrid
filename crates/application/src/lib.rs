@@ -1,6 +1,9 @@
 //! Application-level orchestration independent of Tauri and other interfaces.
 
 mod atlas_preferences;
+mod audio_media;
+mod audio_provider;
+mod audio_recording;
 mod authorization;
 mod credentials;
 mod data_protection;
@@ -17,6 +20,9 @@ mod simulator_debrief;
 mod simulator_recording;
 
 pub use atlas_preferences::*;
+pub use audio_media::*;
+pub use audio_provider::*;
+pub use audio_recording::*;
 pub use authorization::{
     AUTHORIZATION_DECISION_RETENTION_LIMIT, AuthorizationGrantLifetime, AuthorizationRuntime,
     LegalPreferencesRepository, LegalSettingsError, LegalSettingsService, LegalStatus,
@@ -1250,6 +1256,45 @@ impl From<SimulatorRecordingError> for OperationError {
             SimulatorRecordingError::StateUnavailable => {
                 ("simulator.recording_state_unavailable", true, true)
             }
+        };
+        Self {
+            code,
+            message: error.to_string(),
+            retryable,
+            reportable,
+            report_id: None,
+        }
+    }
+}
+
+impl From<AudioRecordingError> for OperationError {
+    fn from(error: AudioRecordingError) -> Self {
+        let (code, retryable, reportable) = match error {
+            AudioRecordingError::ConsentDisabled => ("audio.consent_disabled", false, false),
+            AudioRecordingError::CaptureModeDisabled => {
+                ("audio.capture_mode_disabled", false, false)
+            }
+            AudioRecordingError::NoSourcesSelected => ("audio.no_sources_selected", false, false),
+            AudioRecordingError::PermissionRequired => ("audio.permission_required", false, false),
+            AudioRecordingError::SourceUnavailable => ("audio.source_unavailable", true, false),
+            AudioRecordingError::ProviderUnavailable => ("audio.provider_unavailable", true, false),
+            AudioRecordingError::AlreadyRecording => {
+                ("audio.recording_already_active", false, false)
+            }
+            AudioRecordingError::NotRecording => ("audio.recording_not_active", false, false),
+            AudioRecordingError::SessionActive => ("audio.session_active", false, false),
+            AudioRecordingError::UnknownSession => ("audio.unknown_session", false, false),
+            AudioRecordingError::UnknownTrack => ("audio.unknown_track", false, false),
+            AudioRecordingError::InvalidStoredState => ("audio.invalid_stored_state", false, true),
+            AudioRecordingError::InvalidPreference => ("audio.invalid_preference", false, false),
+            AudioRecordingError::PlaybackTooLarge => ("audio.playback_too_large", false, false),
+            AudioRecordingError::ExportDestinationExists => {
+                ("audio.export_destination_exists", false, false)
+            }
+            AudioRecordingError::MediaUnavailable => ("audio.media_unavailable", true, false),
+            AudioRecordingError::StorageUnavailable => ("audio.storage_unavailable", true, true),
+            AudioRecordingError::StateUnavailable => ("audio.state_unavailable", true, true),
+            AudioRecordingError::ProviderFailed => ("audio.provider_failed", true, true),
         };
         Self {
             code,

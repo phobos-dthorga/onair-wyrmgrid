@@ -1,7 +1,9 @@
 //! Local-first SQLite storage and migration ownership.
 
+mod audio_recording;
 mod data_protection;
 
+pub use audio_recording::*;
 pub use data_protection::{
     DatabaseKey, PORTABLE_BACKUP_FORMAT_VERSION, PortableBackupRecord, PortableRestoreRecord,
     apply_pending_local_data_reset, encrypted_database_state_exists,
@@ -36,7 +38,8 @@ const ATLAS_WEATHER_GRAPHICS_PREFERENCES_SCHEMA: &str =
 const PLUGIN_PREFERENCES_SCHEMA: &str = include_str!("../migrations/0016_plugin_preferences.sql");
 const ATLAS_AND_PLUGIN_CONFIGURATION_SCHEMA: &str =
     include_str!("../migrations/0017_atlas_and_plugin_configuration.sql");
-pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 17;
+const AUDIO_RECORDINGS_SCHEMA: &str = include_str!("../migrations/0018_audio_recordings.sql");
+pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 18;
 
 #[derive(Debug, Error)]
 pub enum StorageError {
@@ -313,6 +316,7 @@ impl Store {
         connection.execute_batch(ATLAS_WEATHER_GRAPHICS_PREFERENCES_SCHEMA)?;
         connection.execute_batch(PLUGIN_PREFERENCES_SCHEMA)?;
         connection.execute_batch(ATLAS_AND_PLUGIN_CONFIGURATION_SCHEMA)?;
+        connection.execute_batch(AUDIO_RECORDINGS_SCHEMA)?;
         if path.is_some() {
             data_protection::mark_wyrmgrid_database(&connection)?;
         }
