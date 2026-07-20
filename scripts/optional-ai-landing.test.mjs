@@ -20,6 +20,18 @@ import {
 const headSha = "a".repeat(40);
 const mergeSha = "b".repeat(40);
 
+async function withCi(value, operation) {
+  const previous = process.env.CI;
+  if (value === undefined) delete process.env.CI;
+  else process.env.CI = value;
+  try {
+    return await operation();
+  } finally {
+    if (previous === undefined) delete process.env.CI;
+    else process.env.CI = previous;
+  }
+}
+
 function manifest(overrides = {}) {
   return validateContributionManifest({
     schema_version: 1,
@@ -234,10 +246,12 @@ test("previews and lands through an exact-head human squash without admin bypass
     const preview = await previewGeneratedContributionLanding(common);
     assert.equal(preview.state, "landing_preview_ready");
     assert.equal(preview.human_actor, "phobos-dthorga");
-    const result = await landGeneratedContribution({
-      ...common,
-      approveOnce: true,
-    });
+    const result = await withCi(undefined, () =>
+      landGeneratedContribution({
+        ...common,
+        approveOnce: true,
+      }),
+    );
     assert.equal(result.state, "merged_and_provenance_verified");
     const mergeCall = calls.find(
       (args) => args[0] === "pr" && args[1] === "merge",
@@ -254,8 +268,19 @@ test("previews and lands through an exact-head human squash without admin bypass
 });
 
 test("requires a fresh one-invocation landing approval", async () => {
-  await assert.rejects(
-    landGeneratedContribution({ approveOnce: false }),
-    /requires --approve-once/,
+  await withCi(undefined, () =>
+    assert.rejects(
+      landGeneratedContribution({ approveOnce: false }),
+      /requires --approve-once/,
+    ),
+  );
+});
+
+test("refuses generated contribution landing in CI", async () => {
+  await withCi("true", () =>
+    assert.rejects(
+      landGeneratedContribution({ approveOnce: true }),
+      /must not run in CI/,
+    ),
   );
 });
