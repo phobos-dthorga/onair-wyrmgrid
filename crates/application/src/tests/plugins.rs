@@ -631,6 +631,191 @@ fn weather_products_must_match_the_exact_host_request() {
 }
 
 #[test]
+fn forecast_products_may_return_bounded_timed_horizons_for_each_requested_point() {
+    let request: ProtocolEnvelope<HostMessage> = serde_json::from_str(include_str!(
+        "../../../../schemas/fixtures/plugin-weather-request-v1.json"
+    ))
+    .expect("request fixture should parse");
+    let response: ProtocolEnvelope<PluginMessage> = serde_json::from_str(include_str!(
+        "../../../../schemas/fixtures/plugin-weather-layer-v1.json"
+    ))
+    .expect("response fixture should parse");
+    let HostMessage::WeatherRequest { request } = request.payload else {
+        panic!("fixture should contain a request");
+    };
+    let PluginMessage::PublishWeather { mut response, .. } = response.payload else {
+        panic!("fixture should contain a response");
+    };
+    let PluginWeatherResponse::Complete {
+        product: PluginWeatherProduct::GlobalLayer { layer },
+    } = &mut response
+    else {
+        panic!("fixture should contain a global layer");
+    };
+    let wyrmgrid_domain::GlobalWeatherLayerData::Grid { points } = &mut layer.data else {
+        panic!("fixture should contain grid points");
+    };
+    let requested_point = points[0].clone();
+    *points = [0, 3, 6, 9, 12, 18]
+        .into_iter()
+        .map(|horizon| {
+            let mut point = requested_point.clone();
+            point.id = format!("{}-h{horizon:02}", requested_point.id);
+            point.valid_at = Some(Utc::now() + chrono::TimeDelta::hours(horizon));
+            point
+        })
+        .collect();
+
+    assert!(weather_response_matches_request(&response, &request.query));
+
+    let mut missing_time = response.clone();
+    let PluginWeatherResponse::Complete {
+        product: PluginWeatherProduct::GlobalLayer { layer },
+    } = &mut missing_time
+    else {
+        unreachable!();
+    };
+    let wyrmgrid_domain::GlobalWeatherLayerData::Grid { points } = &mut layer.data else {
+        unreachable!();
+    };
+    points[0].valid_at = None;
+    assert!(!weather_response_matches_request(
+        &missing_time,
+        &request.query
+    ));
+
+    let mut malformed_horizon = response.clone();
+    let PluginWeatherResponse::Complete {
+        product: PluginWeatherProduct::GlobalLayer { layer },
+    } = &mut malformed_horizon
+    else {
+        unreachable!();
+    };
+    let wyrmgrid_domain::GlobalWeatherLayerData::Grid { points } = &mut layer.data else {
+        unreachable!();
+    };
+    points[0].id = format!("{}-h3", requested_point.id);
+    assert!(!weather_response_matches_request(
+        &malformed_horizon,
+        &request.query
+    ));
+}
+
+#[test]
+fn bundled_open_meteo_shape_correlates_all_504_forecast_points() {
+    let query = default_global_weather_grid();
+    let WeatherQuery::ForecastGrid {
+        points: requested_points,
+    } = &query
+    else {
+        unreachable!();
+    };
+    let response: ProtocolEnvelope<PluginMessage> = serde_json::from_str(include_str!(
+        "../../../../schemas/fixtures/plugin-weather-layer-v1.json"
+    ))
+    .expect("response fixture should parse");
+    let PluginMessage::PublishWeather { mut response, .. } = response.payload else {
+        panic!("fixture should contain a response");
+    };
+    let PluginWeatherResponse::Complete {
+        product: PluginWeatherProduct::GlobalLayer { layer },
+    } = &mut response
+    else {
+        unreachable!();
+    };
+    let wyrmgrid_domain::GlobalWeatherLayerData::Grid { points } = &mut layer.data else {
+        unreachable!();
+    };
+    let template = points[0].clone();
+    *points = requested_points
+        .iter()
+        .flat_map(|requested| {
+            [0, 3, 6, 9, 12, 18].into_iter().map(|horizon| {
+                let mut point = template.clone();
+                point.id = format!("{}-h{horizon:02}", requested.id);
+                point.location = requested.location;
+                point.valid_at = Some(Utc::now() + chrono::TimeDelta::hours(horizon));
+                point
+            })
+        })
+        .collect();
+
+    assert_eq!(points.len(), 504);
+    assert!(weather_response_matches_request(&response, &query));
+}
+
+#[test]
+fn forecast_horizon_correlation_rejects_ambiguous_requested_prefixes() {
+    let location = Coordinates {
+        latitude: -37.8136,
+        longitude: 144.9631,
+    };
+    let query = WeatherQuery::ForecastGrid {
+        points: vec![
+            WeatherGridRequestPoint {
+                id: "grid".into(),
+                location,
+            },
+            WeatherGridRequestPoint {
+                id: "grid-h00".into(),
+                location,
+            },
+        ],
+    };
+    let response: ProtocolEnvelope<PluginMessage> = serde_json::from_str(include_str!(
+        "../../../../schemas/fixtures/plugin-weather-layer-v1.json"
+    ))
+    .expect("response fixture should parse");
+    let PluginMessage::PublishWeather { mut response, .. } = response.payload else {
+        panic!("fixture should contain a response");
+    };
+    let PluginWeatherResponse::Complete {
+        product: PluginWeatherProduct::GlobalLayer { layer },
+    } = &mut response
+    else {
+        unreachable!();
+    };
+    let wyrmgrid_domain::GlobalWeatherLayerData::Grid { points } = &mut layer.data else {
+        unreachable!();
+    };
+    points[0].id = "grid-h00".into();
+    points[0].location = location;
+    points[0].valid_at = Some(Utc::now());
+
+    assert!(!weather_response_matches_request(&response, &query));
+}
+
+#[test]
+fn plugin_runtime_failures_emit_stable_bounded_diagnostics() {
+    let diagnostic = PluginRuntimeFailure::WeatherProductRequestMismatch
+        .diagnostic("org.wyrmgrid.provider.open-meteo");
+
+    assert_eq!(diagnostic.level, "error");
+    assert_eq!(diagnostic.code, "plugin.weather_product_request_mismatch");
+    assert_eq!(diagnostic.operation, "plugin_weather");
+    assert_eq!(
+        diagnostic.message,
+        "The plugin weather product did not match the bounded host request."
+    );
+    assert_eq!(diagnostic.plugin_id, "org.wyrmgrid.provider.open-meteo");
+    assert!(diagnostic.reportable);
+    assert!(!diagnostic.message.contains(&diagnostic.plugin_id));
+}
+
+#[test]
+fn plugin_runtime_preserves_only_the_first_failure_transition() {
+    let state = Mutex::new(PluginProcessState::Running);
+    let failure_recorded = AtomicBool::new(false);
+
+    assert!(mark_plugin_failed(&state, &failure_recorded));
+    assert!(!mark_plugin_failed(&state, &failure_recorded));
+    assert_eq!(
+        *state.lock().expect("state should remain available"),
+        PluginProcessState::Failed
+    );
+}
+
+#[test]
 fn provider_origin_or_product_changes_require_fresh_review() {
     let mut manifest: PluginManifest =
         serde_json::from_str(OPEN_METEO_MANIFEST).expect("provider manifest should parse");

@@ -58,7 +58,7 @@ describe("Sentry event redaction", () => {
       message: "application.state_unavailable",
       tags: {
         "error.code": "application.state_unavailable",
-        company: "Gekko Air",
+        "plugin.id": "org.wyrmgrid.provider.open-meteo",
       },
       exception: {
         values: [
@@ -94,5 +94,17 @@ describe("Sentry event redaction", () => {
     expect(
       discardBreadcrumb({ category: "ui.click", message: "Connect" }),
     ).toBeNull();
+  });
+
+  it("drops an unbounded or non-machine-owned error code", () => {
+    const event = sanitizeEvent({
+      message: "secret",
+      tags: { "error.code": "plugin secret=value" },
+    } as unknown as ErrorEvent);
+
+    expect(event.tags).toEqual({});
+    expect(event.message).toBe(
+      "WyrmGrid encountered an unexpected interface failure.",
+    );
   });
 });

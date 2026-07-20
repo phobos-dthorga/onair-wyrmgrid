@@ -126,6 +126,16 @@ schedule. This is an additive plugin API version-one change: old providers and
 old fixture payloads remain valid, while consumers that understand the field
 may perform bounded host-side temporal matching.
 
+A legacy provider may still return exactly one point using the host-selected
+point ID and coordinates. A provider returning multiple forecast horizons for
+that location uses `<host-point-id>-hNN`, where `NN` is a two-digit decimal
+horizon identifier, preserves the exact host-selected coordinates, and supplies
+`valid_at` on every derived point. The host rejects an invented location,
+malformed suffix, missing requested location, or derived point without a valid
+time. Product validation still enforces unique IDs, the 512-point ceiling, and
+the frame-size limit. This response-correlation clarification is additive and
+does not change plugin API version 1 or invalidate legacy one-to-one products.
+
 The map contract contains an ID, title, bounded points, and provenance. Each
 point contains a unique ID, a label, and valid WGS84 coordinates. Plugins cannot
 provide MapLibre styles, JavaScript, markup, URLs, callbacks, or theme values.

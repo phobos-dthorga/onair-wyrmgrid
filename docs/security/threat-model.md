@@ -757,6 +757,15 @@ makes local data unrecoverable by design.
 - Redaction reduces but cannot prove the absence of accidental disclosure. Keep
   payloads small and structured, and test filters with secret-like canaries
   before enabling public telemetry.
+- A hostile or defective plugin can deliberately trigger supervisor failures.
+  WyrmGrid records only a validated manifest ID plus host-owned codes and
+  messages in the bounded local log; raw plugin output and weather products are
+  excluded. A shared desktop broker records command, startup, partial-sync, and
+  plugin diagnostics locally before applying the application-owned reportability
+  decision. The Sentry adapter receives only a low-cardinality stable failure
+  code, remains consent/build/DSN gated, and the supervisor kills the failed
+  runtime, limiting both disclosure and event amplification to one report per
+  stopped instance.
 - A public DSN can receive spoofed or abusive events. Use Sentry spike controls,
   project quotas, and alerting, and treat event contents and report identifiers
   as untrusted input.

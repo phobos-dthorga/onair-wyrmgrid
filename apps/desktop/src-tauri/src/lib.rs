@@ -1,5 +1,6 @@
 mod credential_store;
 mod database_key;
+mod diagnostic_reporting;
 mod diagnostics;
 mod observability;
 
@@ -136,7 +137,7 @@ async fn synchronize_onair_company_data(
         .await
         .map_err(operation_error)?;
     for failure in &result.failures {
-        diagnostics::record(
+        let _ = diagnostic_reporting::record(
             if failure.code == "onair.request_skipped" {
                 "warning"
             } else {
@@ -145,6 +146,8 @@ async fn synchronize_onair_company_data(
             failure.code,
             "synchronize_onair_company_data",
             &failure.message,
+            None,
+            false,
         );
     }
     Ok(result)
@@ -795,19 +798,7 @@ fn delete_all_simulator_recordings(
 fn operation_error<E: Into<wyrmgrid_application::OperationError>>(
     error: E,
 ) -> wyrmgrid_application::OperationError {
-    let operation_error = error.into();
-    diagnostics::record(
-        "error",
-        operation_error.code,
-        "desktop_command",
-        &operation_error.message,
-    );
-    if operation_error.reportable {
-        let report_id = observability::capture_reportable(operation_error.code);
-        operation_error.with_report_id(report_id)
-    } else {
-        operation_error
-    }
+    diagnostic_reporting::record_operation_error("error", "desktop_command", error.into())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -877,13 +868,15 @@ pub fn run() {
             } else {
                 simulator_settings.startup_provider_id().ok().flatten()
             };
-            let plugins = wyrmgrid_application::PluginService::with_authorization_runtime(
-                Some(app_data_directory.join("plugins")),
-                store,
-                onair.clone(),
-                simulator.clone(),
-                authorization_runtime,
-            );
+            let plugins =
+                wyrmgrid_application::PluginService::with_authorization_runtime_and_diagnostics(
+                    Some(app_data_directory.join("plugins")),
+                    store,
+                    onair.clone(),
+                    simulator.clone(),
+                    authorization_runtime,
+                    Some(Arc::new(diagnostic_reporting::PluginObserver)),
+                );
             let dispatch = wyrmgrid_application::DispatchSession::with_plugin_weather_provider(
                 plugins.clone(),
             );
@@ -912,11 +905,10 @@ pub fn run() {
                 let simulator = app.state::<DesktopState>().simulator.clone();
                 std::thread::spawn(move || {
                     if let Err(error) = simulator.start(&provider_id) {
-                        diagnostics::record(
+                        let _ = diagnostic_reporting::record_operation_error(
                             "warning",
-                            "simulator.automatic_start_failed",
                             "desktop_startup",
-                            &error.to_string(),
+                            error.into(),
                         );
                     }
                 });
@@ -926,20 +918,23 @@ pub fn run() {
                 std::thread::spawn(move || match plugins.start_enabled() {
                     Ok(outcome) => {
                         for failure in outcome.failures {
-                            diagnostics::record(
+                            let _ = diagnostic_reporting::record(
                                 "warning",
                                 "plugin.automatic_start_failed",
                                 "desktop_startup",
-                                &format!("{}: {}", failure.plugin_id, failure.message),
+                                &failure.message,
+                                Some(&failure.plugin_id),
+                                false,
                             );
                         }
                     }
-                    Err(error) => diagnostics::record(
-                        "warning",
-                        "plugin.automatic_start_failed",
-                        "desktop_startup",
-                        &error.to_string(),
-                    ),
+                    Err(error) => {
+                        let _ = diagnostic_reporting::record_operation_error(
+                            "warning",
+                            "desktop_startup",
+                            error.into(),
+                        );
+                    }
                 });
             }
             Ok(())

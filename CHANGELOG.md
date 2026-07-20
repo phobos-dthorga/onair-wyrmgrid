@@ -89,6 +89,22 @@ major application version.
 
 ### Changes
 
+- Fixed the bundled Open-Meteo six-horizon product being rejected by the host's
+  legacy one-point correlation check. Strict additive horizon correlation keeps
+  every returned sample tied to an exact host-selected location while preserving
+  plugin API version 1 and legacy one-to-one products.
+- Routed background plugin-supervisor failures into the bounded local
+  Diagnostics log with stable reason codes, lifecycle operations, controlled
+  messages, and validated local plugin identifiers. Desktop command, startup,
+  partial-sync, and plugin diagnostics now share one reporting broker;
+  unexpected failures reuse the existing consent-gated, redacted Sentry adapter
+  with stable codes only. Plugin identifiers, output, payloads, URLs, and
+  provider data remain local or excluded. Privacy Notice version 2026-07-19.3
+  records the new local field.
+- Updated the Rust Sentry SDK to 0.48.5 for its panic-handler safety fix and the
+  SvelteKit SDK to 10.66.0 for current browser and SvelteKit fixes; the Vite
+  upload plugin was already current at 5.4.0. Error-only settings and telemetry
+  minimisation remain unchanged.
 - Existing webview synchronization choices now migrate once into encrypted
   settings and are removed from browser storage after a successful save. The
   privacy notice and source language catalogue advance for the newly retained

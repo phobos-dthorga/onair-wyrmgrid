@@ -18,6 +18,18 @@ fn metadata_is_bounded_and_low_cardinality() {
 }
 
 #[test]
+fn error_codes_are_bounded_and_machine_owned() {
+    assert!(safe_error_code("a.1"));
+    assert!(safe_error_code(&format!("a{}", "1".repeat(79))));
+    assert!(!safe_error_code("a1"));
+    assert!(!safe_error_code(&format!("a{}", "1".repeat(80))));
+    assert!(safe_error_code("plugin.weather_product_request_mismatch"));
+    assert!(!safe_error_code("Plugin failure"));
+    assert!(!safe_error_code("plugin.secret=value"));
+    assert!(!safe_error_code(&format!("plugin.{}", "a".repeat(80))));
+}
+
+#[test]
 fn strips_sensitive_event_fields_but_keeps_a_symbolic_stack() {
     let mut event = Event {
         message: Some("api-key=secret-value".to_owned()),
@@ -45,6 +57,13 @@ fn strips_sensitive_event_fields_but_keeps_a_symbolic_stack() {
     event
         .extra
         .insert("raw_payload".to_owned(), "secret".into());
+    event
+        .tags
+        .insert("error.code".to_owned(), "plugin secret=value".to_owned());
+    event.tags.insert(
+        "plugin.id".to_owned(),
+        "org.wyrmgrid.provider.open-meteo".to_owned(),
+    );
 
     let sanitized = sanitize_event(event).expect("event should be retained");
 
@@ -52,6 +71,7 @@ fn strips_sensitive_event_fields_but_keeps_a_symbolic_stack() {
     assert!(sanitized.user.is_none());
     assert!(sanitized.server_name.is_none());
     assert!(sanitized.extra.is_empty());
+    assert!(sanitized.tags.is_empty());
     let exception = &sanitized.exception.values[0];
     assert_eq!(exception.value.as_deref(), Some(SAFE_FAILURE_MESSAGE));
     let frame = &exception

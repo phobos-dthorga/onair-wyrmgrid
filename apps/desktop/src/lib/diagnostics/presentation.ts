@@ -43,6 +43,7 @@ export function filterDiagnosticEntries(
         entry.operation,
         entry.message,
         entry.level,
+        entry.plugin_id,
       ]) &&
       (filters.level === null || entry.level === filters.level) &&
       (filters.operation === null || entry.operation === filters.operation),

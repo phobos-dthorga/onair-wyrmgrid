@@ -71,6 +71,9 @@ fn init_client() -> Option<ClientInitGuard> {
 }
 
 pub fn capture_reportable(code: &'static str) -> Option<String> {
+    if !safe_error_code(code) {
+        return None;
+    }
     sentry::Hub::current().client()?;
     let event_id = sentry::with_scope(
         |scope| scope.set_tag("error.code", code),
@@ -92,7 +95,9 @@ fn sanitize_event(mut event: Event<'static>) -> Option<Event<'static>> {
     event.breadcrumbs.values.clear();
     event.template = None;
 
-    event.tags.retain(|key, _| key == "error.code");
+    event
+        .tags
+        .retain(|key, value| key == "error.code" && safe_error_code(value));
     event.contexts.retain(|_, context| {
         matches!(
             context,
@@ -162,6 +167,17 @@ fn safe_metadata(value: &str) -> bool {
         && value
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'@' | b'_' | b'-'))
+}
+
+fn safe_error_code(value: &str) -> bool {
+    (3..=80).contains(&value.len())
+        && value
+            .bytes()
+            .next()
+            .is_some_and(|byte| byte.is_ascii_lowercase())
+        && value.bytes().all(|byte| {
+            byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'.' | b'_' | b'-')
+        })
 }
 
 #[cfg(test)]

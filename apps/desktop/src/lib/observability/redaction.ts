@@ -17,7 +17,9 @@ export function sanitizeEvent(event: ErrorEvent): ErrorEvent {
   delete event.breadcrumbs;
 
   event.tags = Object.fromEntries(
-    Object.entries(event.tags ?? {}).filter(([key]) => key === "error.code"),
+    Object.entries(event.tags ?? {}).filter(
+      ([key, value]) => key === "error.code" && safeCode(value),
+    ),
   );
   event.contexts = Object.fromEntries(
     Object.entries(event.contexts ?? {}).filter(([key]) =>

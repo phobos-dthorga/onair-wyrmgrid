@@ -42,6 +42,13 @@ under the existing 512-point and one-megabyte product limits. Every forecast
 point carries its own `valid_at`; provenance retrieval time is not relabelled as
 a model-run time.
 
+The host correlates each timed sample to the original fixed location through a
+strict `<host-point-id>-hNN` identifier and exact coordinate match. Every
+requested location must remain represented, and every returned sample must map
+to exactly one request point. This preserves the original one-point version-one
+contract while allowing the bundled six-horizon product without exposing the
+route or widening the existing product limits.
+
 Rust samples each continuous, coordinate-bearing plan segment at an interval no
 greater than 300 nautical miles. It derives departure from scheduled-off then
 scheduled-out and derives duration from estimated enroute time, scheduled-on,
