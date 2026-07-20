@@ -121,10 +121,31 @@ are translated into stable WyrmGrid domain summaries before this adapter.
 A published global-model grid point may add an optional UTC `valid_at`. Its
 absence preserves the original version-one shape and means **current context**;
 the host must not call it an ETA-matched forecast. The host-selected
-`forecast_grid` request remains unchanged and contains no active route or
-schedule. This is an additive plugin API version-one change: old providers and
-old fixture payloads remain valid, while consumers that understand the field
-may perform bounded host-side temporal matching.
+ordinary live `forecast_grid` request remains unchanged and contains no active
+route or schedule. An explicit historical request may add a bounded `window`
+with target, start, and end UTC times. The host rejects a historical response
+unless every sample is inside that window and the layer carries the exact
+`historical_model` time scope. An older plugin that ignores the additive field
+therefore fails closed instead of returning current data under a historical
+label. Old providers and live fixture payloads remain valid in plugin API
+version 1.
+
+Grid points may add `provider_extent_radius_nm` only for a circular
+weather-pattern extent explicitly supplied by the provider contract. The host
+validates it between 0.1 and 1,000 nautical miles. It must not be derived from
+condition intensity, precipitation, cloud cover, pressure, point spacing, or a
+renderer preference. Point spacing may still drive a separately labelled
+sample-support footprint.
+
+A legacy provider may still return exactly one point using the host-selected
+point ID and coordinates. A provider returning multiple forecast horizons for
+that location uses `<host-point-id>-hNN`, where `NN` is a two-digit decimal
+horizon identifier, preserves the exact host-selected coordinates, and supplies
+`valid_at` on every derived point. The host rejects an invented location,
+malformed suffix, missing requested location, or derived point without a valid
+time. Product validation still enforces unique IDs, the 512-point ceiling, and
+the frame-size limit. This response-correlation clarification is additive and
+does not change plugin API version 1 or invalidate legacy one-to-one products.
 
 The map contract contains an ID, title, bounded points, and provenance. Each
 point contains a unique ID, a label, and valid WGS84 coordinates. Plugins cannot

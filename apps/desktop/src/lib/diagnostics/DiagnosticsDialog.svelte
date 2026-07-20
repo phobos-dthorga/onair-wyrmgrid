@@ -95,7 +95,7 @@
           aria-label="Diagnostic log exploration"
         >
           <label class="diagnostics-search">
-            <span>Find a code, operation, level, or message</span>
+            <span>Find a code, operation, plugin, level, or message</span>
             <input type="search" bind:value={filters.query} />
           </label>
           <details class="diagnostics-filter-panel">
@@ -165,7 +165,10 @@
                 >{formatTime(entry.occurred_at)}</time
               >
             </div>
-            <strong>{entry.operation}</strong>
+            <div class="diagnostics-entry-context">
+              <strong>{entry.operation}</strong>
+              {#if entry.plugin_id}<code>{entry.plugin_id}</code>{/if}
+            </div>
             <p>{entry.message}</p>
           </article>
         {:else}

@@ -14,6 +14,7 @@ const entries: DiagnosticEntry[] = [
     code: "BRIDGE_TIMEOUT",
     operation: "simulator_bridge",
     message: "Provider did not respond.",
+    plugin_id: "org.wyrmgrid.provider.rainviewer",
   },
   {
     occurred_at: "2026-07-17T02:00:00Z",
@@ -39,6 +40,15 @@ describe("diagnostic exploration", () => {
         query: "provider",
       }).map((entry) => entry.code),
     ).toEqual(["ONAIR_UNAVAILABLE", "BRIDGE_TIMEOUT"]);
+  });
+
+  it("searches the bounded plugin identifier when present", () => {
+    expect(
+      filterDiagnosticEntries(entries, {
+        ...defaultDiagnosticFilters,
+        query: "rainviewer",
+      }).map((entry) => entry.code),
+    ).toEqual(["BRIDGE_TIMEOUT"]);
   });
 
   it("counts filter state independently of destructive log clearing", () => {

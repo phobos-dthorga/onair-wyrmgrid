@@ -8,6 +8,7 @@ import {
   longestRadarTimeline,
   rasterTileCoordinates,
   selectedRadarFrames,
+  weatherLayersForTemporalMode,
 } from "./pluginWeather";
 
 const provenance = {
@@ -97,6 +98,61 @@ describe("plugin weather presentation", () => {
     ];
     expect(pluginWeatherGridFeatures(published).features).toHaveLength(2);
     expect(pluginWeatherItemCount(published)).toBe(2);
+  });
+
+  it("keeps historical model layers separate from live weather", () => {
+    const live: PublishedPluginWeatherLayer = {
+      plugin_id: "org.example.weather",
+      plugin_name: "Example Weather",
+      layer: {
+        schema_version: 1,
+        id: "live",
+        title: "Live",
+        data: {
+          kind: "grid",
+          points: [
+            {
+              id: "live-1",
+              location: { latitude: 0, longitude: 0 },
+              condition: "clear",
+            },
+          ],
+        },
+        provenance,
+      },
+    };
+    const historical: PublishedPluginWeatherLayer = {
+      ...live,
+      layer: {
+        ...live.layer,
+        id: "historical",
+        title: "Historical",
+        time_scope: {
+          kind: "historical_model",
+          target_at: "2026-07-12T12:00:00Z",
+          starts_at: "2026-07-12T08:00:00Z",
+          ends_at: "2026-07-12T16:00:00Z",
+        },
+      },
+    };
+    const archived = {
+      ...historical,
+      layer: {
+        ...historical.layer,
+        id: "archived",
+        time_scope: {
+          ...historical.layer.time_scope!,
+          kind: "archived_forecast" as const,
+        },
+      },
+    };
+
+    expect(
+      weatherLayersForTemporalMode([live, historical, archived], "live"),
+    ).toEqual([live]);
+    expect(
+      weatherLayersForTemporalMode([live, historical, archived], "historical"),
+    ).toEqual([historical, archived]);
   });
 
   it("converts validated XYZ tiles into host-owned image corners", () => {

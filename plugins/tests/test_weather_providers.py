@@ -146,6 +146,45 @@ class WeatherProviderTests(unittest.TestCase):
             )
         self.assertEqual(failure.exception.code, "invalid_response")
 
+    def test_open_meteo_uses_the_bounded_historical_service_without_invented_extent(self):
+        client = OpenMeteoClient()
+        window = {
+            "target_at": "2026-07-17T12:00:00Z",
+            "starts_at": "2026-07-17T08:00:00Z",
+            "ends_at": "2026-07-17T16:00:00Z",
+        }
+        product = OPEN_METEO.forecast_grid(
+            {
+                "query": {
+                    "kind": "forecast_grid",
+                    "points": [
+                        {
+                            "id": "grid-01",
+                            "location": {
+                                "latitude": -33.8688,
+                                "longitude": 151.2093,
+                            },
+                        }
+                    ],
+                    "window": window,
+                }
+            },
+            client,
+        )
+
+        self.assertEqual(client.call[0], OPEN_METEO.HISTORICAL_ORIGIN)
+        self.assertNotIn("forecast_hours", client.call[2])
+        self.assertEqual(client.call[2]["start_date"], "2026-07-17")
+        self.assertEqual(product["layer"]["time_scope"]["kind"], "historical_model")
+        self.assertEqual(product["layer"]["time_scope"]["target_at"], window["target_at"])
+        self.assertEqual(len(product["layer"]["data"]["points"]), 6)
+        self.assertTrue(
+            all(
+                "provider_extent_radius_nm" not in point
+                for point in product["layer"]["data"]["points"]
+            )
+        )
+
     def test_open_meteo_keeps_six_horizons_under_the_domain_point_ceiling(self):
         requested = [
             {
@@ -195,6 +234,27 @@ class WeatherProviderTests(unittest.TestCase):
         self.assertEqual(airport["metar"]["value"]["report_type"], "METAR")
         self.assertEqual(airport["taf"]["value"]["valid_to"], "2026-07-15T06:00:00Z")
         self.assertNotIn("private", json.dumps(product).lower())
+
+    def test_aviation_weather_historical_request_returns_only_windowed_observations(self):
+        client = AviationWeatherClient()
+        product = AVIATION_WEATHER.airport_reports(
+            {
+                "query": {
+                    "kind": "airport_reports",
+                    "stations": ["YSSY"],
+                    "window": {
+                        "target_at": "2026-07-14T01:00:00Z",
+                        "starts_at": "2026-07-14T00:00:00Z",
+                        "ends_at": "2026-07-14T03:00:00Z",
+                    },
+                }
+            },
+            client,
+        )
+
+        airport = product["snapshot"]["airports"][0]
+        self.assertEqual(airport["metar"]["value"]["observed_at"], "2026-07-14T01:00:00Z")
+        self.assertNotIn("taf", airport)
 
     def test_rainviewer_translates_only_requested_bounded_tiles(self):
         client = RainViewerClient()

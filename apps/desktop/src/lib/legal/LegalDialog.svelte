@@ -171,8 +171,9 @@
               <article class="responsive-surface">
                 <strong>Error diagnostics</strong>
                 <span
-                  >Privacy-filtered Sentry reports are optional and off by
-                  default.</span
+                  >Local plugin failures may name the plugin. Privacy-filtered
+                  Sentry reports contain only stable codes, are optional, and
+                  are off by default.</span
                 >
               </article>
               <article class="responsive-surface">

@@ -135,6 +135,8 @@
 - compromise of CI-only Sentry upload credentials;
 - stale data presented as current fact;
 - historical operational state mistaken for the present state;
+- a plugin ignoring a historical weather window and current data being
+  accepted under a historical label;
 - recommendations mistaken for OnAir-provided facts;
 - accidental or automated request storms against OnAir's public API;
 - disclosure of locally cached company, fleet, and location history;
@@ -160,6 +162,12 @@
   immutable, application-owned snapshots with freshness and provider revision;
 - provider rate limits, caching, request coalescing, timeouts, bounded retries,
   and offline suspension are enforced in Rust;
+- historical weather requests use bounded UTC windows, exact response-time and
+  layer-classification checks, separate live/historical presentation, and
+  renewed grants when a bundled provider adds a network origin;
+- the zero-dependency Python SDK keeps TLS certificate and hostname validation
+  mandatory and, on Windows, builds server trust from the operating-system root
+  store instead of a separately installed OpenSSL CA file;
 - imported files, compressed feeds, navigation packages, weather geometries,
   and Bridge messages have strict size, count, nesting, numeric, path, and
   decompression limits;
@@ -771,6 +779,15 @@ makes local data unrecoverable by design.
 - Redaction reduces but cannot prove the absence of accidental disclosure. Keep
   payloads small and structured, and test filters with secret-like canaries
   before enabling public telemetry.
+- A hostile or defective plugin can deliberately trigger supervisor failures.
+  WyrmGrid records only a validated manifest ID plus host-owned codes and
+  messages in the bounded local log; raw plugin output and weather products are
+  excluded. A shared desktop broker records command, startup, partial-sync, and
+  plugin diagnostics locally before applying the application-owned reportability
+  decision. The Sentry adapter receives only a low-cardinality stable failure
+  code, remains consent/build/DSN gated, and the supervisor kills the failed
+  runtime, limiting both disclosure and event amplification to one report per
+  stopped instance.
 - A public DSN can receive spoofed or abusive events. Use Sentry spike controls,
   project quotas, and alerting, and treat event contents and report identifiers
   as untrusted input.

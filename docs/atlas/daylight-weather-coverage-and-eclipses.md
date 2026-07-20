@@ -88,22 +88,32 @@ with no nautical-mile or storm-boundary claim. Their soft edge and fine outline
 intentionally distinguish them from sourced polygons. They must never be used
 for route clearance, avoidance, or a claim that weather stops at the ring.
 
-### Complete regular forecast grids
+### Model samples and source-reported extents
 
 When a validated plugin layer contains every point in a complete rectilinear
-latitude/longitude grid, Atlas calculates a compact support patch centred on
-each source sample. The patch follows midpoint boundaries when neighbouring
-samples are close, but neither dimension may exceed 6°. Coarse grids therefore
+latitude/longitude grid, Atlas calculates a compact circular support footprint
+centred on each source sample. Its radius is no larger than half the nearest
+sample spacing and is capped at 180 nautical miles. Coarse grids therefore
 leave visible unknown gaps instead of allowing one reading to colour a
-continent-sized rectangle. Each patch is a **model sampling support area**. It
+continent-sized region. Each circle is a **model sampling support area**. It
 identifies its nearest validated sample; it does not state that a weather front
-follows the patch boundary or that an unfilled gap is clear weather.
+follows the circle or that an unfilled gap is clear weather.
 
 Irregular, incomplete, duplicate, or single-row grids do not receive inferred
-polygons. Their validated points remain visible without fabricated coverage.
-A future protocol may add source-supplied cell polygons, uncertainty, altitude,
-valid time, and resolution; those geometries will supersede the midpoint
-presentation when validated.
+support circles. Their validated points remain visible without fabricated
+coverage. A point may instead carry an explicit provider-reported extent radius
+when its first-party product actually defines the geographic extent of that
+weather pattern. Atlas then uses the validated radius rather than grid spacing,
+and identifies its basis as provider-reported. It never derives pattern size
+from precipitation intensity, cloud cover, icon category, or neighbouring
+samples. An extent that crosses the antimeridian remains absent until Atlas can
+split that geometry safely.
+
+The bundled AviationWeather.gov and Open-Meteo products do not currently supply
+such a weather-pattern extent, so their size does not grow or shrink. A future
+provider with sourced cell polygons, uncertainty, altitude, valid time, and
+resolution can supersede the circular presentation after a separate contract
+and compatibility review.
 
 ### RADAR
 

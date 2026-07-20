@@ -64,6 +64,22 @@ npm run dev
 See the [testing strategy](testing.md) for test placement, required cases, CI
 gates, and the safe scope for automated test-writing agents.
 
+## Local formatting
+
+Use one repository command to repair all supported source and documentation
+formatting:
+
+```powershell
+npm run format
+```
+
+It runs Prettier and Cargo's formatter locally and deterministically; it does
+not use a network service or an AI model. Rust files are normalized to LF on
+every operating system, matching `.gitattributes` and avoiding the Windows
+native-newline mismatch. Use `npm run format:check` for the non-mutating form.
+Review formatter changes before committing, especially when a formatter or its
+pinned toolchain version has changed.
+
 ## Local review evidence inventory
 
 Stage 1 of the local review-automation programme can inventory the current

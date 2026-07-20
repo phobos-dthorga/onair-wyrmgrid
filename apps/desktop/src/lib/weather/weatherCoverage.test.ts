@@ -44,7 +44,7 @@ function point(
 }
 
 describe("weather support-zone geometry", () => {
-  it("builds compact source-centred cells only for a complete regular grid", () => {
+  it("builds compact circular footprints only for a complete regular grid", () => {
     const layer = gridLayer([
       point("nw", 10, -10, "cloud"),
       point("ne", 10, 10, "rain"),
@@ -54,22 +54,74 @@ describe("weather support-zone geometry", () => {
     const coverage = pluginWeatherGridCoverageFeatures([layer]);
 
     expect(coverage.features).toHaveLength(4);
-    expect(coverage.features[0].properties.coverage_kind).toBe(
-      "model_sample_cell",
-    );
+    expect(coverage.features[0].properties).toMatchObject({
+      coverage_kind: "model_sample_footprint",
+      support_radius_nm: 180,
+      extent_basis: "sample_support",
+    });
     const northwest = coverage.features.find((feature) =>
       feature.properties.id.includes(":nw:"),
     );
-    expect(northwest?.geometry.coordinates[0]).toEqual([
-      [-13, 13],
-      [-7, 13],
-      [-7, 7],
-      [-13, 7],
-      [-13, 13],
-    ]);
+    const ring = northwest?.geometry.coordinates[0] ?? [];
+    expect(ring).toHaveLength(49);
+    expect(ring[0]).toEqual(ring.at(-1));
+    expect(ring[0][0]).toBeCloseTo(-10, 8);
+    expect(ring[0][1]).toBeCloseTo(12.9979, 3);
+    expect(ring[12][0]).toBeCloseTo(-6.956, 3);
+    expect(ring[12][1]).toBeCloseTo(9.986, 3);
   });
 
-  it("preserves native midpoint cells when the source grid is already dense", () => {
+  it("uses only an explicit provider radius for variable weather-pattern size", () => {
+    const northwest = point("nw", 2, -2);
+    northwest.provider_extent_radius_nm = 42;
+    const layer = gridLayer([
+      northwest,
+      point("ne", 2, 2),
+      point("sw", -2, -2),
+      point("se", -2, 2),
+    ]);
+    const coverage = pluginWeatherGridCoverageFeatures([layer]);
+    const sourced = coverage.features.find((feature) =>
+      feature.properties.id.includes(":nw:"),
+    );
+    const unsourced = coverage.features.find((feature) =>
+      feature.properties.id.includes(":ne:"),
+    );
+
+    expect(sourced?.properties).toMatchObject({
+      support_radius_nm: 42,
+      extent_basis: "provider_reported",
+    });
+    expect(unsourced?.properties.extent_basis).toBe("sample_support");
+    expect(unsourced?.properties.support_radius_nm).toBeCloseTo(120.01, 1);
+  });
+
+  it("accepts an isolated extent only when the provider explicitly supplies it", () => {
+    const sourced = point("source-defined", 25, 130);
+    sourced.provider_extent_radius_nm = 55;
+    const unsourced = point("point-only", 35, 140);
+
+    const coverage = pluginWeatherGridCoverageFeatures([
+      gridLayer([sourced, unsourced]),
+    ]);
+
+    expect(coverage.features).toHaveLength(1);
+    expect(coverage.features[0].properties).toMatchObject({
+      support_radius_nm: 55,
+      extent_basis: "provider_reported",
+    });
+  });
+
+  it("omits a provider circle that cannot be represented safely across the antimeridian", () => {
+    const sourced = point("crossing", 0, 179);
+    sourced.provider_extent_radius_nm = 120;
+
+    expect(
+      pluginWeatherGridCoverageFeatures([gridLayer([sourced])]).features,
+    ).toEqual([]);
+  });
+
+  it("limits dense-grid footprints to half the nearest sample spacing", () => {
     const layer = gridLayer([
       point("nw", 2, -2),
       point("ne", 2, 2),
@@ -81,13 +133,10 @@ describe("weather support-zone geometry", () => {
       feature.properties.id.includes(":nw:"),
     );
 
-    expect(northwest?.geometry.coordinates[0]).toEqual([
-      [-4, 4],
-      [0, 4],
-      [0, 0],
-      [-4, 0],
-      [-4, 4],
-    ]);
+    expect(northwest?.properties.support_radius_nm).toBeCloseTo(120.01, 1);
+    const ring = northwest?.geometry.coordinates[0] ?? [];
+    expect(ring[0][1]).toBeCloseTo(4, 2);
+    expect(ring[12][0]).toBeCloseTo(0, 2);
   });
 
   it("refuses incomplete, duplicate, and irregular point sets", () => {
@@ -116,7 +165,7 @@ describe("weather support-zone geometry", () => {
     expect(pluginWeatherGridCoverageFeatures([irregular]).features).toEqual([]);
   });
 
-  it("keeps compact support zones safely inside the antimeridian", () => {
+  it("keeps the fixed host grid's circular support zones inside the antimeridian", () => {
     const layer = gridLayer([
       point("a", -10, -165),
       point("b", -10, -135),
@@ -128,8 +177,11 @@ describe("weather support-zone geometry", () => {
       feature.properties.id.includes(":a:"),
     );
 
-    expect(western?.geometry.coordinates[0][0][0]).toBe(-168);
-    expect(western?.geometry.coordinates[0][1][0]).toBe(-162);
+    const longitudes = western?.geometry.coordinates[0].map(
+      (coordinate) => coordinate[0],
+    );
+    expect(Math.min(...(longitudes ?? []))).toBeGreaterThan(-180);
+    expect(Math.max(...(longitudes ?? []))).toBeLessThan(180);
   });
 
   it("outlines exactly the validated received RADAR tile footprint", () => {
@@ -153,6 +205,8 @@ describe("weather support-zone geometry", () => {
     expect(coverage.features).toHaveLength(1);
     expect(coverage.features[0].properties).toMatchObject({
       coverage_kind: "radar_tile",
+      support_radius_nm: null,
+      extent_basis: null,
       condition: "radar",
       frame_time: "2026-07-19T00:00:00Z",
     });

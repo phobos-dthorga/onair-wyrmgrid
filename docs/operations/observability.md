@@ -5,6 +5,9 @@ This document turns
 into an implementation and operating plan. Account names, DSNs, organisation
 slugs, and authentication tokens are deliberately absent.
 
+The latest bounded code and dependency review is recorded in the
+[2026-07-19 observability audit](observability-audit-2026-07-19.md).
+
 ## Initial hosted layout
 
 Use one Sentry Cloud organisation in the U.S. data region with these projects:
@@ -37,12 +40,20 @@ plan quota. Set a hard pay-as-you-go budget before enabling any paid overage.
 - A separate local diagnostic log retains at most 200 structured English entries
   in `wyrmgrid-diagnostics.jsonl` under the application-data directory. It is
   readable and clearable from **Diagnostics** in the desktop header.
+- Desktop command, background-startup, partial-sync, and plugin-supervisor
+  diagnostics pass through one vendor-neutral reporting broker. It always
+  writes the bounded local entry and invokes the Sentry adapter only when the
+  application-owned error classification is reportable. A plugin entry may
+  include one validated manifest plugin ID locally, but only its stable code can
+  reach the consent-gated Sentry adapter; plugin IDs, output, payloads, URLs,
+  and provider data are not added to Sentry events.
 
 ## Local diagnostic log
 
 The local log is available whether or not Sentry telemetry is configured or
 enabled. It records stable error codes, controlled English messages, operation
-names, severity, and timestamps. It does not record raw provider responses,
+names, severity, timestamps, and an optional validated plugin manifest ID. It
+does not record raw provider responses,
 request URLs, headers, OnAir API keys, company identifiers, domain snapshots,
 plugin output, or user-entered text. Pending-job synchronization failures are
 recorded even when fleet or FBO synchronization succeeds and the combined
@@ -157,6 +168,9 @@ Initially allow only:
 - storage mode and data availability category;
 - synchronization trigger and retryability;
 - plugin or sidecar lifecycle category without untrusted output.
+
+Plugin identifiers remain local diagnostic context and are not part of the
+initial Sentry vocabulary.
 
 Never send:
 

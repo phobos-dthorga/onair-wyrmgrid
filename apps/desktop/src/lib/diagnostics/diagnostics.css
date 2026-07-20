@@ -169,8 +169,20 @@
   color: var(--color-accent);
 }
 
-.diagnostics-list article > strong {
+.diagnostics-entry-context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  align-items: baseline;
+}
+
+.diagnostics-entry-context > strong {
   font-size: 11px;
+}
+
+.diagnostics-entry-context > code {
+  color: var(--color-text-muted);
+  font-size: 10px;
 }
 
 .diagnostics-list article p {

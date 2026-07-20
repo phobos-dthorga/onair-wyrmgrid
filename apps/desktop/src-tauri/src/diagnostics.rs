@@ -19,6 +19,8 @@ pub struct DiagnosticEntry {
     pub code: String,
     pub operation: String,
     pub message: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plugin_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -43,13 +45,21 @@ impl DiagnosticLog {
         }
     }
 
-    fn record(&self, level: &str, code: &str, operation: &str, message: &str) {
+    fn record(
+        &self,
+        level: &str,
+        code: &str,
+        operation: &str,
+        message: &str,
+        plugin_id: Option<&str>,
+    ) {
         let entry = DiagnosticEntry {
             occurred_at: Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true),
             level: bounded_field(level),
             code: bounded_field(code),
             operation: bounded_field(operation),
             message: bounded_field(message),
+            plugin_id: plugin_id.and_then(bounded_plugin_id),
         };
         let Ok(mut entries) = self.entries.lock() else {
             return;
@@ -97,10 +107,10 @@ pub fn initialize(directory: Option<&Path>) {
     let _ = DIAGNOSTICS.set(DiagnosticLog::open(directory));
 }
 
-pub fn record(level: &str, code: &str, operation: &str, message: &str) {
+pub fn record(level: &str, code: &str, operation: &str, message: &str, plugin_id: Option<&str>) {
     DIAGNOSTICS
         .get_or_init(|| DiagnosticLog::open(None))
-        .record(level, code, operation, message);
+        .record(level, code, operation, message, plugin_id);
 }
 
 pub fn view() -> DiagnosticLogView {
@@ -119,6 +129,15 @@ fn bounded_field(value: &str) -> String {
         .filter(|character| !character.is_control() || *character == ' ')
         .take(MAX_FIELD_LENGTH)
         .collect()
+}
+
+fn bounded_plugin_id(value: &str) -> Option<String> {
+    (!value.is_empty()
+        && value.len() <= 96
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-')))
+    .then(|| value.to_owned())
 }
 
 fn load_entries(path: &Path) -> Option<VecDeque<DiagnosticEntry>> {

@@ -60,7 +60,7 @@ major application version.
 - Added a toggleable UTC day/night layer with civil, nautical, and
   astronomical twilight, including historical-Hoard time projection. Added a
   separate weather-support-zone layer for indicative airport observation
-  vicinity, compact regular-grid sample patches, and exact received RADAR tile
+  vicinity, compact source-centred model footprints, and exact received RADAR tile
   footprints without presenting point observations as storm boundaries or
   allowing sparse samples to colour continent-sized cells.
   Theme-independent repeating patterns distinguish cloud, rain, snow,
@@ -92,9 +92,55 @@ major application version.
   RADAR timestamp without extrapolation. Atlas distinguishes ETA-matched,
   current-only, unsupported, and unresolved corridor sections without a safety
   score.
+- Added on-demand historical weather for imported past SimBrief plans. Dispatch
+  requests bounded actual METAR observations and Open-Meteo Historical Forecast
+  model samples, keeps the result session-local, excludes current forecast and
+  RADAR layers, and labels the complete Atlas/Dispatch presentation historical.
+- Documented a near-future, optional ActiveSky weather plugin with explicit
+  simulator-weather provenance, absence-safe behavior, narrow local transport,
+  renewed consent, and no assumption that a SimBrief plan carries ActiveSky's
+  full weather field.
 
 ### Changes
 
+- Unified the local formatting commands across Rust, frontend, and documentation
+  files. Rust formatting now uses the repository's LF newline policy on every
+  operating system, so `npm run format` repairs the recurring Windows mismatch
+  deterministically without an AI or hosted runner.
+- Replaced rectangular global-model support patches with compact, source-centred
+  circular footprints while preserving the clearer solid dispatch route. Their
+  radius is capped and constrained by model-grid spacing; they remain indicative
+  sample support rather than measured weather-pattern boundaries. A provider may
+  vary a footprint only through an explicit, validated first-party extent;
+  intensity and cloud or precipitation values never invent pattern size.
+- Extended plugin API version 1 with an additive bounded historical UTC window
+  and exact historical-layer time scope. Live requests remain unchanged, while
+  an unaware plugin's current response fails closed instead of being accepted
+  under a historical label.
+- Advanced the bundled Open-Meteo provider to 0.3.0 with its separately
+  allowlisted Historical Forecast origin and the AviationWeather.gov provider
+  to 0.2.0 with windowed historical METAR selection. Provider scope changes
+  invalidate previous standing grants and automatic-start choices until the
+  user reviews them; Open-Meteo explicitly requests its additional origin.
+- Kept Python plugin HTTPS certificate and hostname verification mandatory
+  while using the Windows operating-system root store instead of a potentially
+  stale standalone OpenSSL CA file.
+- Fixed the bundled Open-Meteo six-horizon product being rejected by the host's
+  legacy one-point correlation check. Strict additive horizon correlation keeps
+  every returned sample tied to an exact host-selected location while preserving
+  plugin API version 1 and legacy one-to-one products.
+- Routed background plugin-supervisor failures into the bounded local
+  Diagnostics log with stable reason codes, lifecycle operations, controlled
+  messages, and validated local plugin identifiers. Desktop command, startup,
+  partial-sync, and plugin diagnostics now share one reporting broker;
+  unexpected failures reuse the existing consent-gated, redacted Sentry adapter
+  with stable codes only. Plugin identifiers, output, payloads, URLs, and
+  provider data remain local or excluded. Privacy Notice version 2026-07-19.3
+  records the new local field.
+- Updated the Rust Sentry SDK to 0.48.5 for its panic-handler safety fix and the
+  SvelteKit SDK to 10.66.0 for current browser and SvelteKit fixes; the Vite
+  upload plugin was already current at 5.4.0. Error-only settings and telemetry
+  minimisation remain unchanged.
 - Existing webview synchronization choices now migrate once into encrypted
   settings and are removed from browser storage after a successful save. The
   privacy notice and source language catalogue advance for the newly retained
@@ -116,6 +162,8 @@ major application version.
   choice until the user reviews the current provider scope.
 - Advanced the source language catalogue to version 16 for planned route ETA,
   forecast-validity, current-context, and observation-only RADAR wording.
+- Advanced the source language catalogue to version 17 for explicit historical
+  route-weather and Atlas wording.
 
 - Documented a proposal-only hosted-platform architecture and staged delivery
   plan for the public website, WyrmGrid Aerie catalogue, signed community

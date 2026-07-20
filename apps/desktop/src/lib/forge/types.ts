@@ -89,6 +89,14 @@ export type GlobalWeatherGridPoint = {
   wind_direction_degrees?: number;
   wind_speed_kt?: number;
   provider_weather_code?: number;
+  provider_extent_radius_nm?: number;
+};
+
+export type GlobalWeatherTimeScope = {
+  kind: "current_forecast" | "historical_model" | "archived_forecast";
+  target_at: string;
+  starts_at: string;
+  ends_at: string;
 };
 
 export type GlobalWeatherRasterTile = {
@@ -103,6 +111,7 @@ export type GlobalWeatherLayer = {
   schema_version: number;
   id: string;
   title: string;
+  time_scope?: GlobalWeatherTimeScope;
   data:
     | { kind: "grid"; points: GlobalWeatherGridPoint[] }
     | {
