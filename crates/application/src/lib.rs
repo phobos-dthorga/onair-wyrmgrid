@@ -48,6 +48,8 @@ use chrono::{DateTime, SecondsFormat, Utc};
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
+use std::fs;
+use std::path::Path;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
 use thiserror::Error;
@@ -257,6 +259,8 @@ pub enum ThemeSettingsError {
     DuplicateTheme,
     #[error("Themes bundled with WyrmGrid cannot be deleted.")]
     BundledThemeCannotBeDeleted,
+    #[error("WyrmGrid could not save that theme file.")]
+    FileSaveFailed,
 }
 
 pub struct ThemeSettingsService<R> {
@@ -359,14 +363,31 @@ impl<R: ThemeRepository> ThemeSettingsService<R> {
             .find(|theme| theme.manifest.id == theme_id)
             .ok_or(ThemeSettingsError::UnknownTheme)?
             .manifest;
-        let mut content = serde_json::to_string_pretty(&manifest)
-            .map_err(|_| ThemeSettingsError::InvalidManifest)?;
-        content.push('\n');
+        let content = serialise_theme_manifest(&manifest)?;
         Ok(ThemeExport {
             filename: format!("{}.wyrmgrid-theme.json", manifest.id),
             media_type: "application/json",
             content,
         })
+    }
+
+    pub fn save_export(
+        &self,
+        theme_id: &str,
+        destination: &Path,
+    ) -> Result<(), ThemeSettingsError> {
+        let export = self.export(theme_id)?;
+        write_theme_file(destination, &export.content)
+    }
+
+    pub fn save_draft(
+        &self,
+        manifest_json: &str,
+        destination: &Path,
+    ) -> Result<(), ThemeSettingsError> {
+        let manifest = parse_theme_draft(manifest_json)?;
+        let content = serialise_theme_manifest(&manifest)?;
+        write_theme_file(destination, &content)
     }
 
     pub fn delete(&self, theme_id: &str) -> Result<ThemeStatus, ThemeSettingsError> {
@@ -530,16 +551,33 @@ fn theme<const N: usize>(
 }
 
 fn parse_custom_theme(manifest_json: &str) -> Result<ThemeManifest, ThemeSettingsError> {
-    if manifest_json.len() > MAX_THEME_MANIFEST_BYTES {
-        return Err(ThemeSettingsError::ManifestTooLarge);
-    }
-    let manifest: ThemeManifest =
-        serde_json::from_str(manifest_json).map_err(|_| ThemeSettingsError::InvalidManifest)?;
+    let manifest = parse_theme_manifest(manifest_json)?;
     validate_theme(&manifest, false)?;
     Ok(manifest)
 }
 
+fn parse_theme_draft(manifest_json: &str) -> Result<ThemeManifest, ThemeSettingsError> {
+    let manifest = parse_theme_manifest(manifest_json)?;
+    validate_theme_structure(&manifest, false)?;
+    Ok(manifest)
+}
+
+fn parse_theme_manifest(manifest_json: &str) -> Result<ThemeManifest, ThemeSettingsError> {
+    if manifest_json.len() > MAX_THEME_MANIFEST_BYTES {
+        return Err(ThemeSettingsError::ManifestTooLarge);
+    }
+    serde_json::from_str(manifest_json).map_err(|_| ThemeSettingsError::InvalidManifest)
+}
+
 fn validate_theme(
+    manifest: &ThemeManifest,
+    allow_reserved_identifier: bool,
+) -> Result<(), ThemeSettingsError> {
+    validate_theme_structure(manifest, allow_reserved_identifier)?;
+    validate_theme_contrast(manifest)
+}
+
+fn validate_theme_structure(
     manifest: &ThemeManifest,
     allow_reserved_identifier: bool,
 ) -> Result<(), ThemeSettingsError> {
@@ -571,6 +609,10 @@ fn validate_theme(
     {
         return Err(ThemeSettingsError::InvalidColour);
     }
+    Ok(())
+}
+
+fn validate_theme_contrast(manifest: &ThemeManifest) -> Result<(), ThemeSettingsError> {
     let interface_surfaces = [
         manifest.colors.canvas.as_str(),
         manifest.colors.surface.as_str(),
@@ -606,6 +648,20 @@ fn validate_theme(
         return Err(ThemeSettingsError::InsufficientContrast);
     }
     Ok(())
+}
+
+fn serialise_theme_manifest(manifest: &ThemeManifest) -> Result<String, ThemeSettingsError> {
+    let mut content =
+        serde_json::to_string_pretty(manifest).map_err(|_| ThemeSettingsError::InvalidManifest)?;
+    content.push('\n');
+    Ok(content)
+}
+
+fn write_theme_file(destination: &Path, content: &str) -> Result<(), ThemeSettingsError> {
+    if destination.as_os_str().is_empty() || destination.file_name().is_none() {
+        return Err(ThemeSettingsError::FileSaveFailed);
+    }
+    fs::write(destination, content).map_err(|_| ThemeSettingsError::FileSaveFailed)
 }
 
 fn valid_theme_id(value: &str) -> bool {
@@ -1081,6 +1137,7 @@ impl From<ThemeSettingsError> for OperationError {
             ThemeSettingsError::BundledThemeCannotBeDeleted => {
                 ("theme.bundled_delete_forbidden", false)
             }
+            ThemeSettingsError::FileSaveFailed => ("theme.file_save_failed", true),
         };
         Self {
             code,
