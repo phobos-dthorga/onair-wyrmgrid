@@ -85,3 +85,13 @@ outside-repository live certification before it can ship. X-Plane per-bus
 capture remains a candidate rather than an availability claim. The current
 application, Bridge protocol, telemetry recording, plugin permissions, and
 Privacy Notice remain unchanged by this decision.
+
+## Implementation note — 2026-07-20
+
+The independently versioned Audio Capture Provider protocol version-one
+foundation is implemented with stable source and Opus-profile models, bounded
+JSON control headers, separately bounded encoded-packet bodies, schemas,
+sanitized fixtures, and a deterministic development-only fake provider. This
+resolves the deferred provider media-transport shape without changing Bridge
+version 1. It does not implement consent, storage, native capture, packaging, or
+user-facing availability; all remaining decision boundaries above stay in force.

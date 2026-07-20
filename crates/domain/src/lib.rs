@@ -1,5 +1,6 @@
 //! Stable domain types shared by WyrmGrid services and public protocol adapters.
 
+mod audio;
 mod flight_operation;
 mod flight_plan;
 mod job;
@@ -8,6 +9,7 @@ mod simulator;
 mod staff;
 mod weather;
 
+pub use audio::*;
 pub use flight_operation::*;
 pub use flight_plan::*;
 pub use job::*;

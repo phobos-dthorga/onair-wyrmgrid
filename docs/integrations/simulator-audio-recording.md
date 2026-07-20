@@ -1,6 +1,6 @@
 # Simulator-synchronised audio recording
 
-Status: approved design; not implemented
+Status: protocol foundation implemented; capture not implemented
 
 WyrmGrid will offer optional audio recording aligned with a local simulator
 telemetry session. The selected implementation codec is **Opus**. This document
@@ -22,15 +22,29 @@ Audio source ----> Audio Capture Provider ----> encrypted Opus tracks -+--> one 
 ```
 
 WyrmGrid Bridge protocol version 1 remains a bounded 64 KiB JSON control and
-telemetry boundary. It is unsuitable for continuous PCM or encoded media. The
-future Audio Capture Provider protocol is independently versioned and
-supervised. A provider may fail or be absent without taking down WyrmGrid or the
-simulator.
+telemetry boundary. It is unsuitable for continuous PCM or encoded media. Audio
+Capture Provider protocol version 1 is independently versioned and uses bounded
+JSON control headers plus a separately bounded raw binary body for encoded Opus
+packets. It is exercised by a deterministic development-only fake provider. No
+native provider or application capture service exists yet. A provider may fail
+or be absent without taking down WyrmGrid or the simulator.
 
 The Rust application service is authoritative for consent, source selection,
 session lifecycle, time correlation, storage policy, deletion, and export.
 Native providers enumerate and capture approved sources. Interface controls
 display state and delegate actions; they do not decide recording policy.
+
+## Implemented foundation
+
+Slice 1 implements the provider manifest, version-one control and encoded-packet
+contract, stable source capabilities, fixed Opus profiles, schemas, sanitized
+fixtures, bounded framing, and deterministic fake-provider tests. The exact
+framing and compatibility decision are documented in the
+[Audio Capture Provider protocol reference](audio-capture-provider-protocol.md).
+
+This foundation does not enable recording. Independent consent and application
+orchestration, encrypted media, SQLite metadata, retention, playback, export,
+native devices, packaging, and live certification remain later slices.
 
 ## Simulator and operating-system support
 
@@ -356,7 +370,9 @@ does not establish another.
 
 1. Define Audio Capture Provider protocol version 1, fake-provider fixtures,
    application models, consent rules, Opus profile catalogue, and encrypted
-   media-envelope design.
+   media-envelope design. (The protocol, domain capability/profile models,
+   schemas, fixtures, and deterministic fake provider are implemented; consent,
+   application orchestration, and the encrypted envelope remain.)
 2. Add the append-only metadata migration, segmented media store, retention,
    deletion, backup omission, and playback/export services without native
    capture.
@@ -379,8 +395,8 @@ support without maintainer authorization and the required release evidence.
 
 ## Decisions deliberately deferred
 
-- exact binary/media transport between a capture provider and the application;
 - native audio libraries and minimum operating-system versions;
+- native provider supervision and platform pipe integration;
 - whether X-Plane FMOD tapping is stable and distributable;
 - media-envelope cryptography and segment duration after benchmarks;
 - media-inclusive portable backup;

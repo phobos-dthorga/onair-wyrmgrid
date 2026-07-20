@@ -1,0 +1,13 @@
+{
+  "protocol_version": 1,
+  "sequence": 8,
+  "payload": {
+    "type": "audio_packet",
+    "session_id": "session-fixture-1",
+    "track_id": "pilot-microphone",
+    "packet_sequence": 1,
+    "provider_monotonic_ns": 1020000,
+    "duration_48khz_frames": 960,
+    "payload_bytes": 4
+  }
+}

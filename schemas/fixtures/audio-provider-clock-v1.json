@@ -1,0 +1,11 @@
+{
+  "protocol_version": 1,
+  "sequence": 5,
+  "payload": {
+    "type": "clock_synchronized",
+    "request_id": 7,
+    "host_send_monotonic_ns": 500000,
+    "provider_receive_monotonic_ns": 1000000,
+    "provider_send_monotonic_ns": 1000100
+  }
+}

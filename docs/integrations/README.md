@@ -75,9 +75,12 @@ Online networks --------------------------+--> Atlas overlays     |
 9. Add VATSIM and IVAO Atlas layers, followed by X-Plane and approved Navigraph
    features.
 10. Add separately consented Opus audio aligned to simulator sessions, beginning
-    with capability-labelled Windows/MSFS sources. Extend capture to X-Plane's
-    supported desktop systems and isolated radio groups only after their
-    platform and plugin feasibility gates pass.
+    with capability-labelled Windows/MSFS sources. (The independent provider
+    protocol, source/profile models, schemas, fixtures, and deterministic fake
+    provider are implemented; consent, storage, native capture, and release
+    support remain.) Extend capture to X-Plane's supported desktop systems and
+    isolated radio groups only after their platform and plugin feasibility gates
+    pass.
 
 Provider work does not bypass the quality gates. Each protocol or schema change
 needs sanitized fixtures, bounded validation tests, documentation, and an
@@ -124,6 +127,7 @@ the [high-value provider integration process](high-value-provider-process.md).
 - [Simulator provider authoring and FSUIPC path](simulator-provider-authoring.md)
 - [Simulator connection, recording, in-game control, and graphs](simulator-experience-roadmap.md)
 - [Simulator-synchronised audio recording](simulator-audio-recording.md)
+- [Audio Capture Provider protocol version 1](audio-capture-provider-protocol.md)
 - [Telemetry lifecycle and SimBrief correlation](telemetry-plan-correlation.md)
 
 ## Local automation and community handoff

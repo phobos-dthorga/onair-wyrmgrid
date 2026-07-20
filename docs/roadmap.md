@@ -164,7 +164,9 @@ not replace completion of the current vertical slice.
 - X-Plane 12 Web API provider after the MSFS 2024 slice
 - Separately consented simulator-synchronised audio with Opus working tracks,
   encrypted segmented external media, metadata-only SQLite records, storage
-  budgets, deletion, playback, and explicit export
+  budgets, deletion, playback, and explicit export. The independent provider
+  protocol, source/profile models, schemas, fixtures, and deterministic fake
+  provider are implemented; capture remains unavailable.
 - Windows/MSFS microphone and capability-labelled application, endpoint, or
   mixed-output capture; SimConnect COM facts remain metadata rather than
   isolated radio audio

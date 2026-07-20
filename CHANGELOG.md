@@ -8,6 +8,12 @@ major application version.
 
 ### New features
 
+- Added the non-shipping simulator-audio foundation: an independently versioned
+  Audio Capture Provider contract, bounded JSON control and raw encoded-packet
+  framing, stable capability-labelled source and Opus-profile models, schemas,
+  sanitized fixtures, and a deterministic development-only fake provider. No
+  microphone, native capture, consent persistence, media storage, interface, or
+  live-support claim is enabled by this foundation.
 - Added an optional, profile-driven local development-task framework for
   change-impact dossiers, test matrices, documentation synchronization,
   synthetic fixture variants, sanitized failure triage, and release curation.
