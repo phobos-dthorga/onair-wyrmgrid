@@ -1,5 +1,11 @@
 import { invokeDesktop, isDesktopRuntime } from "$lib/desktop/client";
+import { save } from "@tauri-apps/plugin-dialog";
 import type { ThemeExport, ThemeManifest, ThemeStatus } from "./types";
+
+const themeFileFilter = {
+  name: "WyrmGrid theme",
+  extensions: ["json"],
+};
 
 export const classicTheme: ThemeManifest = {
   schema_version: 1,
@@ -53,6 +59,32 @@ export async function importTheme(manifestJson: string): Promise<ThemeStatus> {
 
 export async function exportTheme(themeId: string): Promise<ThemeExport> {
   return invokeDesktop<ThemeExport>("export_theme", { themeId });
+}
+
+export function chooseThemeFileDestination(
+  suggestedFilename: string,
+): Promise<string | null> {
+  return save({
+    defaultPath: suggestedFilename,
+    filters: [themeFileFilter],
+  });
+}
+
+export function saveThemeExport(
+  themeId: string,
+  destination: string,
+): Promise<void> {
+  return invokeDesktop<void>("save_theme_export", { themeId, destination });
+}
+
+export function saveThemeDraft(
+  manifestJson: string,
+  destination: string,
+): Promise<void> {
+  return invokeDesktop<void>("save_theme_draft", {
+    manifestJson,
+    destination,
+  });
 }
 
 export async function deleteTheme(themeId: string): Promise<ThemeStatus> {

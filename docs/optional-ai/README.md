@@ -29,6 +29,13 @@ The task prompts under [`tasks/`](tasks/) are public review boundaries. The
 review-only, untrusted-evidence contract. Profiles select only the local runtime
 and base prompt; they do not change a task's required packet or output shape.
 
+Hoardmind's separate direct-project capability does not extend these runner
+contracts. Initial isolated propositions for a static website, read-only Aerie
+presentation, and inert package fixture corpus are documented in the
+[hosted-platform prototype work orders](hosted-platform-prototype-work-orders.md).
+They write only to gitignored prototype roots, require individual activation,
+and have no integration, publication or deployment authority.
+
 ## Running a task
 
 Copy one of the

@@ -12,6 +12,7 @@
     onselect,
     onimport,
     onexport,
+    ondownload,
     ondelete,
     onclose,
   }: {
@@ -21,8 +22,9 @@
     busy: boolean;
     errorMessage: string;
     onselect: (themeId: string) => void;
-    onimport: (manifestJson: string) => void;
-    onexport: (themeId: string) => void;
+    onimport: (manifestJson: string) => Promise<boolean>;
+    onexport: (themeId: string) => Promise<void>;
+    ondownload: (manifestJson: string, filename: string) => Promise<void>;
     ondelete: (themeId: string) => void;
     onclose: () => void;
   } = $props();
@@ -47,7 +49,9 @@
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
     input.value = "";
-    if (file) onimport(await file.slice(0, MAX_MANIFEST_READ_BYTES).text());
+    if (file) {
+      await onimport(await file.slice(0, MAX_MANIFEST_READ_BYTES).text());
+    }
   }
 
   function beginAuthoring(theme: ThemeManifest, copy: boolean): void {
@@ -55,9 +59,8 @@
     authoringSource = theme;
   }
 
-  function saveAuthoredTheme(manifestJson: string): void {
-    authoringSource = undefined;
-    onimport(manifestJson);
+  async function saveAuthoredTheme(manifestJson: string): Promise<void> {
+    if (await onimport(manifestJson)) authoringSource = undefined;
   }
 
   function confirmDelete(theme: ThemeManifest): void {
@@ -124,6 +127,7 @@
             {desktopRuntime}
             {busy}
             onsave={saveAuthoredTheme}
+            {ondownload}
             onclose={() => (authoringSource = undefined)}
           />
         {/key}
@@ -210,7 +214,7 @@
                 <button
                   type="button"
                   disabled={busy || !desktopRuntime}
-                  onclick={() => onexport(theme.manifest.id)}
+                  onclick={() => void onexport(theme.manifest.id)}
                 >
                   {$translation("theme-export")}
                 </button>

@@ -189,6 +189,79 @@ fn exports_any_available_theme_without_host_provenance() {
 }
 
 #[test]
+fn saves_exported_themes_to_the_user_selected_file() {
+    let service =
+        ThemeSettingsService::new(Store::open_in_memory().expect("theme store should initialize"));
+    service
+        .import(include_str!(
+            "../../../../schemas/fixtures/theme-manifest-v1.json"
+        ))
+        .expect("fixture should import");
+    let directory = tempdir().expect("temporary export directory should exist");
+    let destination = directory.path().join("exported-theme.json");
+
+    service
+        .save_export("midnight-cargo", &destination)
+        .expect("selected theme should save");
+
+    let content = std::fs::read_to_string(destination).expect("saved theme should be readable");
+    let manifest: ThemeManifest =
+        serde_json::from_str(&content).expect("saved export should remain a theme manifest");
+    assert_eq!(manifest.id, "midnight-cargo");
+    assert!(!content.contains("provenance"));
+}
+
+#[test]
+fn saves_structurally_valid_low_contrast_drafts_without_importing_them() {
+    let service =
+        ThemeSettingsService::new(Store::open_in_memory().expect("theme store should initialize"));
+    let mut draft = parse_custom_theme(include_str!(
+        "../../../../schemas/fixtures/theme-manifest-v1.json"
+    ))
+    .expect("fixture should parse");
+    draft.colors.text = draft.colors.canvas.clone();
+    let draft_json = serde_json::to_string(&draft).expect("draft should serialize");
+    let directory = tempdir().expect("temporary draft directory should exist");
+    let destination = directory.path().join("draft-theme.json");
+
+    service
+        .save_draft(&draft_json, &destination)
+        .expect("unfinished contrast work should remain downloadable as a draft");
+
+    let content = std::fs::read_to_string(destination).expect("saved draft should be readable");
+    let saved: ThemeManifest =
+        serde_json::from_str(&content).expect("saved draft should remain structured JSON");
+    assert_eq!(saved.colors.text, saved.colors.canvas);
+    assert_eq!(
+        service.import(&content),
+        Err(ThemeSettingsError::InsufficientContrast)
+    );
+    assert_eq!(service.status().unwrap().themes.len(), 4);
+}
+
+#[test]
+fn theme_file_saving_rejects_invalid_content_and_unwritable_destinations() {
+    let service =
+        ThemeSettingsService::new(Store::open_in_memory().expect("theme store should initialize"));
+    let directory = tempdir().expect("temporary draft directory should exist");
+    assert_eq!(
+        service.save_draft("{}", &directory.path().join("invalid.json")),
+        Err(ThemeSettingsError::InvalidManifest)
+    );
+    assert_eq!(
+        service.save_draft(
+            &" ".repeat(MAX_THEME_MANIFEST_BYTES + 1),
+            &directory.path().join("oversized.json")
+        ),
+        Err(ThemeSettingsError::ManifestTooLarge)
+    );
+    assert_eq!(
+        service.save_export(DEFAULT_THEME_ID, directory.path()),
+        Err(ThemeSettingsError::FileSaveFailed)
+    );
+}
+
+#[test]
 fn deletes_only_local_themes_and_falls_back_when_the_active_theme_is_deleted() {
     let service =
         ThemeSettingsService::new(Store::open_in_memory().expect("theme store should initialize"));
@@ -763,5 +836,9 @@ fn exposes_stable_safe_operation_errors() {
     assert_eq!(
         OperationError::from(ThemeSettingsError::BundledThemeCannotBeDeleted).code,
         "theme.bundled_delete_forbidden"
+    );
+    assert_eq!(
+        OperationError::from(ThemeSettingsError::FileSaveFailed).code,
+        "theme.file_save_failed"
     );
 }

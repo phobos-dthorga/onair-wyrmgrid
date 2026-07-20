@@ -639,6 +639,30 @@ fn export_theme(
 }
 
 #[tauri::command]
+fn save_theme_export(
+    state: tauri::State<'_, DesktopState>,
+    theme_id: String,
+    destination: String,
+) -> Result<(), wyrmgrid_application::OperationError> {
+    state
+        .themes
+        .save_export(&theme_id, std::path::Path::new(&destination))
+        .map_err(operation_error)
+}
+
+#[tauri::command]
+fn save_theme_draft(
+    state: tauri::State<'_, DesktopState>,
+    manifest_json: String,
+    destination: String,
+) -> Result<(), wyrmgrid_application::OperationError> {
+    state
+        .themes
+        .save_draft(&manifest_json, std::path::Path::new(&destination))
+        .map_err(operation_error)
+}
+
+#[tauri::command]
 fn delete_theme(
     state: tauri::State<'_, DesktopState>,
     theme_id: String,
@@ -1276,6 +1300,8 @@ pub fn run() {
             select_theme,
             import_theme,
             export_theme,
+            save_theme_export,
+            save_theme_draft,
             delete_theme,
             language_status,
             select_language_pack,

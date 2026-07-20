@@ -54,6 +54,7 @@
 - [Changelog](../CHANGELOG.md)
 - [Release process](release-process.md)
 - [Optional local-AI development tasks](optional-ai/README.md)
+  - [Hoardmind hosted-platform prototype work orders](optional-ai/hosted-platform-prototype-work-orders.md)
   - [Optional local-AI profile schema](../schemas/optional-ai-task-profile-v1.schema.json)
   - [Optional local-AI metrics schema](../schemas/optional-ai-task-metrics-v1.schema.json)
   - [Ollama profile example](../examples/optional-ai/local-ollama-profile-v1.json)
