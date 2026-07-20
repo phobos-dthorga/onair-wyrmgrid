@@ -12,7 +12,16 @@ major application version.
 
 ### Changes
 
-- None.
+- Added proposal-only Hoardmind work orders for isolated static-website,
+  read-only catalogue-presentation, and inert package-fixture prototypes. The
+  work orders include hardware-aware Hugging Face model recommendations,
+  synthetic-data and path boundaries, deterministic gates, and explicit
+  separation from repository integration, publication and deployment. The
+  initial local smoke activation records the failed Scribe chat/tool handoff,
+  reviewed fallback candidates, and two independently approval-gated local
+  presentation proposals plus the independently challenged, 36-case inert
+  metadata fixture proposal, without treating any of them as integrated
+  application work.
 
 ### Removed
 
