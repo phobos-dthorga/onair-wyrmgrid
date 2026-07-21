@@ -197,5 +197,5 @@ through Aerie, it additionally needs publisher identity, signed artifacts,
 authenticated updates, tamper checks, CPU/memory/process limits, rate and
 restart throttling, vulnerability handling, and a provider conformance kit.
 Local installation does not remove those distribution hardening gates. See
-[ADR-0022](../architecture/decisions/0022-simulator-provider-package-format-v1.md)
+[ADR-0023](../architecture/decisions/0023-simulator-provider-package-format-v1.md)
 for the package compatibility and security decision.

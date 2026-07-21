@@ -66,7 +66,9 @@ SimConnect provider executables:
 - `wyrmgrid-bridge-protocol` — versioned simulator-provider framing and
   manifests;
 - `wyrmgrid-audio-provider-protocol` — versioned audio-provider control and
-  encoded-packet framing;
+  bounded PCM framing;
+- `wyrmgrid-audio-codec-protocol` — versioned out-of-process encoding control
+  and bounded packet framing;
 - `wyrmgrid-plugin-protocol` — public manifest and permission contracts;
 - `wyrmgrid-simbrief-api` — bounded private SimBrief response translation;
 - `wyrmgrid-weather-api` — bounded AviationWeather.gov METAR/TAF translation.

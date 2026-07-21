@@ -41,8 +41,10 @@ const ATLAS_AND_PLUGIN_CONFIGURATION_SCHEMA: &str =
 const AUDIO_RECORDINGS_SCHEMA: &str = include_str!("../migrations/0018_audio_recordings.sql");
 const FLIGHT_OPERATION_AIRCRAFT_ASSIGNMENTS_SCHEMA: &str =
     include_str!("../migrations/0019_flight_operation_aircraft_assignments.sql");
-const EXTENSION_PACKAGES_SCHEMA: &str = include_str!("../migrations/0020_extension_packages.sql");
-pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 20;
+const AUDIO_CODEC_PROVIDERS_SCHEMA: &str =
+    include_str!("../migrations/0020_audio_codec_providers.sql");
+const EXTENSION_PACKAGES_SCHEMA: &str = include_str!("../migrations/0021_extension_packages.sql");
+pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 21;
 
 #[derive(Debug, Error)]
 pub enum StorageError {
@@ -340,6 +342,22 @@ pub struct CustomLanguagePackRecord {
     pub manifest_json: String,
 }
 
+fn apply_audio_codec_provider_migration(connection: &mut Connection) -> Result<(), StorageError> {
+    let already_applied = connection.query_row(
+        "SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = 20)",
+        [],
+        |row| row.get::<_, bool>(0),
+    )?;
+    if already_applied {
+        return Ok(());
+    }
+
+    let transaction = connection.transaction()?;
+    transaction.execute_batch(AUDIO_CODEC_PROVIDERS_SCHEMA)?;
+    transaction.commit()?;
+    Ok(())
+}
+
 impl Store {
     pub fn open(path: impl AsRef<Path>, key: &DatabaseKey) -> Result<Self, StorageError> {
         let path = path.as_ref().to_path_buf();
@@ -356,7 +374,7 @@ impl Store {
     }
 
     fn configure_and_migrate(
-        connection: Connection,
+        mut connection: Connection,
         path: Option<PathBuf>,
     ) -> Result<Self, StorageError> {
         connection.execute_batch(
@@ -381,6 +399,7 @@ impl Store {
         connection.execute_batch(ATLAS_AND_PLUGIN_CONFIGURATION_SCHEMA)?;
         connection.execute_batch(AUDIO_RECORDINGS_SCHEMA)?;
         connection.execute_batch(FLIGHT_OPERATION_AIRCRAFT_ASSIGNMENTS_SCHEMA)?;
+        apply_audio_codec_provider_migration(&mut connection)?;
         connection.execute_batch(EXTENSION_PACKAGES_SCHEMA)?;
         if path.is_some() {
             data_protection::mark_wyrmgrid_database(&connection)?;

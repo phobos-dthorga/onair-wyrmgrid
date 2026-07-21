@@ -159,7 +159,7 @@ release gate.
 Run `npm run audio-provider:distribution` on Windows to build the deterministic
 fake provider and create its independently installable `.wyrmaudio` reference
 artifact under `assets/audio-provider-packages`. It contains only synthetic
-sources and packet bytes and is not staged or seeded by the desktop installer.
+sources and PCM frames and is not staged or seeded by the desktop installer.
 
 Use `npm run audio-provider:package -- --source <directory> --output
 <file.wyrmaudio>` for another provider payload. Install the result through the
@@ -167,14 +167,41 @@ Audio recording panel so inspection, explicit trust review, selection, disable,
 update, rollback, and removal all exercise the public lifecycle. See
 [audio provider authoring](integrations/audio-provider-authoring.md).
 
+## Development audio capture and codecs
+
+Build the provider and codec sidecars with:
+
+```powershell
+cargo build -p wyrmgrid-fake-audio-provider `
+  -p wyrmgrid-windows-audio-provider `
+  -p wyrmgrid-opus-codec
+```
+
+Capture providers must be installed as `.wyrmaudio` packages; the desktop no
+longer has a compile-time or environment-variable provider injection path. A
+deliberate Windows microphone test still requires packaging and installing the
+Windows provider, selecting it, enabling master consent and a source, and
+performing an explicit permission action. The first-party Opus codec is
+discovered from the development target directory or an explicitly approved
+absolute `WYRMGRID_AUDIO_CODEC_PATH` until its managed package lifecycle is
+implemented.
+
+Automated tests never install or select the Windows provider and never open a
+microphone.
+The native Windows and codec sidecars are not staged into the installer. Do not
+infer released or live support from a successful local device test, and never
+include device labels, raw identifiers, PCM, encoded packets, or paths in test
+reports or optional-AI handoffs.
+
 ## Repository layout
 
 ```text
 apps/desktop/          Tauri and Svelte desktop interface
 crates/                application-owned Rust libraries
+codecs/                approved audio codec provider sidecars
 docs/                  durable design and operating documentation
 examples/plugins/      public protocol examples
-providers/             approved simulator provider sidecars
+providers/             approved simulator and capture provider sidecars
 schemas/               language-neutral public contracts
 locales/               canonical interface message catalogues
 .github/               contribution and automation policy

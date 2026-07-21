@@ -163,17 +163,21 @@ not replace completion of the current vertical slice.
 - Explicit `.pln` export and flight-plan load after read-only telemetry is proven
 - MSFS 2020 and FSUIPC compatibility providers
 - X-Plane 12 Web API provider after the MSFS 2024 slice
-- Separately consented simulator-synchronised audio with Opus working tracks,
+- Separately consented simulator-synchronised audio with user-selected codec
+  providers and first-party Opus working tracks,
   encrypted segmented external media, metadata-only SQLite records, storage
   budgets, deletion, playback, and explicit export. The independent provider
-  protocol, source/profile models, schemas, fixtures, and deterministic fake
-  provider are implemented; capture remains unavailable.
-- Windows/MSFS microphone and capability-labelled application, endpoint, or
+  protocols, source/profile models, schemas, fixtures, deterministic fake
+  capture, debug-only Windows microphone provider, and Opus codec sidecar are
+  implemented; packaging and live certification remain unavailable.
+- Windows/MSFS capability-labelled application, endpoint, or
   mixed-output capture; SimConnect COM facts remain metadata rather than
   isolated radio audio
 - Cross-platform X-Plane microphone and mixed-output capture after the Web API
   telemetry provider, followed by isolated COM1/COM2 or pilot/copilot tracks
   only if the thin audio-tap stability and licensing spike succeeds
+- Verified end-user codec-provider installation, signing, integrity, resource
+  controls, updates, rollback, removal, trust presentation, and privacy notice
 
 ### Navigation, networks, and automation
 
@@ -223,7 +227,7 @@ The simulator UX sequence is detailed in the
 
 This is a local application capability, not part of the optional hosted track.
 It implements the invariant in
-[ADR-0020](architecture/decisions/0020-externally-installable-extensions.md):
+[ADR-0021](architecture/decisions/0021-externally-installable-extensions.md):
 every plugin and provider can be delivered and managed as an external artifact
 without rebuilding WyrmGrid.
 

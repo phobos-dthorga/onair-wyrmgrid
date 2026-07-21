@@ -1,0 +1,20 @@
+[package]
+name = "wyrmgrid-windows-audio-provider"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+sha2.workspace = true
+wyrmgrid-audio-provider-protocol = { path = "../../crates/audio-provider-protocol" }
+wyrmgrid-domain = { path = "../../crates/domain" }
+
+[target.'cfg(windows)'.dependencies]
+cpal.workspace = true
+# CPAL 0.18 permits either Windows bindings line; keep its macro and interface
+# crates on the same line until CPAL tightens that upstream constraint.
+windows = "=0.61.3"
+windows-core = "=0.61.2"

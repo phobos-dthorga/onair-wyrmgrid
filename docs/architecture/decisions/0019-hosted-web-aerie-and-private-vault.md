@@ -97,7 +97,7 @@ distribution before executable plugins. Ordinary plugins and native simulator
 providers remain different trust classes.
 
 The desktop's external package lifecycle is a local product capability governed
-by [ADR-0020](0020-externally-installable-extensions.md), not a hosted-service
+by [ADR-0021](0021-externally-installable-extensions.md), not a hosted-service
 phase. Aerie can supply stronger publisher and repository provenance to that
 existing installer, but must not be the only source from which a package can be
 installed.

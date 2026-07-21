@@ -3,11 +3,11 @@ use super::*;
 #[test]
 fn provider_registration_rejects_unsafe_or_mismatched_manifests() {
     let invalid = r#"{
-        "schema_version": 1,
+        "schema_version": 2,
         "id": "dev.wyrmgrid.fake-audio",
         "name": "Fake",
         "version": "0.2.0",
-        "audio_protocol_version": 1,
+        "audio_protocol_version": 2,
         "author": "WyrmGrid",
         "entry_point": "../fake",
         "platforms": ["windows_x86_64"],
@@ -25,17 +25,17 @@ fn provider_handshake_descriptor_must_match_the_installed_manifest() {
 
     let manifest = AudioProviderManifest {
         schema: None,
-        schema_version: 1,
+        schema_version: 2,
         id: "dev.wyrmgrid.fake-audio".into(),
         name: "Fake audio provider".into(),
         version: "0.1.0".into(),
-        audio_protocol_version: 1,
+        audio_protocol_version: 2,
         author: "WyrmGrid".into(),
         entry_point: "fake-audio-provider".into(),
         platforms: vec![current_audio_provider_platform()],
         capabilities: vec![
             AudioProviderCapability::SourceEnumeration,
-            AudioProviderCapability::EncodedOpusCapture,
+            AudioProviderCapability::PcmS16leCapture,
         ],
     };
     let descriptor = AudioProviderDescriptor {

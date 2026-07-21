@@ -9,7 +9,8 @@
   online-network activity, and simulator telemetry;
 - planned simulator-synchronised recordings: voices, radio or ATC
   communications, simulator and application output, device/application labels,
-  source identifiers, timing metadata, Opus segments, and media keys;
+  source identifiers, codec selections and provider identities, timing
+  metadata, transient PCM, encoded segments, and media keys;
 - Navigraph, IVAO, community-delivery, and future provider tokens or application
   credentials;
 - local files and operating-system access;
@@ -40,8 +41,8 @@
 ## Primary threats
 
 - credential disclosure through logs, errors, telemetry, storage, or plugins;
-- malicious plugin or simulator-provider manifests, executables, dependencies,
-  and messages;
+- malicious plugin, simulator-provider, audio-capture-provider, or audio-codec-
+  provider manifests, executables, dependencies, and messages;
 - malicious, compromised, impersonating, unlicensed, or deceptively named
   Aerie publishers and packages being accepted, signed, cached, installed, or
   mistaken for an endorsement;
@@ -97,6 +98,9 @@
 - recorded voices, communications, device/application identities, media paths,
   or plaintext exports leaking through plugins, Sentry, diagnostics, optional
   AI, support bundles, backups, public services, or filesystem recovery;
+- a selected third-party codec retaining, relaying, transforming, or otherwise
+  misusing transient PCM, or being mistaken for a general plugin that receives
+  no audio authority;
 - unbounded audio buffers, encoder stalls, disk exhaustion, corrupt segments,
   orphaned media, clock drift, or a blocking in-process X-Plane tap degrading
   the simulator or joining discontinuous evidence;
@@ -515,27 +519,41 @@
 ## Implemented simulator-audio application controls and remaining release gates
 
 Simulator-synchronised native audio remains unavailable to users. Its
-independently versioned provider contract, external package lifecycle, and
-non-native application services are implemented; native capture, legal
-approval, and live support are not. Before any native capture path ships, the remaining controls are gates
-rather than claims about the current application:
+independently versioned capture and codec contracts, external capture-provider
+package lifecycle, application services, debug-only Windows microphone
+provider, and first-party Opus provider are implemented. The synthetic capture
+provider has a separately installable reference package; native release, codec
+package lifecycle, legal approval, and live-device support are not complete.
+Before any native capture path ships, the remaining controls are gates rather
+than claims about the current application:
 
-- Opus is the versioned working codec, with bounded profiles and independently
-  recoverable encrypted segments. SQLite stores only metadata and opaque media
-  identifiers through a new append-only migration.
-- Audio uses a separately supervised Audio Capture Provider and a bounded media
-  path, never Bridge protocol version 1's 64 KiB JSON channel. Audio failure
-  cannot block telemetry or simulator operation; coordinated deletion still
-  fails closed when linked audio cannot be removed.
-- Version-one framing rejects oversized lengths before allocation, permits a
-  bounded binary body only for an encoded audio-packet message, requires its
-  declared and actual lengths to match, rejects unknown JSON fields, and fails
-  closed on unsupported versions or non-increasing sequences. Protocol errors
-  contain neither source labels nor encoded bytes.
-- The deterministic fake provider is available as a separately installable
-  reference `.wyrmaudio` artifact but is never seeded as a live provider. It
-  uses only synthetic identities, timestamps, events, and packet bytes. Its
-  tests do not authorize a native provider or establish valid Opus capture.
+- Codec choice is explicit and per source. The first-party Opus implementation
+  is an out-of-process Audio Codec Provider with no privileged in-process path;
+  a missing or incompatible codec fails closed. SQLite migration 20 records
+  codec-provider identity/version and codec ID/media type while existing
+  schema-19 tracks default to the previously implied Opus format with an
+  explicit `legacy-unversioned` provider-version marker.
+- Audio Capture Provider version 2 emits bounded PCM to WyrmGrid; Audio Codec
+  Provider version 1 receives only selected PCM and returns bounded encoded
+  packets. Neither uses Bridge protocol version 1's JSON channel. Neither
+  receives media keys or storage paths, and only WyrmGrid encrypts or stores
+  packets. Audio failure cannot block telemetry or simulator operation.
+- Both protocols reject oversized lengths before allocation, require declared
+  and actual binary sizes to match, reject unknown JSON fields, and fail closed
+  on unsupported versions, non-increasing sequences, timeouts, or identity
+  mismatches. Capture PCM and codec packets have independent bounds. Protocol
+  errors contain neither source labels nor media bytes.
+- The deterministic fake capture provider is never staged as live and uses only
+  synthetic identities, timestamps, events, and PCM. Its `.wyrmaudio` package
+  exercises the same offline inspection, managed storage, enable/disable,
+  selection, rollback, and removal path available to other capture providers.
+  The Windows microphone provider hashes raw device IDs, uses bounded
+  non-blocking callback queues, and is never opened by automated tests. Neither
+  establishes released or live-certified capture.
+- The first-party Opus provider uses the same codec protocol intended for
+  future end-user choices. Its synthetic encode/decode test establishes
+  integration only, not independent conformance, quality, or security
+  certification.
 - Microphone and communications consent is separate, explicit, default-off,
   source-specific, and visibly active. Telemetry recording and its automation
   grant no audio authority, and full desktop audio is never implicit.
@@ -562,9 +580,12 @@ rather than claims about the current application:
   Cleanup recognises only correctly sharded opaque media names and rejects a
   redirected or non-directory media root before reading, writing, or deleting.
 - Project policy excludes audio content, labels, identifiers, and media paths
-  from plugins, Sentry, diagnostics, optional-AI packets, support bundles, and
-  public services. Stable bounded status codes may describe failures without
-  carrying those values.
+  from general plugins, Sentry, diagnostics, optional-AI packets, support
+  bundles, and public services. A deliberately selected codec provider is the
+  narrow exception for its selected source's transient PCM; community codec
+  installation still requires signing, integrity, trust, resource, update,
+  rollback, removal, and privacy presentation. Stable bounded status codes may
+  describe failures without carrying private values.
 - A first-party X-Plane in-process tap can proceed only after stability,
   licensing, signing, installation/removal, local authentication, backpressure,
   third-party-aircraft, and cross-platform review. It has no business logic and
@@ -576,7 +597,8 @@ rather than claims about the current application:
 
 The accepted boundary and full test matrix are recorded in
 [ADR-0017](../architecture/decisions/0017-simulator-synchronised-audio-recording.md)
-and the
+and [ADR-0020](../architecture/decisions/0020-out-of-process-audio-codec-providers.md),
+plus the
 [simulator-audio plan](../integrations/simulator-audio-recording.md).
 
 Before stable release, the project needs a cross-platform review of its
@@ -804,11 +826,11 @@ this guidance must change without weakening secret handling.
 
 The exact implemented boundary and deferred hardening are recorded in
 [plugin protocol version 1](../plugins/protocol-v1.md) and
-[ADR-0020](../architecture/decisions/0020-externally-installable-extensions.md),
+[ADR-0021](../architecture/decisions/0021-externally-installable-extensions.md),
 with the ordinary package security and compatibility decision in
-[ADR-0021](../architecture/decisions/0021-ordinary-plugin-package-format-v1.md)
+[ADR-0022](../architecture/decisions/0022-ordinary-plugin-package-format-v1.md)
 and the native simulator-provider decision in
-[ADR-0022](../architecture/decisions/0022-simulator-provider-package-format-v1.md).
+[ADR-0023](../architecture/decisions/0023-simulator-provider-package-format-v1.md).
 
 ## Residual Hoard risks
 

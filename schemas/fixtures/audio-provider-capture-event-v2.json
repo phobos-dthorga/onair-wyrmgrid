@@ -1,0 +1,13 @@
+{
+  "protocol_version": 2,
+  "sequence": 10,
+  "payload": {
+    "type": "capture_event",
+    "session_id": "session-fixture-1",
+    "track_id": "pilot-microphone",
+    "provider_monotonic_ns": 1040000,
+    "event": "gap",
+    "code": "capture.synthetic_gap",
+    "affected_frames": 960
+  }
+}

@@ -147,22 +147,26 @@ plus the [external integrations programme](../integrations/README.md).
 Simulator-synchronised audio is adjacent to Bridge telemetry rather than part
 of Bridge protocol version 1. The application owns separate default-off audio
 consent, session correlation, retention, deletion, and presentation. A
-separately supervised Audio Capture Provider supplies capability-labelled Opus
-tracks; SQLite stores metadata while encrypted media remains in bounded
-external segments. Audio, device labels, and communications are unavailable to
-ordinary plugins and observability.
+separately supervised Audio Capture Provider v2 supplies capability-labelled
+PCM to a separately supervised, user-selected Audio Codec Provider v1; SQLite
+stores metadata while WyrmGrid encrypts bounded encoded segments. Audio, device
+labels, and communications are unavailable to ordinary plugins and
+observability.
 
-The independently versioned provider protocol, bounded control and binary
-packet framing, source/profile domain models, schemas, fixtures, and a
-development-only fake provider are implemented. Application consent, encrypted
-storage, native capture, interface controls, packaging, and live support are not.
+The independently versioned capture and codec protocols, bounded control and
+binary framing, source/profile domain models, schemas, fixtures, deterministic
+fake capture, application consent and storage, debug-only Windows microphone
+provider, codec-selection interface, and first-party Opus codec provider are
+implemented. Packaging and live support are not.
 
 MSFS 2024 capture is Windows-specific. X-Plane 12 provides the cross-platform
 Windows, macOS, and supported Linux target, while its named COM audio groups
 remain a feasibility candidate until a thin non-blocking tap is proven. See
-[ADR-0017](decisions/0017-simulator-synchronised-audio-recording.md) and the
+[ADR-0017](decisions/0017-simulator-synchronised-audio-recording.md),
+[ADR-0020](decisions/0020-out-of-process-audio-codec-providers.md), and the
 [audio-recording plan](../integrations/simulator-audio-recording.md), plus the
-[version-one protocol reference](../integrations/audio-capture-provider-protocol.md).
+[capture](../integrations/audio-capture-provider-protocol.md) and
+[codec](../integrations/audio-codec-provider-protocol.md) protocol references.
 
 ## Extension boundary
 
@@ -179,7 +183,7 @@ executable, or platform-native payload; its package kind, manifest, entry point,
 compatibility, permissions, and lifecycle remain explicit and host-validated.
 First-party packages may be seeded by an official installer, but must use the
 same external boundary and remain independently distributable. See
-[ADR-0020](decisions/0020-externally-installable-extensions.md). The currently
+[ADR-0021](decisions/0021-externally-installable-extensions.md). The currently
 implemented envelopes are `.wyrmplugin` for ordinary processes,
 `.wyrmprovider` for native simulator sidecars, and `.wyrmaudio` for native
 Audio Capture Providers.

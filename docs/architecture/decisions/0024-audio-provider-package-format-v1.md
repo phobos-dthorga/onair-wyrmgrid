@@ -1,15 +1,15 @@
-# ADR-0023: Audio provider package format version 1
+# ADR-0024: Audio provider package format version 1
 
 - Status: Accepted
 - Date: 2026-07-21
 
 ## Context
 
-Audio Capture Provider protocol version 1 already defines a supervised,
+Audio Capture Provider protocol version 2 defines a supervised,
 language-neutral process boundary, but the desktop previously accepted only one
 development provider injected at startup. A community author could implement
 the protocol yet could not give users an independently installable artifact.
-ADR-0020 requires audio providers to use the same external delivery principle
+ADR-0021 requires audio providers to use the same external delivery principle
 as ordinary plugins and simulator providers.
 
 An audio provider is native executable code with ambient user rights and may
@@ -78,8 +78,8 @@ audio availability.
 Audio package schema version, audio-provider manifest schema version, Audio
 Capture Provider protocol version, database migration version, and application
 semantic version are independent contracts. This decision adds package schema
-version 1 without changing audio protocol version 1 or audio-provider manifest
-schema version 1. Unknown package schemas, kinds, manifest schemas, platforms,
+version 1 without changing audio protocol version 2 or audio-provider manifest
+schema version 2. Unknown package schemas, kinds, manifest schemas, platforms,
 protocol versions, compression methods, or capabilities remain inert.
 
 One package can inventory both the portable entry point and its Windows `.exe`
@@ -103,8 +103,8 @@ native implementation evidence, platform permissions, privacy/legal review,
 and real-device testing.
 
 This decision implements the audio-provider portion of
-[ADR-0020](0020-externally-installable-extensions.md), reuses the package
-envelope decisions in [ADR-0021](0021-ordinary-plugin-package-format-v1.md) and
-[ADR-0022](0022-simulator-provider-package-format-v1.md), and preserves the
+[ADR-0021](0021-externally-installable-extensions.md), reuses the package
+envelope decisions in [ADR-0022](0022-ordinary-plugin-package-format-v1.md) and
+[ADR-0023](0023-simulator-provider-package-format-v1.md), and preserves the
 separate consent boundary in
 [ADR-0017](0017-simulator-synchronised-audio-recording.md).

@@ -64,7 +64,7 @@ available without Aerie; unknown package kinds and runtimes fail closed.
 The first such contract is ordinary plugin package schema version 1. It uses a
 `.wyrmplugin` ZIP envelope, root `wyrmgrid-package.json`, exact size and SHA-256
 inventory, and the fixed `plugin.json` manifest location. Its compatibility and
-security decision is [ADR-0021](../architecture/decisions/0021-ordinary-plugin-package-format-v1.md).
+security decision is [ADR-0022](../architecture/decisions/0022-ordinary-plugin-package-format-v1.md).
 This package contract is not a plugin-protocol revision.
 
 ## Transport

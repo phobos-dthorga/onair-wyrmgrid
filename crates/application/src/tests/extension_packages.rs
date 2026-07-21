@@ -180,15 +180,15 @@ fn audio_provider_package_bytes(version: &str, executable: &[u8]) -> Vec<u8> {
         "macos_x86_64"
     };
     let provider_manifest = serde_json::to_vec_pretty(&json!({
-        "schema_version": 1,
+        "schema_version": 2,
         "id": AUDIO_PROVIDER_ID,
         "name": "Audio Provider Test",
         "version": version,
-        "audio_protocol_version": 1,
+        "audio_protocol_version": 2,
         "author": "WyrmGrid tests",
         "entry_point": "audio-provider",
         "platforms": [platform],
-        "capabilities": ["source_enumeration", "encoded_opus_capture"]
+        "capabilities": ["source_enumeration", "pcm_s16le_capture"]
     }))
     .unwrap();
     let payload = BTreeMap::from([
@@ -271,7 +271,7 @@ fn inspects_and_extracts_a_valid_audio_provider_package() {
     let inspection = package.inspection();
     assert_eq!(inspection.id, AUDIO_PROVIDER_ID);
     assert_eq!(inspection.version, "1.2.3");
-    assert_eq!(inspection.audio_protocol_version, 1);
+    assert_eq!(inspection.audio_protocol_version, 2);
     assert_eq!(inspection.capabilities.len(), 2);
     assert!(!inspection.publisher_verified);
 
@@ -361,8 +361,8 @@ fn deterministic_reference_audio_provider_passes_the_runtime_validator() {
         .join("../../assets/audio-provider-packages/deterministic-fake-audio.wyrmaudio");
     let inspection = inspect_audio_provider_package(&package).unwrap();
     assert_eq!(inspection.id, "dev.wyrmgrid.fake-audio");
-    assert_eq!(inspection.version, "0.1.0");
-    assert_eq!(inspection.audio_protocol_version, 1);
+    assert_eq!(inspection.version, "0.3.1");
+    assert_eq!(inspection.audio_protocol_version, 2);
     assert!(!inspection.publisher_verified);
 }
 

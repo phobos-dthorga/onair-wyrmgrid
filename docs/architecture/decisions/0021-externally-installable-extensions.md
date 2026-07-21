@@ -1,4 +1,4 @@
-# ADR-0020: Externally installable plugins and providers
+# ADR-0021: Externally installable plugins and providers
 
 - Status: Accepted
 - Date: 2026-07-21
@@ -88,10 +88,10 @@ as the final plugin model.
 
 The ordinary-plugin and simulator-provider portions are now implemented by
 package schema version 1 in
-[ADR-0021](0021-ordinary-plugin-package-format-v1.md) and
-[ADR-0022](0022-simulator-provider-package-format-v1.md), including
+[ADR-0022](0022-ordinary-plugin-package-format-v1.md) and
+[ADR-0023](0023-simulator-provider-package-format-v1.md), including
 deterministic first-party package artifacts. Audio provider packaging and
-lifecycle are implemented by [ADR-0023](0023-audio-provider-package-format-v1.md)
+lifecycle are implemented by [ADR-0024](0024-audio-provider-package-format-v1.md)
 with a deterministic synthetic reference artifact. Optional Aerie distribution
 remains migration work.
 

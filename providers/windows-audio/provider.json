@@ -1,0 +1,19 @@
+{
+  "$schema": "../../schemas/audio-provider-manifest-v2.schema.json",
+  "schema_version": 2,
+  "id": "dev.wyrmgrid.windows-audio",
+  "name": "WyrmGrid Windows microphone provider",
+  "version": "0.3.1",
+  "audio_protocol_version": 2,
+  "author": "WyrmGrid contributors",
+  "entry_point": "wyrmgrid-windows-audio-provider",
+  "platforms": ["windows_x86_64"],
+  "capabilities": [
+    "source_enumeration",
+    "permission_requests",
+    "pcm_s16le_capture",
+    "level_metering",
+    "hot_plug_notifications",
+    "clock_synchronization"
+  ]
+}

@@ -1,10 +1,10 @@
 {
-  "$schema": "../../schemas/audio-provider-manifest-v1.schema.json",
-  "schema_version": 1,
+  "$schema": "../../schemas/audio-provider-manifest-v2.schema.json",
+  "schema_version": 2,
   "id": "dev.wyrmgrid.fake-audio",
   "name": "WyrmGrid deterministic fake audio provider",
-  "version": "0.1.0",
-  "audio_protocol_version": 1,
+  "version": "0.3.1",
+  "audio_protocol_version": 2,
   "author": "WyrmGrid contributors",
   "entry_point": "wyrmgrid-fake-audio-provider",
   "platforms": [
@@ -16,7 +16,7 @@
   "capabilities": [
     "source_enumeration",
     "permission_requests",
-    "encoded_opus_capture",
+    "pcm_s16le_capture",
     "level_metering",
     "hot_plug_notifications",
     "clock_synchronization"

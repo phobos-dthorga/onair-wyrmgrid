@@ -64,8 +64,10 @@ and import the pack again. Existing ordinary translated message keys keep their
 meaning. Version 5 previously introduced the protected `security-` namespace.
 
 Source catalogue version 21 adds audio-provider package inspection, selection,
-native-code trust, lifecycle, and removal wording. Version 20 added simulator-provider package inspection,
-native-code trust, lifecycle, and removal wording. Version 19 added the consent, source-state, recording-state,
+native-code trust, lifecycle, and removal wording. Version 20 added simulator-
+provider package inspection and lifecycle wording together with per-source codec
+selection and codec-unavailable wording. Version 19 added the consent,
+source-state, recording-state,
 authenticated-packet inspection, export, deletion, and backup/reset wording for
 the non-shipping audio application slices. Version 18 added theme provenance,
 lifecycle, authoring, contrast-preview, and duplicate guidance. Version 17 added

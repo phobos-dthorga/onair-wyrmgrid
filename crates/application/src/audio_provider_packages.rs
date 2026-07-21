@@ -1,7 +1,7 @@
 use crate::{
     AudioCaptureProvider, AudioProviderPackageInspection, AudioProviderRegistration,
-    ExtensionPackageManagementError, ExtensionPackageService, ExternalAudioProviderProcess,
-    ManagedAudioProviderPackageView, inspect_audio_provider_package,
+    ExtensionPackageManagementError, ExtensionPackageService, ManagedAudioProviderPackageView,
+    ProcessAudioCaptureProvider, inspect_audio_provider_package,
 };
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -261,7 +261,7 @@ impl AudioProviderPackageService {
         let registration =
             AudioProviderRegistration::from_managed_package(managed.manifest, managed.root)
                 .map_err(|_| AudioProviderPackageError::ProviderUnavailable)?;
-        let provider = ExternalAudioProviderProcess::new(registration)
+        let provider = ProcessAudioCaptureProvider::new(registration)
             .map_err(|_| AudioProviderPackageError::ProviderUnavailable)?;
         Ok(CachedAudioProvider {
             id: provider_id.to_owned(),

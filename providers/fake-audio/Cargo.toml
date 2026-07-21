@@ -1,6 +1,6 @@
 [package]
 name = "wyrmgrid-fake-audio-provider"
-version = "0.1.0"
+version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
@@ -14,4 +14,5 @@ wyrmgrid-domain = { path = "../../crates/domain" }
 [dev-dependencies]
 tempfile = "3.20.0"
 wyrmgrid-application = { path = "../../crates/application" }
+wyrmgrid-audio-codec-protocol = { path = "../../crates/audio-codec-protocol" }
 wyrmgrid-storage = { path = "../../crates/storage" }

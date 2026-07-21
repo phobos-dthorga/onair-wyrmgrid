@@ -1,0 +1,43 @@
+{
+  "protocol_version": 2,
+  "sequence": 4,
+  "payload": {
+    "type": "sources",
+    "revision": 1,
+    "sources": [
+      {
+        "schema_version": 1,
+        "id": "synthetic.microphone.primary",
+        "display_name": "Synthetic pilot microphone",
+        "role": "microphone_input",
+        "direction": "input",
+        "truth": "isolated",
+        "availability": "available",
+        "permission": "prompt_required",
+        "channels": 1,
+        "native_sample_rate_hz": 48000,
+        "supported_profiles": ["pilot_microphone_v1"],
+        "supports_hot_plug": true,
+        "origin": { "kind": "operating_system" }
+      },
+      {
+        "schema_version": 1,
+        "id": "synthetic.simulator.mix",
+        "display_name": "Synthetic simulator mix",
+        "role": "simulator_master_mix",
+        "direction": "output",
+        "truth": "mixed_output",
+        "availability": "unavailable",
+        "permission": "not_required",
+        "channels": 2,
+        "native_sample_rate_hz": 48000,
+        "supported_profiles": ["mixed_stereo_v1"],
+        "supports_hot_plug": true,
+        "origin": {
+          "kind": "simulator",
+          "identifier": "synthetic_simulator"
+        }
+      }
+    ]
+  }
+}

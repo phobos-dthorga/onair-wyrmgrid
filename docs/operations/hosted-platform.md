@@ -11,7 +11,7 @@ publication, a production deployment, or a release.
 The governing architecture decision is
 [ADR-0019](../architecture/decisions/0019-hosted-web-aerie-and-private-vault.md).
 Local external-plugin delivery is governed independently by
-[ADR-0020](../architecture/decisions/0020-externally-installable-extensions.md).
+[ADR-0021](../architecture/decisions/0021-externally-installable-extensions.md).
 The legal and dependency questions are tracked in the
 [hosted-platform licensing and compliance register](../legal/hosted-platform-licensing.md).
 

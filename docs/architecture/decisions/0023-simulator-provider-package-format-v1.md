@@ -1,4 +1,4 @@
-# ADR-0022: Simulator provider package format version 1
+# ADR-0023: Simulator provider package format version 1
 
 - Status: Accepted
 - Date: 2026-07-21
@@ -9,7 +9,7 @@ WyrmGrid Bridge already isolates native simulator integrations in supervised
 sidecars, but the first SimConnect provider was staged only while building the
 desktop installer. Community authors could implement the public protocol but
 users had no supported way to install their executable without rebuilding
-WyrmGrid. ADR-0020 requires the same independently installable artifact
+WyrmGrid. ADR-0021 requires the same independently installable artifact
 boundary for first-party and community providers.
 
 A simulator provider is more privileged than an ordinary plugin: it is native
@@ -109,7 +109,7 @@ providers remains gated on that hardening even though deliberate local
 installation is supported.
 
 This decision implements the simulator-provider portion of
-[ADR-0020](0020-externally-installable-extensions.md), reuses the bounded
-envelope rules in [ADR-0021](0021-ordinary-plugin-package-format-v1.md), and
+[ADR-0021](0021-externally-installable-extensions.md), reuses the bounded
+envelope rules in [ADR-0022](0022-ordinary-plugin-package-format-v1.md), and
 preserves the out-of-process Bridge boundary in
 [ADR-0011](0011-core-simulator-capability-provider-sidecars.md).

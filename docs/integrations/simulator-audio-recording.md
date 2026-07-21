@@ -1,11 +1,15 @@
 # Simulator-synchronised audio recording
 
-Status: non-native application slices implemented; native capture not implemented
+Status: managed external capture-provider packages, debug-only Windows
+microphone capture, and a first-party Opus codec provider implemented; native
+capture and codec sidecars are not released or live-certified
 
 WyrmGrid will offer optional audio recording aligned with a local simulator
-telemetry session. The selected implementation codec is **Opus**. This document
-defines the product truth, platform boundary, storage model, privacy rules, and
-validation required before capture can be described as available.
+telemetry session. Codec choice is an end-user selection implemented through a
+specialised out-of-process codec-provider contract. WyrmGrid's own Opus
+implementation uses that same contract. This document defines the product
+truth, platform boundary, storage model, privacy rules, and validation required
+before capture can be described as available.
 
 Audio recording is not part of Hoardmind or any other AI workflow. Audio must
 never enter an optional-AI packet.
@@ -16,41 +20,55 @@ Audio is recorded **alongside** telemetry, not inside the current WyrmGrid
 Bridge stream:
 
 ```text
-Simulator API ----> Bridge provider ----> validated telemetry facts ----+
-                                                                      |
-Audio source ----> Audio Capture Provider ----> encrypted Opus tracks -+--> one session timeline
+Simulator API -> Bridge provider -> validated telemetry facts --------+
+                                                                    |
+Audio source -> Capture Provider v2 -> bounded PCM                    |
+                                      -> selected Codec Provider v1   |
+                                      -> encrypted encoded tracks ----+-> one session timeline
 ```
 
 WyrmGrid Bridge protocol version 1 remains a bounded 64 KiB JSON control and
 telemetry boundary. It is unsuitable for continuous PCM or encoded media. Audio
-Capture Provider protocol version 1 is independently versioned and uses bounded
-JSON control headers plus a separately bounded raw binary body for encoded Opus
-packets. It is exercised by a deterministic development-only fake provider.
-Default-off consent, application orchestration, encrypted media lifecycle, and
-authenticated packet inspection/export and external `.wyrmaudio` lifecycle now
-exist, but no native capture provider exists. A provider may fail or be absent without taking down WyrmGrid
-or the simulator.
+Capture Provider protocol version 2 supplies bounded PCM to the host; Audio
+Codec Provider protocol version 1 converts it to bounded encoded packets.
+Default-off consent, application orchestration, encrypted media lifecycle,
+authenticated packet inspection/export, a deterministic fake capture provider,
+a managed external `.wyrmaudio` lifecycle, a debug-only Windows microphone
+provider, and a first-party Opus codec provider now exist. The fake provider has
+a separately installable reference package; the native and codec sidecars are
+not released or live-certified. Either process may fail or be absent without
+taking down WyrmGrid, telemetry, or the simulator.
 
 The Rust application service is authoritative for consent, source selection,
 session lifecycle, time correlation, storage policy, deletion, and export.
-Native providers enumerate and capture approved sources. Interface controls
-display state and delegate actions; they do not decide recording policy.
+Capture providers enumerate and capture approved sources. Codec providers
+encode only host-selected PCM. Interface controls display state and delegate
+actions; they do not decide recording policy.
 
 ## Implemented non-native slices
 
-Slice 1 implements the provider manifest, version-one control and encoded-packet
-contract, stable source capabilities, fixed Opus profiles, schemas, sanitized
-fixtures, bounded framing, and deterministic fake-provider tests. The exact
-framing and compatibility decision are documented in the
-[Audio Capture Provider protocol reference](audio-capture-provider-protocol.md).
+Slice 1 originally implemented the version-one capture contract. Slice 5
+supersedes its encoded-packet path with [Audio Capture Provider version
+2](audio-capture-provider-protocol.md), [Audio Codec Provider version
+1](audio-codec-provider-protocol.md), codec-neutral stable profiles, separate
+bounded PCM and encoded framing, sanitized fixtures, and deterministic process
+tests. Version-one capture fixtures remain compatibility evidence.
 
 Slices 2–5 implement independent persisted consent, explicit permission
-requests, managed external-provider selection, schema-20 package state, authenticated
-external packet segments, recovery, retention, tombstoned deletion, portable-
+requests, managed external-provider selection, schema-21 package state,
+authenticated external packet segments, recovery, retention, tombstoned deletion, portable-
 backup omission, bounded authenticated packet inspection, and separately
 warned plaintext packet export. These slices do not enable a microphone or
 native simulator capture and do not establish audible playback or live
 certification.
+
+Slice 5A implements a debug-only Windows microphone provider through CPAL/WASAPI
+with explicit source selection, explicit permission probing, hashed raw device
+identities, bounded non-blocking capture queues, PCM conversion, and
+backpressure events. Slice 5B implements per-source codec selection, schema-20
+codec provenance, host orchestration, and `dev.wyrmgrid.opus` as a normal
+out-of-process codec provider. Automated tests use synthetic audio and never
+open a real microphone.
 
 ## Simulator and operating-system support
 
@@ -206,21 +224,24 @@ default, which could capture an unintended microphone. The track becomes
 unavailable and records a source-loss event until the approved source returns
 or the user selects another one.
 
-## Opus decision and profiles
+## Codec providers and first-party Opus
 
 Opus is open, royalty-free, designed for speech and music, and suitable for
 storage as well as interactive audio. Its reference implementation uses the
-three-clause BSD licence. These properties make it the mandatory working codec.
+three-clause BSD licence. These properties make it WyrmGrid's first-party and
+initial default codec, but not the only codec end users may eventually install.
 
 | Codec           | Suitability | Decision                                                                 |
 | --------------- | ----------: | ------------------------------------------------------------------------ |
-| **Opus**        |  **9.5/10** | Selected working codec for voice, radio, and simulator mix               |
+| **Opus**        |  **9.5/10** | First-party provider for voice, radio, and simulator mix                 |
 | FLAC            |      7.5/10 | Possible explicit lossless export; too large for routine working storage |
 | Vorbis          |        6/10 | Open and usable, but offers no compelling advantage over Opus here       |
 | PCM in WAV/RF64 |        4/10 | Diagnostic interchange only; uncompressed storage is excessive           |
 | Speex           |        2/10 | Rejected for new work because Opus supersedes it                         |
 
-Initial profiles are deliberately few and versioned:
+Stable profile roles are deliberately few and versioned. Codec manifests bind
+those roles to their own format, media type, bitrate, channels, and packet
+duration. The first-party Opus provider declares:
 
 | Track role                   | Channels | Sample rate | Target bitrate |
 | ---------------------------- | -------: | ----------: | -------------: |
@@ -242,11 +263,12 @@ the same versioned profile catalogue.
 
 ## External media and SQLite metadata
 
-Working media uses independently recoverable authenticated WyrmGrid Opus-packet
-segments. The initial envelope is deliberately not described as Ogg or
-Matroska. A five-minute segment remains the native-provider starting target;
-live tests may justify a different bounded duration. Segmentation limits crash
-damage, permits per-track gaps, and avoids rewriting a multi-hour file.
+Working media uses independently recoverable authenticated WyrmGrid encoded-
+packet segments. The initial envelope is deliberately not described as Ogg,
+Matroska, or another standard container. Codec identity and media type are
+recorded separately. Live tests may justify a different bounded segment
+duration. Segmentation limits crash damage, permits per-track gaps, and avoids
+rewriting a multi-hour file.
 
 Audio bytes never become a SQLite BLOB. Append-only migration 18 adds
 application-owned records equivalent to:
@@ -255,16 +277,23 @@ application-owned records equivalent to:
   retention, and storage budget;
 - `AudioRecordingSession`: linked simulator session, origin, start/end, status,
   and aggregate size;
-- `AudioTrack`: role, truth class, provider/source provenance, Opus profile,
-  channels, sample rate, offsets, and status;
+- `AudioTrack`: role, truth class, capture-provider/source provenance, codec-
+  provider identity/version, codec ID/media type, profile, channels, sample
+  rate, offsets, and status;
 - `AudioTrackSegment`: opaque storage key, frame range, duration, byte size,
   integrity hash, encryption version, and finalisation state; and
 - `AudioCaptureEvent`: permission, source, gap, dropout, drift, provider,
   storage, and user-marker events.
 
-Absolute local paths, PCM, Opus packets, voices, and device or application
+Absolute local paths, PCM, encoded packets, voices, and device or application
 labels are not copied into the database. Display labels may remain session-only
 unless a reviewed usability need justifies bounded encrypted persistence.
+
+Append-only migration 20 adds the selected codec-provider identity to source
+selections and snapshots provider identity/version plus codec ID/media type on
+tracks. Schema-19 rows receive `dev.wyrmgrid.opus`, `legacy-unversioned`,
+`opus`, and `audio/opus`, the only previously implied format without an
+invented historical provider version, without rewriting migration 18.
 
 The version-one media envelope uses XChaCha20-Poly1305 with a fresh random
 24-byte nonce per segment. HKDF-SHA256 derives a purpose-separated media key
@@ -319,8 +348,9 @@ software. Before implementation ships:
 - Windows, macOS, and Linux permission prompts and indicators must be tested on
   every packaged target;
 - source identifiers, labels, and failures must be redacted from diagnostics;
-- plugins and community providers receive no audio capability in the initial
-  design; and
+- general plugins receive no audio capability; an explicitly selected codec
+  provider necessarily receives only that selected source's transient PCM and
+  requires a separate future installation and trust disclosure; and
 - support tooling, Sentry, optional AI, crash attachments, and public services
   must be unable to receive audio or media paths by default.
 
@@ -382,8 +412,9 @@ does not establish another.
 
 ## Delivery sequence
 
-1. Define Audio Capture Provider protocol version 1, fake-provider fixtures,
-   application models, and Opus profile catalogue. (Implemented.)
+1. Define the original Audio Capture Provider protocol, fake-provider fixtures,
+   application models, and profile catalogue. (Implemented; the encoded-media
+   portion is archived as version 1 compatibility evidence.)
 2. Add independently default-off master, manual, automatic, and source-specific
    consent plus explicit permission and fake-provider orchestration. (Implemented
    without a native provider.)
@@ -393,17 +424,25 @@ does not establish another.
 4. Add bounded authenticated packet inspection and separately warned plaintext
    track export without claiming decoding or a standard media container.
    (Implemented.)
-5. Deliver the Windows provider for microphone and explicitly selected MSFS or
-   application output, with SimConnect COM facts presented as metadata only.
-6. Complete the X-Plane local Web API telemetry provider across WyrmGrid's
+5. Separate capture and codecs: implement Audio Capture Provider version 2,
+   Audio Codec Provider version 1, user codec selection, schema-20 provenance,
+   a debug-only Windows microphone provider (5A), and first-party Opus as a
+   normal codec provider (5B). (Implemented without packaging or live-device
+   certification.)
+6. Extend the Windows provider to explicitly selected MSFS, application, or
+   endpoint output, with SimConnect COM facts presented as metadata only.
+7. Complete the X-Plane local Web API telemetry provider across WyrmGrid's
    supported Windows, macOS, and Linux targets.
-7. Deliver approved microphone and mixed-output capture for those X-Plane
+8. Deliver approved microphone and mixed-output capture for those X-Plane
    targets where platform certification passes.
-8. Run the X-Plane named-audio-group feasibility spike. Add isolated COM1,
+9. Run the X-Plane named-audio-group feasibility spike. Add isolated COM1,
    COM2, pilot, or copilot sources only after the separate review succeeds.
-9. Add explicitly selected external ATC application capture where each platform
-   can enforce truthful source selection and current service rules permit it.
-10. Update the Privacy Notice, legal versions, threat model, user guide, licence
+10. Add explicitly selected external ATC application capture where each platform
+    can enforce truthful source selection and current service rules permit it.
+11. Add verified codec-provider discovery, publisher/package identity, signing,
+    integrity, resource limits, updates, rollback, removal, and explicit trust
+    presentation before accepting user-installed codec executables.
+12. Update the Privacy Notice, legal versions, threat model, user guide, licence
     bundle, installers, and release notes only for capabilities actually ready to
     ship.
 
@@ -412,8 +451,9 @@ support without maintainer authorization and the required release evidence.
 
 ## Decisions deliberately deferred
 
-- native audio libraries and minimum operating-system versions;
-- native provider supervision and platform pipe integration;
+- packaged Windows audio dependencies and minimum operating-system version;
+- community codec discovery, signing, resource controls, updates, and removal;
+- Windows application, endpoint, and process-loopback capture;
 - whether X-Plane FMOD tapping is stable and distributable;
 - native-provider segment duration after benchmarks and live certification;
 - media-inclusive portable backup;

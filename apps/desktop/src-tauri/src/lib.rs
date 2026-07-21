@@ -1411,14 +1411,20 @@ pub fn run() {
                     store.clone(),
                     audio_media,
                     audio_provider_packages,
+                    development_audio_codecs(),
                 );
             let _ = audio_recording.recover_interrupted_sessions();
             let (audio_sender, audio_receiver) = mpsc::channel::<AudioSyncRequest>();
             let audio_worker = audio_recording.clone();
             std::thread::spawn(move || {
-                while let Ok(request) = audio_receiver.recv() {
-                    audio_worker
-                        .synchronize_with_simulator_recording(request.session_id, request.mode);
+                loop {
+                    match audio_receiver.recv_timeout(std::time::Duration::from_millis(100)) {
+                        Ok(request) => audio_worker
+                            .synchronize_with_simulator_recording(request.session_id, request.mode),
+                        Err(mpsc::RecvTimeoutError::Timeout) => {}
+                        Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                    }
+                    let _ = audio_worker.poll_active_capture();
                 }
             });
             let simulator = wyrmgrid_application::SimulatorBridgeService::with_extension_packages(
@@ -1677,6 +1683,38 @@ fn first_party_simulator_provider_package(app: &tauri::App) -> Option<std::path:
             .join("provider-packages")
             .join("msfs2024-simconnect.wyrmprovider")
     })
+}
+
+fn development_audio_codecs() -> Vec<Arc<dyn wyrmgrid_application::AudioCodecProvider>> {
+    if !cfg!(debug_assertions) {
+        return Vec::new();
+    }
+    let workspace_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let executable = std::env::var_os("WYRMGRID_OPUS_CODEC_PATH")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| development_binary(&workspace_root, "wyrmgrid-opus-codec"));
+    let Some(codec) = wyrmgrid_application::AudioCodecRegistration::from_manifest_json(
+        include_str!("../../../../codecs/opus/codec.json"),
+        executable,
+    )
+    .ok()
+    .and_then(|registration| {
+        wyrmgrid_application::ProcessAudioCodecProvider::new(registration).ok()
+    }) else {
+        return Vec::new();
+    };
+    vec![Arc::new(codec)]
+}
+
+fn development_binary(workspace_root: &std::path::Path, name: &str) -> std::path::PathBuf {
+    let target = std::env::var_os("CARGO_TARGET_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| workspace_root.join("target"));
+    let mut filename = name.to_owned();
+    if cfg!(windows) {
+        filename.push_str(".exe");
+    }
+    target.join("debug").join(filename)
 }
 
 #[cfg(test)]

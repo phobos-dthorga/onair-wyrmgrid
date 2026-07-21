@@ -36,7 +36,7 @@ Aerie, an account, or a network connection. Aerie may later add discovery,
 publisher identity, signatures, revocation metadata, and convenient updates;
 it is not the source of the plugin model or a prerequisite for loading an
 already verified local package. This direction is recorded in
-[ADR-0020](../architecture/decisions/0020-externally-installable-extensions.md).
+[ADR-0021](../architecture/decisions/0021-externally-installable-extensions.md).
 
 The current developer preview implements the first ordinary-plugin vertical
 slice. Forge can inspect and install a local `.wyrmplugin` file without Aerie,
@@ -72,7 +72,7 @@ The package format proves content consistency, not publisher identity. Schema
 version 1 is unsigned and Forge always reports its publisher as unverified.
 The exact compatibility decision, limits, managed lifecycle, and security
 consequences are in
-[ADR-0021](../architecture/decisions/0021-ordinary-plugin-package-format-v1.md).
+[ADR-0022](../architecture/decisions/0022-ordinary-plugin-package-format-v1.md).
 The canonical package manifest schema and fixture are
 `schemas/extension-package-manifest-v1.schema.json` and
 `schemas/fixtures/extension-package-manifest-plugin-v1.json`.

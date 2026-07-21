@@ -2,6 +2,7 @@
 members = [
     "apps/desktop/src-tauri",
     "crates/application",
+    "crates/audio-codec-protocol",
     "crates/audio-provider-protocol",
     "crates/bridge-protocol",
     "crates/domain",
@@ -9,8 +10,10 @@ members = [
     "crates/plugin-protocol",
     "crates/simbrief-api",
     "crates/storage",
+    "codecs/opus",
     "providers/fake-audio",
     "providers/msfs2024-simconnect",
+    "providers/windows-audio",
 ]
 resolver = "2"
 
@@ -26,6 +29,7 @@ repository = "https://github.com/phobos-dthorga/onair-wyrmgrid"
 base64 = "0.22.1"
 chacha20poly1305 = "0.11.0"
 chrono = { version = "0.4.41", default-features = false, features = ["clock", "serde"] }
+cpal = "0.18.1"
 fluent-syntax = "0.12.0"
 getrandom = "0.4.3"
 hkdf = "0.13.0"

@@ -41,5 +41,7 @@ CREATE TABLE IF NOT EXISTS audio_provider_preferences (
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-PRAGMA user_version = 20;
+INSERT OR IGNORE INTO schema_migrations (version) VALUES (21);
+
+PRAGMA user_version = 21;
 INSERT OR IGNORE INTO schema_migrations (version) VALUES (20);

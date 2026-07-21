@@ -31,7 +31,7 @@ const audioProviderPackageFilter = {
 
 const audioPacketFilter = {
   name: "WyrmGrid authenticated Opus packets",
-  extensions: ["wyrmgrid-opus-packets"],
+  extensions: ["wyrmgrid-audio-packets"],
 };
 
 export function loadSimulatorBridge(): Promise<SimulatorBridgeView> {
@@ -258,7 +258,7 @@ export async function chooseAudioExportDestination(
   sessionId: string,
 ): Promise<string | null> {
   return save({
-    defaultPath: `${sessionId}.wyrmgrid-opus-packets`,
+    defaultPath: `${sessionId}.wyrmgrid-audio-packets`,
     filters: [audioPacketFilter],
   });
 }

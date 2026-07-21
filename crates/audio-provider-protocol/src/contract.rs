@@ -2,20 +2,21 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::{Component, Path};
 use thiserror::Error;
-use wyrmgrid_domain::{AudioOpusProfileId, AudioSourceCapability};
+use wyrmgrid_domain::{AUDIO_WORKING_SAMPLE_RATE_HZ, AudioProfileId, AudioSourceCapability};
 
-pub const AUDIO_PROVIDER_PROTOCOL_VERSION: u32 = 1;
-pub const AUDIO_PROVIDER_MANIFEST_SCHEMA_VERSION: u32 = 1;
+pub const AUDIO_PROVIDER_PROTOCOL_VERSION: u32 = 2;
+pub const AUDIO_PROVIDER_MANIFEST_SCHEMA_VERSION: u32 = 2;
 pub const MAX_AUDIO_CONTROL_FRAME_BYTES: usize = 64 * 1024;
-pub const MAX_ENCODED_AUDIO_PACKET_BYTES: usize = 16 * 1024;
+pub const MAX_PCM_AUDIO_FRAME_BYTES: usize = 64 * 1024;
 pub const MAX_AUDIO_SOURCES: usize = 32;
 pub const MAX_AUDIO_TRACKS: usize = 8;
 pub const MAX_AUDIO_PROVIDER_CAPABILITIES: usize = 6;
+pub const MAX_AUDIO_DRAIN_FRAMES: u16 = 64;
 pub const MAX_AUDIO_EVENT_FRAMES: u64 = 48_000 * 60;
 pub const MAX_ABSOLUTE_AUDIO_DRIFT_PPM: i32 = 100_000;
 pub const MIN_AUDIO_LEVEL_MILLIDBFS: i32 = -120_000;
 pub const MAX_AUDIO_LEVEL_MILLIDBFS: i32 = 0;
-pub const OPUS_PACKET_DURATIONS_48KHZ: [u16; 6] = [120, 240, 480, 960, 1_920, 2_880];
+pub const PCM_FRAME_DURATIONS_48KHZ: [u16; 6] = [120, 240, 480, 960, 1_920, 2_880];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -31,7 +32,7 @@ pub enum AudioProviderPlatform {
 pub enum AudioProviderCapability {
     SourceEnumeration,
     PermissionRequests,
-    EncodedOpusCapture,
+    PcmS16leCapture,
     LevelMetering,
     HotPlugNotifications,
     ClockSynchronization,
@@ -161,7 +162,7 @@ pub enum AudioEnvelopeError {
 pub struct AudioTrackRequest {
     pub track_id: String,
     pub source_id: String,
-    pub profile: AudioOpusProfileId,
+    pub profile: AudioProfileId,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -182,6 +183,10 @@ pub enum AudioHostMessage {
     StartCapture {
         session_id: String,
         tracks: Vec<AudioTrackRequest>,
+    },
+    DrainCapture {
+        session_id: String,
+        maximum_frames: u16,
     },
     StopCapture {
         session_id: String,
@@ -206,11 +211,20 @@ impl AudioHostMessage {
             {
                 Ok(())
             }
+            Self::DrainCapture {
+                session_id,
+                maximum_frames,
+            } if valid_session_id(session_id)
+                && (1..=MAX_AUDIO_DRAIN_FRAMES).contains(maximum_frames) =>
+            {
+                Ok(())
+            }
             Self::StopCapture { session_id } if valid_session_id(session_id) => Ok(()),
             Self::Hello { .. }
             | Self::RequestPermission { .. }
             | Self::SynchronizeClock { .. }
             | Self::StartCapture { .. }
+            | Self::DrainCapture { .. }
             | Self::StopCapture { .. } => Err(AudioMessageError::InvalidHostMessage),
         }
     }
@@ -253,7 +267,7 @@ impl AudioProviderDescriptor {
 pub struct AudioStartedTrack {
     pub track_id: String,
     pub source_id: String,
-    pub profile: AudioOpusProfileId,
+    pub profile: AudioProfileId,
     pub provider_start_monotonic_ns: u64,
 }
 
@@ -306,12 +320,14 @@ pub enum AudioProviderMessage {
         tracks: Vec<AudioStartedTrack>,
         provider_monotonic_ns: u64,
     },
-    AudioPacket {
+    PcmFrame {
         session_id: String,
         track_id: String,
-        packet_sequence: u64,
+        frame_sequence: u64,
         provider_monotonic_ns: u64,
-        duration_48khz_frames: u16,
+        channels: u8,
+        sample_rate_hz: u32,
+        frame_count: u16,
         payload_bytes: u32,
     },
     Level {
@@ -332,6 +348,10 @@ pub enum AudioProviderMessage {
         affected_frames: Option<u64>,
         #[serde(skip_serializing_if = "Option::is_none")]
         drift_parts_per_million: Option<i32>,
+    },
+    DrainComplete {
+        session_id: String,
+        frame_count: u16,
     },
     CaptureStopped {
         session_id: String,
@@ -364,20 +384,25 @@ impl AudioProviderMessage {
             Self::CaptureStarted {
                 session_id, tracks, ..
             } if valid_session_id(session_id) && valid_started_tracks(tracks) => Ok(()),
-            Self::AudioPacket {
+            Self::PcmFrame {
                 session_id,
                 track_id,
-                packet_sequence,
-                duration_48khz_frames,
+                frame_sequence,
+                channels,
+                sample_rate_hz,
+                frame_count,
                 payload_bytes,
                 ..
             } if valid_session_id(session_id)
                 && valid_machine_id(track_id, 128)
-                && *packet_sequence > 0
-                && OPUS_PACKET_DURATIONS_48KHZ.contains(duration_48khz_frames)
-                && *payload_bytes > 0
-                && usize::try_from(*payload_bytes)
-                    .is_ok_and(|length| length <= MAX_ENCODED_AUDIO_PACKET_BYTES) =>
+                && *frame_sequence > 0
+                && (1..=8).contains(channels)
+                && *sample_rate_hz == AUDIO_WORKING_SAMPLE_RATE_HZ
+                && PCM_FRAME_DURATIONS_48KHZ.contains(frame_count)
+                && usize::try_from(*payload_bytes).is_ok_and(|length| {
+                    length == usize::from(*frame_count) * usize::from(*channels) * 2
+                        && length <= MAX_PCM_AUDIO_FRAME_BYTES
+                }) =>
             {
                 Ok(())
             }
@@ -393,6 +418,10 @@ impl AudioProviderMessage {
             {
                 Ok(())
             }
+            Self::DrainComplete {
+                session_id,
+                frame_count,
+            } if valid_session_id(session_id) && *frame_count <= MAX_AUDIO_DRAIN_FRAMES => Ok(()),
             Self::CaptureEvent {
                 session_id,
                 track_id,
@@ -416,16 +445,17 @@ impl AudioProviderMessage {
             Self::Sources { .. } => Err(AudioMessageError::InvalidSources),
             Self::ClockSynchronized { .. } => Err(AudioMessageError::InvalidClock),
             Self::CaptureStarted { .. } => Err(AudioMessageError::InvalidTracks),
-            Self::AudioPacket { .. } => Err(AudioMessageError::InvalidPacket),
+            Self::PcmFrame { .. } => Err(AudioMessageError::InvalidPacket),
             Self::Level { .. } => Err(AudioMessageError::InvalidLevel),
             Self::CaptureEvent { .. } => Err(AudioMessageError::InvalidEvent),
+            Self::DrainComplete { .. } => Err(AudioMessageError::InvalidPacket),
             Self::CaptureStopped { .. } => Err(AudioMessageError::InvalidSession),
         }
     }
 
     pub fn declared_body_bytes(&self) -> Option<usize> {
         match self {
-            Self::AudioPacket { payload_bytes, .. } => usize::try_from(*payload_bytes).ok(),
+            Self::PcmFrame { payload_bytes, .. } => usize::try_from(*payload_bytes).ok(),
             _ => None,
         }
     }

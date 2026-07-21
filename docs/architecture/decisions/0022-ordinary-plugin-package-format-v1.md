@@ -1,11 +1,11 @@
-# ADR-0021: Ordinary plugin package format version 1
+# ADR-0022: Ordinary plugin package format version 1
 
 - Status: Accepted
 - Date: 2026-07-21
 
 ## Context
 
-ADR-0020 requires independently installable extension artifacts without
+ADR-0021 requires independently installable extension artifacts without
 requiring one payload language or one package kind. The first implemented
 vertical slice needs a deterministic envelope for ordinary out-of-process
 plugins, an offline installation path, and an explicit compatibility decision.
@@ -52,7 +52,7 @@ WyrmGrid validates the entire archive and the existing `plugin.json` contract
 before extraction. It then extracts into a fresh staging directory using
 create-new file semantics, moves the validated tree into versioned managed
 storage, and records its package manifest, plugin manifest, source, schema
-version, and archive digest in append-only database migration 20.
+version, and archive digest in append-only database migration 21.
 
 An `(ordinary_plugin, id, version)` tuple is immutable. Reinstalling the same
 version is accepted only when its archive digest is identical; different bytes
@@ -110,5 +110,5 @@ revocation, resource quotas, or an operating-system sandbox; those limitations
 remain visible rather than being inferred from the package envelope.
 
 This decision implements the ordinary-plugin portion of
-[ADR-0020](0020-externally-installable-extensions.md) and preserves the
+[ADR-0021](0021-externally-installable-extensions.md) and preserves the
 out-of-process boundary in [ADR-0002](0002-out-of-process-plugins.md).

@@ -19,6 +19,7 @@ pub struct AudioSourceSelectionRecord {
     pub provider_id: String,
     pub source_id: String,
     pub profile_id: String,
+    pub codec_provider_id: String,
     pub enabled: bool,
     pub playback_muted: bool,
     pub playback_solo: bool,
@@ -46,6 +47,10 @@ pub struct AudioTrackRecord {
     pub session_id: String,
     pub source_id: String,
     pub profile_id: String,
+    pub codec_provider_id: String,
+    pub codec_provider_version: String,
+    pub codec_id: String,
+    pub codec_media_type: String,
     pub source_role: String,
     pub source_truth: String,
     pub channel_count: u8,
@@ -172,7 +177,7 @@ impl Store {
             .lock()
             .map_err(|_| StorageError::StateUnavailable)?;
         let mut statement = connection.prepare(
-            "SELECT provider_id, source_id, profile_id, enabled,
+            "SELECT provider_id, source_id, profile_id, codec_provider_id, enabled,
                     playback_muted, playback_solo, playback_volume_percent
              FROM audio_source_selections ORDER BY provider_id, source_id",
         )?;
@@ -182,10 +187,11 @@ impl Store {
                     row.get::<_, String>(0)?,
                     row.get::<_, String>(1)?,
                     row.get::<_, String>(2)?,
-                    row.get::<_, i64>(3)?,
+                    row.get::<_, String>(3)?,
                     row.get::<_, i64>(4)?,
                     row.get::<_, i64>(5)?,
                     row.get::<_, i64>(6)?,
+                    row.get::<_, i64>(7)?,
                 ))
             })?
             .map(|row| {
@@ -203,6 +209,7 @@ impl Store {
         validate_machine_id(&record.provider_id, 255)?;
         validate_machine_id(&record.source_id, 128)?;
         validate_profile_id(&record.profile_id)?;
+        validate_machine_id(&record.codec_provider_id, 255)?;
         if record.playback_volume_percent > 200 {
             return Err(StorageError::InvalidRecord);
         }
@@ -212,11 +219,12 @@ impl Store {
             .map_err(|_| StorageError::StateUnavailable)?;
         connection.execute(
             "INSERT INTO audio_source_selections
-                (provider_id, source_id, profile_id, enabled, playback_muted,
+                (provider_id, source_id, profile_id, codec_provider_id, enabled, playback_muted,
                  playback_solo, playback_volume_percent)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
              ON CONFLICT(provider_id, source_id) DO UPDATE SET
                 profile_id = excluded.profile_id,
+                codec_provider_id = excluded.codec_provider_id,
                 enabled = excluded.enabled,
                 playback_muted = excluded.playback_muted,
                 playback_solo = excluded.playback_solo,
@@ -226,6 +234,7 @@ impl Store {
                 record.provider_id,
                 record.source_id,
                 record.profile_id,
+                record.codec_provider_id,
                 record.enabled,
                 record.playback_muted,
                 record.playback_solo,
@@ -282,15 +291,20 @@ impl Store {
             let last_packet_sequence = track.last_packet_sequence.map(stored_i64).transpose()?;
             transaction.execute(
                 "INSERT INTO audio_tracks
-                    (id, session_id, source_id, profile_id, source_role, source_truth,
+                    (id, session_id, source_id, profile_id, codec_provider_id,
+                     codec_provider_version, codec_id, codec_media_type, source_role, source_truth,
                      channel_count, sample_rate_hz, provider_start_monotonic_ns,
                      packet_count, frame_count, last_packet_sequence)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
                 params![
                     track.id,
                     track.session_id,
                     track.source_id,
                     track.profile_id,
+                    track.codec_provider_id,
+                    track.codec_provider_version,
+                    track.codec_id,
+                    track.codec_media_type,
                     track.source_role,
                     track.source_truth,
                     track.channel_count,
@@ -493,7 +507,8 @@ impl Store {
             .lock()
             .map_err(|_| StorageError::StateUnavailable)?;
         let mut statement = connection.prepare(
-            "SELECT id, session_id, source_id, profile_id, source_role, source_truth,
+            "SELECT id, session_id, source_id, profile_id, codec_provider_id,
+                    codec_provider_version, codec_id, codec_media_type, source_role, source_truth,
                     channel_count, sample_rate_hz, provider_start_monotonic_ns,
                     packet_count, frame_count, last_packet_sequence
              FROM audio_tracks WHERE session_id = ?1 ORDER BY id",
@@ -583,21 +598,23 @@ fn audio_preferences_from_values(
 }
 
 fn audio_selection_from_values(
-    values: (String, String, String, i64, i64, i64, i64),
+    values: (String, String, String, String, i64, i64, i64, i64),
 ) -> Result<AudioSourceSelectionRecord, StorageError> {
     let record = AudioSourceSelectionRecord {
         provider_id: values.0,
         source_id: values.1,
         profile_id: values.2,
-        enabled: stored_bool(values.3)?,
-        playback_muted: stored_bool(values.4)?,
-        playback_solo: stored_bool(values.5)?,
-        playback_volume_percent: u16::try_from(values.6)
+        codec_provider_id: values.3,
+        enabled: stored_bool(values.4)?,
+        playback_muted: stored_bool(values.5)?,
+        playback_solo: stored_bool(values.6)?,
+        playback_volume_percent: u16::try_from(values.7)
             .map_err(|_| StorageError::InvalidRecord)?,
     };
     validate_machine_id(&record.provider_id, 255)?;
     validate_machine_id(&record.source_id, 128)?;
     validate_profile_id(&record.profile_id)?;
+    validate_machine_id(&record.codec_provider_id, 255)?;
     if record.playback_volume_percent > 200 {
         return Err(StorageError::InvalidRecord);
     }
@@ -626,14 +643,18 @@ fn audio_track_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<AudioTrackR
         session_id: row.get(1)?,
         source_id: row.get(2)?,
         profile_id: row.get(3)?,
-        source_role: row.get(4)?,
-        source_truth: row.get(5)?,
-        channel_count: row.get(6)?,
-        sample_rate_hz: row.get(7)?,
-        provider_start_monotonic_ns: row_u64(row, 8)?,
-        packet_count: row_u64(row, 9)?,
-        frame_count: row_u64(row, 10)?,
-        last_packet_sequence: row_optional_u64(row, 11)?,
+        codec_provider_id: row.get(4)?,
+        codec_provider_version: row.get(5)?,
+        codec_id: row.get(6)?,
+        codec_media_type: row.get(7)?,
+        source_role: row.get(8)?,
+        source_truth: row.get(9)?,
+        channel_count: row.get(10)?,
+        sample_rate_hz: row.get(11)?,
+        provider_start_monotonic_ns: row_u64(row, 12)?,
+        packet_count: row_u64(row, 13)?,
+        frame_count: row_u64(row, 14)?,
+        last_packet_sequence: row_optional_u64(row, 15)?,
     })
 }
 
@@ -708,6 +729,10 @@ fn validate_audio_track(record: &AudioTrackRecord, session_id: &str) -> Result<(
     validate_machine_id(&record.id, 128)?;
     validate_machine_id(&record.source_id, 128)?;
     validate_profile_id(&record.profile_id)?;
+    validate_machine_id(&record.codec_provider_id, 255)?;
+    validate_machine_id(&record.codec_provider_version, 64)?;
+    validate_machine_id(&record.codec_id, 96)?;
+    validate_media_type(&record.codec_media_type)?;
     if record.session_id != session_id
         || !(1..=8).contains(&record.channel_count)
         || record.sample_rate_hz != 48_000
@@ -798,6 +823,28 @@ fn validate_machine_id(value: &str, maximum: usize) -> Result<(), StorageError> 
         && value
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b':' | b'-'))
+    {
+        Ok(())
+    } else {
+        Err(StorageError::InvalidRecord)
+    }
+}
+
+fn validate_media_type(value: &str) -> Result<(), StorageError> {
+    let valid_token = |token: &str| {
+        !token.is_empty()
+            && token.bytes().all(|byte| {
+                byte.is_ascii_alphanumeric()
+                    || matches!(
+                        byte,
+                        b'!' | b'#' | b'$' | b'&' | b'^' | b'_' | b'.' | b'+' | b'-'
+                    )
+            })
+    };
+    if value.len() <= 120
+        && value
+            .split_once('/')
+            .is_some_and(|(kind, subtype)| valid_token(kind) && valid_token(subtype))
     {
         Ok(())
     } else {

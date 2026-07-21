@@ -136,7 +136,7 @@ test("builds a distinct simulator provider package contract", async (t) => {
   await writeFile(
     manifestPath,
     JSON.stringify({
-      schema_version: 1,
+      schema_version: 2,
       id: "org.wyrmgrid.test.simulator-provider",
       name: "Provider package test",
       version: "1.0.0",
@@ -178,15 +178,15 @@ test("builds a distinct audio provider package contract", async (t) => {
   await writeFile(
     manifestPath,
     JSON.stringify({
-      schema_version: 1,
+      schema_version: 2,
       id: "org.wyrmgrid.test.audio-provider",
       name: "Audio provider package test",
       version: "1.0.0",
-      audio_protocol_version: 1,
+      audio_protocol_version: 2,
       author: "Tests",
       entry_point: "audio-provider",
       platforms: ["windows_x86_64"],
-      capabilities: ["source_enumeration", "encoded_opus_capture"],
+      capabilities: ["source_enumeration", "pcm_s16le_capture"],
     }),
   );
   await writeFile(executablePath, "sanitized audio executable fixture");

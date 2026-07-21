@@ -92,13 +92,16 @@ Privacy Notice remain unchanged by this decision.
 ## Implementation note — 2026-07-20
 
 The independently versioned Audio Capture Provider protocol version-one
-foundation and non-native application Slices 2–4 are implemented. They add
+foundation and non-native application Slices 2–4 were implemented first. Audio
+Capture Provider version 2 and Audio Codec Provider version 1 now supersede the
+encoded-packet boundary, and the `.wyrmaudio` lifecycle supplies external
+capture-provider packages. Together these slices add
 default-off consent, explicit permissions, fake-provider orchestration,
 schema-18 metadata, purpose-keyed XChaCha20-Poly1305 segments, retention,
 tombstoned deletion, backup omission, authenticated packet inspection, and
 plaintext packet export warnings. The host monotonic origin remains nullable
 until a stored clock-correlation exchange supplies it; the fake path does not
-invent that evidence. Audio protocol 1, Bridge 1, plugin protocol
-1, portable-backup format 1, application 0.2.0, installer identity, and the
-Privacy Notice version remain unchanged. Native capture, packaging, audible
-playback, legal approval, and live availability remain unresolved.
+invent that evidence. Bridge 1, plugin protocol 1, portable-backup format 1,
+installer identity, and the Privacy Notice version remain unchanged. Native
+release, codec packaging, audible playback, legal approval, and live
+availability remain unresolved.
