@@ -6,6 +6,85 @@ export type BridgeCapability =
   | "flight_plan_load"
   | "command_execute";
 
+export type ProviderPlatform =
+  "windows_x86_64" | "linux_x86_64" | "macos_aarch64" | "macos_x86_64";
+
+export type AudioProviderCapability =
+  | "source_enumeration"
+  | "permission_requests"
+  | "encoded_opus_capture"
+  | "level_metering"
+  | "hot_plug_notifications"
+  | "clock_synchronization";
+
+export type AudioProviderPackageInspection = {
+  package_schema_version: number;
+  package_kind: "audio_provider";
+  id: string;
+  name: string;
+  version: string;
+  author: string;
+  audio_protocol_version: number;
+  platforms: ProviderPlatform[];
+  capabilities: AudioProviderCapability[];
+  archive_sha256: string;
+  archive_size: number;
+  expanded_size: number;
+  file_count: number;
+  publisher_verified: false;
+};
+
+export type ManagedAudioProviderPackage = {
+  id: string;
+  name: string;
+  author: string;
+  active_version: string;
+  rollback_version?: string;
+  enabled: boolean;
+  installed_versions: string[];
+  active_archive_sha256: string;
+  source: "local_file" | "first_party";
+  publisher_verified: false;
+  audio_protocol_version: number;
+  platforms: ProviderPlatform[];
+  capabilities: AudioProviderCapability[];
+};
+
+export type SimulatorProviderPackageInspection = {
+  package_schema_version: number;
+  package_kind: "simulator_provider";
+  id: string;
+  name: string;
+  version: string;
+  author: string;
+  bridge_protocol_version: number;
+  platforms: ProviderPlatform[];
+  simulators: string[];
+  capabilities: BridgeCapability[];
+  archive_sha256: string;
+  archive_size: number;
+  expanded_size: number;
+  file_count: number;
+  publisher_verified: false;
+};
+
+export type ManagedSimulatorProviderPackage = {
+  id: string;
+  name: string;
+  author: string;
+  active_version: string;
+  rollback_version?: string;
+  enabled: boolean;
+  installed_versions: string[];
+  active_archive_sha256: string;
+  source: "local_file" | "first_party";
+  publisher_verified: false;
+  bridge_protocol_version: number;
+  platforms: ProviderPlatform[];
+  simulators: string[];
+  capabilities: BridgeCapability[];
+};
+
 export type SimulatorProviderProcessState =
   "unavailable" | "stopped" | "starting" | "running" | "stopping" | "failed";
 

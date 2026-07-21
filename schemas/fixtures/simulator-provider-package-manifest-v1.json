@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "kind": "simulator_provider",
+  "id": "io.github.phobosdthorga.wyrmgrid-simconnect-msfs2024",
+  "version": "0.1.0",
+  "manifest_path": "provider.json",
+  "files": [
+    {
+      "path": "provider.json",
+      "size": 512,
+      "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    {
+      "path": "wyrmgrid-simconnect-provider.exe",
+      "size": 1024,
+      "sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+    }
+  ]
+}

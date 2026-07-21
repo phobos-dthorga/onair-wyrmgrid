@@ -12,14 +12,20 @@ OnAir WyrmGrid is a local-first desktop application for understanding fleets,
 jobs, FBO networks, maintenance, finance, flight history, and simulator context
 through one connected world map. It is designed as a community platform: most
 first-party intelligence modules will use the same versioned, permission-aware
-plugin boundary available to third-party developers.
+plugin boundary available to third-party developers. Every component presented
+as a plugin or provider is intended to remain an external, independently
+installable artifact rather than a feature that exists only when compiled into
+WyrmGrid.
 
 > **Project status:** foundation stage. Session-only OnAir connection, Atlas,
 > Hoard, read-only Jobs-to-Dispatch comparison, and the first supervised Python
 > plugin proof are implemented. The versioned Bridge supervisor, read-only MSFS
 > 2024 SimConnect provider, desktop telemetry view, and permission-filtered
-> plugin snapshots are also implemented; live simulator certification, release
-> bundling, broader user-token credential support, plugin/provider signing and
+> plugin snapshots are also implemented. Ordinary plugin and simulator
+> provider package version 1 add offline inspection and installation, immutable
+> managed versions, disable, rollback, removal, and separately distributable
+> first-party artifacts. Live simulator certification, external audio-provider
+> packaging, broader user-token credential support, publisher signing,
 > sandboxing, and broader operational integrations remain ahead.
 
 ## Vision
@@ -59,13 +65,20 @@ SimConnect provider executables:
 - `wyrmgrid-application` — interface-independent orchestration;
 - `wyrmgrid-bridge-protocol` — versioned simulator-provider framing and
   manifests;
+- `wyrmgrid-audio-provider-protocol` — versioned audio-provider control and
+  encoded-packet framing;
 - `wyrmgrid-plugin-protocol` — public manifest and permission contracts;
 - `wyrmgrid-simbrief-api` — bounded private SimBrief response translation;
 - `wyrmgrid-weather-api` — bounded AviationWeather.gov METAR/TAF translation.
 
-`wyrmgrid-simconnect-provider` is the first supervised Bridge sidecar. Other
-providers such as FSUIPC use the same stable boundary rather than linking a
-native simulator ABI into the desktop process.
+`wyrmgrid-simconnect-provider` is the first supervised Bridge sidecar and ships
+as a separately installable `.wyrmprovider` artifact. Other providers such as
+FSUIPC use the same stable boundary rather than linking a native simulator ABI
+into the desktop process.
+
+Audio Capture Providers use the separate supervised audio protocol and ship as
+independently installable `.wyrmaudio` artifacts. The current deterministic
+reference package is synthetic and does not claim native capture.
 
 ## Core promises
 
@@ -82,6 +95,9 @@ native simulator ABI into the desktop process.
    airport-weather flows are explicit, session-only, and read-only.
 9. Community language packs are bounded, data-only, locally validated, and
    unable to replace protected legal, credential, permission, or error text.
+10. Plugins and providers can be installed, replaced, disabled, updated, and
+    removed without rebuilding WyrmGrid; first-party bundling is optional
+    convenience, not architectural privilege.
 
 ## Development
 
@@ -118,6 +134,7 @@ become OnAir's primary client, so this is a temporary compatibility rule that
 must be retested when its API credential support reaches parity.
 
 See [Development](docs/development.md), [Architecture](docs/architecture/overview.md),
+[Plugin platform](docs/plugins/overview.md),
 [display and performance launch options](docs/user-guide/display-and-performance.md),
 [settings and measurement units](docs/user-guide/settings-and-units.md),
 [remembered accounts and credentials](docs/user-guide/accounts-and-credentials.md),

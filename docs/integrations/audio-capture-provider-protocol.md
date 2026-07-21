@@ -1,6 +1,6 @@
 # Audio Capture Provider protocol version 1
 
-Status: protocol and non-native application services implemented; no native capture or live availability
+Status: protocol, external package lifecycle, and non-native application services implemented; no native capture or live availability
 
 The Audio Capture Provider protocol is the supervised, language-neutral boundary
 for future microphone, application-output, endpoint-output, simulator-mix, and
@@ -10,11 +10,11 @@ media or receives an audio capability.
 
 The implementation consists of the `wyrmgrid-audio-provider-protocol` crate,
 stable source and Opus-profile models in `wyrmgrid-domain`, version-one schemas
-and sanitized fixtures, a deterministic development-only fake provider, and
-application services for default-off consent, fake-provider orchestration,
+and sanitized fixtures, `.wyrmaudio` package schema and managed lifecycle, a
+deterministic development-only fake provider, and application services for default-off consent, provider orchestration,
 encrypted packet segments, lifecycle policy, and authenticated packet
 inspection/export. There is no native device access, audible decoding,
-installer entry, packaged provider, or live-support claim.
+installer-seeded provider or live-support claim.
 
 ## Compatibility decision
 
@@ -23,10 +23,10 @@ preserve. It does not change the application semantic version, Bridge protocol
 version 1, plugin protocol version 1, simulator telemetry schemas, database
 migrations, existing provider manifests, or installer identity.
 
-Application schema 18 and English source catalogue 18 implement the new local
-metadata and interface without changing audio provider protocol version 1,
+Application schema 20 and English source catalogue 21 implement managed package
+state, provider selection, and interface wording without changing audio provider protocol version 1,
 Bridge protocol version 1, plugin protocol version 1, portable-backup format
-version 1, application version 0.2.0, or installer identity.
+version 1, application version 0.3.1, or installer identity.
 
 Version-one JSON rejects unknown fields and unknown enum values. Adding or
 removing a message, field, enum value, framing rule, or interpretation therefore
@@ -47,10 +47,15 @@ is a workspace member so black-box tests can launch it, but the Tauri external-
 binary preparation and installer do not stage it. Its labels, identities,
 timestamps, events, and packet bytes are synthetic.
 
-Version 1 does not establish community-provider installation. Discovery,
-publisher identity, signing, package integrity, canonical installation paths,
-updates, rollback, resource limits, and an explicit trust flow remain required
-before any provider not approved and bundled by the host can be accepted.
+Package format version 1 now establishes deliberate local community-provider
+installation through bounded `.wyrmaudio` archives, canonical managed paths,
+staged validation, explicit native-code trust review, update, rollback,
+disable/removal, and persistent selection. Installation grants no recording,
+source, operating-system permission, OnAir, simulator, plugin, or network
+authority. Publisher identity, signing, revocation, sandboxing, and Aerie
+recommendation remain separate hardening work. See
+[audio provider authoring](audio-provider-authoring.md) and
+[ADR-0023](../architecture/decisions/0023-audio-provider-package-format-v1.md).
 
 ## Framing
 
@@ -182,6 +187,7 @@ simulator and operating-system volume.
 ## Schemas and fixtures
 
 - `schemas/audio-provider-manifest-v1.schema.json`
+- `schemas/audio-provider-package-manifest-v1.schema.json`
 - `schemas/audio-source-capability-v1.schema.json`
 - `schemas/audio-provider-envelope-v1.schema.json`
 - sanitized hello, permission, sources, clock, packet-header, packet-body, and

@@ -67,6 +67,22 @@ fn simulator_preferences_default_to_the_first_provider_with_auto_start_off() {
 }
 
 #[test]
+fn simulator_preferences_fail_closed_when_managed_provider_storage_is_unavailable() {
+    let bridge = SimulatorBridgeService::with_extension_packages(
+        Vec::new(),
+        ExtensionPackageService::new(None, Store::open_in_memory().unwrap()),
+        None,
+    );
+    let service =
+        SimulatorSettingsService::with_bridge(MemorySimulatorPreferences::default(), bridge);
+
+    assert_eq!(
+        service.status(),
+        Err(SimulatorBridgeError::PackageStorageUnavailable)
+    );
+}
+
+#[test]
 fn simulator_preferences_reject_auto_start_without_an_installed_provider() {
     let service = SimulatorSettingsService::new(MemorySimulatorPreferences::default(), vec![]);
 

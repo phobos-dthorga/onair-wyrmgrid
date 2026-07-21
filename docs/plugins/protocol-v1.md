@@ -46,6 +46,27 @@ envelope schema and accepted examples are
 Rust tests deserialize the fixtures and run the same validation used by the
 host.
 
+## Packaging and discovery boundary
+
+Plugin protocol version 1 defines runtime communication, not a single source
+language, executable format, archive format, catalogue, or compilation path.
+Every executable plugin must ultimately be installable as an external package
+without rebuilding WyrmGrid. A package envelope may carry a script, executable,
+or another explicitly supported payload while preserving the version-one
+manifest and message contract.
+
+Package validation, installation provenance, atomic activation, rollback,
+disable, removal, signing, and catalogue metadata are independently versioned
+host concerns. Adding them does not change plugin protocol version 1 unless the
+runtime messages or their meaning change. Manual local installation must remain
+available without Aerie; unknown package kinds and runtimes fail closed.
+
+The first such contract is ordinary plugin package schema version 1. It uses a
+`.wyrmplugin` ZIP envelope, root `wyrmgrid-package.json`, exact size and SHA-256
+inventory, and the fixed `plugin.json` manifest location. Its compatibility and
+security decision is [ADR-0021](../architecture/decisions/0021-ordinary-plugin-package-format-v1.md).
+This package contract is not a plugin-protocol revision.
+
 ## Transport
 
 Each message is:
@@ -176,7 +197,7 @@ Map coordinates must be finite and inside latitude `[-90, 90]` and longitude
 
 ## Python SDK proof
 
-`sdk/python/wyrmgrid_sdk` uses only the Python standard library. The bundled
+`sdk/python/wyrmgrid_sdk` uses only the Python standard library. The first-party
 `Fleet Locations` plugin demonstrates stable snapshot consumption. Three
 first-party providers demonstrate weather publication: Open-Meteo model grid,
 AviationWeather.gov airport reports, and RainViewer PNG radar tiles. The SDK's
@@ -186,16 +207,17 @@ byte ceiling.
 
 ## Deferred hardening
 
-Protocol and process separation are not an OS sandbox. Before unreviewed
-community plugins are recommended, WyrmGrid needs signed packages, publisher
-identity, tamper detection, CPU/memory/process quotas, message-rate limits,
-restart throttling, OS-specific filesystem and network isolation, SDK
-conformance suites, safe update/rollback, and a security review. Until then,
-Forge labels the runtime a developer preview and users should run only code they
-trust.
+Protocol and process separation are not an OS sandbox. External local packages
+are an architectural requirement, but unreviewed community plugins must not be
+presented as safe merely because they are external. Before broad community use
+is recommended, WyrmGrid needs package integrity, clear publisher provenance,
+tamper detection, CPU/memory/process quotas, message-rate limits, restart
+throttling, OS-specific filesystem and network isolation, SDK conformance
+suites, safe update/rollback, and a security review. Until then, Forge labels
+the runtime a developer preview and users should run only code they trust.
 
-The proposal for supplying that distribution boundary through WyrmGrid Aerie
-is documented separately in
+The proposal for adding an optional signed catalogue and publication boundary
+through WyrmGrid Aerie is documented separately in
 [ADR-0019](../architecture/decisions/0019-hosted-web-aerie-and-private-vault.md)
 and the
 [hosted-platform implementation plan](../operations/hosted-platform.md). It does

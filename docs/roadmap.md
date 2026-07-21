@@ -219,6 +219,42 @@ The complete sequence and provider constraints live in the
 The simulator UX sequence is detailed in the
 [simulator experience roadmap](integrations/simulator-experience-roadmap.md).
 
+## External extension delivery track
+
+This is a local application capability, not part of the optional hosted track.
+It implements the invariant in
+[ADR-0020](architecture/decisions/0020-externally-installable-extensions.md):
+every plugin and provider can be delivered and managed as an external artifact
+without rebuilding WyrmGrid.
+
+- Ordinary plugin package schema version 1 now establishes the first canonical
+  per-user installation root, bounded exact inventory, compatibility decision,
+  inert unknown-format behaviour, staged Rust validation, explicit Forge trust
+  review, immutable activation, provenance, disable, removal, update, and
+  rollback.
+- The four first-party Python plugins now build as deterministic, separately
+  distributable packages and are seeded through that same public lifecycle.
+- Simulator provider package schema version 1 now provides the same managed
+  lifecycle for native Bridge sidecars while retaining a distinct executable
+  trust class. The MSFS 2024 SimConnect provider is the deterministic reference
+  `.wyrmprovider` and no longer depends on installer-only binary registration.
+- Audio provider package schema version 1 now gives native audio sidecars their
+  own `.wyrmaudio` contract, executable trust review, persistent selection, and
+  the same install, disable, update, rollback, and removal lifecycle offered to
+  community artifacts. The deterministic fake provider proves packaging and
+  protocol conformance without claiming live native capture support.
+- Prove offline manual installation, application upgrade compatibility,
+  independent plugin failure, absent runtime/provider behaviour, and recovery
+  from corrupt or permission-changing updates.
+- Keep first-party seeding optional and make every seeded package separately
+  distributable. A feature that cannot meet this boundary is documented as
+  core, not as a plugin.
+
+Local packages may be deliberately installed before Aerie exists, with their
+unverified publisher and integrity status shown honestly. Recommendation of
+unreviewed executable packages still waits for the relevant isolation,
+conformance, integrity, update, and security gates.
+
 ## Hosted ecosystem track
 
 This is an optional, separately approved track. It must not make application
@@ -265,10 +301,11 @@ the
 - Launch rights attestations, SPDX and notice collection, takedown, abuse,
   yanking, revocation, incident, off-site recovery and key-compromise processes
   before public submissions.
-- Enable ordinary out-of-process executable plugins only after protocol and SDK
-  conformance, deny-by-default permissions, resource controls, staged atomic
-  installation, rollback, client revalidation and independent security review.
-  Automatic updates remain a later decision.
+- Publish and recommend ordinary out-of-process executable plugins through
+  Aerie only after protocol and SDK conformance, deny-by-default permissions,
+  resource controls, client revalidation, and independent security review. The
+  local staged installation and rollback path already belongs to the external
+  extension track. Automatic updates remain a later decision.
 
 ### Optional private vault
 

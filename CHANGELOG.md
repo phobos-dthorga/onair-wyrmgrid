@@ -8,11 +8,45 @@ major application version.
 
 ### New features
 
-- None.
+- Added the first external ordinary-plugin package slice: bounded
+  `.wyrmplugin` archives with an exact SHA-256 inventory, offline inspection
+  and confirmation in Forge, versioned managed storage, immutable version
+  identities, enable/disable controls, one-step rollback, removal with access
+  revocation, and interrupted-removal recovery. Package schema version 1 is
+  independently versioned from plugin protocol version 1 and does not claim
+  publisher verification.
+- Added external simulator-provider packages: bounded `.wyrmprovider` archives
+  declare platform, simulator, executable, Bridge version, and capabilities;
+  support offline inspection, managed install, enable/disable, immutable
+  updates, rollback, removal, and safe unavailable states; and seed the MSFS
+  2024 SimConnect provider through the same public lifecycle while keeping its
+  release artifact separately distributable.
+- Added external Audio Capture Provider packages: bounded `.wyrmaudio` archives
+  declare platform, executable stem, Audio protocol version, and capabilities;
+  support offline native-code review, managed install, explicit selection,
+  enable/disable, immutable updates, rollback, and removal; keep installation
+  separate from device permission and recording consent; and provide a
+  deterministic synthetic reference artifact without claiming native capture.
 
 ### Changes
 
-- None.
+- Established external, independently installable artifacts as the required
+  delivery boundary for every plugin and provider. First-party packages may be
+  included by an installer, but users must also be able to install, replace,
+  disable, update, and remove them without rebuilding WyrmGrid; local
+  installation remains independent of the future Aerie catalogue.
+- Removed the SimConnect provider's installer-only external-binary authority.
+  The desktop now discovers only validated managed provider packages, and the
+  provider reports an independently versioned `0.1.0` identity matching its
+  manifest and Bridge handshake.
+- Replaced the desktop's fixed development-only audio provider injection with
+  managed package discovery and a persisted selected-provider boundary. Audio
+  provider hello now has to match the installed manifest's identity, version,
+  platform, and complete capability set.
+- Advanced the canonical source catalogue to version 21 for audio-provider
+  package inspection, selection, native-code trust, lifecycle, and destructive-
+  removal wording. Community language packs must review the new protected
+  messages and update their declared source version before re-import.
 
 ### Removed
 

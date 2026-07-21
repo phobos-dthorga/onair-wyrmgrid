@@ -8,9 +8,10 @@ use std::thread;
 use std::time::{Duration, Instant};
 use thiserror::Error;
 use wyrmgrid_audio_provider_protocol::{
-    AudioCaptureEventKind, AudioEnvelope, AudioHostMessage, AudioProviderManifest,
-    AudioProviderMessage, AudioProviderPlatform, AudioProviderState, AudioStopReason,
-    AudioTrackRequest, read_provider_frame, validate_next_sequence, write_host_frame,
+    AudioCaptureEventKind, AudioEnvelope, AudioHostMessage, AudioProviderDescriptor,
+    AudioProviderManifest, AudioProviderMessage, AudioProviderPlatform, AudioProviderState,
+    AudioStopReason, AudioTrackRequest, read_provider_frame, validate_next_sequence,
+    write_host_frame,
 };
 use wyrmgrid_domain::{AudioSourceCapability, AudioSourceTruth};
 
@@ -39,6 +40,20 @@ impl AudioProviderRegistration {
         Ok(Self {
             manifest,
             executable: executable.into(),
+        })
+    }
+
+    pub(crate) fn from_managed_package(
+        manifest: AudioProviderManifest,
+        root: PathBuf,
+    ) -> Result<Self, AudioProviderError> {
+        manifest
+            .validate()
+            .map_err(|_| AudioProviderError::InvalidManifest)?;
+        let executable = provider_executable_in(&root, &manifest);
+        Ok(Self {
+            manifest,
+            executable,
         })
     }
 }
@@ -110,7 +125,7 @@ pub enum AudioProviderError {
     SourceUnavailable,
 }
 
-pub struct FakeAudioProviderProcess {
+pub struct ExternalAudioProviderProcess {
     registration: AudioProviderRegistration,
     runtime: Mutex<Option<AudioProcessRuntime>>,
 }
@@ -124,7 +139,7 @@ struct AudioProcessRuntime {
     active_session_id: Option<String>,
 }
 
-impl FakeAudioProviderProcess {
+impl ExternalAudioProviderProcess {
     pub fn new(registration: AudioProviderRegistration) -> Result<Self, AudioProviderError> {
         if !platform_supported(&registration.manifest) || !registration.executable.is_file() {
             return Err(AudioProviderError::Unavailable);
@@ -154,7 +169,7 @@ impl FakeAudioProviderProcess {
     }
 }
 
-impl AudioCaptureProvider for FakeAudioProviderProcess {
+impl AudioCaptureProvider for ExternalAudioProviderProcess {
     fn provider_id(&self) -> &str {
         &self.registration.manifest.id
     }
@@ -402,7 +417,9 @@ fn launch(
     let mut ready_seen = false;
     for _ in 0..STARTUP_MESSAGE_COUNT {
         match runtime.receive()?.0.payload {
-            AudioProviderMessage::Hello { provider } if provider.id == registration.manifest.id => {
+            AudioProviderMessage::Hello { provider }
+                if provider_matches_manifest(&provider, &registration.manifest) =>
+            {
                 hello_seen = true
             }
             AudioProviderMessage::State {
@@ -422,12 +439,28 @@ fn launch(
     Ok(runtime)
 }
 
+fn provider_matches_manifest(
+    provider: &AudioProviderDescriptor,
+    manifest: &AudioProviderManifest,
+) -> bool {
+    provider.validate()
+        && provider.id == manifest.id
+        && provider.name == manifest.name
+        && provider.version == manifest.version
+        && provider.platform == current_audio_provider_platform()
+        && provider.capabilities.len() == manifest.capabilities.len()
+        && provider
+            .capabilities
+            .iter()
+            .all(|capability| manifest.capabilities.contains(capability))
+}
+
 fn platform_supported(manifest: &AudioProviderManifest) -> bool {
-    let platform = current_platform();
+    let platform = current_audio_provider_platform();
     manifest.platforms.contains(&platform)
 }
 
-fn current_platform() -> AudioProviderPlatform {
+pub(crate) fn current_audio_provider_platform() -> AudioProviderPlatform {
     #[cfg(target_os = "windows")]
     return AudioProviderPlatform::WindowsX86_64;
     #[cfg(target_os = "linux")]

@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "kind": "audio_provider",
+  "id": "dev.wyrmgrid.fake-audio",
+  "version": "0.1.0",
+  "manifest_path": "audio-provider.json",
+  "files": [
+    {
+      "path": "audio-provider.json",
+      "size": 704,
+      "sha256": "c6697e2d9f2bd7294d3108621dc45e8df79a892f7924319518efc50ac28c4d31"
+    },
+    {
+      "path": "wyrmgrid-fake-audio-provider.exe",
+      "size": 4096,
+      "sha256": "fa76220dafe664646ca084d24d5c710409e4f8e6b57b8747bb51248209d47e2d"
+    }
+  ]
+}

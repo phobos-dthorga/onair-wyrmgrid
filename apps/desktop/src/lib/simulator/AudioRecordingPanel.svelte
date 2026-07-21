@@ -4,18 +4,29 @@
   import { formatLocalDateTime } from "$lib/presentation/dateTime";
   import type {
     AudioPlaybackView,
+    AudioProviderPackageInspection,
     AudioRecordingPreferences,
     AudioRecordingView,
     AudioSessionSummary,
     AudioSourceSelection,
     AudioSourceView,
+    ManagedAudioProviderPackage,
   } from "./types";
 
   let {
     status,
     playback,
+    managedProviders,
+    pendingProviderPackage,
     busy = false,
     onpreferences,
+    onchooseproviderpackage,
+    oncancelproviderpackage,
+    oninstallproviderpackage,
+    onproviderselect,
+    onproviderenable,
+    onproviderrollback,
+    onproviderremove,
     onrefresh,
     onpermission,
     onsource,
@@ -25,8 +36,17 @@
   }: {
     status: AudioRecordingView;
     playback?: AudioPlaybackView;
+    managedProviders: ManagedAudioProviderPackage[];
+    pendingProviderPackage?: AudioProviderPackageInspection;
     busy?: boolean;
     onpreferences: (preferences: AudioRecordingPreferences) => void;
+    onchooseproviderpackage: () => void;
+    oncancelproviderpackage: () => void;
+    oninstallproviderpackage: () => void;
+    onproviderselect: (providerId: string) => void;
+    onproviderenable: (providerId: string, enabled: boolean) => void;
+    onproviderrollback: (providerId: string) => void;
+    onproviderremove: (providerId: string) => void;
     onrefresh: () => void;
     onpermission: (sourceId: string) => void;
     onsource: (selection: AudioSourceSelection) => void;
@@ -34,6 +54,8 @@
     onexport: (sessionId: string, trackId: string) => void;
     ondelete: (sessionId: string) => void;
   } = $props();
+
+  let removalCandidate = $state<string>();
 
   const availabilityLabels = {
     available: "audio-source-available",
@@ -86,6 +108,12 @@
   function mediaSize(bytes: number): string {
     return `${(bytes / 1024).toFixed(1)} KiB`;
   }
+
+  function compactBytes(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
+  }
 </script>
 
 <section class="audio-recording-panel" aria-labelledby="audio-recording-title">
@@ -105,6 +133,188 @@
   </header>
 
   <p class="audio-boundary">{$translation("audio-recording-boundary")}</p>
+
+  <section
+    class="provider-packages audio-provider-packages"
+    aria-labelledby="audio-provider-package-title"
+  >
+    <div class="provider-package-heading">
+      <div>
+        <span class="eyebrow"
+          >{$translation("audio-provider-packages-eyebrow")}</span
+        >
+        <h4 id="audio-provider-package-title">
+          {$translation("audio-provider-packages-title")}
+        </h4>
+        <p>{$translation("audio-provider-packages-introduction")}</p>
+      </div>
+      <button
+        type="button"
+        disabled={busy || pendingProviderPackage !== undefined}
+        onclick={onchooseproviderpackage}
+        >{$translation("audio-provider-packages-choose")}</button
+      >
+    </div>
+
+    {#if pendingProviderPackage}
+      <div class="provider-package-review">
+        <div>
+          <strong>{pendingProviderPackage.name}</strong>
+          <span>
+            {$translation("audio-provider-package-by-author", {
+              author: pendingProviderPackage.author,
+              version: pendingProviderPackage.version,
+            })}
+          </span>
+        </div>
+        <dl>
+          <div>
+            <dt>{$translation("audio-provider-package-identity")}</dt>
+            <dd>{pendingProviderPackage.id}</dd>
+          </div>
+          <div>
+            <dt>{$translation("audio-provider-package-compatibility")}</dt>
+            <dd>
+              {$translation("audio-provider-package-compatibility-value", {
+                platforms: pendingProviderPackage.platforms.join(" · "),
+                protocol: pendingProviderPackage.audio_protocol_version,
+              })}
+            </dd>
+          </div>
+          <div>
+            <dt>{$translation("audio-provider-package-contents")}</dt>
+            <dd>
+              {$translation("audio-provider-package-contents-value", {
+                count: pendingProviderPackage.file_count,
+                size: compactBytes(pendingProviderPackage.expanded_size),
+              })}
+            </dd>
+          </div>
+          <div>
+            <dt>{$translation("audio-provider-package-capabilities")}</dt>
+            <dd>{pendingProviderPackage.capabilities.join(" · ")}</dd>
+          </div>
+          <div>
+            <dt>{$translation("audio-provider-package-archive-digest")}</dt>
+            <dd class="provider-package-digest">
+              {pendingProviderPackage.archive_sha256}
+            </dd>
+          </div>
+        </dl>
+        <p class="provider-package-warning">
+          {$translation("security-audio-provider-package-warning")}
+        </p>
+        <div class="provider-package-actions">
+          <button
+            class="secondary"
+            type="button"
+            disabled={busy}
+            onclick={oncancelproviderpackage}
+            >{$translation("action-cancel")}</button
+          >
+          <button
+            type="button"
+            disabled={busy}
+            onclick={oninstallproviderpackage}
+            >{$translation("audio-provider-package-install")}</button
+          >
+        </div>
+      </div>
+    {/if}
+
+    {#if managedProviders.length === 0}
+      <p class="audio-empty-state">
+        {$translation("audio-provider-packages-empty")}
+      </p>
+    {:else}
+      <div class="managed-provider-packages">
+        {#each managedProviders as managed (managed.id)}
+          <article>
+            <div class="managed-provider-summary">
+              <strong>{managed.name}</strong>
+              <span>
+                {managed.enabled
+                  ? $translation("audio-provider-package-enabled", {
+                      version: managed.active_version,
+                    })
+                  : $translation("audio-provider-package-disabled", {
+                      version: managed.active_version,
+                    })}
+                {#if status.provider_id === managed.id}
+                  · {$translation("audio-provider-package-selected")}
+                {/if}
+              </span>
+              <small>{managed.id}</small>
+            </div>
+            {#if removalCandidate === managed.id}
+              <div class="provider-removal-confirmation">
+                <span
+                  >{$translation(
+                    "destructive-audio-provider-package-remove-confirm",
+                  )}</span
+                >
+                <button
+                  class="secondary"
+                  type="button"
+                  disabled={busy}
+                  onclick={() => (removalCandidate = undefined)}
+                  >{$translation("audio-provider-package-keep")}</button
+                >
+                <button
+                  class="stop"
+                  type="button"
+                  disabled={busy}
+                  onclick={() => {
+                    removalCandidate = undefined;
+                    onproviderremove(managed.id);
+                  }}
+                  >{$translation("audio-provider-package-remove")}</button
+                >
+              </div>
+            {:else}
+              <div class="provider-package-actions">
+                <button
+                  type="button"
+                  disabled={busy || !managed.enabled || status.recording_active}
+                  onclick={() => onproviderselect(managed.id)}
+                  >{status.provider_id === managed.id
+                    ? $translation("audio-provider-package-selected")
+                    : $translation("audio-provider-package-select")}</button
+                >
+                <button
+                  class="secondary"
+                  type="button"
+                  disabled={busy || status.recording_active}
+                  onclick={() =>
+                    onproviderenable(managed.id, !managed.enabled)}
+                >
+                  {managed.enabled
+                    ? $translation("audio-provider-package-disable")
+                    : $translation("audio-provider-package-enable")}
+                </button>
+                <button
+                  class="secondary"
+                  type="button"
+                  disabled={busy ||
+                    !managed.rollback_version ||
+                    status.recording_active}
+                  onclick={() => onproviderrollback(managed.id)}
+                  >{$translation("audio-provider-package-rollback")}</button
+                >
+                <button
+                  class="stop"
+                  type="button"
+                  disabled={busy || status.recording_active}
+                  onclick={() => (removalCandidate = managed.id)}
+                  >{$translation("audio-provider-package-remove-menu")}</button
+                >
+              </div>
+            {/if}
+          </article>
+        {/each}
+      </div>
+    {/if}
+  </section>
 
   <div class="audio-preferences">
     <label class:enabled={status.preferences.enabled} class="audio-consent-row">

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use wyrmgrid_application::{
     AudioCaptureMode, AudioCaptureProvider, AudioMediaKey, AudioProviderRegistration,
     AudioRecordingPreferences, AudioRecordingService, AudioSourceSelection,
-    EncryptedAudioMediaStore, FakeAudioProviderProcess,
+    EncryptedAudioMediaStore, ExternalAudioProviderProcess,
 };
 use wyrmgrid_domain::AudioOpusProfileId;
 use wyrmgrid_storage::{DatabaseKey, Store};
@@ -14,7 +14,7 @@ fn application_orchestrates_the_development_provider_without_implicit_permission
     let registration =
         AudioProviderRegistration::from_manifest_json(include_str!("../provider.json"), executable)
             .unwrap();
-    let provider = Arc::new(FakeAudioProviderProcess::new(registration).unwrap());
+    let provider = Arc::new(ExternalAudioProviderProcess::new(registration).unwrap());
     let initial_sources = provider.sources().unwrap();
     assert_eq!(initial_sources.len(), 2);
     assert!(!initial_sources[0].is_capture_ready());

@@ -135,3 +135,31 @@ export type PluginHostView = {
   layers: PublishedPluginLayer[];
   weather_layers: PublishedPluginWeatherLayer[];
 };
+
+export type PluginPackageInspection = {
+  package_schema_version: number;
+  package_kind: "ordinary_plugin";
+  id: string;
+  name: string;
+  version: string;
+  author: string;
+  runtime?: "python";
+  archive_sha256: string;
+  archive_size: number;
+  expanded_size: number;
+  file_count: number;
+  publisher_verified: boolean;
+};
+
+export type ManagedPluginPackage = {
+  id: string;
+  name: string;
+  author: string;
+  active_version: string;
+  rollback_version?: string;
+  enabled: boolean;
+  installed_versions: string[];
+  active_archive_sha256: string;
+  source: "local_file" | "first_party";
+  publisher_verified: boolean;
+};

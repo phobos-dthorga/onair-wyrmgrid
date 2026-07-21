@@ -35,7 +35,13 @@
     "ai:contribution:landing-preview": "node scripts/optional-ai-landing.mjs preview",
     "ai:contribution:land": "node scripts/optional-ai-landing.mjs land",
     "atlas:regions": "node scripts/prepare-atlas-regions.mjs",
+    "plugin:package": "node scripts/package-plugin.mjs",
+    "provider:package": "node scripts/package-simulator-provider.mjs",
+    "audio-provider:package": "node scripts/package-audio-provider.mjs",
+    "plugins:prepare": "node scripts/prepare-plugin-packages.mjs",
     "provider:prepare": "node scripts/prepare-simulator-provider.mjs",
+    "provider:distribution": "node scripts/prepare-simulator-provider.mjs --distribution",
+    "audio-provider:distribution": "node scripts/prepare-audio-provider.mjs --distribution",
     "test:tooling": "node --test scripts/*.test.mjs",
     "tauri": "npm run tauri --workspace @wyrmgrid/desktop --"
   },

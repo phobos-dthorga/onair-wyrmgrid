@@ -368,6 +368,36 @@ impl<R: AuthorizationRepository> AuthorizationService<R> {
         self.clear_runtime_grant(subject, scope_revision, true)
     }
 
+    pub(crate) fn revoke_subject(
+        &self,
+        subject: &AuthorizationSubject,
+    ) -> Result<(), AuthorizationError> {
+        validate_subject(subject)?;
+        self.repository
+            .replace_grants(subject, "extension-removed", &[])?;
+        let mut state = self
+            .runtime
+            .inner
+            .lock()
+            .map_err(|_| AuthorizationError::StorageUnavailable)?;
+        let previous_count = state.grants.len();
+        state.grants.retain(|key, _| {
+            key.subject_kind != subject.kind.as_str() || key.subject_id != subject.id
+        });
+        if state.grants.len() != previous_count {
+            push_runtime_decision(
+                &mut state,
+                subject,
+                "extension-removed",
+                SecurityDecision::Revoke,
+                0,
+                None,
+                authorization_timestamp(),
+            );
+        }
+        Ok(())
+    }
+
     pub(crate) fn require_all(
         &self,
         subject: &AuthorizationSubject,

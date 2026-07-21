@@ -23,6 +23,10 @@ record rather than silently rewriting history.
 - [ADR-0016: Out-of-process weather provider plugins](0016-out-of-process-weather-provider-plugins.md)
 - [ADR-0017: Simulator-synchronised audio recording through capability providers](0017-simulator-synchronised-audio-recording.md)
 - [ADR-0018: Three.js WebGPU-preferred weather composition](0018-threejs-webgpu-weather-composition.md)
+- [ADR-0020: Externally installable plugins and providers](0020-externally-installable-extensions.md)
+- [ADR-0021: Ordinary plugin package format version 1](0021-ordinary-plugin-package-format-v1.md)
+- [ADR-0022: Simulator provider package format version 1](0022-simulator-provider-package-format-v1.md)
+- [ADR-0023: Audio provider package format version 1](0023-audio-provider-package-format-v1.md)
 
 ## Proposed decisions
 

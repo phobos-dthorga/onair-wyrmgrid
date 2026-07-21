@@ -41,7 +41,8 @@ const ATLAS_AND_PLUGIN_CONFIGURATION_SCHEMA: &str =
 const AUDIO_RECORDINGS_SCHEMA: &str = include_str!("../migrations/0018_audio_recordings.sql");
 const FLIGHT_OPERATION_AIRCRAFT_ASSIGNMENTS_SCHEMA: &str =
     include_str!("../migrations/0019_flight_operation_aircraft_assignments.sql");
-pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 19;
+const EXTENSION_PACKAGES_SCHEMA: &str = include_str!("../migrations/0020_extension_packages.sql");
+pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 20;
 
 #[derive(Debug, Error)]
 pub enum StorageError {
@@ -124,6 +125,40 @@ pub struct PluginConfigurationRecord {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExtensionPackageVersionRecord {
+    pub package_kind: String,
+    pub extension_id: String,
+    pub version: String,
+    pub archive_sha256: String,
+    pub package_schema_version: u32,
+    pub source: String,
+    pub package_manifest_json: String,
+    pub extension_manifest_json: String,
+    pub installed_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NewExtensionPackageVersionRecord {
+    pub package_kind: String,
+    pub extension_id: String,
+    pub version: String,
+    pub archive_sha256: String,
+    pub package_schema_version: u32,
+    pub source: String,
+    pub package_manifest_json: String,
+    pub extension_manifest_json: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExtensionPackageStateRecord {
+    pub package_kind: String,
+    pub extension_id: String,
+    pub active_version: String,
+    pub rollback_version: Option<String>,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ThemePreferencesRecord {
     pub selected_theme_id: String,
 }
@@ -167,6 +202,11 @@ pub struct AtlasPreferencesRecord {
 pub struct SimulatorPreferencesRecord {
     pub selected_provider_id: Option<String>,
     pub start_with_wyrmgrid: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AudioProviderPreferencesRecord {
+    pub selected_provider_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -341,6 +381,7 @@ impl Store {
         connection.execute_batch(ATLAS_AND_PLUGIN_CONFIGURATION_SCHEMA)?;
         connection.execute_batch(AUDIO_RECORDINGS_SCHEMA)?;
         connection.execute_batch(FLIGHT_OPERATION_AIRCRAFT_ASSIGNMENTS_SCHEMA)?;
+        connection.execute_batch(EXTENSION_PACKAGES_SCHEMA)?;
         if path.is_some() {
             data_protection::mark_wyrmgrid_database(&connection)?;
         }
@@ -1013,6 +1054,50 @@ impl Store {
                     preferences.selected_provider_id,
                     preferences.start_with_wyrmgrid,
                 ],
+            )
+            .map(|_| ())
+            .map_err(StorageError::from)
+    }
+
+    pub fn load_audio_provider_preferences_record(
+        &self,
+    ) -> Result<Option<AudioProviderPreferencesRecord>, StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection
+            .query_row(
+                "SELECT selected_provider_id
+                 FROM audio_provider_preferences WHERE singleton_id = 1",
+                [],
+                |row| {
+                    Ok(AudioProviderPreferencesRecord {
+                        selected_provider_id: row.get(0)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(StorageError::from)
+    }
+
+    pub fn save_audio_provider_preferences_record(
+        &self,
+        preferences: &AudioProviderPreferencesRecord,
+    ) -> Result<(), StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection
+            .execute(
+                "INSERT INTO audio_provider_preferences (
+                    singleton_id, selected_provider_id
+                 ) VALUES (1, ?1)
+                 ON CONFLICT(singleton_id) DO UPDATE SET
+                    selected_provider_id = excluded.selected_provider_id,
+                    updated_at = CURRENT_TIMESTAMP",
+                [preferences.selected_provider_id.as_deref()],
             )
             .map(|_| ())
             .map_err(StorageError::from)
@@ -1964,6 +2049,384 @@ impl Store {
         )?;
         Ok(())
     }
+}
+
+impl Store {
+    pub fn seed_extension_package_version_record(
+        &self,
+        record: &NewExtensionPackageVersionRecord,
+    ) -> Result<ExtensionPackageStateRecord, StorageError> {
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        let transaction = connection.transaction()?;
+        save_extension_package_version(&transaction, record)?;
+        let state = transaction
+            .query_row(
+                "SELECT package_kind, extension_id, active_version, rollback_version, enabled
+                 FROM extension_package_state
+                 WHERE package_kind = ?1 AND extension_id = ?2",
+                params![record.package_kind, record.extension_id],
+                extension_package_state_from_row,
+            )
+            .optional()?;
+        let state = match state {
+            Some(state) => state,
+            None => {
+                transaction.execute(
+                    "INSERT INTO extension_package_state (
+                        package_kind, extension_id, active_version, enabled
+                     ) VALUES (?1, ?2, ?3, 1)",
+                    params![record.package_kind, record.extension_id, record.version],
+                )?;
+                ExtensionPackageStateRecord {
+                    package_kind: record.package_kind.clone(),
+                    extension_id: record.extension_id.clone(),
+                    active_version: record.version.clone(),
+                    rollback_version: None,
+                    enabled: true,
+                }
+            }
+        };
+        transaction.commit()?;
+        Ok(state)
+    }
+
+    pub fn activate_extension_package_version_record(
+        &self,
+        record: &NewExtensionPackageVersionRecord,
+    ) -> Result<ExtensionPackageStateRecord, StorageError> {
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        let transaction = connection.transaction()?;
+        save_extension_package_version(&transaction, record)?;
+
+        let current = transaction
+            .query_row(
+                "SELECT active_version, rollback_version, enabled
+                 FROM extension_package_state
+                 WHERE package_kind = ?1 AND extension_id = ?2",
+                params![record.package_kind, record.extension_id],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, Option<String>>(1)?,
+                        row.get::<_, bool>(2)?,
+                    ))
+                },
+            )
+            .optional()?;
+        let state = match current {
+            Some((active_version, rollback_version, enabled))
+                if active_version == record.version =>
+            {
+                ExtensionPackageStateRecord {
+                    package_kind: record.package_kind.clone(),
+                    extension_id: record.extension_id.clone(),
+                    active_version,
+                    rollback_version,
+                    enabled,
+                }
+            }
+            Some((active_version, _, enabled)) => {
+                transaction.execute(
+                    "UPDATE extension_package_state
+                     SET active_version = ?3,
+                         rollback_version = ?4,
+                         updated_at = CURRENT_TIMESTAMP
+                     WHERE package_kind = ?1 AND extension_id = ?2",
+                    params![
+                        record.package_kind,
+                        record.extension_id,
+                        record.version,
+                        active_version,
+                    ],
+                )?;
+                ExtensionPackageStateRecord {
+                    package_kind: record.package_kind.clone(),
+                    extension_id: record.extension_id.clone(),
+                    active_version: record.version.clone(),
+                    rollback_version: Some(active_version),
+                    enabled,
+                }
+            }
+            None => {
+                transaction.execute(
+                    "INSERT INTO extension_package_state (
+                        package_kind, extension_id, active_version, enabled
+                     ) VALUES (?1, ?2, ?3, 1)",
+                    params![record.package_kind, record.extension_id, record.version],
+                )?;
+                ExtensionPackageStateRecord {
+                    package_kind: record.package_kind.clone(),
+                    extension_id: record.extension_id.clone(),
+                    active_version: record.version.clone(),
+                    rollback_version: None,
+                    enabled: true,
+                }
+            }
+        };
+        transaction.commit()?;
+        Ok(state)
+    }
+
+    pub fn load_extension_package_state_record(
+        &self,
+        package_kind: &str,
+        extension_id: &str,
+    ) -> Result<Option<ExtensionPackageStateRecord>, StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection
+            .query_row(
+                "SELECT package_kind, extension_id, active_version, rollback_version, enabled
+                 FROM extension_package_state
+                 WHERE package_kind = ?1 AND extension_id = ?2",
+                params![package_kind, extension_id],
+                extension_package_state_from_row,
+            )
+            .optional()
+            .map_err(StorageError::from)
+    }
+
+    pub fn list_extension_package_state_records(
+        &self,
+        package_kind: &str,
+    ) -> Result<Vec<ExtensionPackageStateRecord>, StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        let mut statement = connection.prepare(
+            "SELECT package_kind, extension_id, active_version, rollback_version, enabled
+             FROM extension_package_state
+             WHERE package_kind = ?1
+             ORDER BY extension_id ASC",
+        )?;
+        statement
+            .query_map([package_kind], extension_package_state_from_row)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StorageError::from)
+    }
+
+    pub fn load_extension_package_version_record(
+        &self,
+        package_kind: &str,
+        extension_id: &str,
+        version: &str,
+    ) -> Result<Option<ExtensionPackageVersionRecord>, StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        connection
+            .query_row(
+                "SELECT package_kind, extension_id, version, archive_sha256,
+                        package_schema_version, source, package_manifest_json,
+                        extension_manifest_json, installed_at
+                 FROM extension_package_versions
+                 WHERE package_kind = ?1 AND extension_id = ?2 AND version = ?3",
+                params![package_kind, extension_id, version],
+                extension_package_version_from_row,
+            )
+            .optional()
+            .map_err(StorageError::from)
+    }
+
+    pub fn list_extension_package_version_records(
+        &self,
+        package_kind: &str,
+        extension_id: &str,
+    ) -> Result<Vec<ExtensionPackageVersionRecord>, StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        let mut statement = connection.prepare(
+            "SELECT package_kind, extension_id, version, archive_sha256,
+                    package_schema_version, source, package_manifest_json,
+                    extension_manifest_json, installed_at
+             FROM extension_package_versions
+             WHERE package_kind = ?1 AND extension_id = ?2
+             ORDER BY installed_at DESC, version DESC",
+        )?;
+        statement
+            .query_map(
+                params![package_kind, extension_id],
+                extension_package_version_from_row,
+            )?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StorageError::from)
+    }
+
+    pub fn set_extension_package_enabled(
+        &self,
+        package_kind: &str,
+        extension_id: &str,
+        enabled: bool,
+    ) -> Result<(), StorageError> {
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        let changed = connection.execute(
+            "UPDATE extension_package_state
+             SET enabled = ?3, updated_at = CURRENT_TIMESTAMP
+             WHERE package_kind = ?1 AND extension_id = ?2",
+            params![package_kind, extension_id, enabled],
+        )?;
+        if changed == 1 {
+            Ok(())
+        } else {
+            Err(StorageError::InvalidRecord)
+        }
+    }
+
+    pub fn rollback_extension_package(
+        &self,
+        package_kind: &str,
+        extension_id: &str,
+    ) -> Result<ExtensionPackageStateRecord, StorageError> {
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        let transaction = connection.transaction()?;
+        let (active_version, rollback_version, enabled) = transaction
+            .query_row(
+                "SELECT active_version, rollback_version, enabled
+                 FROM extension_package_state
+                 WHERE package_kind = ?1 AND extension_id = ?2",
+                params![package_kind, extension_id],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, Option<String>>(1)?,
+                        row.get::<_, bool>(2)?,
+                    ))
+                },
+            )
+            .optional()?
+            .ok_or(StorageError::InvalidRecord)?;
+        let rollback_version = rollback_version.ok_or(StorageError::InvalidRecord)?;
+        transaction.execute(
+            "UPDATE extension_package_state
+             SET active_version = ?3,
+                 rollback_version = ?4,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE package_kind = ?1 AND extension_id = ?2",
+            params![package_kind, extension_id, rollback_version, active_version],
+        )?;
+        transaction.commit()?;
+        Ok(ExtensionPackageStateRecord {
+            package_kind: package_kind.to_owned(),
+            extension_id: extension_id.to_owned(),
+            active_version: rollback_version,
+            rollback_version: Some(active_version),
+            enabled,
+        })
+    }
+
+    pub fn delete_extension_package_records(
+        &self,
+        package_kind: &str,
+        extension_id: &str,
+    ) -> Result<(), StorageError> {
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| StorageError::StateUnavailable)?;
+        let transaction = connection.transaction()?;
+        let changed = transaction.execute(
+            "DELETE FROM extension_package_state
+             WHERE package_kind = ?1 AND extension_id = ?2",
+            params![package_kind, extension_id],
+        )?;
+        if changed != 1 {
+            return Err(StorageError::InvalidRecord);
+        }
+        transaction.execute(
+            "DELETE FROM extension_package_versions
+             WHERE package_kind = ?1 AND extension_id = ?2",
+            params![package_kind, extension_id],
+        )?;
+        transaction.commit().map_err(StorageError::from)
+    }
+}
+
+fn extension_package_state_from_row(
+    row: &rusqlite::Row<'_>,
+) -> rusqlite::Result<ExtensionPackageStateRecord> {
+    Ok(ExtensionPackageStateRecord {
+        package_kind: row.get(0)?,
+        extension_id: row.get(1)?,
+        active_version: row.get(2)?,
+        rollback_version: row.get(3)?,
+        enabled: row.get(4)?,
+    })
+}
+
+fn save_extension_package_version(
+    transaction: &rusqlite::Transaction<'_>,
+    record: &NewExtensionPackageVersionRecord,
+) -> Result<(), StorageError> {
+    let existing_digest = transaction
+        .query_row(
+            "SELECT archive_sha256
+             FROM extension_package_versions
+             WHERE package_kind = ?1 AND extension_id = ?2 AND version = ?3",
+            params![record.package_kind, record.extension_id, record.version],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()?;
+    match existing_digest {
+        Some(digest) if digest != record.archive_sha256 => Err(StorageError::InvalidRecord),
+        Some(_) => Ok(()),
+        None => {
+            transaction.execute(
+                "INSERT INTO extension_package_versions (
+                    package_kind, extension_id, version, archive_sha256,
+                    package_schema_version, source, package_manifest_json,
+                    extension_manifest_json
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                params![
+                    record.package_kind,
+                    record.extension_id,
+                    record.version,
+                    record.archive_sha256,
+                    i64::from(record.package_schema_version),
+                    record.source,
+                    record.package_manifest_json,
+                    record.extension_manifest_json,
+                ],
+            )?;
+            Ok(())
+        }
+    }
+}
+
+fn extension_package_version_from_row(
+    row: &rusqlite::Row<'_>,
+) -> rusqlite::Result<ExtensionPackageVersionRecord> {
+    let package_schema_version = row.get::<_, i64>(4)?;
+    let package_schema_version = u32::try_from(package_schema_version)
+        .map_err(|_| rusqlite::Error::IntegralValueOutOfRange(4, package_schema_version))?;
+    Ok(ExtensionPackageVersionRecord {
+        package_kind: row.get(0)?,
+        extension_id: row.get(1)?,
+        version: row.get(2)?,
+        archive_sha256: row.get(3)?,
+        package_schema_version,
+        source: row.get(5)?,
+        package_manifest_json: row.get(6)?,
+        extension_manifest_json: row.get(7)?,
+        installed_at: row.get(8)?,
+    })
 }
 
 impl Store {

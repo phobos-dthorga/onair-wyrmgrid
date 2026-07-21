@@ -27,8 +27,8 @@ Capture Provider protocol version 1 is independently versioned and uses bounded
 JSON control headers plus a separately bounded raw binary body for encoded Opus
 packets. It is exercised by a deterministic development-only fake provider.
 Default-off consent, application orchestration, encrypted media lifecycle, and
-authenticated packet inspection/export now exist, but no native or packaged
-provider exists. A provider may fail or be absent without taking down WyrmGrid
+authenticated packet inspection/export and external `.wyrmaudio` lifecycle now
+exist, but no native capture provider exists. A provider may fail or be absent without taking down WyrmGrid
 or the simulator.
 
 The Rust application service is authoritative for consent, source selection,
@@ -44,13 +44,13 @@ fixtures, bounded framing, and deterministic fake-provider tests. The exact
 framing and compatibility decision are documented in the
 [Audio Capture Provider protocol reference](audio-capture-provider-protocol.md).
 
-Slices 2–4 implement independent persisted consent, explicit permission
-requests, debug fake-provider orchestration, schema-18 metadata, authenticated
+Slices 2–5 implement independent persisted consent, explicit permission
+requests, managed external-provider selection, schema-20 package state, authenticated
 external packet segments, recovery, retention, tombstoned deletion, portable-
 backup omission, bounded authenticated packet inspection, and separately
 warned plaintext packet export. These slices do not enable a microphone or
-native simulator capture and do not establish audible playback, packaging, or
-live certification.
+native simulator capture and do not establish audible playback or live
+certification.
 
 ## Simulator and operating-system support
 

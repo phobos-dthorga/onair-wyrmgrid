@@ -3,8 +3,8 @@
 The simulator experience has three separate states. WyrmGrid must name them
 honestly instead of treating all three as “telemetry”:
 
-1. **Provider available**: the approved sidecar executable is installed and can
-   be launched.
+1. **Provider available**: an enabled, manifest-validated provider package
+   supports this host and its sidecar executable can be launched.
 2. **Provider connected**: the sidecar has completed the Bridge handshake and is
    receiving live simulator facts.
 3. **Flight recording active**: the user has chosen to persist a bounded session

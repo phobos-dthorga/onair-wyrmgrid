@@ -18,6 +18,9 @@ choose the active source, or inherit a provider's capabilities.
   supported platforms and simulators, executable, and capabilities.
 - `schemas/simulator-provider-manifest-v1.schema.json` defines manifest version
   1. IDs use reverse-domain notation and entry points are safe relative paths.
+- `schemas/simulator-provider-package-manifest-v1.schema.json` defines the
+  independently installable `.wyrmprovider` envelope and exact payload
+  inventory.
 - `schemas/bridge-protocol-envelope-v1.schema.json` defines Bridge protocol
   version 1.
 - `schemas/simulator-telemetry-snapshot-v1.schema.json` defines the
@@ -27,9 +30,12 @@ choose the active source, or inherit a provider's capabilities.
   `schemas/fixtures/simulator-telemetry-v1.json` are sanitized compatibility
   fixtures.
 
-Provider packages are not ordinary `plugin.json` packages. Version 1 registers
-only explicitly host-approved providers; a folder copied into the plugin
-directory is neither discovered nor executed as a simulator provider.
+Provider packages are not ordinary `plugin.json` packages. A `.wyrmprovider`
+contains `provider.json`, the declared executable, and any other exactly
+inventoried payloads. The desktop can inspect, install, enable, disable, update,
+roll back, and remove one through a canonical per-user managed root without
+rebuilding WyrmGrid. Providers remain a different trust class from ordinary
+plugins and never inherit an ordinary plugin's approval.
 
 ## Transport and lifecycle
 
@@ -104,8 +110,8 @@ SimConnect executable. Its implementation should:
    provenance and omit unsupported facts;
 6. add sanitized raw-to-domain fixtures, boundary tests, Bridge handshake tests,
    absent/incompatible/disconnect tests, and an outside-repository live matrix;
-7. add the provider to the host's approved registration list and source picker;
-   and
+7. build a deterministic `.wyrmprovider`, install it through the managed
+   provider interface, and verify it appears in the source picker; and
 8. preserve the selected source if SimConnect is unavailable—never switch to
    FSUIPC without a visible user choice or a separately documented policy.
 
@@ -125,7 +131,7 @@ The Python SDK offers an optional `on_simulator_telemetry` callback. Existing
 plugins that do not request the permission receive no telemetry and require no
 code change.
 
-## Building and staging the first provider
+## Building and packaging a provider
 
 The normal development launch prepares the sidecar before starting Tauri:
 
@@ -133,17 +139,37 @@ The normal development launch prepares the sidecar before starting Tauri:
 npm run dev
 ```
 
-`npm run provider:prepare` performs the same debug build and Tauri staging
-without launching the desktop. Development discovery checks `target/debug` in
-the workspace. Release preparation builds the provider in release mode and
-copies it to Tauri's ignored `binaries` staging directory with the required
-target-triple suffix. CI verifies the preparation command and Tauri bundles the
-declared external binary only in Windows packages. Non-Windows builds skip this
-native provider. A custom build can be selected with an absolute path:
+`npm run provider:prepare` performs the same debug build and creates an ignored
+`.wyrmprovider` staging artifact for Tauri without launching the desktop. The
+desktop installer includes that package only as a seed; first launch validates
+and installs it through the normal managed-provider service. Non-Windows builds
+skip the Windows-only reference provider.
+
+To create the separately distributable release artifact for the first-party
+provider, run:
 
 ```powershell
-$env:WYRMGRID_SIMULATOR_PROVIDER_PATH = "C:\absolute\path\wyrmgrid-simconnect-provider.exe"
+npm run provider:distribution
 ```
+
+The result is
+`assets/provider-packages/msfs2024-simconnect.wyrmprovider`. It is the same
+package format accepted by the desktop's **Install a simulator provider**
+interface and is not coupled to a WyrmGrid installer.
+
+For another already-built provider directory containing `provider.json` and
+its declared entry point, run:
+
+```powershell
+npm run provider:package -- --source path\to\provider --output dist\my-provider.wyrmprovider
+```
+
+The authoring tool refuses undeclared or unsafe paths, identity or version
+mismatches, missing entry points, excessive payloads, and overwrite without
+`--force`. It emits deterministic ZIP bytes with a complete SHA-256 inventory.
+The desktop independently repeats validation; packaging is not a trust
+decision. The provider's package version, `provider.json` version, and Bridge
+hello version must match.
 
 The SimConnect provider searches for `SimConnect.dll` beside its executable,
 then an absolute `WYRMGRID_SIMCONNECT_DLL`, then `MSFS2024_SDK`, and finally the
@@ -158,12 +184,18 @@ run a sanitized outside-repository integration session against a supported MSFS
 2024 build and representative aircraft, recording simulator/provider versions
 and behavioural results without routes, coordinates, usernames, or identifiers.
 
-## Community-provider release gate
+## External provider release gate
 
-The protocol is open for future providers, but loading unreviewed native
-executables is not yet a supported end-user workflow. Public provider packages
-need signed artifacts, publisher identity, hashes and tamper checks, canonical
-installation roots, explicit permission/trust review, CPU/memory/process limits,
-rate and restart throttling, safe update/rollback, vulnerability handling, and a
-provider conformance kit. Until those controls ship, providers are built-in or
-maintainer-approved development integrations only.
+Local external installation now uses a canonical provider root, staged
+manifest and content validation, explicit trust review, recorded provenance,
+atomic activation, safe disable/removal, and rollback. An unsigned local
+package is labelled unverified and is installed only through deliberate user
+action. Installation does not launch it or enable auto-start.
+
+Before WyrmGrid recommends unreviewed native providers or distributes them
+through Aerie, it additionally needs publisher identity, signed artifacts,
+authenticated updates, tamper checks, CPU/memory/process limits, rate and
+restart throttling, vulnerability handling, and a provider conformance kit.
+Local installation does not remove those distribution hardening gates. See
+[ADR-0022](../architecture/decisions/0022-simulator-provider-package-format-v1.md)
+for the package compatibility and security decision.

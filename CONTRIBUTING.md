@@ -13,6 +13,22 @@ Good first contributions include documentation corrections, accessible UI
 improvements, test fixtures with all personal data removed, and small isolated
 plugin examples.
 
+A contribution described as a plugin or provider must preserve an external
+artifact boundary. It may add a supported script, executable, native library,
+or future runtime payload, but it must not require community users to rebuild
+or relink the WyrmGrid desktop. A first-party artifact may be included in an
+official installer while remaining independently packageable and installable.
+Ordinary plugin authors can create the current version-one package with
+`npm run plugin:package -- --source <directory> --output <file.wyrmplugin>`;
+see the [plugin platform guide](docs/plugins/overview.md) for inventory,
+runtime, trust, and installation details.
+Simulator provider authors can package an existing `provider.json` and its
+declared executable with
+`npm run provider:package -- --source <directory> --output <file.wyrmprovider>`;
+see the
+[simulator provider guide](docs/integrations/simulator-provider-authoring.md)
+for Bridge compatibility, native-code trust, and lifecycle requirements.
+
 ## Local checks
 
 ```powershell

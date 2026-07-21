@@ -19,8 +19,9 @@ use wyrmgrid_storage::{
 
 use crate::{
     AudioCaptureProvider, AudioMediaError, AudioProviderError, AudioProviderLevel,
-    AudioSegmentContext, EncodedAudioPacket, EncryptedAudioMediaStore, encode_packet_export,
-    source_truth_id,
+    AudioProviderPackageError, AudioProviderPackageInspection, AudioProviderPackageService,
+    AudioSegmentContext, EncodedAudioPacket, EncryptedAudioMediaStore,
+    ManagedAudioProviderPackageView, encode_packet_export, source_truth_id,
 };
 
 pub const DEFAULT_AUDIO_RETENTION_DAYS: u32 = 30;
@@ -199,6 +200,18 @@ pub enum AudioRecordingError {
     StateUnavailable,
     #[error("The audio provider violated its contract or became unavailable.")]
     ProviderFailed,
+    #[error("The selected audio provider package is invalid or unsupported.")]
+    InvalidProviderPackage,
+    #[error("Local audio provider package storage is unavailable.")]
+    ProviderPackageStorageUnavailable,
+    #[error("That audio provider version already exists with different package contents.")]
+    ProviderPackageVersionConflict,
+    #[error("Stop audio recording before changing the selected provider package.")]
+    ProviderPackageInUse,
+    #[error("No previous audio provider version is available for rollback.")]
+    ProviderRollbackUnavailable,
+    #[error("That audio provider is not installed, enabled, or available on this platform.")]
+    UnknownProvider,
 }
 
 #[derive(Clone)]
@@ -209,9 +222,14 @@ pub struct AudioRecordingService {
 struct AudioRecordingInner {
     store: Store,
     media: EncryptedAudioMediaStore,
-    provider: Option<Arc<dyn AudioCaptureProvider>>,
+    provider: AudioProviderAccess,
     state: Mutex<AudioRuntimeState>,
     operation: Mutex<()>,
+}
+
+enum AudioProviderAccess {
+    Static(Option<Arc<dyn AudioCaptureProvider>>),
+    Managed(AudioProviderPackageService),
 }
 
 #[derive(Default)]
@@ -234,7 +252,23 @@ impl AudioRecordingService {
             inner: Arc::new(AudioRecordingInner {
                 store,
                 media,
-                provider,
+                provider: AudioProviderAccess::Static(provider),
+                state: Mutex::new(AudioRuntimeState::default()),
+                operation: Mutex::new(()),
+            }),
+        }
+    }
+
+    pub fn with_managed_provider_packages(
+        store: Store,
+        media: EncryptedAudioMediaStore,
+        provider_packages: AudioProviderPackageService,
+    ) -> Self {
+        Self {
+            inner: Arc::new(AudioRecordingInner {
+                store,
+                media,
+                provider: AudioProviderAccess::Managed(provider_packages),
                 state: Mutex::new(AudioRuntimeState::default()),
                 operation: Mutex::new(()),
             }),
@@ -244,6 +278,7 @@ impl AudioRecordingService {
     pub fn status(&self) -> Result<AudioRecordingView, AudioRecordingError> {
         let preferences = self.load_preferences()?;
         let selections = self.load_selections()?;
+        let provider = self.provider_optional()?;
         let state = self
             .inner
             .state
@@ -265,18 +300,115 @@ impl AudioRecordingService {
             .collect::<Result<Vec<_>, _>>()?;
         Ok(AudioRecordingView {
             preferences,
-            provider_id: self
-                .inner
-                .provider
+            provider_id: provider
                 .as_ref()
                 .map(|provider| provider.provider_id().to_owned()),
-            provider_available: self.inner.provider.is_some(),
+            provider_available: provider.is_some(),
             recording_active: state.active_session_id.is_some(),
             active_session_id: state.active_session_id.clone(),
             sources,
             sessions,
             last_code: state.last_code.clone(),
         })
+    }
+
+    pub fn inspect_provider_package(
+        &self,
+        path: &Path,
+    ) -> Result<AudioProviderPackageInspection, AudioRecordingError> {
+        self.managed_provider_packages()?
+            .inspect_package(path)
+            .map_err(map_provider_package_error)
+    }
+
+    pub fn list_managed_provider_packages(
+        &self,
+    ) -> Result<Vec<ManagedAudioProviderPackageView>, AudioRecordingError> {
+        self.managed_provider_packages()?
+            .list_packages()
+            .map_err(map_provider_package_error)
+    }
+
+    pub fn install_provider_package(
+        &self,
+        path: &Path,
+    ) -> Result<ManagedAudioProviderPackageView, AudioRecordingError> {
+        let _operation = self.package_mutation_guard()?;
+        let packages = self.managed_provider_packages()?;
+        let selected = packages
+            .selected_provider_id()
+            .map_err(map_provider_package_error)?;
+        let installed = packages
+            .install_package(path)
+            .map_err(map_provider_package_error)?;
+        if selected.as_deref() == Some(&installed.id) {
+            self.clear_provider_runtime_state()?;
+        }
+        Ok(installed)
+    }
+
+    pub fn select_managed_provider(
+        &self,
+        provider_id: &str,
+    ) -> Result<AudioRecordingView, AudioRecordingError> {
+        let _operation = self.package_mutation_guard()?;
+        self.managed_provider_packages()?
+            .select_provider(provider_id)
+            .map_err(map_provider_package_error)?;
+        self.clear_provider_runtime_state()?;
+        self.status()
+    }
+
+    pub fn set_managed_provider_enabled(
+        &self,
+        provider_id: &str,
+        enabled: bool,
+    ) -> Result<ManagedAudioProviderPackageView, AudioRecordingError> {
+        let _operation = self.package_mutation_guard()?;
+        let packages = self.managed_provider_packages()?;
+        let selected = packages
+            .selected_provider_id()
+            .map_err(map_provider_package_error)?;
+        let view = packages
+            .set_enabled(provider_id, enabled)
+            .map_err(map_provider_package_error)?;
+        if selected.as_deref() == Some(provider_id) {
+            self.clear_provider_runtime_state()?;
+        }
+        Ok(view)
+    }
+
+    pub fn rollback_managed_provider(
+        &self,
+        provider_id: &str,
+    ) -> Result<ManagedAudioProviderPackageView, AudioRecordingError> {
+        let _operation = self.package_mutation_guard()?;
+        let packages = self.managed_provider_packages()?;
+        let selected = packages
+            .selected_provider_id()
+            .map_err(map_provider_package_error)?;
+        let view = packages
+            .rollback(provider_id)
+            .map_err(map_provider_package_error)?;
+        if selected.as_deref() == Some(provider_id) {
+            self.clear_provider_runtime_state()?;
+        }
+        Ok(view)
+    }
+
+    pub fn remove_managed_provider(&self, provider_id: &str) -> Result<(), AudioRecordingError> {
+        let _operation = self.package_mutation_guard()?;
+        let packages = self.managed_provider_packages()?;
+        let selected = packages
+            .selected_provider_id()
+            .map_err(map_provider_package_error)?;
+        packages
+            .remove(provider_id)
+            .map_err(map_provider_package_error)?;
+        if selected.as_deref() == Some(provider_id) {
+            self.clear_provider_runtime_state()?;
+        }
+        Ok(())
     }
 
     pub fn recover_interrupted_sessions(&self) -> Result<AudioRecordingView, AudioRecordingError> {
@@ -1082,11 +1214,56 @@ impl AudioRecordingService {
             .collect()
     }
 
-    fn provider(&self) -> Result<&Arc<dyn AudioCaptureProvider>, AudioRecordingError> {
-        self.inner
-            .provider
-            .as_ref()
+    fn provider(&self) -> Result<Arc<dyn AudioCaptureProvider>, AudioRecordingError> {
+        self.provider_optional()?
             .ok_or(AudioRecordingError::ProviderUnavailable)
+    }
+
+    fn provider_optional(
+        &self,
+    ) -> Result<Option<Arc<dyn AudioCaptureProvider>>, AudioRecordingError> {
+        match &self.inner.provider {
+            AudioProviderAccess::Static(provider) => Ok(provider.clone()),
+            AudioProviderAccess::Managed(packages) => {
+                packages.provider().map_err(map_provider_package_error)
+            }
+        }
+    }
+
+    fn managed_provider_packages(
+        &self,
+    ) -> Result<&AudioProviderPackageService, AudioRecordingError> {
+        match &self.inner.provider {
+            AudioProviderAccess::Managed(packages) => Ok(packages),
+            AudioProviderAccess::Static(_) => {
+                Err(AudioRecordingError::ProviderPackageStorageUnavailable)
+            }
+        }
+    }
+
+    fn package_mutation_guard(&self) -> Result<std::sync::MutexGuard<'_, ()>, AudioRecordingError> {
+        let guard = self
+            .inner
+            .operation
+            .lock()
+            .map_err(|_| AudioRecordingError::StateUnavailable)?;
+        if self.active_session_id()?.is_some() {
+            return Err(AudioRecordingError::ProviderPackageInUse);
+        }
+        Ok(guard)
+    }
+
+    fn clear_provider_runtime_state(&self) -> Result<(), AudioRecordingError> {
+        let mut state = self
+            .inner
+            .state
+            .lock()
+            .map_err(|_| AudioRecordingError::StateUnavailable)?;
+        state.sources.clear();
+        state.track_sources.clear();
+        state.levels.clear();
+        state.last_code = Some("audio.provider_changed".into());
+        Ok(())
     }
 
     fn active_session_id(&self) -> Result<Option<String>, AudioRecordingError> {
@@ -1373,6 +1550,23 @@ fn map_provider_error(error: AudioProviderError) -> AudioRecordingError {
             AudioRecordingError::ProviderUnavailable
         }
         _ => AudioRecordingError::ProviderFailed,
+    }
+}
+fn map_provider_package_error(error: AudioProviderPackageError) -> AudioRecordingError {
+    match error {
+        AudioProviderPackageError::InvalidPackage => AudioRecordingError::InvalidProviderPackage,
+        AudioProviderPackageError::PackageStorageUnavailable
+        | AudioProviderPackageError::SelectionUnavailable => {
+            AudioRecordingError::ProviderPackageStorageUnavailable
+        }
+        AudioProviderPackageError::PackageVersionConflict => {
+            AudioRecordingError::ProviderPackageVersionConflict
+        }
+        AudioProviderPackageError::RollbackUnavailable => {
+            AudioRecordingError::ProviderRollbackUnavailable
+        }
+        AudioProviderPackageError::UnknownProvider
+        | AudioProviderPackageError::ProviderUnavailable => AudioRecordingError::UnknownProvider,
     }
 }
 fn map_media_error(_: AudioMediaError) -> AudioRecordingError {

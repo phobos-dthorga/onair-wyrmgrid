@@ -23,10 +23,14 @@
     ProviderConnectionState,
     SimulatorBridgeView,
     AudioPlaybackView,
+    AudioProviderPackageInspection,
     AudioRecordingPreferences,
     AudioRecordingView,
     AudioSourceSelection,
+    ManagedAudioProviderPackage,
+    ManagedSimulatorProviderPackage,
     SimulatorProviderView,
+    SimulatorProviderPackageInspection,
     SimulatorRecordingView,
     SimulatorSessionDebrief,
     SimulatorSessionView,
@@ -35,6 +39,8 @@
   let {
     open,
     status,
+    managedProviders,
+    pendingProviderPackage,
     busy = false,
     errorMessage = "",
     displayPreferences,
@@ -44,10 +50,18 @@
     recordingBusy = false,
     audioStatus,
     audioPlayback,
+    managedAudioProviders,
+    pendingAudioProviderPackage,
     audioBusy = false,
     onrefresh,
     onstart,
     onstop,
+    onchooseproviderpackage,
+    oncancelproviderpackage,
+    oninstallproviderpackage,
+    onproviderpackageenable,
+    onproviderpackagerollback,
+    onproviderpackageremove,
     onrecordstart,
     onrecordstop,
     onsessionselect,
@@ -58,6 +72,13 @@
     onexport,
     onviewatlas,
     onaudiopreferences,
+    onaudiochooseproviderpackage,
+    onaudiocancelproviderpackage,
+    onaudioinstallproviderpackage,
+    onaudioproviderselect,
+    onaudioproviderenable,
+    onaudioproviderrollback,
+    onaudioproviderremove,
     onaudiorefresh,
     onaudiopermission,
     onaudiosource,
@@ -68,6 +89,8 @@
   }: {
     open: boolean;
     status: SimulatorBridgeView;
+    managedProviders: ManagedSimulatorProviderPackage[];
+    pendingProviderPackage?: SimulatorProviderPackageInspection;
     busy?: boolean;
     errorMessage?: string;
     displayPreferences: DisplayPreferences;
@@ -77,10 +100,18 @@
     recordingBusy?: boolean;
     audioStatus: AudioRecordingView;
     audioPlayback?: AudioPlaybackView;
+    managedAudioProviders: ManagedAudioProviderPackage[];
+    pendingAudioProviderPackage?: AudioProviderPackageInspection;
     audioBusy?: boolean;
     onrefresh: () => void;
     onstart: (providerId: string) => void;
     onstop: (providerId: string) => void;
+    onchooseproviderpackage: () => void;
+    oncancelproviderpackage: () => void;
+    oninstallproviderpackage: () => void;
+    onproviderpackageenable: (providerId: string, enabled: boolean) => void;
+    onproviderpackagerollback: (providerId: string) => void;
+    onproviderpackageremove: (providerId: string) => void;
     onrecordstart: () => void;
     onrecordstop: () => void;
     onsessionselect: (sessionId: string) => void;
@@ -91,6 +122,13 @@
     onexport: (sessionId: string, format: "json" | "csv") => void;
     onviewatlas: (route: AtlasFlightRoute) => void;
     onaudiopreferences: (preferences: AudioRecordingPreferences) => void;
+    onaudiochooseproviderpackage: () => void;
+    onaudiocancelproviderpackage: () => void;
+    onaudioinstallproviderpackage: () => void;
+    onaudioproviderselect: (providerId: string) => void;
+    onaudioproviderenable: (providerId: string, enabled: boolean) => void;
+    onaudioproviderrollback: (providerId: string) => void;
+    onaudioproviderremove: (providerId: string) => void;
     onaudiorefresh: () => void;
     onaudiopermission: (sourceId: string) => void;
     onaudiosource: (selection: AudioSourceSelection) => void;
@@ -101,6 +139,7 @@
   } = $props();
 
   const snapshot = $derived(status.latest_snapshot);
+  let removalCandidate = $state<string>();
 
   function stateLabel(state: ProviderConnectionState): string {
     return $translation(providerConnectionStateMessageKeys[state]);
@@ -114,6 +153,18 @@
 
   function processActive(provider: SimulatorProviderView): boolean {
     return ["starting", "running", "stopping"].includes(provider.process_state);
+  }
+
+  function providerPackageProcessActive(providerId: string): boolean {
+    return status.providers.some(
+      (provider) => provider.id === providerId && processActive(provider),
+    );
+  }
+
+  function compactBytes(bytes: number): string {
+    if (bytes >= 1024 * 1024)
+      return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
+    return `${Math.max(1, Math.ceil(bytes / 1024))} KiB`;
   }
 
   function bridgeRitualStage(provider: SimulatorProviderView): number {
@@ -208,6 +259,188 @@
       {#if errorMessage}<p class="simulator-error" role="alert">
           {errorMessage}
         </p>{/if}
+
+      <section
+        class="provider-packages"
+        aria-labelledby="provider-package-title"
+      >
+        <div class="provider-package-heading">
+          <div>
+            <span class="eyebrow"
+              >{$translation("simulator-provider-packages-eyebrow")}</span
+            >
+            <h3 id="provider-package-title">
+              {$translation("simulator-provider-packages-title")}
+            </h3>
+            <p>
+              {$translation("simulator-provider-packages-introduction")}
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={busy || pendingProviderPackage !== undefined}
+            onclick={onchooseproviderpackage}
+            >{$translation("simulator-provider-packages-choose")}</button
+          >
+        </div>
+
+        {#if pendingProviderPackage}
+          <div class="provider-package-review">
+            <div>
+              <strong>{pendingProviderPackage.name}</strong>
+              <span>
+                {$translation("simulator-provider-package-by-author", {
+                  author: pendingProviderPackage.author,
+                  version: pendingProviderPackage.version,
+                })}
+              </span>
+            </div>
+            <dl>
+              <div>
+                <dt>{$translation("simulator-provider-package-identity")}</dt>
+                <dd>{pendingProviderPackage.id}</dd>
+              </div>
+              <div>
+                <dt>
+                  {$translation("simulator-provider-package-compatibility")}
+                </dt>
+                <dd>
+                  {$translation(
+                    "simulator-provider-package-compatibility-value",
+                    {
+                      platforms: pendingProviderPackage.platforms.join(" · "),
+                      simulators:
+                        pendingProviderPackage.simulators.join(" · "),
+                      bridge: pendingProviderPackage.bridge_protocol_version,
+                    },
+                  )}
+                </dd>
+              </div>
+              <div>
+                <dt>{$translation("simulator-provider-package-contents")}</dt>
+                <dd>
+                  {$translation("simulator-provider-package-contents-value", {
+                    count: pendingProviderPackage.file_count,
+                    size: compactBytes(pendingProviderPackage.expanded_size),
+                  })}
+                </dd>
+              </div>
+              <div>
+                <dt>
+                  {$translation("simulator-provider-package-capabilities")}
+                </dt>
+                <dd>{pendingProviderPackage.capabilities.join(" · ")}</dd>
+              </div>
+              <div>
+                <dt>
+                  {$translation("simulator-provider-package-archive-digest")}
+                </dt>
+                <dd class="provider-package-digest">
+                  {pendingProviderPackage.archive_sha256}
+                </dd>
+              </div>
+            </dl>
+            <p class="provider-package-warning">
+              {$translation("security-simulator-provider-package-warning")}
+            </p>
+            <div class="provider-package-actions">
+              <button
+                class="secondary"
+                type="button"
+                disabled={busy}
+                onclick={oncancelproviderpackage}
+                >{$translation("action-cancel")}</button
+              >
+              <button
+                type="button"
+                disabled={busy}
+                onclick={oninstallproviderpackage}
+                >{$translation("simulator-provider-package-install")}</button
+              >
+            </div>
+          </div>
+        {/if}
+
+        {#if managedProviders.length > 0}
+          <div class="managed-provider-packages">
+            {#each managedProviders as managed (managed.id)}
+              <article>
+                <div class="managed-provider-summary">
+                  <strong>{managed.name}</strong>
+                  <span>
+                    {managed.enabled
+                      ? $translation("simulator-provider-package-enabled", {
+                          version: managed.active_version,
+                        })
+                      : $translation("simulator-provider-package-disabled", {
+                          version: managed.active_version,
+                        })}
+                  </span>
+                  <small>{managed.id}</small>
+                </div>
+                {#if removalCandidate === managed.id}
+                  <div class="provider-removal-confirmation">
+                    <span
+                      >{$translation(
+                        "destructive-simulator-provider-package-remove-confirm",
+                      )}</span
+                    >
+                    <button
+                      class="secondary"
+                      type="button"
+                      disabled={busy}
+                      onclick={() => (removalCandidate = undefined)}
+                      >{$translation("simulator-provider-package-keep")}</button
+                    >
+                    <button
+                      class="stop"
+                      type="button"
+                      disabled={busy}
+                      onclick={() => {
+                        removalCandidate = undefined;
+                        onproviderpackageremove(managed.id);
+                      }}
+                      >{$translation("simulator-provider-package-remove")}</button
+                    >
+                  </div>
+                {:else}
+                  <div class="provider-package-actions">
+                    <button
+                      class="secondary"
+                      type="button"
+                      disabled={busy ||
+                        providerPackageProcessActive(managed.id)}
+                      onclick={() =>
+                        onproviderpackageenable(managed.id, !managed.enabled)}
+                    >
+                      {managed.enabled
+                        ? $translation("simulator-provider-package-disable")
+                        : $translation("simulator-provider-package-enable")}
+                    </button>
+                    <button
+                      class="secondary"
+                      type="button"
+                      disabled={busy ||
+                        !managed.rollback_version ||
+                        providerPackageProcessActive(managed.id)}
+                      onclick={() => onproviderpackagerollback(managed.id)}
+                      >{$translation("simulator-provider-package-rollback")}</button
+                    >
+                    <button
+                      class="stop"
+                      type="button"
+                      disabled={busy ||
+                        providerPackageProcessActive(managed.id)}
+                      onclick={() => (removalCandidate = managed.id)}
+                      >{$translation("simulator-provider-package-remove-menu")}</button
+                    >
+                  </div>
+                {/if}
+              </article>
+            {/each}
+          </div>
+        {/if}
+      </section>
 
       <section
         class="provider-list"
@@ -427,8 +660,17 @@
       <AudioRecordingPanel
         status={audioStatus}
         playback={audioPlayback}
+        managedProviders={managedAudioProviders}
+        pendingProviderPackage={pendingAudioProviderPackage}
         busy={audioBusy}
         onpreferences={onaudiopreferences}
+        onchooseproviderpackage={onaudiochooseproviderpackage}
+        oncancelproviderpackage={onaudiocancelproviderpackage}
+        oninstallproviderpackage={onaudioinstallproviderpackage}
+        onproviderselect={onaudioproviderselect}
+        onproviderenable={onaudioproviderenable}
+        onproviderrollback={onaudioproviderrollback}
+        onproviderremove={onaudioproviderremove}
         onrefresh={onaudiorefresh}
         onpermission={onaudiopermission}
         onsource={onaudiosource}
