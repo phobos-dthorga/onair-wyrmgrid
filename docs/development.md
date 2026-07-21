@@ -152,14 +152,39 @@ first release bundle must follow an explicit redistribution review. See
 the protocol, FSUIPC path, live-validation requirements, and community-provider
 release gate.
 
+## Debug audio capture and codecs
+
+Build the explicitly registered development audio sidecars with:
+
+```powershell
+cargo build -p wyrmgrid-fake-audio-provider `
+  -p wyrmgrid-windows-audio-provider `
+  -p wyrmgrid-opus-codec
+```
+
+The desktop uses the deterministic fake capture provider by default. To make a
+deliberate local microphone test, launch with
+`WYRMGRID_AUDIO_PROVIDER=windows-microphone`; WyrmGrid still requires master
+consent, a source selection, and an explicit permission action. An approved
+absolute development binary may be selected with
+`WYRMGRID_AUDIO_PROVIDER_PATH`. The first-party Opus codec is discovered from
+the development target directory or `WYRMGRID_AUDIO_CODEC_PATH`.
+
+Automated tests never set the Windows selector and never open a microphone.
+These sidecars are not staged into the installer. Do not infer packaged or live
+support from a successful local device test, and never include device labels,
+raw identifiers, PCM, encoded packets, or paths in test reports or optional-AI
+handoffs.
+
 ## Repository layout
 
 ```text
 apps/desktop/          Tauri and Svelte desktop interface
 crates/                application-owned Rust libraries
+codecs/                approved audio codec provider sidecars
 docs/                  durable design and operating documentation
 examples/plugins/      public protocol examples
-providers/             approved simulator provider sidecars
+providers/             approved simulator and capture provider sidecars
 schemas/               language-neutral public contracts
 locales/               canonical interface message catalogues
 .github/               contribution and automation policy

@@ -1,0 +1,15 @@
+{
+  "protocol_version": 2,
+  "sequence": 8,
+  "payload": {
+    "type": "pcm_frame",
+    "session_id": "session-fixture-1",
+    "track_id": "pilot-microphone",
+    "frame_sequence": 1,
+    "provider_monotonic_ns": 1020000,
+    "channels": 1,
+    "sample_rate_hz": 48000,
+    "frame_count": 120,
+    "payload_bytes": 240
+  }
+}

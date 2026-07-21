@@ -1,0 +1,21 @@
+{
+  "protocol_version": 2,
+  "sequence": 1,
+  "payload": {
+    "type": "hello",
+    "provider": {
+      "id": "dev.wyrmgrid.fake-audio",
+      "name": "WyrmGrid deterministic fake audio provider",
+      "version": "0.2.0",
+      "platform": "windows_x86_64",
+      "capabilities": [
+        "source_enumeration",
+        "permission_requests",
+        "pcm_s16le_capture",
+        "level_metering",
+        "hot_plug_notifications",
+        "clock_synchronization"
+      ]
+    }
+  }
+}

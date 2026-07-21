@@ -1,5 +1,19 @@
 # Dependency security notes
 
+## 2026-07-21: Windows capture and first-party Opus sidecars
+
+The debug-only Windows microphone provider uses CPAL 0.18.1 and its WASAPI
+backend. Direct target pins to `windows` 0.61.3 and `windows-core` 0.61.2 keep
+CPAL on the same Windows binding line already selected by the desktop graph and
+avoid incompatible generated-interface and macro versions. Automated tests use
+synthetic conversions and do not open a device.
+
+The first-party `dev.wyrmgrid.opus` codec provider uses `opus2` 0.4.0 with its
+pure-Rust Mousiki backend. This avoids a build-time native libopus/CMake toolchain
+dependency, but does not establish independent codec conformance or a security
+audit. The encoder runs out of process behind bounded PCM and packet frames; it
+does not receive storage paths, database handles, or XChaCha keys.
+
 ## 2026-07-20: RustCrypto authenticated audio media
 
 External audio segments use RustCrypto `chacha20poly1305` 0.11

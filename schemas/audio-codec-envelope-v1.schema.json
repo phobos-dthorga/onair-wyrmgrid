@@ -1,0 +1,237 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wyrmgrid.dev/schemas/audio-codec-envelope-v1.json",
+  "title": "WyrmGrid audio codec provider protocol v1 envelope header",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol_version", "sequence", "payload"],
+  "properties": {
+    "protocol_version": { "const": 1 },
+    "sequence": { "type": "integer", "minimum": 1 },
+    "payload": {
+      "oneOf": [
+        { "$ref": "#/$defs/hostHello" },
+        { "$ref": "#/$defs/startTrack" },
+        { "$ref": "#/$defs/encodePcm" },
+        { "$ref": "#/$defs/stopTrack" },
+        { "$ref": "#/$defs/shutdown" },
+        { "$ref": "#/$defs/providerHello" },
+        { "$ref": "#/$defs/state" },
+        { "$ref": "#/$defs/trackStarted" },
+        { "$ref": "#/$defs/encodedPacket" },
+        { "$ref": "#/$defs/trackStopped" },
+        { "$ref": "#/$defs/error" }
+      ]
+    }
+  },
+  "$defs": {
+    "machineId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "providerId": {
+      "type": "string",
+      "maxLength": 255,
+      "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?){2,}$"
+    },
+    "semanticVersion": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "profileId": {
+      "enum": ["pilot_microphone_v1", "isolated_voice_v1", "mixed_stereo_v1"]
+    },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "codec_id",
+        "media_type",
+        "channels",
+        "sample_rate_hz",
+        "target_bitrate_bps",
+        "packet_duration_48khz_frames"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/profileId" },
+        "codec_id": { "type": "string", "minLength": 1, "maxLength": 96 },
+        "media_type": { "type": "string", "minLength": 3, "maxLength": 120 },
+        "channels": { "type": "integer", "minimum": 1, "maximum": 8 },
+        "sample_rate_hz": { "const": 48000 },
+        "target_bitrate_bps": {
+          "type": "integer",
+          "minimum": 8000,
+          "maximum": 10000000
+        },
+        "packet_duration_48khz_frames": {
+          "enum": [120, 240, 480, 960, 1920, 2880]
+        }
+      }
+    },
+    "descriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "version", "platform", "profiles"],
+      "properties": {
+        "id": { "$ref": "#/$defs/providerId" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "version": { "$ref": "#/$defs/semanticVersion" },
+        "platform": {
+          "enum": [
+            "windows_x86_64",
+            "linux_x86_64",
+            "macos_aarch64",
+            "macos_x86_64"
+          ]
+        },
+        "profiles": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "items": { "$ref": "#/$defs/profile" }
+        }
+      }
+    },
+    "hostHello": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "host_version", "codec_provider_id"],
+      "properties": {
+        "type": { "const": "hello" },
+        "host_version": { "$ref": "#/$defs/semanticVersion" },
+        "codec_provider_id": { "$ref": "#/$defs/providerId" }
+      }
+    },
+    "startTrack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "session_id", "track_id", "profile"],
+      "properties": {
+        "type": { "const": "start_track" },
+        "session_id": { "$ref": "#/$defs/machineId" },
+        "track_id": { "$ref": "#/$defs/machineId" },
+        "profile": { "$ref": "#/$defs/profileId" }
+      }
+    },
+    "encodePcm": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "session_id",
+        "track_id",
+        "frame_sequence",
+        "provider_monotonic_ns",
+        "sample_format",
+        "channels",
+        "sample_rate_hz",
+        "frame_count",
+        "payload_bytes"
+      ],
+      "properties": {
+        "type": { "const": "encode_pcm" },
+        "session_id": { "$ref": "#/$defs/machineId" },
+        "track_id": { "$ref": "#/$defs/machineId" },
+        "frame_sequence": { "type": "integer", "minimum": 1 },
+        "provider_monotonic_ns": { "type": "integer", "minimum": 0 },
+        "sample_format": { "const": "s16le" },
+        "channels": { "type": "integer", "minimum": 1, "maximum": 8 },
+        "sample_rate_hz": { "const": 48000 },
+        "frame_count": { "enum": [120, 240, 480, 960, 1920, 2880] },
+        "payload_bytes": { "type": "integer", "minimum": 1, "maximum": 65536 }
+      }
+    },
+    "stopTrack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "session_id", "track_id"],
+      "properties": {
+        "type": { "const": "stop_track" },
+        "session_id": { "$ref": "#/$defs/machineId" },
+        "track_id": { "$ref": "#/$defs/machineId" }
+      }
+    },
+    "shutdown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": { "type": { "const": "shutdown" } }
+    },
+    "providerHello": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "codec"],
+      "properties": {
+        "type": { "const": "hello" },
+        "codec": { "$ref": "#/$defs/descriptor" }
+      }
+    },
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "state", "code"],
+      "properties": {
+        "type": { "const": "state" },
+        "state": {
+          "enum": ["starting", "ready", "encoding", "failed", "stopped"]
+        },
+        "code": { "$ref": "#/$defs/machineId" }
+      }
+    },
+    "trackStarted": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "session_id", "track_id", "profile"],
+      "properties": {
+        "type": { "const": "track_started" },
+        "session_id": { "$ref": "#/$defs/machineId" },
+        "track_id": { "$ref": "#/$defs/machineId" },
+        "profile": { "$ref": "#/$defs/profileId" }
+      }
+    },
+    "encodedPacket": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "session_id",
+        "track_id",
+        "packet_sequence",
+        "provider_monotonic_ns",
+        "duration_48khz_frames",
+        "payload_bytes"
+      ],
+      "properties": {
+        "type": { "const": "encoded_packet" },
+        "session_id": { "$ref": "#/$defs/machineId" },
+        "track_id": { "$ref": "#/$defs/machineId" },
+        "packet_sequence": { "type": "integer", "minimum": 1 },
+        "provider_monotonic_ns": { "type": "integer", "minimum": 0 },
+        "duration_48khz_frames": { "enum": [120, 240, 480, 960, 1920, 2880] },
+        "payload_bytes": { "type": "integer", "minimum": 1, "maximum": 16384 }
+      }
+    },
+    "trackStopped": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "session_id", "track_id"],
+      "properties": {
+        "type": { "const": "track_stopped" },
+        "session_id": { "$ref": "#/$defs/machineId" },
+        "track_id": { "$ref": "#/$defs/machineId" }
+      }
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "code"],
+      "properties": {
+        "type": { "const": "error" },
+        "code": { "$ref": "#/$defs/machineId" }
+      }
+    }
+  }
+}

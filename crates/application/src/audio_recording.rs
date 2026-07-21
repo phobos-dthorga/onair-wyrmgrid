@@ -9,7 +9,7 @@ use thiserror::Error;
 use uuid::Uuid;
 use wyrmgrid_audio_provider_protocol::{AudioCaptureEventKind, AudioTrackRequest};
 use wyrmgrid_domain::{
-    AudioOpusProfileId, AudioPermissionState, AudioSourceAvailability, AudioSourceCapability,
+    AudioPermissionState, AudioProfileId, AudioSourceAvailability, AudioSourceCapability,
     AudioSourceRole,
 };
 use wyrmgrid_storage::{
@@ -18,14 +18,15 @@ use wyrmgrid_storage::{
 };
 
 use crate::{
-    AudioCaptureProvider, AudioMediaError, AudioProviderError, AudioProviderLevel,
-    AudioSegmentContext, EncodedAudioPacket, EncryptedAudioMediaStore, encode_packet_export,
-    source_truth_id,
+    AudioCaptureProvider, AudioCodecError, AudioCodecProvider, AudioMediaError, AudioProviderError,
+    AudioProviderLevel, AudioSegmentContext, EncodedAudioPacket, EncryptedAudioMediaStore,
+    encode_packet_export, source_truth_id,
 };
 
 pub const DEFAULT_AUDIO_RETENTION_DAYS: u32 = 30;
 pub const DEFAULT_AUDIO_STORAGE_BUDGET_BYTES: u64 = 5 * 1024 * 1024 * 1024;
 const MAX_PLAYBACK_WINDOW_BYTES: usize = 2 * 1024 * 1024;
+const MAX_CAPTURE_DRAIN_FRAMES: u16 = 64;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AudioRecordingPreferences {
@@ -52,7 +53,8 @@ impl Default for AudioRecordingPreferences {
 pub struct AudioSourceSelection {
     pub provider_id: String,
     pub source_id: String,
-    pub profile_id: AudioOpusProfileId,
+    pub profile_id: AudioProfileId,
+    pub codec_provider_id: String,
     pub enabled: bool,
     pub playback_muted: bool,
     pub playback_solo: bool,
@@ -66,13 +68,21 @@ pub struct AudioSourceView {
     pub role: AudioSourceRole,
     pub availability: AudioSourceAvailability,
     pub permission: AudioPermissionState,
-    pub supported_profiles: Vec<AudioOpusProfileId>,
+    pub supported_profiles: Vec<AudioProfileId>,
+    pub codec_provider_id: Option<String>,
     pub enabled: bool,
     pub playback_muted: bool,
     pub playback_solo: bool,
     pub playback_volume_percent: u16,
     pub peak_millidbfs: Option<i32>,
     pub clipped: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct AudioCodecView {
+    pub id: String,
+    pub name: String,
+    pub supported_profiles: Vec<AudioProfileId>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -120,6 +130,7 @@ pub struct AudioRecordingView {
     pub recording_active: bool,
     pub active_session_id: Option<String>,
     pub sources: Vec<AudioSourceView>,
+    pub codecs: Vec<AudioCodecView>,
     pub sessions: Vec<AudioSessionSummary>,
     pub last_code: Option<String>,
 }
@@ -128,7 +139,11 @@ pub struct AudioRecordingView {
 pub struct AudioTrackPlaybackView {
     pub track_id: String,
     pub source_id: String,
-    pub profile_id: AudioOpusProfileId,
+    pub profile_id: AudioProfileId,
+    pub codec_provider_id: String,
+    pub codec_provider_version: String,
+    pub codec_id: String,
+    pub codec_media_type: String,
     pub playback_muted: bool,
     pub playback_solo: bool,
     pub playback_volume_percent: u16,
@@ -173,6 +188,8 @@ pub enum AudioRecordingError {
     SourceUnavailable,
     #[error("No audio provider is available.")]
     ProviderUnavailable,
+    #[error("The selected audio codec is unavailable or does not support this profile.")]
+    CodecUnavailable,
     #[error("Audio recording is already active.")]
     AlreadyRecording,
     #[error("Audio recording is not active.")]
@@ -199,6 +216,8 @@ pub enum AudioRecordingError {
     StateUnavailable,
     #[error("The audio provider violated its contract or became unavailable.")]
     ProviderFailed,
+    #[error("The audio codec violated its contract or became unavailable.")]
+    CodecFailed,
 }
 
 #[derive(Clone)]
@@ -210,6 +229,7 @@ struct AudioRecordingInner {
     store: Store,
     media: EncryptedAudioMediaStore,
     provider: Option<Arc<dyn AudioCaptureProvider>>,
+    codecs: BTreeMap<String, Arc<dyn AudioCodecProvider>>,
     state: Mutex<AudioRuntimeState>,
     operation: Mutex<()>,
 }
@@ -219,9 +239,15 @@ struct AudioRuntimeState {
     sources: Vec<AudioSourceCapability>,
     active_session_id: Option<String>,
     track_sources: BTreeMap<String, String>,
+    track_codecs: BTreeMap<String, String>,
     levels: BTreeMap<String, AudioProviderLevel>,
     last_code: Option<String>,
     reset_in_progress: bool,
+}
+
+struct EncodedTrackPacket {
+    track_id: String,
+    packet: EncodedAudioPacket,
 }
 
 impl AudioRecordingService {
@@ -229,12 +255,27 @@ impl AudioRecordingService {
         store: Store,
         media: EncryptedAudioMediaStore,
         provider: Option<Arc<dyn AudioCaptureProvider>>,
+        codecs: Vec<Arc<dyn AudioCodecProvider>>,
     ) -> Self {
+        let mut indexed_codecs = BTreeMap::new();
+        let mut duplicate_ids = BTreeSet::new();
+        for codec in codecs {
+            let provider_id = codec.provider_id().to_owned();
+            if duplicate_ids.contains(&provider_id) {
+                continue;
+            }
+            if indexed_codecs.remove(&provider_id).is_some() {
+                duplicate_ids.insert(provider_id);
+            } else {
+                indexed_codecs.insert(provider_id, codec);
+            }
+        }
         Self {
             inner: Arc::new(AudioRecordingInner {
                 store,
                 media,
                 provider,
+                codecs: indexed_codecs,
                 state: Mutex::new(AudioRuntimeState::default()),
                 operation: Mutex::new(()),
             }),
@@ -263,6 +304,16 @@ impl AudioRecordingService {
             .filter(|record| record.media_availability != "tombstoned")
             .map(session_summary)
             .collect::<Result<Vec<_>, _>>()?;
+        let codecs = self
+            .inner
+            .codecs
+            .values()
+            .map(|codec| AudioCodecView {
+                id: codec.provider_id().into(),
+                name: codec.display_name().into(),
+                supported_profiles: codec.profiles().iter().map(|profile| profile.id).collect(),
+            })
+            .collect();
         Ok(AudioRecordingView {
             preferences,
             provider_id: self
@@ -274,6 +325,7 @@ impl AudioRecordingService {
             recording_active: state.active_session_id.is_some(),
             active_session_id: state.active_session_id.clone(),
             sources,
+            codecs,
             sessions,
             last_code: state.last_code.clone(),
         })
@@ -431,6 +483,18 @@ impl AudioRecordingService {
         {
             return Err(AudioRecordingError::InvalidPreference);
         }
+        let codec = self
+            .inner
+            .codecs
+            .get(&selection.codec_provider_id)
+            .ok_or(AudioRecordingError::CodecUnavailable)?;
+        if !codec
+            .profiles()
+            .iter()
+            .any(|profile| profile.id == selection.profile_id)
+        {
+            return Err(AudioRecordingError::CodecUnavailable);
+        }
         if selection.enabled {
             let sources = provider.sources().map_err(map_provider_error)?;
             validate_source_list(&sources)?;
@@ -461,7 +525,10 @@ impl AudioRecordingService {
             .values()
             .any(|source_id| source_id == &selection.source_id);
         let recording_choice_changed = !selection.enabled
-            || current.is_some_and(|current| current.profile_id != selection.profile_id);
+            || current.is_some_and(|current| {
+                current.profile_id != selection.profile_id
+                    || current.codec_provider_id != selection.codec_provider_id
+            });
         if active_source && recording_choice_changed {
             self.stop_locked()?;
         }
@@ -471,6 +538,7 @@ impl AudioRecordingService {
                 provider_id: selection.provider_id,
                 source_id: selection.source_id,
                 profile_id: profile_id(selection.profile_id).into(),
+                codec_provider_id: selection.codec_provider_id,
                 enabled: selection.enabled,
                 playback_muted: selection.playback_muted,
                 playback_solo: selection.playback_solo,
@@ -526,6 +594,7 @@ impl AudioRecordingService {
             return Err(AudioRecordingError::NoSourcesSelected);
         }
         let mut requests = Vec::with_capacity(selected.len());
+        let mut track_codecs = BTreeMap::new();
         for selection in selected {
             let source = sources
                 .iter()
@@ -539,8 +608,22 @@ impl AudioRecordingService {
             {
                 return Err(AudioRecordingError::SourceUnavailable);
             }
+            let codec = self
+                .inner
+                .codecs
+                .get(&selection.codec_provider_id)
+                .ok_or(AudioRecordingError::CodecUnavailable)?;
+            if !codec.profiles().iter().any(|profile| {
+                profile.id == selection.profile_id
+                    && profile.channels == source.channels
+                    && profile.sample_rate_hz == 48_000
+            }) {
+                return Err(AudioRecordingError::CodecUnavailable);
+            }
+            let track_id = format!("track-{}", Uuid::new_v4().simple());
+            track_codecs.insert(track_id.clone(), selection.codec_provider_id.clone());
             requests.push(AudioTrackRequest {
-                track_id: format!("track-{}", Uuid::new_v4().simple()),
+                track_id,
                 source_id: source.id.clone(),
                 profile: selection.profile_id,
             });
@@ -554,6 +637,27 @@ impl AudioRecordingService {
             let _ = provider.stop_capture(&session_id);
             return Err(error);
         }
+        let mut started_codecs = Vec::<(String, String)>::new();
+        for request in &requests {
+            let codec_id = track_codecs
+                .get(&request.track_id)
+                .ok_or(AudioRecordingError::CodecUnavailable)?;
+            let codec = self
+                .inner
+                .codecs
+                .get(codec_id)
+                .ok_or(AudioRecordingError::CodecUnavailable)?;
+            if let Err(error) = codec.start_track(&session_id, &request.track_id, request.profile) {
+                for (started_codec_id, started_track_id) in &started_codecs {
+                    if let Some(started_codec) = self.inner.codecs.get(started_codec_id) {
+                        let _ = started_codec.stop_track(&session_id, started_track_id);
+                    }
+                }
+                let _ = provider.stop_capture(&session_id);
+                return Err(map_codec_error(error));
+            }
+            started_codecs.push((codec_id.clone(), request.track_id.clone()));
+        }
         let now = timestamp();
         let tracks = batch
             .tracks
@@ -563,11 +667,28 @@ impl AudioRecordingService {
                     .iter()
                     .find(|source| source.id == started.source_id)
                     .ok_or(AudioRecordingError::ProviderFailed)?;
+                let codec_provider_id = track_codecs
+                    .get(&started.track_id)
+                    .ok_or(AudioRecordingError::CodecUnavailable)?;
+                let codec = self
+                    .inner
+                    .codecs
+                    .get(codec_provider_id)
+                    .ok_or(AudioRecordingError::CodecUnavailable)?;
+                let codec_profile = codec
+                    .profiles()
+                    .iter()
+                    .find(|profile| profile.id == started.profile)
+                    .ok_or(AudioRecordingError::CodecUnavailable)?;
                 Ok(AudioTrackRecord {
                     id: started.track_id.clone(),
                     session_id: session_id.clone(),
                     source_id: started.source_id.clone(),
                     profile_id: profile_id(started.profile).into(),
+                    codec_provider_id: codec_provider_id.clone(),
+                    codec_provider_version: codec.provider_version().into(),
+                    codec_id: codec_profile.codec_id.clone(),
+                    codec_media_type: codec_profile.media_type.clone(),
                     source_role: source_role_id(source.role).into(),
                     source_truth: source_truth_id(source.truth).into(),
                     channel_count: started.profile.spec().channels,
@@ -597,19 +718,13 @@ impl AudioRecordingService {
             .store
             .create_audio_session_record(&session, &tracks)
         {
+            for (codec_id, track_id) in &started_codecs {
+                if let Some(codec) = self.inner.codecs.get(codec_id) {
+                    let _ = codec.stop_track(&session_id, track_id);
+                }
+            }
             let _ = provider.stop_capture(&session_id);
             return Err(map_storage_error(error));
-        }
-        if let Err(error) =
-            self.persist_batch(&session_id, &tracks, &batch.packets, &batch.events, &now)
-        {
-            let _ = provider.stop_capture(&session_id);
-            let _ = self.inner.store.finish_audio_session_record(
-                &session_id,
-                &timestamp(),
-                "interrupted",
-            );
-            return Err(error);
         }
         let mut state = self
             .inner
@@ -621,11 +736,8 @@ impl AudioRecordingService {
             .iter()
             .map(|track| (track.id.clone(), track.source_id.clone()))
             .collect();
-        state.levels = batch
-            .levels
-            .into_iter()
-            .map(|level| (level.track_id.clone(), level))
-            .collect();
+        state.track_codecs = track_codecs;
+        state.levels.clear();
         state.active_session_id = Some(session_id);
         state.last_code = Some("audio.capture_active".into());
         drop(state);
@@ -641,12 +753,33 @@ impl AudioRecordingService {
         self.stop_locked()
     }
 
+    pub fn poll_active_capture(&self) -> Result<(), AudioRecordingError> {
+        let _operation = self
+            .inner
+            .operation
+            .lock()
+            .map_err(|_| AudioRecordingError::StateUnavailable)?;
+        if self.active_session_id()?.is_none() {
+            return Ok(());
+        }
+        if let Err(error) = self.poll_locked() {
+            self.interrupt_locked();
+            return Err(error);
+        }
+        Ok(())
+    }
+
     fn stop_locked(&self) -> Result<AudioRecordingView, AudioRecordingError> {
         let session_id = self
             .active_session_id()?
             .ok_or(AudioRecordingError::NotRecording)?;
         let provider = self.provider()?;
-        let status = if provider.stop_capture(&session_id).is_ok() {
+        let drained = self
+            .poll_locked()
+            .is_ok_and(|count| count < usize::from(MAX_CAPTURE_DRAIN_FRAMES));
+        let provider_stopped = provider.stop_capture(&session_id).is_ok();
+        let codecs_stopped = self.stop_codec_tracks(&session_id);
+        let status = if drained && provider_stopped && codecs_stopped {
             "completed"
         } else {
             "interrupted"
@@ -662,6 +795,7 @@ impl AudioRecordingService {
             .map_err(|_| AudioRecordingError::StateUnavailable)?;
         state.active_session_id = None;
         state.track_sources.clear();
+        state.track_codecs.clear();
         state.levels.clear();
         state.last_code = Some(
             if status == "completed" {
@@ -674,6 +808,93 @@ impl AudioRecordingService {
         drop(state);
         let _ = self.enforce_retention();
         self.status()
+    }
+
+    fn poll_locked(&self) -> Result<usize, AudioRecordingError> {
+        let session_id = self
+            .active_session_id()?
+            .ok_or(AudioRecordingError::NotRecording)?;
+        let batch = self
+            .provider()?
+            .drain_capture(&session_id, MAX_CAPTURE_DRAIN_FRAMES)
+            .map_err(map_provider_error)?;
+        let track_codecs = self
+            .inner
+            .state
+            .lock()
+            .map_err(|_| AudioRecordingError::StateUnavailable)?
+            .track_codecs
+            .clone();
+        let drained_frame_count = batch.frames.len();
+        let mut packets = Vec::with_capacity(drained_frame_count);
+        for frame in &batch.frames {
+            if frame.session_id != session_id {
+                return Err(AudioRecordingError::ProviderFailed);
+            }
+            let codec_id = track_codecs
+                .get(&frame.track_id)
+                .ok_or(AudioRecordingError::ProviderFailed)?;
+            let codec = self
+                .inner
+                .codecs
+                .get(codec_id)
+                .ok_or(AudioRecordingError::CodecUnavailable)?;
+            packets.push(EncodedTrackPacket {
+                track_id: frame.track_id.clone(),
+                packet: codec.encode_pcm(frame).map_err(map_codec_error)?,
+            });
+        }
+        self.persist_batch(&session_id, &packets, &batch.events, &timestamp())?;
+        let mut state = self
+            .inner
+            .state
+            .lock()
+            .map_err(|_| AudioRecordingError::StateUnavailable)?;
+        for level in batch.levels {
+            if !state.track_sources.contains_key(&level.track_id) {
+                return Err(AudioRecordingError::ProviderFailed);
+            }
+            state.levels.insert(level.track_id.clone(), level);
+        }
+        Ok(drained_frame_count)
+    }
+
+    fn stop_codec_tracks(&self, session_id: &str) -> bool {
+        let track_codecs = match self.inner.state.lock() {
+            Ok(state) => state.track_codecs.clone(),
+            Err(_) => return false,
+        };
+        track_codecs
+            .into_iter()
+            .fold(true, |all_stopped, (track_id, codec_id)| {
+                let stopped = self
+                    .inner
+                    .codecs
+                    .get(&codec_id)
+                    .is_some_and(|codec| codec.stop_track(session_id, &track_id).is_ok());
+                all_stopped && stopped
+            })
+    }
+
+    fn interrupt_locked(&self) {
+        let Ok(Some(session_id)) = self.active_session_id() else {
+            return;
+        };
+        if let Some(provider) = &self.inner.provider {
+            let _ = provider.stop_capture(&session_id);
+        }
+        self.stop_codec_tracks(&session_id);
+        let _ =
+            self.inner
+                .store
+                .finish_audio_session_record(&session_id, &timestamp(), "interrupted");
+        if let Ok(mut state) = self.inner.state.lock() {
+            state.active_session_id = None;
+            state.track_sources.clear();
+            state.track_codecs.clear();
+            state.levels.clear();
+            state.last_code = Some("audio.capture_interrupted".into());
+        }
     }
 
     pub fn playback(&self, session_id: &str) -> Result<AudioPlaybackView, AudioRecordingError> {
@@ -707,6 +928,10 @@ impl AudioRecordingService {
                 track_id: track.id,
                 source_id: track.source_id,
                 profile_id: parse_profile_id(&track.profile_id)?,
+                codec_provider_id: track.codec_provider_id,
+                codec_provider_version: track.codec_provider_version,
+                codec_id: track.codec_id,
+                codec_media_type: track.codec_media_type,
                 playback_muted: selection.is_some_and(|selection| selection.playback_muted),
                 playback_solo: selection.is_some_and(|selection| selection.playback_solo),
                 playback_volume_percent: selection
@@ -755,9 +980,9 @@ impl AudioRecordingService {
             filename: destination
                 .file_name()
                 .and_then(|name| name.to_str())
-                .unwrap_or("audio.wyrmgrid-opus-packets")
+                .unwrap_or("audio.wyrmgrid-audio-packets")
                 .into(),
-            media_type: "application/vnd.wyrmgrid.opus-packets".into(),
+            media_type: "application/vnd.wyrmgrid.audio-packets".into(),
             plaintext_warning_required: true,
             packet_count: packets.len() as u64,
         })
@@ -910,19 +1135,32 @@ impl AudioRecordingService {
     fn persist_batch(
         &self,
         session_id: &str,
-        tracks: &[AudioTrackRecord],
-        packets: &[crate::AudioProviderPacket],
+        packets: &[EncodedTrackPacket],
         events: &[crate::AudioProviderEvent],
         observed_at: &str,
     ) -> Result<(), AudioRecordingError> {
-        for track in tracks {
+        let tracks = self
+            .inner
+            .store
+            .list_audio_track_records(session_id)
+            .map_err(map_storage_error)?;
+        for track in &tracks {
             let track_packets = packets
                 .iter()
                 .filter(|packet| packet.track_id == track.id)
                 .map(|packet| packet.packet.clone())
                 .collect::<Vec<_>>();
             if track_packets.is_empty() {
-                return Err(AudioRecordingError::ProviderFailed);
+                continue;
+            }
+            if track_packets
+                .windows(2)
+                .any(|pair| pair[0].sequence >= pair[1].sequence)
+                || track
+                    .last_packet_sequence
+                    .is_some_and(|last| track_packets[0].sequence <= last)
+            {
+                return Err(AudioRecordingError::CodecFailed);
             }
             let frame_count = track_packets
                 .iter()
@@ -930,11 +1168,18 @@ impl AudioRecordingService {
                     total.checked_add(u64::from(packet.duration_48khz_frames))
                 })
                 .ok_or(AudioRecordingError::ProviderFailed)?;
+            let segments = self
+                .inner
+                .store
+                .list_audio_segment_records(&track.id)
+                .map_err(map_storage_error)?;
+            let segment_index = u32::try_from(segments.len())
+                .map_err(|_| AudioRecordingError::StorageUnavailable)?;
             let context = AudioSegmentContext {
                 session_id: session_id.into(),
                 track_id: track.id.clone(),
-                segment_index: 0,
-                first_frame: 0,
+                segment_index,
+                first_frame: track.frame_count,
                 frame_count,
             };
             let stored = self
@@ -947,9 +1192,9 @@ impl AudioRecordingService {
                 .complete_audio_segment_record(
                     &AudioSegmentRecord {
                         track_id: track.id.clone(),
-                        segment_index: 0,
+                        segment_index,
                         storage_key: stored.storage_key,
-                        first_frame: 0,
+                        first_frame: track.frame_count,
                         frame_count,
                         packet_count: track_packets.len() as u64,
                         encrypted_bytes: stored.encrypted_bytes,
@@ -1073,6 +1318,7 @@ impl AudioRecordingService {
                     provider_id: record.provider_id,
                     source_id: record.source_id,
                     profile_id: parse_profile_id(&record.profile_id)?,
+                    codec_provider_id: record.codec_provider_id,
                     enabled: record.enabled,
                     playback_muted: record.playback_muted,
                     playback_solo: record.playback_solo,
@@ -1163,6 +1409,7 @@ fn source_view(
         availability: source.availability,
         permission: source.permission,
         supported_profiles: source.supported_profiles.clone(),
+        codec_provider_id: selection.map(|selection| selection.codec_provider_id.clone()),
         enabled: selection.is_some_and(|selection| selection.enabled),
         playback_muted: selection.is_some_and(|selection| selection.playback_muted),
         playback_solo: selection.is_some_and(|selection| selection.playback_solo),
@@ -1186,7 +1433,7 @@ fn validate_source_list(sources: &[AudioSourceCapability]) -> Result<(), AudioRe
 }
 
 fn validate_capture_batch(
-    session_id: &str,
+    _session_id: &str,
     requests: &[AudioTrackRequest],
     batch: &crate::AudioProviderCaptureBatch,
 ) -> Result<(), AudioRecordingError> {
@@ -1215,42 +1462,6 @@ fn validate_capture_batch(
         return Err(AudioRecordingError::ProviderFailed);
     }
 
-    for request in requests {
-        let track_packets = batch
-            .packets
-            .iter()
-            .filter(|packet| packet.track_id == request.track_id)
-            .collect::<Vec<_>>();
-        if track_packets.is_empty()
-            || track_packets.iter().any(|packet| {
-                packet.session_id != session_id
-                    || !requested_tracks.contains_key(packet.track_id.as_str())
-            })
-            || track_packets
-                .windows(2)
-                .any(|pair| pair[0].packet.sequence >= pair[1].packet.sequence)
-        {
-            return Err(AudioRecordingError::ProviderFailed);
-        }
-    }
-    if batch
-        .packets
-        .iter()
-        .any(|packet| !requested_tracks.contains_key(packet.track_id.as_str()))
-        || batch.levels.iter().any(|level| {
-            level.session_id != session_id
-                || !requested_tracks.contains_key(level.track_id.as_str())
-        })
-        || batch.events.iter().any(|event| {
-            event.session_id != session_id
-                || event
-                    .track_id
-                    .as_ref()
-                    .is_some_and(|track_id| !requested_tracks.contains_key(track_id.as_str()))
-        })
-    {
-        return Err(AudioRecordingError::ProviderFailed);
-    }
     Ok(())
 }
 
@@ -1305,19 +1516,19 @@ fn validate_preferences(
     }
 }
 
-fn profile_id(profile: AudioOpusProfileId) -> &'static str {
+fn profile_id(profile: AudioProfileId) -> &'static str {
     match profile {
-        AudioOpusProfileId::PilotMicrophoneV1 => "pilot_microphone_v1",
-        AudioOpusProfileId::IsolatedVoiceV1 => "isolated_voice_v1",
-        AudioOpusProfileId::MixedStereoV1 => "mixed_stereo_v1",
+        AudioProfileId::PilotMicrophoneV1 => "pilot_microphone_v1",
+        AudioProfileId::IsolatedVoiceV1 => "isolated_voice_v1",
+        AudioProfileId::MixedStereoV1 => "mixed_stereo_v1",
     }
 }
 
-fn parse_profile_id(value: &str) -> Result<AudioOpusProfileId, AudioRecordingError> {
+fn parse_profile_id(value: &str) -> Result<AudioProfileId, AudioRecordingError> {
     match value {
-        "pilot_microphone_v1" => Ok(AudioOpusProfileId::PilotMicrophoneV1),
-        "isolated_voice_v1" => Ok(AudioOpusProfileId::IsolatedVoiceV1),
-        "mixed_stereo_v1" => Ok(AudioOpusProfileId::MixedStereoV1),
+        "pilot_microphone_v1" => Ok(AudioProfileId::PilotMicrophoneV1),
+        "isolated_voice_v1" => Ok(AudioProfileId::IsolatedVoiceV1),
+        "mixed_stereo_v1" => Ok(AudioProfileId::MixedStereoV1),
         _ => Err(AudioRecordingError::InvalidStoredState),
     }
 }
@@ -1375,6 +1586,14 @@ fn map_provider_error(error: AudioProviderError) -> AudioRecordingError {
         _ => AudioRecordingError::ProviderFailed,
     }
 }
+fn map_codec_error(error: AudioCodecError) -> AudioRecordingError {
+    match error {
+        AudioCodecError::Unavailable | AudioCodecError::UnsupportedProfile => {
+            AudioRecordingError::CodecUnavailable
+        }
+        _ => AudioRecordingError::CodecFailed,
+    }
+}
 fn map_media_error(_: AudioMediaError) -> AudioRecordingError {
     AudioRecordingError::MediaUnavailable
 }
@@ -1387,6 +1606,8 @@ fn error_code(error: AudioRecordingError) -> &'static str {
         AudioRecordingError::SourceUnavailable => "audio.source_unavailable",
         AudioRecordingError::ProviderUnavailable => "audio.provider_unavailable",
         AudioRecordingError::ProviderFailed => "audio.provider_failed",
+        AudioRecordingError::CodecUnavailable => "audio.codec_unavailable",
+        AudioRecordingError::CodecFailed => "audio.codec_failed",
         AudioRecordingError::InvalidStoredState => "audio.invalid_stored_state",
         _ => "audio.capture_unavailable",
     }

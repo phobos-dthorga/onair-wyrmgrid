@@ -12,30 +12,25 @@ fn microphone() -> AudioSourceCapability {
         permission: AudioPermissionState::Granted,
         channels: 1,
         native_sample_rate_hz: 48_000,
-        supported_profiles: vec![AudioOpusProfileId::PilotMicrophoneV1],
+        supported_profiles: vec![AudioProfileId::PilotMicrophoneV1],
         supports_hot_plug: true,
         origin: AudioSourceOrigin::OperatingSystem,
     }
 }
 
 #[test]
-fn defines_the_bounded_version_one_opus_catalogue() {
-    let microphone = AudioOpusProfileId::PilotMicrophoneV1.spec();
+fn defines_the_codec_neutral_version_one_capture_profiles() {
+    let microphone = AudioProfileId::PilotMicrophoneV1.spec();
     assert_eq!(microphone.channels, 1);
     assert_eq!(microphone.sample_rate_hz, 48_000);
-    assert_eq!(microphone.target_bitrate_bps, 48_000);
-    assert_eq!(microphone.estimated_encoded_bytes(3_600), Some(21_600_000));
 
-    let voice = AudioOpusProfileId::IsolatedVoiceV1.spec();
+    let voice = AudioProfileId::IsolatedVoiceV1.spec();
     assert_eq!(voice.channels, 1);
-    assert_eq!(voice.target_bitrate_bps, 32_000);
-    assert_eq!(voice.estimated_encoded_bytes(3_600), Some(14_400_000));
+    assert_eq!(voice.sample_rate_hz, 48_000);
 
-    let mixed = AudioOpusProfileId::MixedStereoV1.spec();
+    let mixed = AudioProfileId::MixedStereoV1.spec();
     assert_eq!(mixed.channels, 2);
-    assert_eq!(mixed.target_bitrate_bps, 128_000);
-    assert_eq!(mixed.estimated_encoded_bytes(3_600), Some(57_600_000));
-    assert_eq!(mixed.estimated_encoded_bytes(u64::MAX), None);
+    assert_eq!(mixed.sample_rate_hz, 48_000);
 }
 
 #[test]
@@ -78,7 +73,7 @@ fn rejects_invalid_source_boundaries_and_duplicate_profiles() {
     );
 
     candidate = microphone();
-    candidate.supported_profiles = vec![AudioOpusProfileId::MixedStereoV1];
+    candidate.supported_profiles = vec![AudioProfileId::MixedStereoV1];
     assert_eq!(
         candidate.validate(),
         Err(AudioSourceCapabilityError::InvalidProfiles)

@@ -10,14 +10,13 @@ use thiserror::Error;
 use wyrmgrid_audio_provider_protocol::{
     AudioCaptureEventKind, AudioEnvelope, AudioHostMessage, AudioProviderManifest,
     AudioProviderMessage, AudioProviderPlatform, AudioProviderState, AudioStopReason,
-    AudioTrackRequest, read_provider_frame, validate_next_sequence, write_host_frame,
+    AudioTrackRequest, MAX_AUDIO_DRAIN_FRAMES, read_provider_frame, validate_next_sequence,
+    write_host_frame,
 };
 use wyrmgrid_domain::{AudioSourceCapability, AudioSourceTruth};
 
-use crate::EncodedAudioPacket;
-
 const STARTUP_MESSAGE_COUNT: usize = 3;
-const FAKE_CAPTURE_MESSAGE_COUNT: usize = 5;
+const START_CAPTURE_MESSAGE_COUNT: usize = 2;
 const PROVIDER_IO_TIMEOUT: Duration = Duration::from_secs(3);
 
 #[derive(Debug, Clone)]
@@ -44,10 +43,15 @@ impl AudioProviderRegistration {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AudioProviderPacket {
+pub struct AudioProviderPcmFrame {
     pub session_id: String,
     pub track_id: String,
-    pub packet: EncodedAudioPacket,
+    pub frame_sequence: u64,
+    pub provider_monotonic_ns: u64,
+    pub channels: u8,
+    pub sample_rate_hz: u32,
+    pub frame_count: u16,
+    pub bytes: Vec<u8>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -74,7 +78,11 @@ pub struct AudioProviderEvent {
 pub struct AudioProviderCaptureBatch {
     pub provider_start_monotonic_ns: u64,
     pub tracks: Vec<wyrmgrid_audio_provider_protocol::AudioStartedTrack>,
-    pub packets: Vec<AudioProviderPacket>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct AudioProviderDrainBatch {
+    pub frames: Vec<AudioProviderPcmFrame>,
     pub levels: Vec<AudioProviderLevel>,
     pub events: Vec<AudioProviderEvent>,
 }
@@ -91,6 +99,11 @@ pub trait AudioCaptureProvider: Send + Sync + 'static {
         session_id: &str,
         tracks: &[AudioTrackRequest],
     ) -> Result<AudioProviderCaptureBatch, AudioProviderError>;
+    fn drain_capture(
+        &self,
+        session_id: &str,
+        maximum_frames: u16,
+    ) -> Result<AudioProviderDrainBatch, AudioProviderError>;
     fn stop_capture(&self, session_id: &str) -> Result<AudioStopReason, AudioProviderError>;
 }
 
@@ -110,7 +123,7 @@ pub enum AudioProviderError {
     SourceUnavailable,
 }
 
-pub struct FakeAudioProviderProcess {
+pub struct ProcessAudioCaptureProvider {
     registration: AudioProviderRegistration,
     runtime: Mutex<Option<AudioProcessRuntime>>,
 }
@@ -124,7 +137,7 @@ struct AudioProcessRuntime {
     active_session_id: Option<String>,
 }
 
-impl FakeAudioProviderProcess {
+impl ProcessAudioCaptureProvider {
     pub fn new(registration: AudioProviderRegistration) -> Result<Self, AudioProviderError> {
         if !platform_supported(&registration.manifest) || !registration.executable.is_file() {
             return Err(AudioProviderError::Unavailable);
@@ -154,7 +167,7 @@ impl FakeAudioProviderProcess {
     }
 }
 
-impl AudioCaptureProvider for FakeAudioProviderProcess {
+impl AudioCaptureProvider for ProcessAudioCaptureProvider {
     fn provider_id(&self) -> &str {
         &self.registration.manifest.id
     }
@@ -200,12 +213,12 @@ impl AudioCaptureProvider for FakeAudioProviderProcess {
             let mut batch = AudioProviderCaptureBatch {
                 provider_start_monotonic_ns: 0,
                 tracks: Vec::new(),
-                packets: Vec::new(),
-                levels: Vec::new(),
-                events: Vec::new(),
             };
-            for _ in 0..FAKE_CAPTURE_MESSAGE_COUNT {
+            for _ in 0..START_CAPTURE_MESSAGE_COUNT {
                 let (envelope, body) = runtime.receive()?;
+                if !body.is_empty() {
+                    return Err(AudioProviderError::Protocol);
+                }
                 match envelope.payload {
                     AudioProviderMessage::State {
                         state: AudioProviderState::Capturing,
@@ -219,22 +232,55 @@ impl AudioCaptureProvider for FakeAudioProviderProcess {
                         batch.provider_start_monotonic_ns = provider_monotonic_ns;
                         batch.tracks = tracks;
                     }
-                    AudioProviderMessage::AudioPacket {
+                    _ => return Err(AudioProviderError::Protocol),
+                }
+            }
+            if batch.tracks.is_empty() || batch.provider_start_monotonic_ns == 0 {
+                return Err(AudioProviderError::Protocol);
+            }
+            runtime.active_session_id = Some(session_id.into());
+            Ok(batch)
+        })
+    }
+
+    fn drain_capture(
+        &self,
+        session_id: &str,
+        maximum_frames: u16,
+    ) -> Result<AudioProviderDrainBatch, AudioProviderError> {
+        self.with_runtime(|runtime| {
+            if runtime.active_session_id.as_deref() != Some(session_id)
+                || !(1..=MAX_AUDIO_DRAIN_FRAMES).contains(&maximum_frames)
+            {
+                return Err(AudioProviderError::StateUnavailable);
+            }
+            runtime.send(AudioHostMessage::DrainCapture {
+                session_id: session_id.into(),
+                maximum_frames,
+            })?;
+            let mut batch = AudioProviderDrainBatch::default();
+            let maximum_messages = usize::from(maximum_frames) * 3 + 1;
+            for _ in 0..maximum_messages {
+                let (envelope, body) = runtime.receive()?;
+                match envelope.payload {
+                    AudioProviderMessage::PcmFrame {
                         session_id: received,
                         track_id,
-                        packet_sequence,
+                        frame_sequence,
                         provider_monotonic_ns,
-                        duration_48khz_frames,
+                        channels,
+                        sample_rate_hz,
+                        frame_count,
                         ..
-                    } if received == session_id => batch.packets.push(AudioProviderPacket {
+                    } if received == session_id => batch.frames.push(AudioProviderPcmFrame {
                         session_id: received,
                         track_id,
-                        packet: EncodedAudioPacket {
-                            sequence: packet_sequence,
-                            provider_monotonic_ns,
-                            duration_48khz_frames,
-                            bytes: body,
-                        },
+                        frame_sequence,
+                        provider_monotonic_ns,
+                        channels,
+                        sample_rate_hz,
+                        frame_count,
+                        bytes: body,
                     }),
                     AudioProviderMessage::Level {
                         session_id: received,
@@ -242,13 +288,15 @@ impl AudioCaptureProvider for FakeAudioProviderProcess {
                         provider_monotonic_ns,
                         peak_millidbfs,
                         clipped,
-                    } if received == session_id => batch.levels.push(AudioProviderLevel {
-                        session_id: received,
-                        track_id,
-                        provider_monotonic_ns,
-                        peak_millidbfs,
-                        clipped,
-                    }),
+                    } if received == session_id && body.is_empty() => {
+                        batch.levels.push(AudioProviderLevel {
+                            session_id: received,
+                            track_id,
+                            provider_monotonic_ns,
+                            peak_millidbfs,
+                            clipped,
+                        })
+                    }
                     AudioProviderMessage::CaptureEvent {
                         session_id: received,
                         track_id,
@@ -257,26 +305,33 @@ impl AudioCaptureProvider for FakeAudioProviderProcess {
                         code,
                         affected_frames,
                         drift_parts_per_million,
-                    } if received == session_id => batch.events.push(AudioProviderEvent {
+                    } if received == session_id && body.is_empty() => {
+                        batch.events.push(AudioProviderEvent {
+                            session_id: received,
+                            track_id,
+                            provider_monotonic_ns,
+                            event,
+                            code,
+                            affected_frames,
+                            drift_parts_per_million,
+                        })
+                    }
+                    AudioProviderMessage::DrainComplete {
                         session_id: received,
-                        track_id,
-                        provider_monotonic_ns,
-                        event,
-                        code,
-                        affected_frames,
-                        drift_parts_per_million,
-                    }),
+                        frame_count,
+                    } if received == session_id
+                        && body.is_empty()
+                        && usize::from(frame_count) == batch.frames.len() =>
+                    {
+                        return Ok(batch);
+                    }
                     _ => return Err(AudioProviderError::Protocol),
                 }
+                if batch.frames.len() > usize::from(maximum_frames) {
+                    return Err(AudioProviderError::Protocol);
+                }
             }
-            if batch.tracks.is_empty()
-                || batch.packets.is_empty()
-                || batch.provider_start_monotonic_ns == 0
-            {
-                return Err(AudioProviderError::Protocol);
-            }
-            runtime.active_session_id = Some(session_id.into());
-            Ok(batch)
+            Err(AudioProviderError::Protocol)
         })
     }
 
@@ -312,6 +367,8 @@ impl AudioCaptureProvider for FakeAudioProviderProcess {
         })
     }
 }
+
+pub type FakeAudioProviderProcess = ProcessAudioCaptureProvider;
 
 impl AudioProcessRuntime {
     fn send(&mut self, message: AudioHostMessage) -> Result<(), AudioProviderError> {
@@ -402,7 +459,13 @@ fn launch(
     let mut ready_seen = false;
     for _ in 0..STARTUP_MESSAGE_COUNT {
         match runtime.receive()?.0.payload {
-            AudioProviderMessage::Hello { provider } if provider.id == registration.manifest.id => {
+            AudioProviderMessage::Hello { provider }
+                if provider.id == registration.manifest.id
+                    && provider.name == registration.manifest.name
+                    && provider.version == registration.manifest.version
+                    && provider.platform == current_platform()
+                    && provider.capabilities == registration.manifest.capabilities =>
+            {
                 hello_seen = true
             }
             AudioProviderMessage::State {

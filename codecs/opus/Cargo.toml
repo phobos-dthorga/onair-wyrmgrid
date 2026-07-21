@@ -1,0 +1,16 @@
+[package]
+name = "wyrmgrid-opus-codec"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+opus2 = { version = "0.4.0", default-features = false, features = ["backend-mousiki"] }
+wyrmgrid-audio-codec-protocol = { path = "../../crates/audio-codec-protocol" }
+wyrmgrid-domain = { path = "../../crates/domain" }
+
+[dev-dependencies]
+tempfile = "3.20.0"

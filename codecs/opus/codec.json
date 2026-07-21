@@ -1,0 +1,46 @@
+{
+  "$schema": "../../schemas/audio-codec-manifest-v1.schema.json",
+  "schema_version": 1,
+  "id": "dev.wyrmgrid.opus",
+  "name": "WyrmGrid Opus codec",
+  "version": "0.3.1",
+  "codec_protocol_version": 1,
+  "author": "WyrmGrid contributors",
+  "entry_point": "wyrmgrid-opus-codec",
+  "platforms": [
+    "windows_x86_64",
+    "linux_x86_64",
+    "macos_aarch64",
+    "macos_x86_64"
+  ],
+  "capabilities": ["encode_pcm_s16le"],
+  "profiles": [
+    {
+      "id": "pilot_microphone_v1",
+      "codec_id": "opus",
+      "media_type": "audio/opus",
+      "channels": 1,
+      "sample_rate_hz": 48000,
+      "target_bitrate_bps": 48000,
+      "packet_duration_48khz_frames": 960
+    },
+    {
+      "id": "isolated_voice_v1",
+      "codec_id": "opus",
+      "media_type": "audio/opus",
+      "channels": 1,
+      "sample_rate_hz": 48000,
+      "target_bitrate_bps": 32000,
+      "packet_duration_48khz_frames": 960
+    },
+    {
+      "id": "mixed_stereo_v1",
+      "codec_id": "opus",
+      "media_type": "audio/opus",
+      "channels": 2,
+      "sample_rate_hz": 48000,
+      "target_bitrate_bps": 128000,
+      "packet_duration_48khz_frames": 960
+    }
+  ]
+}

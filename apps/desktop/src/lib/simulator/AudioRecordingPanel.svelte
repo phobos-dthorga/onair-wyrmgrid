@@ -71,16 +71,39 @@
   ): void {
     const profile = source.supported_profiles[0];
     if (!status.provider_id || !profile) return;
+    const codecProviderId =
+      source.codec_provider_id ??
+      status.codecs.find((codec) => codec.supported_profiles.includes(profile))
+        ?.id;
+    if (!codecProviderId) return;
     onsource({
       provider_id: status.provider_id,
       source_id: source.id,
       profile_id: profile,
+      codec_provider_id: codecProviderId,
       enabled: source.enabled,
       playback_muted: source.playback_muted,
       playback_solo: source.playback_solo,
       playback_volume_percent: source.playback_volume_percent,
       ...patch,
     });
+  }
+
+  function compatibleCodecs(source: AudioSourceView) {
+    return status.codecs.filter((codec) =>
+      source.supported_profiles.some((profile) =>
+        codec.supported_profiles.includes(profile),
+      ),
+    );
+  }
+
+  function selectedCodecAvailable(source: AudioSourceView): boolean {
+    return (
+      source.codec_provider_id === undefined ||
+      compatibleCodecs(source).some(
+        (codec) => codec.id === source.codec_provider_id,
+      )
+    );
   }
 
   function mediaSize(bytes: number): string {
@@ -177,11 +200,37 @@
                   · {$translation("audio-source-clipped")}{/if}
               </small>
             </div>
+            <label class="audio-codec-choice">
+              <span>{$translation("audio-codec-label")}</span>
+              <select
+                value={source.codec_provider_id ?? compatibleCodecs(source)[0]?.id}
+                disabled={busy || compatibleCodecs(source).length === 0}
+                onchange={(event) =>
+                  updateSource(source, {
+                    codec_provider_id: event.currentTarget.value,
+                  })}
+              >
+                {#if source.codec_provider_id && !selectedCodecAvailable(source)}
+                  <option value={source.codec_provider_id} disabled>
+                    {$translation("audio-codec-unavailable")}
+                  </option>
+                {/if}
+                {#each compatibleCodecs(source) as codec}
+                  <option value={codec.id}>{codec.name}</option>
+                {/each}
+              </select>
+            </label>
+            {#if compatibleCodecs(source).length === 0 || !selectedCodecAvailable(source)}
+              <small>{$translation("audio-codec-unavailable")}</small>
+            {/if}
             <label>
               <input
                 type="checkbox"
                 checked={source.enabled}
-                disabled={busy || source.availability !== "available"}
+                disabled={busy ||
+                  source.availability !== "available" ||
+                  compatibleCodecs(source).length === 0 ||
+                  !selectedCodecAvailable(source)}
                 onchange={(event) =>
                   updateSource(source, {
                     enabled: event.currentTarget.checked,

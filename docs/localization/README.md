@@ -8,7 +8,7 @@ grammar, plurals, number and date formatting, and bidirectional text.
 
 ## Implemented foundation
 
-- `locales/en-AU.json` is source catalogue version 19.
+- `locales/en-AU.json` is source catalogue version 20.
 - Language-pack manifest schema version 1 is defined in
   `schemas/language-pack-v1.schema.json`.
 - Rust validates and canonicalizes imported packs before SQLite persistence.
@@ -59,11 +59,12 @@ bundled through a future trusted release path.
 Source catalogue version 6 adds the protected `data-protection-` namespace for
 encryption, backup-password, destructive restore, and licence wording. Version
 5 community packs are rejected rather than being silently reinterpreted;
-authors must review the version 19 catalogue, update `source_catalog_version`,
+authors must review the version 20 catalogue, update `source_catalog_version`,
 and import the pack again. Existing ordinary translated message keys keep their
 meaning. Version 5 previously introduced the protected `security-` namespace.
 
-Source catalogue version 19 adds the consent, source-state, recording-state,
+Source catalogue version 20 adds per-source codec selection and codec-
+unavailable wording. Version 19 added the consent, source-state, recording-state,
 authenticated-packet inspection, export, deletion, and backup/reset wording for
 the non-shipping audio application slices. Version 18 added theme provenance,
 lifecycle, authoring, contrast-preview, and duplicate guidance. Version 17 added

@@ -93,9 +93,15 @@ relevant release issue or architecture decision.
 - Verify persistent, accessible recording indication and permission recovery on
   every packaged Windows, macOS, and Linux target. Full desktop audio must not
   be selected implicitly.
-- Complete the Audio Capture Provider, X-Plane in-process tap, Opus and FMOD
-  licence, dependency-notice, signing, installation/removal, and third-party-
-  aircraft reviews applicable to the shipped source set.
+- Complete the packaged Audio Capture Provider, Audio Codec Provider, X-Plane
+  in-process tap, Opus and FMOD licence, dependency-notice, signing,
+  installation/removal, and third-party-aircraft reviews applicable to the
+  shipped source and codec set.
+- Before user-installed codec providers are accepted, review their publisher
+  identity, signing, package integrity, resource limits, update, rollback,
+  removal, and trust presentation. Make clear that a deliberately selected
+  codec receives that source's transient PCM even though general plugins remain
+  denied audio.
 - Complete a focused privacy and security review of media-key separation,
   authenticated segment storage, size quotas, disk-full behaviour, orphan
   cleanup, deletion limitations, default backup omission, restore messaging,

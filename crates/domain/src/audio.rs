@@ -5,7 +5,7 @@ use thiserror::Error;
 use crate::valid_text;
 
 pub const AUDIO_SOURCE_SCHEMA_VERSION: u32 = 1;
-pub const OPUS_SAMPLE_RATE_HZ: u32 = 48_000;
+pub const AUDIO_WORKING_SAMPLE_RATE_HZ: u32 = 48_000;
 pub const MIN_AUDIO_NATIVE_SAMPLE_RATE_HZ: u32 = 8_000;
 pub const MAX_AUDIO_NATIVE_SAMPLE_RATE_HZ: u32 = 384_000;
 pub const MAX_AUDIO_SOURCE_CHANNELS: u8 = 8;
@@ -65,52 +65,44 @@ pub enum AudioSourceOrigin {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum AudioOpusProfileId {
+pub enum AudioProfileId {
     PilotMicrophoneV1,
     IsolatedVoiceV1,
     MixedStereoV1,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct AudioOpusProfile {
-    pub id: AudioOpusProfileId,
+pub struct AudioProfile {
+    pub id: AudioProfileId,
     pub channels: u8,
     pub sample_rate_hz: u32,
-    pub target_bitrate_bps: u32,
 }
 
-impl AudioOpusProfileId {
-    pub const fn spec(self) -> AudioOpusProfile {
+impl AudioProfileId {
+    pub const fn spec(self) -> AudioProfile {
         match self {
-            Self::PilotMicrophoneV1 => AudioOpusProfile {
+            Self::PilotMicrophoneV1 => AudioProfile {
                 id: self,
                 channels: 1,
-                sample_rate_hz: OPUS_SAMPLE_RATE_HZ,
-                target_bitrate_bps: 48_000,
+                sample_rate_hz: AUDIO_WORKING_SAMPLE_RATE_HZ,
             },
-            Self::IsolatedVoiceV1 => AudioOpusProfile {
+            Self::IsolatedVoiceV1 => AudioProfile {
                 id: self,
                 channels: 1,
-                sample_rate_hz: OPUS_SAMPLE_RATE_HZ,
-                target_bitrate_bps: 32_000,
+                sample_rate_hz: AUDIO_WORKING_SAMPLE_RATE_HZ,
             },
-            Self::MixedStereoV1 => AudioOpusProfile {
+            Self::MixedStereoV1 => AudioProfile {
                 id: self,
                 channels: 2,
-                sample_rate_hz: OPUS_SAMPLE_RATE_HZ,
-                target_bitrate_bps: 128_000,
+                sample_rate_hz: AUDIO_WORKING_SAMPLE_RATE_HZ,
             },
         }
     }
 }
 
-impl AudioOpusProfile {
-    pub fn estimated_encoded_bytes(self, duration_seconds: u64) -> Option<u64> {
-        u64::from(self.target_bitrate_bps)
-            .checked_mul(duration_seconds)
-            .map(|bits| bits / 8)
-    }
-}
+pub type AudioOpusProfileId = AudioProfileId;
+
+pub type AudioOpusProfile = AudioProfile;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -125,7 +117,7 @@ pub struct AudioSourceCapability {
     pub permission: AudioPermissionState,
     pub channels: u8,
     pub native_sample_rate_hz: u32,
-    pub supported_profiles: Vec<AudioOpusProfileId>,
+    pub supported_profiles: Vec<AudioProfileId>,
     pub supports_hot_plug: bool,
     pub origin: AudioSourceOrigin,
 }

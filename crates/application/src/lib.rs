@@ -1,6 +1,7 @@
 //! Application-level orchestration independent of Tauri and other interfaces.
 
 mod atlas_preferences;
+mod audio_codec;
 mod audio_media;
 mod audio_provider;
 mod audio_recording;
@@ -20,6 +21,7 @@ mod simulator_debrief;
 mod simulator_recording;
 
 pub use atlas_preferences::*;
+pub use audio_codec::*;
 pub use audio_media::*;
 pub use audio_provider::*;
 pub use audio_recording::*;
@@ -1337,6 +1339,7 @@ impl From<AudioRecordingError> for OperationError {
             AudioRecordingError::PermissionRequired => ("audio.permission_required", false, false),
             AudioRecordingError::SourceUnavailable => ("audio.source_unavailable", true, false),
             AudioRecordingError::ProviderUnavailable => ("audio.provider_unavailable", true, false),
+            AudioRecordingError::CodecUnavailable => ("audio.codec_unavailable", true, false),
             AudioRecordingError::AlreadyRecording => {
                 ("audio.recording_already_active", false, false)
             }
@@ -1354,6 +1357,7 @@ impl From<AudioRecordingError> for OperationError {
             AudioRecordingError::StorageUnavailable => ("audio.storage_unavailable", true, true),
             AudioRecordingError::StateUnavailable => ("audio.state_unavailable", true, true),
             AudioRecordingError::ProviderFailed => ("audio.provider_failed", true, true),
+            AudioRecordingError::CodecFailed => ("audio.codec_failed", true, true),
         };
         Self {
             code,

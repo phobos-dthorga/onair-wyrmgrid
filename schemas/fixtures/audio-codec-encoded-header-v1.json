@@ -1,0 +1,13 @@
+{
+  "protocol_version": 1,
+  "sequence": 4,
+  "payload": {
+    "type": "encoded_packet",
+    "session_id": "audio-session",
+    "track_id": "track-1",
+    "packet_sequence": 1,
+    "provider_monotonic_ns": 42,
+    "duration_48khz_frames": 120,
+    "payload_bytes": 8
+  }
+}

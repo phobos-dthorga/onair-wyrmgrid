@@ -1,6 +1,9 @@
 use super::*;
-use crate::{AudioProviderCaptureBatch, AudioProviderEvent, AudioProviderPacket};
+use crate::{
+    AudioProviderCaptureBatch, AudioProviderDrainBatch, AudioProviderEvent, AudioProviderPcmFrame,
+};
 use std::sync::atomic::{AtomicBool, Ordering};
+use wyrmgrid_audio_codec_protocol::AudioCodecProfile;
 use wyrmgrid_audio_provider_protocol::{AudioCaptureEventKind, AudioStartedTrack, AudioStopReason};
 use wyrmgrid_domain::{
     AUDIO_SOURCE_SCHEMA_VERSION, AudioPermissionState, AudioSourceDirection, AudioSourceOrigin,
@@ -9,12 +12,25 @@ use wyrmgrid_domain::{
 
 struct FakeProvider {
     permission_granted: AtomicBool,
+    frame_pending: AtomicBool,
+    frames_per_drain: u16,
+    active_track_id: std::sync::Mutex<Option<String>>,
 }
 
 impl FakeProvider {
     fn new() -> Self {
         Self {
             permission_granted: AtomicBool::new(false),
+            frame_pending: AtomicBool::new(false),
+            frames_per_drain: 1,
+            active_track_id: std::sync::Mutex::new(None),
+        }
+    }
+
+    fn with_frames_per_drain(frames_per_drain: u16) -> Self {
+        Self {
+            frames_per_drain,
+            ..Self::new()
         }
     }
 
@@ -34,7 +50,7 @@ impl FakeProvider {
             },
             channels: 1,
             native_sample_rate_hz: 48_000,
-            supported_profiles: vec![AudioOpusProfileId::PilotMicrophoneV1],
+            supported_profiles: vec![AudioProfileId::PilotMicrophoneV1],
             supports_hot_plug: true,
             origin: AudioSourceOrigin::OperatingSystem,
         }
@@ -63,10 +79,12 @@ impl AudioCaptureProvider for FakeProvider {
 
     fn start_capture(
         &self,
-        session_id: &str,
+        _session_id: &str,
         tracks: &[AudioTrackRequest],
     ) -> Result<AudioProviderCaptureBatch, AudioProviderError> {
         let track = tracks.first().ok_or(AudioProviderError::Protocol)?;
+        self.frame_pending.store(true, Ordering::SeqCst);
+        *self.active_track_id.lock().unwrap() = Some(track.track_id.clone());
         Ok(AudioProviderCaptureBatch {
             provider_start_monotonic_ns: 1_010_000,
             tracks: vec![AudioStartedTrack {
@@ -75,26 +93,47 @@ impl AudioCaptureProvider for FakeProvider {
                 profile: track.profile,
                 provider_start_monotonic_ns: 1_010_000,
             }],
-            packets: vec![AudioProviderPacket {
-                session_id: session_id.into(),
-                track_id: track.track_id.clone(),
-                packet: EncodedAudioPacket {
-                    sequence: 1,
-                    provider_monotonic_ns: 1_020_000,
-                    duration_48khz_frames: 960,
-                    bytes: vec![0xf8, 0xff, 0xfe, 0x00],
-                },
-            }],
+        })
+    }
+
+    fn drain_capture(
+        &self,
+        session_id: &str,
+        maximum_frames: u16,
+    ) -> Result<AudioProviderDrainBatch, AudioProviderError> {
+        if !self.frame_pending.swap(false, Ordering::SeqCst) {
+            return Ok(AudioProviderDrainBatch::default());
+        }
+        let track_id = self
+            .active_track_id
+            .lock()
+            .unwrap()
+            .clone()
+            .ok_or(AudioProviderError::StateUnavailable)?;
+        let frame_count = self.frames_per_drain.min(maximum_frames);
+        Ok(AudioProviderDrainBatch {
+            frames: (1..=u64::from(frame_count))
+                .map(|sequence| AudioProviderPcmFrame {
+                    session_id: session_id.into(),
+                    track_id: track_id.clone(),
+                    frame_sequence: sequence,
+                    provider_monotonic_ns: 1_020_000 + sequence,
+                    channels: 1,
+                    sample_rate_hz: 48_000,
+                    frame_count: 960,
+                    bytes: vec![0; 1_920],
+                })
+                .collect(),
             levels: vec![AudioProviderLevel {
                 session_id: session_id.into(),
-                track_id: track.track_id.clone(),
+                track_id: track_id.clone(),
                 provider_monotonic_ns: 1_020_000,
                 peak_millidbfs: -12_000,
                 clipped: false,
             }],
             events: vec![AudioProviderEvent {
                 session_id: session_id.into(),
-                track_id: Some(track.track_id.clone()),
+                track_id: Some(track_id),
                 provider_monotonic_ns: 1_040_000,
                 event: AudioCaptureEventKind::Gap,
                 code: "capture.synthetic_gap".into(),
@@ -105,8 +144,83 @@ impl AudioCaptureProvider for FakeProvider {
     }
 
     fn stop_capture(&self, _: &str) -> Result<AudioStopReason, AudioProviderError> {
+        *self.active_track_id.lock().unwrap() = None;
         Ok(AudioStopReason::UserRequested)
     }
+}
+
+struct FakeCodec {
+    profiles: Vec<AudioCodecProfile>,
+    fail_encode: bool,
+}
+
+impl FakeCodec {
+    fn new() -> Self {
+        Self {
+            profiles: vec![AudioCodecProfile {
+                id: AudioProfileId::PilotMicrophoneV1,
+                codec_id: "opus".into(),
+                media_type: "audio/opus".into(),
+                channels: 1,
+                sample_rate_hz: 48_000,
+                target_bitrate_bps: 48_000,
+                packet_duration_48khz_frames: 960,
+            }],
+            fail_encode: false,
+        }
+    }
+
+    fn failing() -> Self {
+        Self {
+            fail_encode: true,
+            ..Self::new()
+        }
+    }
+}
+
+impl AudioCodecProvider for FakeCodec {
+    fn provider_id(&self) -> &str {
+        "dev.wyrmgrid.opus"
+    }
+
+    fn provider_version(&self) -> &str {
+        "0.3.1"
+    }
+
+    fn display_name(&self) -> &str {
+        "Synthetic Opus codec"
+    }
+
+    fn profiles(&self) -> &[AudioCodecProfile] {
+        &self.profiles
+    }
+
+    fn start_track(&self, _: &str, _: &str, _: AudioProfileId) -> Result<(), AudioCodecError> {
+        Ok(())
+    }
+
+    fn encode_pcm(
+        &self,
+        frame: &AudioProviderPcmFrame,
+    ) -> Result<EncodedAudioPacket, AudioCodecError> {
+        if self.fail_encode {
+            return Err(AudioCodecError::Protocol);
+        }
+        Ok(EncodedAudioPacket {
+            sequence: frame.frame_sequence,
+            provider_monotonic_ns: frame.provider_monotonic_ns,
+            duration_48khz_frames: frame.frame_count,
+            bytes: vec![0xf8, 0xff, 0xfe, 0x00],
+        })
+    }
+
+    fn stop_track(&self, _: &str, _: &str) -> Result<(), AudioCodecError> {
+        Ok(())
+    }
+}
+
+fn fake_codecs() -> Vec<Arc<dyn AudioCodecProvider>> {
+    vec![Arc::new(FakeCodec::new())]
 }
 
 fn service() -> (AudioRecordingService, tempfile::TempDir) {
@@ -120,6 +234,7 @@ fn service() -> (AudioRecordingService, tempfile::TempDir) {
             Store::open_in_memory().unwrap(),
             media,
             Some(Arc::new(FakeProvider::new())),
+            fake_codecs(),
         ),
         directory,
     )
@@ -138,7 +253,8 @@ fn selection() -> AudioSourceSelection {
     AudioSourceSelection {
         provider_id: "dev.wyrmgrid.fake-audio".into(),
         source_id: "synthetic.microphone.primary".into(),
-        profile_id: AudioOpusProfileId::PilotMicrophoneV1,
+        profile_id: AudioProfileId::PilotMicrophoneV1,
+        codec_provider_id: "dev.wyrmgrid.opus".into(),
         enabled: true,
         playback_muted: false,
         playback_solo: false,
@@ -181,6 +297,102 @@ fn permission_is_never_requested_implicitly() {
 }
 
 #[test]
+fn a_selection_cannot_name_an_unavailable_codec() {
+    let directory = tempfile::tempdir().unwrap();
+    let service = AudioRecordingService::new(
+        Store::open_in_memory().unwrap(),
+        EncryptedAudioMediaStore::new(
+            directory.path(),
+            crate::AudioMediaKey::from_test_bytes([17; 32]),
+        ),
+        Some(Arc::new(FakeProvider::new())),
+        vec![],
+    );
+    service.update_preferences(enabled_preferences()).unwrap();
+    service.refresh_sources().unwrap();
+
+    assert_eq!(
+        service.update_source_selection(selection()).unwrap_err(),
+        AudioRecordingError::CodecUnavailable
+    );
+}
+
+#[test]
+fn duplicate_codec_provider_identities_are_withheld_instead_of_replaced() {
+    let directory = tempfile::tempdir().unwrap();
+    let service = AudioRecordingService::new(
+        Store::open_in_memory().unwrap(),
+        EncryptedAudioMediaStore::new(
+            directory.path(),
+            crate::AudioMediaKey::from_test_bytes([20; 32]),
+        ),
+        Some(Arc::new(FakeProvider::new())),
+        vec![Arc::new(FakeCodec::new()), Arc::new(FakeCodec::new())],
+    );
+
+    assert!(service.status().unwrap().codecs.is_empty());
+    assert_eq!(
+        service.update_source_selection(selection()).unwrap_err(),
+        AudioRecordingError::CodecUnavailable
+    );
+}
+
+#[test]
+fn a_codec_failure_interrupts_capture_without_persisting_plaintext_pcm() {
+    let directory = tempfile::tempdir().unwrap();
+    let service = AudioRecordingService::new(
+        Store::open_in_memory().unwrap(),
+        EncryptedAudioMediaStore::new(
+            directory.path(),
+            crate::AudioMediaKey::from_test_bytes([18; 32]),
+        ),
+        Some(Arc::new(FakeProvider::new())),
+        vec![Arc::new(FakeCodec::failing())],
+    );
+    service.update_preferences(enabled_preferences()).unwrap();
+    service.refresh_sources().unwrap();
+    service.update_source_selection(selection()).unwrap();
+    service
+        .request_source_permission("synthetic.microphone.primary")
+        .unwrap();
+    service.start(None, AudioCaptureMode::Manual).unwrap();
+
+    assert_eq!(
+        service.poll_active_capture().unwrap_err(),
+        AudioRecordingError::CodecFailed
+    );
+    let status = service.status().unwrap();
+    assert!(!status.recording_active);
+    assert_eq!(status.sessions[0].status, AudioSessionStatus::Interrupted);
+    assert!(directory.path().read_dir().unwrap().next().is_none());
+}
+
+#[test]
+fn a_saturated_final_drain_is_marked_interrupted_instead_of_hiding_possible_tail_loss() {
+    let directory = tempfile::tempdir().unwrap();
+    let service = AudioRecordingService::new(
+        Store::open_in_memory().unwrap(),
+        EncryptedAudioMediaStore::new(
+            directory.path(),
+            crate::AudioMediaKey::from_test_bytes([19; 32]),
+        ),
+        Some(Arc::new(FakeProvider::with_frames_per_drain(64))),
+        fake_codecs(),
+    );
+    service.update_preferences(enabled_preferences()).unwrap();
+    service.refresh_sources().unwrap();
+    service.update_source_selection(selection()).unwrap();
+    service
+        .request_source_permission("synthetic.microphone.primary")
+        .unwrap();
+    service.start(None, AudioCaptureMode::Manual).unwrap();
+
+    let stopped = service.stop().unwrap();
+    assert!(!stopped.recording_active);
+    assert_eq!(stopped.sessions[0].status, AudioSessionStatus::Interrupted);
+}
+
+#[test]
 fn capture_persists_authenticated_playback_export_and_coordinated_deletion() {
     let (service, directory) = service();
     service.update_preferences(enabled_preferences()).unwrap();
@@ -205,12 +417,16 @@ fn capture_persists_authenticated_playback_export_and_coordinated_deletion() {
     let playback = service.playback(&session_id).unwrap();
     assert!(playback.authenticated);
     assert_eq!(playback.tracks.len(), 1);
+    assert_eq!(playback.tracks[0].codec_provider_id, "dev.wyrmgrid.opus");
+    assert_eq!(playback.tracks[0].codec_provider_version, "0.3.1");
+    assert_eq!(playback.tracks[0].codec_id, "opus");
+    assert_eq!(playback.tracks[0].codec_media_type, "audio/opus");
     assert_eq!(
         playback.tracks[0].packets[0].bytes,
         vec![0xf8, 0xff, 0xfe, 0x00]
     );
 
-    let export_path = directory.path().join("track.wyrmgrid-opus-packets");
+    let export_path = directory.path().join("track.wyrmgrid-audio-packets");
     let export = service
         .export_track(&session_id, &playback.tracks[0].track_id, &export_path)
         .unwrap();
@@ -284,8 +500,12 @@ fn tombstoned_deletion_is_hidden_and_retried_during_recovery() {
         directory.path(),
         crate::AudioMediaKey::from_test_bytes([12; 32]),
     );
-    let service =
-        AudioRecordingService::new(store.clone(), media, Some(Arc::new(FakeProvider::new())));
+    let service = AudioRecordingService::new(
+        store.clone(),
+        media,
+        Some(Arc::new(FakeProvider::new())),
+        fake_codecs(),
+    );
     service.update_preferences(enabled_preferences()).unwrap();
     service.refresh_sources().unwrap();
     service.update_source_selection(selection()).unwrap();
@@ -318,7 +538,7 @@ fn provider_batch_cannot_substitute_a_requested_track_source() {
     let requests = vec![AudioTrackRequest {
         track_id: "track-1".into(),
         source_id: "synthetic.microphone.primary".into(),
-        profile: AudioOpusProfileId::PilotMicrophoneV1,
+        profile: AudioProfileId::PilotMicrophoneV1,
     }];
     let mut batch = provider
         .start_capture("audio-session-1", &requests)
@@ -355,6 +575,10 @@ fn media_cleanup_failure_does_not_block_interrupted_session_recovery() {
         session_id: session.id.clone(),
         source_id: "synthetic.microphone.primary".into(),
         profile_id: "pilot_microphone_v1".into(),
+        codec_provider_id: "dev.wyrmgrid.opus".into(),
+        codec_provider_version: "0.3.1".into(),
+        codec_id: "opus".into(),
+        codec_media_type: "audio/opus".into(),
         source_role: "microphone_input".into(),
         source_truth: "isolated".into(),
         channel_count: 1,
@@ -371,6 +595,7 @@ fn media_cleanup_failure_does_not_block_interrupted_session_recovery() {
         store,
         EncryptedAudioMediaStore::new(media_path, crate::AudioMediaKey::from_test_bytes([13; 32])),
         None,
+        vec![],
     );
 
     let status = service.recover_interrupted_sessions().unwrap();
@@ -420,6 +645,10 @@ fn backup_omission_metadata_does_not_consume_the_local_media_budget() {
                     session_id: id.into(),
                     source_id: "synthetic.microphone.primary".into(),
                     profile_id: "pilot_microphone_v1".into(),
+                    codec_provider_id: "dev.wyrmgrid.opus".into(),
+                    codec_provider_version: "0.3.1".into(),
+                    codec_id: "opus".into(),
+                    codec_media_type: "audio/opus".into(),
                     source_role: "microphone_input".into(),
                     source_truth: "isolated".into(),
                     channel_count: 1,
@@ -448,6 +677,7 @@ fn backup_omission_metadata_does_not_consume_the_local_media_budget() {
             crate::AudioMediaKey::from_test_bytes([15; 32]),
         ),
         None,
+        vec![],
     );
 
     assert_eq!(service.enforce_retention().unwrap().sessions.len(), 2);
@@ -475,6 +705,10 @@ fn restored_backup_metadata_does_not_retain_an_external_segment() {
         session_id: session.id.clone(),
         source_id: "synthetic.microphone.primary".into(),
         profile_id: "pilot_microphone_v1".into(),
+        codec_provider_id: "dev.wyrmgrid.opus".into(),
+        codec_provider_version: "0.3.1".into(),
+        codec_id: "opus".into(),
+        codec_media_type: "audio/opus".into(),
         source_role: "microphone_input".into(),
         source_truth: "isolated".into(),
         channel_count: 1,
@@ -520,6 +754,7 @@ fn restored_backup_metadata_does_not_retain_an_external_segment() {
             crate::AudioMediaKey::from_test_bytes([16; 32]),
         ),
         None,
+        vec![],
     );
 
     let recovered = service.recover_interrupted_sessions().unwrap();

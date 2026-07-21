@@ -6,7 +6,7 @@ use wyrmgrid_audio_provider_protocol::{
     write_provider_frame,
 };
 use wyrmgrid_domain::{
-    AUDIO_SOURCE_SCHEMA_VERSION, AudioOpusProfileId, AudioPermissionState, AudioSourceAvailability,
+    AUDIO_SOURCE_SCHEMA_VERSION, AudioPermissionState, AudioProfileId, AudioSourceAvailability,
     AudioSourceCapability, AudioSourceDirection, AudioSourceOrigin, AudioSourceRole,
     AudioSourceTruth,
 };
@@ -14,7 +14,13 @@ use wyrmgrid_domain::{
 const PROVIDER_ID: &str = "dev.wyrmgrid.fake-audio";
 const MICROPHONE_SOURCE_ID: &str = "synthetic.microphone.primary";
 const MIX_SOURCE_ID: &str = "synthetic.simulator.mix";
-const SYNTHETIC_PACKET: [u8; 4] = [0xf8, 0xff, 0xfe, 0x00];
+const SYNTHETIC_PCM_FRAME: [u8; 1_920] = [0; 1_920];
+
+struct ActiveCapture {
+    session_id: String,
+    tracks: Vec<AudioStartedTrack>,
+    synthetic_frame_sent: bool,
+}
 
 fn main() {
     if run().is_err() {
@@ -53,7 +59,7 @@ fn run() -> Result<(), ()> {
     )?;
 
     let mut last_sequence = first.sequence;
-    let mut active_session: Option<String> = None;
+    let mut active_capture: Option<ActiveCapture> = None;
     let mut microphone_permission_granted = false;
     loop {
         let envelope = read_next(&mut stdin, last_sequence)?;
@@ -101,7 +107,7 @@ fn run() -> Result<(), ()> {
                 &[],
             )?,
             AudioHostMessage::StartCapture { session_id, tracks } => {
-                if active_session.is_some()
+                if active_capture.is_some()
                     || !tracks.iter().all(|track| {
                         source_for(&track.source_id, microphone_permission_granted).is_some_and(
                             |source| {
@@ -120,7 +126,6 @@ fn run() -> Result<(), ()> {
                     )?;
                     return Err(());
                 }
-                active_session = Some(session_id.clone());
                 let started_tracks = tracks
                     .iter()
                     .map(|track| AudioStartedTrack {
@@ -130,6 +135,11 @@ fn run() -> Result<(), ()> {
                         provider_start_monotonic_ns: 1_010_000,
                     })
                     .collect::<Vec<_>>();
+                active_capture = Some(ActiveCapture {
+                    session_id: session_id.clone(),
+                    tracks: started_tracks.clone(),
+                    synthetic_frame_sent: false,
+                });
                 writer.send(
                     AudioProviderMessage::State {
                         state: AudioProviderState::Capturing,
@@ -145,43 +155,71 @@ fn run() -> Result<(), ()> {
                     },
                     &[],
                 )?;
-                let track_id = tracks[0].track_id.clone();
+            }
+            AudioHostMessage::DrainCapture {
+                session_id,
+                maximum_frames,
+            } => {
+                let Some(capture) = active_capture
+                    .as_mut()
+                    .filter(|capture| capture.session_id == session_id)
+                else {
+                    return Err(());
+                };
+                let should_send = !capture.synthetic_frame_sent && maximum_frames > 0;
+                if should_send {
+                    let track_id = capture.tracks[0].track_id.clone();
+                    writer.send(
+                        AudioProviderMessage::PcmFrame {
+                            session_id: session_id.clone(),
+                            track_id: track_id.clone(),
+                            frame_sequence: 1,
+                            provider_monotonic_ns: 1_020_000,
+                            channels: 1,
+                            sample_rate_hz: 48_000,
+                            frame_count: 960,
+                            payload_bytes: SYNTHETIC_PCM_FRAME.len() as u32,
+                        },
+                        &SYNTHETIC_PCM_FRAME,
+                    )?;
+                    writer.send(
+                        AudioProviderMessage::Level {
+                            session_id: session_id.clone(),
+                            track_id: track_id.clone(),
+                            provider_monotonic_ns: 1_020_000,
+                            peak_millidbfs: -12_000,
+                            clipped: false,
+                        },
+                        &[],
+                    )?;
+                    writer.send(
+                        AudioProviderMessage::CaptureEvent {
+                            session_id: session_id.clone(),
+                            track_id: Some(track_id),
+                            provider_monotonic_ns: 1_040_000,
+                            event: AudioCaptureEventKind::Gap,
+                            code: "capture.synthetic_gap".into(),
+                            affected_frames: Some(960),
+                            drift_parts_per_million: None,
+                        },
+                        &[],
+                    )?;
+                    capture.synthetic_frame_sent = true;
+                }
                 writer.send(
-                    AudioProviderMessage::AudioPacket {
-                        session_id: session_id.clone(),
-                        track_id: track_id.clone(),
-                        packet_sequence: 1,
-                        provider_monotonic_ns: 1_020_000,
-                        duration_48khz_frames: 960,
-                        payload_bytes: SYNTHETIC_PACKET.len() as u32,
-                    },
-                    &SYNTHETIC_PACKET,
-                )?;
-                writer.send(
-                    AudioProviderMessage::Level {
-                        session_id: session_id.clone(),
-                        track_id: track_id.clone(),
-                        provider_monotonic_ns: 1_020_000,
-                        peak_millidbfs: -12_000,
-                        clipped: false,
-                    },
-                    &[],
-                )?;
-                writer.send(
-                    AudioProviderMessage::CaptureEvent {
+                    AudioProviderMessage::DrainComplete {
                         session_id,
-                        track_id: Some(track_id),
-                        provider_monotonic_ns: 1_040_000,
-                        event: AudioCaptureEventKind::Gap,
-                        code: "capture.synthetic_gap".into(),
-                        affected_frames: Some(960),
-                        drift_parts_per_million: None,
+                        frame_count: u16::from(should_send),
                     },
                     &[],
                 )?;
             }
             AudioHostMessage::StopCapture { session_id } => {
-                if active_session.as_deref() != Some(session_id.as_str()) {
+                if active_capture
+                    .as_ref()
+                    .map(|capture| capture.session_id.as_str())
+                    != Some(session_id.as_str())
+                {
                     writer.send(
                         AudioProviderMessage::State {
                             state: AudioProviderState::Failed,
@@ -191,7 +229,7 @@ fn run() -> Result<(), ()> {
                     )?;
                     return Err(());
                 }
-                active_session = None;
+                active_capture = None;
                 writer.send(
                     AudioProviderMessage::CaptureStopped {
                         session_id,
@@ -243,7 +281,7 @@ fn descriptor() -> AudioProviderDescriptor {
         capabilities: vec![
             AudioProviderCapability::SourceEnumeration,
             AudioProviderCapability::PermissionRequests,
-            AudioProviderCapability::EncodedOpusCapture,
+            AudioProviderCapability::PcmS16leCapture,
             AudioProviderCapability::LevelMetering,
             AudioProviderCapability::HotPlugNotifications,
             AudioProviderCapability::ClockSynchronization,
@@ -268,7 +306,7 @@ fn sources(microphone_permission_granted: bool) -> Vec<AudioSourceCapability> {
             },
             channels: 1,
             native_sample_rate_hz: 48_000,
-            supported_profiles: vec![AudioOpusProfileId::PilotMicrophoneV1],
+            supported_profiles: vec![AudioProfileId::PilotMicrophoneV1],
             supports_hot_plug: true,
             origin: AudioSourceOrigin::OperatingSystem,
         },
@@ -283,7 +321,7 @@ fn sources(microphone_permission_granted: bool) -> Vec<AudioSourceCapability> {
             permission: AudioPermissionState::NotRequired,
             channels: 2,
             native_sample_rate_hz: 48_000,
-            supported_profiles: vec![AudioOpusProfileId::MixedStereoV1],
+            supported_profiles: vec![AudioProfileId::MixedStereoV1],
             supports_hot_plug: true,
             origin: AudioSourceOrigin::Simulator {
                 identifier: "synthetic_simulator".into(),

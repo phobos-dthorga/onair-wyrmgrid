@@ -242,7 +242,7 @@ export const emptySimulatorRecording: SimulatorRecordingView = {
   sessions: [],
 };
 
-export type AudioOpusProfileId =
+export type AudioProfileId =
   "pilot_microphone_v1" | "isolated_voice_v1" | "mixed_stereo_v1";
 
 export type AudioRecordingPreferences = {
@@ -264,7 +264,8 @@ export const defaultAudioRecordingPreferences: AudioRecordingPreferences = {
 export type AudioSourceSelection = {
   provider_id: string;
   source_id: string;
-  profile_id: AudioOpusProfileId;
+  profile_id: AudioProfileId;
+  codec_provider_id: string;
   enabled: boolean;
   playback_muted: boolean;
   playback_solo: boolean;
@@ -277,13 +278,20 @@ export type AudioSourceView = {
   role: string;
   availability: "available" | "unavailable";
   permission: "not_required" | "prompt_required" | "granted" | "denied";
-  supported_profiles: AudioOpusProfileId[];
+  supported_profiles: AudioProfileId[];
+  codec_provider_id?: string;
   enabled: boolean;
   playback_muted: boolean;
   playback_solo: boolean;
   playback_volume_percent: number;
   peak_millidbfs?: number;
   clipped: boolean;
+};
+
+export type AudioCodecView = {
+  id: string;
+  name: string;
+  supported_profiles: AudioProfileId[];
 };
 
 export type AudioSessionSummary = {
@@ -305,6 +313,7 @@ export type AudioRecordingView = {
   recording_active: boolean;
   active_session_id?: string;
   sources: AudioSourceView[];
+  codecs: AudioCodecView[];
   sessions: AudioSessionSummary[];
   last_code?: string;
 };
@@ -314,6 +323,7 @@ export const emptyAudioRecording: AudioRecordingView = {
   provider_available: false,
   recording_active: false,
   sources: [],
+  codecs: [],
   sessions: [],
 };
 
@@ -327,7 +337,11 @@ export type EncodedAudioPacketView = {
 export type AudioTrackPlaybackView = {
   track_id: string;
   source_id: string;
-  profile_id: AudioOpusProfileId;
+  profile_id: AudioProfileId;
+  codec_provider_id: string;
+  codec_provider_version: string;
+  codec_id: string;
+  codec_media_type: string;
   playback_muted: boolean;
   playback_solo: boolean;
   playback_volume_percent: number;

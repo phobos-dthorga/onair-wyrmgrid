@@ -73,9 +73,10 @@ Simulator-synchronised audio is not a Bridge protocol version 1 payload.
 Continuous PCM or encoded media would violate the purpose and limits of the 64
 KiB JSON telemetry channel and couple audio backpressure to simulator facts.
 Bridge providers continue to supply attributed radio state and session evidence.
-The separate Audio Capture Provider protocol version-one foundation now defines
-capability-labelled sources, bounded control headers, and separately framed
-encoded-packet bodies, but no native capture or user-facing availability exists.
+The separate Audio Capture Provider version 2 defines capability-labelled
+sources and bounded PCM. Audio Codec Provider version 1 separately defines
+user-selected encoding. A debug-only Windows microphone provider and first-
+party Opus codec sidecar exist, but neither is packaged or live-certified.
 
 MSFS 2024's documented COM facts do not establish isolated COM audio. X-Plane
 12's named audio groups make isolated capture a feasibility candidate, but its
@@ -83,10 +84,12 @@ planned Web API Bridge provider remains the telemetry authority. Any future
 in-process X-Plane audio tap must be thin, first-party, non-blocking, and unable
 to make WyrmGrid policy or storage decisions. The complete planned boundary is
 defined in
-[ADR-0017](../architecture/decisions/0017-simulator-synchronised-audio-recording.md)
+[ADR-0017](../architecture/decisions/0017-simulator-synchronised-audio-recording.md),
+[ADR-0020](../architecture/decisions/0020-out-of-process-audio-codec-providers.md),
 and the [simulator-audio plan](simulator-audio-recording.md).
 The implemented wire contract is documented separately in the
-[Audio Capture Provider protocol reference](audio-capture-provider-protocol.md).
+[Audio Capture Provider](audio-capture-provider-protocol.md) and
+[Audio Codec Provider](audio-codec-provider-protocol.md) protocol references.
 
 ## MSFS 2024 slice
 

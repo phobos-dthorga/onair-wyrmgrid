@@ -4,7 +4,7 @@ use wyrmgrid_audio_provider_protocol::{
     AudioCaptureEventKind, AudioEnvelope, AudioHostMessage, AudioProviderMessage,
     AudioProviderState, AudioStopReason, AudioTrackRequest, read_provider_frame, write_host_frame,
 };
-use wyrmgrid_domain::{AudioOpusProfileId, AudioPermissionState, AudioSourceAvailability};
+use wyrmgrid_domain::{AudioPermissionState, AudioProfileId, AudioSourceAvailability};
 
 fn spawn_provider() -> (Child, ChildStdin, BufReader<ChildStdout>) {
     let mut child = Command::new(env!("CARGO_BIN_EXE_wyrmgrid-fake-audio-provider"))
@@ -33,7 +33,7 @@ fn complete_handshake(stdin: &mut ChildStdin, stdout: &mut BufReader<ChildStdout
         stdin,
         1,
         AudioHostMessage::Hello {
-            host_version: "0.2.0".into(),
+            host_version: "0.3.1".into(),
             provider_id: "dev.wyrmgrid.fake-audio".into(),
         },
     );
@@ -117,7 +117,7 @@ fn follows_the_deterministic_capture_lifecycle_without_hardware() {
             tracks: vec![AudioTrackRequest {
                 track_id: "pilot-microphone".into(),
                 source_id: "synthetic.microphone.primary".into(),
-                profile: AudioOpusProfileId::PilotMicrophoneV1,
+                profile: AudioProfileId::PilotMicrophoneV1,
             }],
         },
     );
@@ -132,17 +132,25 @@ fn follows_the_deterministic_capture_lifecycle_without_hardware() {
         receive(&mut stdout).0,
         AudioProviderMessage::CaptureStarted { .. }
     ));
-    let (packet, body) = receive(&mut stdout);
+    send(
+        &mut stdin,
+        6,
+        AudioHostMessage::DrainCapture {
+            session_id: "session-black-box-1".into(),
+            maximum_frames: 8,
+        },
+    );
+    let (frame, body) = receive(&mut stdout);
     assert!(matches!(
-        packet,
-        AudioProviderMessage::AudioPacket {
-            packet_sequence: 1,
-            duration_48khz_frames: 960,
-            payload_bytes: 4,
+        frame,
+        AudioProviderMessage::PcmFrame {
+            frame_sequence: 1,
+            frame_count: 960,
+            payload_bytes: 1_920,
             ..
         }
     ));
-    assert_eq!(body, [0xf8, 0xff, 0xfe, 0x00]);
+    assert_eq!(body, vec![0_u8; 1_920]);
     assert!(matches!(
         receive(&mut stdout).0,
         AudioProviderMessage::Level {
@@ -159,10 +167,14 @@ fn follows_the_deterministic_capture_lifecycle_without_hardware() {
             ..
         }
     ));
+    assert!(matches!(
+        receive(&mut stdout).0,
+        AudioProviderMessage::DrainComplete { frame_count: 1, .. }
+    ));
 
     send(
         &mut stdin,
-        6,
+        7,
         AudioHostMessage::StopCapture {
             session_id: "session-black-box-1".into(),
         },
@@ -182,7 +194,7 @@ fn follows_the_deterministic_capture_lifecycle_without_hardware() {
         }
     ));
 
-    send(&mut stdin, 7, AudioHostMessage::Shutdown);
+    send(&mut stdin, 8, AudioHostMessage::Shutdown);
     assert!(matches!(
         receive(&mut stdout).0,
         AudioProviderMessage::State {
@@ -206,7 +218,7 @@ fn fails_closed_for_an_unavailable_source_without_fallback() {
             tracks: vec![AudioTrackRequest {
                 track_id: "simulator-mix".into(),
                 source_id: "synthetic.simulator.mix".into(),
-                profile: AudioOpusProfileId::MixedStereoV1,
+                profile: AudioProfileId::MixedStereoV1,
             }],
         },
     );

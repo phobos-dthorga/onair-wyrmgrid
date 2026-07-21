@@ -1,0 +1,10 @@
+{
+  "protocol_version": 1,
+  "sequence": 2,
+  "payload": {
+    "type": "start_track",
+    "session_id": "audio-session",
+    "track_id": "track-1",
+    "profile": "pilot_microphone_v1"
+  }
+}
