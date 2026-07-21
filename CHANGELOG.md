@@ -12,6 +12,26 @@ major application version.
 
 ### Changes
 
+- None.
+
+### Removed
+
+- None.
+
+### 🚨 Breaking changes
+
+- None.
+
+## [0.3.1] - 2026-07-21
+
+### New features
+
+- None.
+
+### Changes
+
+- Corrected theme export so choosing a destination now saves the selected
+  theme manifest successfully.
 - Added proposal-only Hoardmind work orders for isolated static-website,
   read-only catalogue-presentation, and inert package-fixture prototypes. The
   work orders include hardware-aware Hugging Face model recommendations,
@@ -377,7 +397,8 @@ major application version.
 
 - None.
 
-[Unreleased]: https://github.com/phobos-dthorga/onair-wyrmgrid/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/phobos-dthorga/onair-wyrmgrid/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/phobos-dthorga/onair-wyrmgrid/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/phobos-dthorga/onair-wyrmgrid/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/phobos-dthorga/onair-wyrmgrid/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/phobos-dthorga/onair-wyrmgrid/releases/tag/v0.1.0
