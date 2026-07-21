@@ -22,6 +22,7 @@ tokio.workspace = true
 uuid.workspace = true
 zeroize.workspace = true
 wyrmgrid-domain = { path = "../domain" }
+wyrmgrid-audio-codec-protocol = { path = "../audio-codec-protocol" }
 wyrmgrid-audio-provider-protocol = { path = "../audio-provider-protocol" }
 wyrmgrid-bridge-protocol = { path = "../bridge-protocol" }
 wyrmgrid-onair-api = { path = "../onair-api" }

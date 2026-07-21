@@ -1,194 +1,98 @@
-# Audio Capture Provider protocol version 1
+# Audio Capture Provider protocol version 2
 
-Status: protocol and non-native application services implemented; no native capture or live availability
+Status: implemented with deterministic fake and debug-only Windows microphone
+providers; not packaged or live-certified
 
-The Audio Capture Provider protocol is the supervised, language-neutral boundary
-for future microphone, application-output, endpoint-output, simulator-mix, and
-proven isolated-radio sources. It is independent of WyrmGrid Bridge version 1
-and the community plugin protocol. Neither existing contract carries audio
-media or receives an audio capability.
-
-The implementation consists of the `wyrmgrid-audio-provider-protocol` crate,
-stable source and Opus-profile models in `wyrmgrid-domain`, version-one schemas
-and sanitized fixtures, a deterministic development-only fake provider, and
-application services for default-off consent, fake-provider orchestration,
-encrypted packet segments, lifecycle policy, and authenticated packet
-inspection/export. There is no native device access, audible decoding,
-installer entry, packaged provider, or live-support claim.
+Audio Capture Provider version 2 is the supervised boundary between an exact,
+explicitly approved audio source and WyrmGrid. It enumerates capabilities,
+handles an explicit operating-system permission request, captures PCM, reports
+levels and discontinuities, and stops on command. It neither encodes nor stores
+media.
 
 ## Compatibility decision
 
-Audio provider protocol version 1 is a new contract with no predecessor to
-preserve. It does not change the application semantic version, Bridge protocol
-version 1, plugin protocol version 1, simulator telemetry schemas, database
-migrations, existing provider manifests, or installer identity.
+Version 1 transported encoded packets and made the capture provider choose
+Opus. It was implemented only with a synthetic provider and never shipped with
+native capture. Version 2 deliberately replaces that model with PCM capture so
+end users can select a separate codec provider. The host accepts version 2
+only; v1 schemas and fixtures remain unchanged as historical evidence.
 
-Application schema 18 and English source catalogue 18 implement the new local
-metadata and interface without changing audio provider protocol version 1,
-Bridge protocol version 1, plugin protocol version 1, portable-backup format
-version 1, application version 0.2.0, or installer identity.
+This internal protocol change does not change application semantic version
+0.3.1, Bridge protocol 1, community plugin protocol 1, portable-backup format
+1, or installer identity. Any change to v2 message fields, framing,
+interpretation, or enum values requires another explicit compatibility
+decision.
 
-Version-one JSON rejects unknown fields and unknown enum values. Adding or
-removing a message, field, enum value, framing rule, or interpretation therefore
-requires an explicit audio-protocol compatibility decision and normally a new
-protocol version. Manifest-schema changes are separately versioned. Stable
-machine-readable errors do not include source labels or encoded bytes.
+## Process and authority boundary
 
-## Process boundary
+Starting a provider does not authorize capture. WyrmGrid applies default-off
+audio consent, an exact source selection, and any explicit OS permission action
+before `start_capture`. Automatic telemetry recording cannot prompt for or
+enable a microphone.
 
-A future native provider is a separately supervised sidecar. Starting that
-process does not authorize capture. The implemented application service selects
-exact sources and profiles only after the separate default-off consent and
-explicit permission rules are satisfied. The provider reports capabilities and facts; it does not choose
-retention, fallback devices, storage, disclosure, or user policy.
+The provider receives source and track identifiers plus a codec-neutral profile
+shape. It receives no OnAir credential, database key, audio media key, storage
+path, retention rule, export authority, general plugin capability, or network
+authority. Source labels and raw OS identifiers are private and excluded from
+logs and optional-AI packets.
 
-The development-only `wyrmgrid-fake-audio-provider` is a protocol test tool. It
-is a workspace member so black-box tests can launch it, but the Tauri external-
-binary preparation and installer do not stage it. Its labels, identities,
-timestamps, events, and packet bytes are synthetic.
+## Framing and limits
 
-Version 1 does not establish community-provider installation. Discovery,
-publisher identity, signing, package integrity, canonical installation paths,
-updates, rollback, resource limits, and an explicit trust flow remain required
-before any provider not approved and bundled by the host can be accepted.
+Both directions use a 32-bit big-endian JSON-header length. Provider frames add
+a 32-bit big-endian binary-body length. JSON headers and PCM bodies are each
+limited to 64 KiB and their declared and actual lengths must match before
+allocation or interpretation.
 
-## Framing
+PCM frames are signed 16-bit little-endian, interleaved, exactly 48 kHz, one of
+the contract's bounded durations (120–2,880 frames per channel), and compatible
+with the selected profile's channel count. At most 32 sources, eight tracks,
+and 64 frames per drain request are accepted. Identifiers, labels, events,
+level values, drift, and affected-frame counts are separately bounded.
 
-All integer frame lengths use unsigned 32-bit big-endian representation.
-
-Host-to-provider control frames are:
-
-```text
-+----------------------+------------------------------+
-| JSON header bytes u32| versioned JSON envelope ... |
-+----------------------+------------------------------+
-```
-
-Provider-to-host frames are:
-
-```text
-+----------------------+----------------------+----------------+-------------+
-| JSON header bytes u32| binary body bytes u32| JSON envelope  | binary body |
-+----------------------+----------------------+----------------+-------------+
-```
-
-The JSON header is limited to 64 KiB. The binary body is limited to 16 KiB and
-must be empty for every message except `audio_packet`. An `audio_packet` declares
-`payload_bytes`; the declaration and actual body length must match and both must
-be non-zero. Length limits are checked before allocating either section.
-
-The binary body is separate from JSON rather than base64-encoded and never
-enters Bridge's 64 KiB telemetry stream. A live provider will place one encoded
-Opus packet in each audio-packet body. Slice 1's fixed fake bytes test framing
-only and are not represented as a decodable recording.
-
-Malformed JSON, invalid UTF-8, unsupported versions, zero or non-increasing
-sequences, invalid messages, truncated frames, unexpected bodies, and oversized
-lengths fail the provider session closed. A later supervisor owns timeouts and
-bounded restart policy.
-
-## Limits
-
-| Contract value                |    Version-one limit |
-| ----------------------------- | -------------------: |
-| JSON control header           |               64 KiB |
-| Encoded packet body           |               16 KiB |
-| Sources per enumeration       |                   32 |
-| Tracks per start request      |                    8 |
-| Provider capabilities         |                    6 |
-| Source channels               |                  1–8 |
-| Declared native sample rate   |         8–384,000 Hz |
-| Machine identifier            |       128 characters |
-| Display label                 |       160 characters |
-| State or event code           |        96 characters |
-| Gap/dropout/backpressure span | 60 seconds at 48 kHz |
-
-Source, track, and profile collections are bounded and must contain the required
-unique identities. A valid enumeration may contain zero sources so provider and
-hardware unavailability remain representable. JSON Schema captures the portable
-structural limits; Rust validation additionally enforces cross-field rules such
-as unique source and track identifiers, profile/channel compatibility, monotonic
-clock ordering, and event-specific measurements.
-
-## Source capabilities
-
-Each source declares:
-
-- a provider-owned machine identifier and a current display label;
-- microphone, application output, endpoint output, simulator master mix,
-  isolated COM1, isolated COM2, pilot radio, or copilot radio role;
-- input or output direction;
-- `isolated`, `mixed_output`, or `metadata_only` truth;
-- separate availability and permission state;
-- native channels and sample rate;
-- supported versioned Opus profiles;
-- hot-plug notification support; and
-- operating-system, simulator, or external-application origin.
-
-A metadata-only source has no audio profiles and cannot be captured. A source is
-capture-ready only when it is non-metadata, available, permission is granted or
-not required, and it declares at least one compatible profile. The host has a
-separate explicit `request_permission` command so an operating-system prompt is
-never an implicit effect of automatic capture. Application services will still
-apply independent user consent before requesting permission or starting it.
-
-Source labels and origin identifiers are untrusted and privacy-sensitive. They
-remain excluded from plugins, optional-AI packets, Sentry, diagnostics, support
-bundles, and public services. This protocol does not authorize their persistence.
-
-## Opus profiles
-
-Version 1 has a deliberately fixed catalogue:
-
-| Profile               | Channels | Sample rate | Target bitrate |
-| --------------------- | -------: | ----------: | -------------: |
-| `pilot_microphone_v1` |        1 |      48 kHz |      48 kbit/s |
-| `isolated_voice_v1`   |        1 |      48 kHz |      32 kbit/s |
-| `mixed_stereo_v1`     |        2 |      48 kHz |     128 kbit/s |
-
-The domain model provides overflow-safe encoded-size estimates from these
-targets. Audio packets use the Opus 48 kHz timebase and accept only 2.5, 5, 10,
-20, 40, or 60 millisecond durations: 120, 240, 480, 960, 1,920, or 2,880 sample
-frames per channel.
+Unknown fields or enum values, invalid UTF-8, unsupported versions, unsafe
+manifest entry points, non-increasing sequences, unexpected bodies, mismatched
+session/track identities, truncated frames, and oversized lengths fail closed.
 
 ## Lifecycle
 
-The version-one control flow is:
+1. Host sends `hello` for one expected provider identity.
+2. Provider returns `hello` and bounded state transitions.
+3. Host enumerates sources.
+4. Only after an explicit user action, host may request permission for one
+   source and receives a revised source list.
+5. Host may exchange monotonic clock anchors.
+6. Host starts one to eight exact source/track/profile requests.
+7. Host repeatedly requests a bounded drain; provider responds with zero or
+   more PCM frames, levels, events, then `drain_complete`.
+8. Host stops capture or shuts the sidecar down.
 
-1. The host sends `hello` for one expected provider identity.
-2. The provider returns `hello`, then bounded `state` transitions.
-3. The host requests `enumerate_sources`; the provider returns a revisioned
-   capability list.
-4. After a future explicit user action, the host may send `request_permission`
-   for one exact source. The provider returns a revised capability list; capture
-   start itself does not implicitly prompt.
-5. The host may exchange `synchronize_clock` messages. The provider echoes the
-   host send value and reports ordered provider receive/send monotonic values;
-   the host will later record its receive value and calculate correlation and
-   uncertainty.
-6. After future application-owned consent, the host sends `start_capture` with
-   one to eight exact source, track, and profile selections.
-7. The provider emits `capture_started`, encoded `audio_packet` frames, bounded
-   `level` observations, and explicit `capture_event` facts.
-8. The host sends `stop_capture` or `shutdown`; the provider reports the exact
-   stop reason and final state.
+No provider may silently fall back to another device. Gaps, dropouts,
+backpressure, drift, source changes, permission problems, and failures remain
+explicit facts.
 
-Capture events represent permission delay or denial, source loss/change, gaps,
-dropouts, drift, backpressure, and encoder failure. Gap-like events declare a
-bounded affected-frame count. Drift declares a bounded signed parts-per-million
-observation. Events do not silently splice media, replace sources, or alter
-simulator and operating-system volume.
+## Implementations and evidence
 
-## Schemas and fixtures
+`wyrmgrid-fake-audio-provider` supplies synthetic PCM and deterministic events
+for hardware-independent tests. `wyrmgrid-windows-audio-provider` uses CPAL's
+WASAPI host to enumerate and capture an explicitly selected microphone, hashes
+raw OS device identifiers before they become source IDs, downmixes an approved
+48 kHz stream to bounded mono PCM, never blocks the realtime callback, and
+reports dropped frames as backpressure.
 
-- `schemas/audio-provider-manifest-v1.schema.json`
-- `schemas/audio-source-capability-v1.schema.json`
-- `schemas/audio-provider-envelope-v1.schema.json`
-- sanitized hello, permission, sources, clock, packet-header, packet-body, and
-  event fixtures under `schemas/fixtures/`
+The Windows provider is selected only by the development environment setting
+`WYRMGRID_AUDIO_PROVIDER=windows-microphone`. It is not staged into an
+installer, is not automatically opened by tests, and does not establish live
+microphone availability. Output, process-loopback, MSFS, and X-Plane capture
+remain unimplemented.
 
-The fake-provider black-box tests prove deterministic handshake, enumeration,
-explicit permission transition, clock exchange, microphone start, packet
-transport, level and gap reporting, stop, shutdown, unavailable-source rejection
-without fallback, and rejection of a non-increasing host sequence. They do not
-prove native capture or valid Opus encoding.
+Schemas and sanitized fixtures:
+
+- `schemas/audio-provider-manifest-v2.schema.json`
+- `schemas/audio-provider-envelope-v2.schema.json`
+- v2 hello, permission, sources, clock, PCM-header/body, and event fixtures in
+  `schemas/fixtures/`
+- retained v1 manifest/envelope schemas and fixtures
+
+Tests validate framing, exact body sizes, identities, sequences, lifecycle,
+unavailability, permission separation, synthetic PCM, callback conversion, and
+bounded backpressure without opening real hardware.

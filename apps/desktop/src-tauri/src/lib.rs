@@ -1153,14 +1153,20 @@ pub fn run() {
                 store.clone(),
                 audio_media,
                 audio_provider,
+                development_audio_codecs(),
             );
             let _ = audio_recording.recover_interrupted_sessions();
             let (audio_sender, audio_receiver) = mpsc::channel::<AudioSyncRequest>();
             let audio_worker = audio_recording.clone();
             std::thread::spawn(move || {
-                while let Ok(request) = audio_receiver.recv() {
-                    audio_worker
-                        .synchronize_with_simulator_recording(request.session_id, request.mode);
+                loop {
+                    match audio_receiver.recv_timeout(std::time::Duration::from_millis(100)) {
+                        Ok(request) => audio_worker
+                            .synchronize_with_simulator_recording(request.session_id, request.mode),
+                        Err(mpsc::RecvTimeoutError::Timeout) => {}
+                        Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                    }
+                    let _ = audio_worker.poll_active_capture();
                 }
             });
             let simulator = wyrmgrid_application::SimulatorBridgeService::with_telemetry_observer(
@@ -1383,26 +1389,65 @@ fn simulator_provider_path() -> std::path::PathBuf {
     )
 }
 
-fn development_audio_provider() -> Option<wyrmgrid_application::FakeAudioProviderProcess> {
+fn development_audio_provider() -> Option<wyrmgrid_application::ProcessAudioCaptureProvider> {
     if !cfg!(debug_assertions) {
         return None;
     }
     let workspace_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
-    let executable = std::env::var_os("WYRMGRID_FAKE_AUDIO_PROVIDER_PATH")
+    let use_windows_microphone =
+        std::env::var("WYRMGRID_AUDIO_PROVIDER").is_ok_and(|value| value == "windows-microphone");
+    let (configured_path, manifest, executable_name) = if use_windows_microphone {
+        (
+            "WYRMGRID_WINDOWS_AUDIO_PROVIDER_PATH",
+            include_str!("../../../../providers/windows-audio/provider.json"),
+            "wyrmgrid-windows-audio-provider",
+        )
+    } else {
+        (
+            "WYRMGRID_FAKE_AUDIO_PROVIDER_PATH",
+            include_str!("../../../../providers/fake-audio/provider.json"),
+            "wyrmgrid-fake-audio-provider",
+        )
+    };
+    let executable = std::env::var_os(configured_path)
         .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| {
-            workspace_root.join("target/debug").join(if cfg!(windows) {
-                "wyrmgrid-fake-audio-provider.exe"
-            } else {
-                "wyrmgrid-fake-audio-provider"
-            })
-        });
-    let registration = wyrmgrid_application::AudioProviderRegistration::from_manifest_json(
-        include_str!("../../../../providers/fake-audio/provider.json"),
+        .unwrap_or_else(|| development_binary(&workspace_root, executable_name));
+    let registration =
+        wyrmgrid_application::AudioProviderRegistration::from_manifest_json(manifest, executable)
+            .ok()?;
+    wyrmgrid_application::ProcessAudioCaptureProvider::new(registration).ok()
+}
+
+fn development_audio_codecs() -> Vec<Arc<dyn wyrmgrid_application::AudioCodecProvider>> {
+    if !cfg!(debug_assertions) {
+        return Vec::new();
+    }
+    let workspace_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let executable = std::env::var_os("WYRMGRID_OPUS_CODEC_PATH")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| development_binary(&workspace_root, "wyrmgrid-opus-codec"));
+    let Some(codec) = wyrmgrid_application::AudioCodecRegistration::from_manifest_json(
+        include_str!("../../../../codecs/opus/codec.json"),
         executable,
     )
-    .ok()?;
-    wyrmgrid_application::FakeAudioProviderProcess::new(registration).ok()
+    .ok()
+    .and_then(|registration| {
+        wyrmgrid_application::ProcessAudioCodecProvider::new(registration).ok()
+    }) else {
+        return Vec::new();
+    };
+    vec![Arc::new(codec)]
+}
+
+fn development_binary(workspace_root: &std::path::Path, name: &str) -> std::path::PathBuf {
+    let target = std::env::var_os("CARGO_TARGET_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| workspace_root.join("target"));
+    let mut filename = name.to_owned();
+    if cfg!(windows) {
+        filename.push_str(".exe");
+    }
+    target.join("debug").join(filename)
 }
 
 const SIMULATOR_PROVIDER_EXECUTABLE: &str = "wyrmgrid-simconnect-provider.exe";

@@ -38,7 +38,7 @@ Online networks --------------------------+--> Atlas overlays     |
 | Simulator          | MSFS 2024 through SimConnect                | Primary WyrmGrid Bridge provider                    | Local simulator installation                              |
 | Simulator          | MSFS 2020 and FSUIPC                        | Compatibility providers                             | Local installation; FSUIPC may be separately licensed     |
 | Simulator          | X-Plane 12 Web API                          | Second simulator family                             | Local X-Plane 12.1.1 or later                             |
-| Simulator audio    | MSFS 2024 and X-Plane 12                    | Optional capability-driven Opus recording           | Separate microphone or communications approval            |
+| Simulator audio    | MSFS 2024 and X-Plane 12                    | Separate capture and user-selected codec providers  | Separate microphone or communications approval            |
 | Navigation         | Navigraph Navdata                           | Optional approved adapter                           | Developer approval and user subscription for current data |
 | Airport baseline   | OurAirports                                 | Offline reference import                            | No account; public-domain dataset                         |
 | Plan interchange   | MSFS, X-Plane, and Little Navmap formats    | First-party import/export adapters                  | No account                                                |
@@ -74,13 +74,13 @@ Online networks --------------------------+--> Atlas overlays     |
    detail, and AI ATC context remain.)
 9. Add VATSIM and IVAO Atlas layers, followed by X-Plane and approved Navigraph
    features.
-10. Add separately consented Opus audio aligned to simulator sessions, beginning
-    with capability-labelled Windows/MSFS sources. (The independent provider
-    protocol, source/profile models, schemas, fixtures, and deterministic fake
-    provider are implemented; consent, storage, native capture, and release
-    support remain.) Extend capture to X-Plane's supported desktop systems and
-    isolated radio groups only after their platform and plugin feasibility gates
-    pass.
+10. Add separately consented audio aligned to simulator sessions, beginning
+    with capability-labelled Windows/MSFS sources and user-selected codec
+    providers. (Capture protocol v2, codec protocol v1, consent, encrypted
+    storage, deterministic fake capture, debug-only Windows microphone capture,
+    and first-party Opus-as-a-provider are implemented; packaging and live
+    certification remain.) Extend capture to Windows output and X-Plane only
+    after their platform, legal, and plugin feasibility gates pass.
 
 Provider work does not bypass the quality gates. Each protocol or schema change
 needs sanitized fixtures, bounded validation tests, documentation, and an
@@ -127,7 +127,8 @@ the [high-value provider integration process](high-value-provider-process.md).
 - [Simulator provider authoring and FSUIPC path](simulator-provider-authoring.md)
 - [Simulator connection, recording, in-game control, and graphs](simulator-experience-roadmap.md)
 - [Simulator-synchronised audio recording](simulator-audio-recording.md)
-- [Audio Capture Provider protocol version 1](audio-capture-provider-protocol.md)
+- [Audio Capture Provider protocol version 2](audio-capture-provider-protocol.md)
+- [Audio Codec Provider protocol version 1](audio-codec-provider-protocol.md)
 - [Telemetry lifecycle and SimBrief correlation](telemetry-plan-correlation.md)
 
 ## Local automation and community handoff

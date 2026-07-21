@@ -1,0 +1,16 @@
+{
+  "protocol_version": 1,
+  "sequence": 3,
+  "payload": {
+    "type": "encode_pcm",
+    "session_id": "audio-session",
+    "track_id": "track-1",
+    "frame_sequence": 1,
+    "provider_monotonic_ns": 42,
+    "sample_format": "s16le",
+    "channels": 1,
+    "sample_rate_hz": 48000,
+    "frame_count": 120,
+    "payload_bytes": 240
+  }
+}

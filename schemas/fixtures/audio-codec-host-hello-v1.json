@@ -1,0 +1,9 @@
+{
+  "protocol_version": 1,
+  "sequence": 1,
+  "payload": {
+    "type": "hello",
+    "host_version": "0.3.1",
+    "codec_provider_id": "dev.wyrmgrid.opus"
+  }
+}

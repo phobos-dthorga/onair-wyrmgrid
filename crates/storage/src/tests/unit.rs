@@ -6,7 +6,7 @@ fn initializes_the_database_schema() {
     let store = Store::open_in_memory().expect("in-memory database should open");
     assert_eq!(
         store.schema_version().expect("version should be readable"),
-        19
+        20
     );
 }
 
@@ -37,6 +37,7 @@ fn audio_consent_defaults_off_and_round_trips_source_specific_choices() {
         provider_id: "dev.wyrmgrid.fake-audio".into(),
         source_id: "synthetic.microphone.primary".into(),
         profile_id: "pilot_microphone_v1".into(),
+        codec_provider_id: "dev.wyrmgrid.opus".into(),
         enabled: true,
         playback_muted: false,
         playback_solo: false,
@@ -119,6 +120,10 @@ fn pinned_linked_sessions_are_excluded_from_audio_retention_candidates() {
                     session_id: id.into(),
                     source_id: "synthetic.microphone.primary".into(),
                     profile_id: "pilot_microphone_v1".into(),
+                    codec_provider_id: "dev.wyrmgrid.opus".into(),
+                    codec_provider_version: "0.3.1".into(),
+                    codec_id: "opus".into(),
+                    codec_media_type: "audio/opus".into(),
                     source_role: "microphone_input".into(),
                     source_truth: "isolated".into(),
                     channel_count: 1,
@@ -307,6 +312,91 @@ fn aircraft_assignment_migration_preserves_existing_operation_revisions() {
             .query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0))
             .unwrap(),
         19
+    );
+}
+
+#[test]
+fn audio_codec_migration_preserves_version_19_audio_with_explicit_opus_provenance() {
+    let connection = Connection::open_in_memory().expect("database should open");
+    connection
+        .execute_batch(INITIAL_SCHEMA)
+        .expect("initial schema should apply");
+    connection
+        .execute_batch(SIMULATOR_RECORDINGS_SCHEMA)
+        .expect("simulator recording schema should apply");
+    connection
+        .execute_batch(AUDIO_RECORDINGS_SCHEMA)
+        .expect("audio schema should apply");
+    connection
+        .execute(
+            "INSERT INTO audio_source_selections (
+                provider_id, source_id, profile_id, enabled
+             ) VALUES (
+                'dev.wyrmgrid.fake-audio', 'synthetic.microphone.primary',
+                'pilot_microphone_v1', 1
+             )",
+            [],
+        )
+        .unwrap();
+    connection
+        .execute(
+            "INSERT INTO audio_recording_sessions (
+                id, provider_id, capture_mode, started_at, status
+             ) VALUES (
+                'session-before-codecs', 'dev.wyrmgrid.fake-audio', 'manual',
+                '2026-07-20T00:00:00Z', 'completed'
+             )",
+            [],
+        )
+        .unwrap();
+    connection
+        .execute(
+            "INSERT INTO audio_tracks (
+                id, session_id, source_id, profile_id, source_role, source_truth,
+                channel_count, sample_rate_hz, provider_start_monotonic_ns
+             ) VALUES (
+                'track-before-codecs', 'session-before-codecs',
+                'synthetic.microphone.primary', 'pilot_microphone_v1',
+                'microphone_input', 'isolated', 1, 48000, 100
+             )",
+            [],
+        )
+        .unwrap();
+
+    connection
+        .execute_batch(AUDIO_CODEC_PROVIDERS_SCHEMA)
+        .expect("codec migration should apply");
+
+    let selection_codec: String = connection
+        .query_row(
+            "SELECT codec_provider_id FROM audio_source_selections",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let track_codec: (String, String, String, String) = connection
+        .query_row(
+            "SELECT codec_provider_id, codec_provider_version, codec_id, codec_media_type
+             FROM audio_tracks",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        )
+        .unwrap();
+    assert_eq!(selection_codec, "dev.wyrmgrid.opus");
+    assert_eq!(
+        track_codec,
+        (
+            "dev.wyrmgrid.opus".into(),
+            "legacy-unversioned".into(),
+            "opus".into(),
+            "audio/opus".into(),
+        )
+    );
+    assert_eq!(
+        connection
+            .query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0))
+            .unwrap(),
+        20
     );
 }
 

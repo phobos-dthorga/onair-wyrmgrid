@@ -8,11 +8,21 @@ major application version.
 
 ### New features
 
-- None.
+- Added a debug-only Windows microphone capture provider and a specialised,
+  out-of-process codec-provider contract. Codec choice is stored per source;
+  exact provider-version and codec-format provenance is snapshotted per track.
+  WyrmGrid's first-party Opus encoder uses the same bounded protocol intended
+  for future end-user codec providers. None of these sidecars is packaged or
+  live-certified yet.
 
 ### Changes
 
-- None.
+- Audio Capture Provider protocol version 2 now transports bounded 48 kHz PCM
+  separately from encoding. Unreleased version 1 schemas and fixtures are
+  retained as compatibility evidence; migration 20 preserves earlier audio
+  metadata with explicit first-party Opus provenance.
+- Advanced the English source catalogue to version 20 for codec selection and
+  unavailable-codec wording.
 
 ### Removed
 

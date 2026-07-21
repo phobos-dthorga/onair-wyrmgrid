@@ -37,6 +37,25 @@ fn rejects_unknown_manifest_fields() {
 }
 
 #[test]
+fn general_plugins_cannot_request_audio_capture_or_codec_access() {
+    for denied_permission in ["audio_capture", "audio_codec"] {
+        let candidate = format!(
+            r#"{{
+                "id":"org.wyrmgrid.example.audio-request",
+                "name":"Denied audio request",
+                "version":"0.1.0",
+                "api_version":1,
+                "author":"Example Developer",
+                "runtime":"python",
+                "entry_point":"src/main.py",
+                "permissions":["{denied_permission}"]
+            }}"#,
+        );
+        assert!(serde_json::from_str::<PluginManifest>(&candidate).is_err());
+    }
+}
+
+#[test]
 fn rejects_parent_directory_entry_points() {
     let mut candidate = manifest();
     candidate.entry_point = "../outside.py".into();

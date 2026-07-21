@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wyrmgrid.dev/schemas/audio-codec-manifest-v1.json",
+  "title": "WyrmGrid audio codec provider manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "id",
+    "name",
+    "version",
+    "codec_protocol_version",
+    "author",
+    "entry_point",
+    "platforms",
+    "capabilities",
+    "profiles"
+  ],
+  "properties": {
+    "$schema": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "schema_version": { "const": 1 },
+    "id": { "$ref": "#/$defs/providerId" },
+    "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+    "version": { "$ref": "#/$defs/semanticVersion" },
+    "codec_protocol_version": { "const": 1 },
+    "author": { "type": "string", "minLength": 1, "maxLength": 120 },
+    "entry_point": { "type": "string", "minLength": 1 },
+    "platforms": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/platform" }
+    },
+    "capabilities": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "uniqueItems": true,
+      "items": { "const": "encode_pcm_s16le" }
+    },
+    "profiles": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "items": { "$ref": "#/$defs/profile" }
+    }
+  },
+  "$defs": {
+    "providerId": {
+      "type": "string",
+      "maxLength": 255,
+      "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?){2,}$"
+    },
+    "semanticVersion": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "platform": {
+      "enum": [
+        "windows_x86_64",
+        "linux_x86_64",
+        "macos_aarch64",
+        "macos_x86_64"
+      ]
+    },
+    "profileId": {
+      "enum": ["pilot_microphone_v1", "isolated_voice_v1", "mixed_stereo_v1"]
+    },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "codec_id",
+        "media_type",
+        "channels",
+        "sample_rate_hz",
+        "target_bitrate_bps",
+        "packet_duration_48khz_frames"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/profileId" },
+        "codec_id": { "type": "string", "minLength": 1, "maxLength": 96 },
+        "media_type": { "type": "string", "minLength": 3, "maxLength": 120 },
+        "channels": { "type": "integer", "minimum": 1, "maximum": 8 },
+        "sample_rate_hz": { "const": 48000 },
+        "target_bitrate_bps": {
+          "type": "integer",
+          "minimum": 8000,
+          "maximum": 10000000
+        },
+        "packet_duration_48khz_frames": {
+          "enum": [120, 240, 480, 960, 1920, 2880]
+        }
+      }
+    }
+  }
+}

@@ -1,8 +1,7 @@
 use super::*;
 use wyrmgrid_domain::{
-    AUDIO_SOURCE_SCHEMA_VERSION, AudioOpusProfileId, AudioSourceAvailability,
-    AudioSourceCapability, AudioSourceDirection, AudioSourceOrigin, AudioSourceRole,
-    AudioSourceTruth,
+    AUDIO_SOURCE_SCHEMA_VERSION, AudioProfileId, AudioSourceAvailability, AudioSourceCapability,
+    AudioSourceDirection, AudioSourceOrigin, AudioSourceRole, AudioSourceTruth,
 };
 
 fn manifest() -> AudioProviderManifest {
@@ -16,7 +15,7 @@ fn track() -> AudioTrackRequest {
     AudioTrackRequest {
         track_id: "pilot-microphone".into(),
         source_id: "synthetic.microphone.primary".into(),
-        profile: AudioOpusProfileId::PilotMicrophoneV1,
+        profile: AudioProfileId::PilotMicrophoneV1,
     }
 }
 
@@ -32,20 +31,22 @@ fn microphone() -> AudioSourceCapability {
         permission: wyrmgrid_domain::AudioPermissionState::Granted,
         channels: 1,
         native_sample_rate_hz: 48_000,
-        supported_profiles: vec![AudioOpusProfileId::PilotMicrophoneV1],
+        supported_profiles: vec![AudioProfileId::PilotMicrophoneV1],
         supports_hot_plug: true,
         origin: AudioSourceOrigin::OperatingSystem,
     }
 }
 
-fn packet(payload_bytes: u32) -> AudioProviderMessage {
-    AudioProviderMessage::AudioPacket {
+fn pcm_frame(frame_count: u16) -> AudioProviderMessage {
+    AudioProviderMessage::PcmFrame {
         session_id: "session-fixture-1".into(),
         track_id: "pilot-microphone".into(),
-        packet_sequence: 1,
+        frame_sequence: 1,
         provider_monotonic_ns: 1_020_000,
-        duration_48khz_frames: 960,
-        payload_bytes,
+        channels: 1,
+        sample_rate_hz: 48_000,
+        frame_count,
+        payload_bytes: u32::from(frame_count) * 2,
     }
 }
 
@@ -95,6 +96,22 @@ fn validates_host_messages_and_rejects_duplicate_tracks_or_sources() {
     };
     assert_eq!(start.validate(), Ok(()));
     assert_eq!(
+        AudioHostMessage::DrainCapture {
+            session_id: "session-fixture-1".into(),
+            maximum_frames: MAX_AUDIO_DRAIN_FRAMES,
+        }
+        .validate(),
+        Ok(())
+    );
+    assert_eq!(
+        AudioHostMessage::DrainCapture {
+            session_id: "session-fixture-1".into(),
+            maximum_frames: 0,
+        }
+        .validate(),
+        Err(AudioMessageError::InvalidHostMessage)
+    );
+    assert_eq!(
         AudioHostMessage::RequestPermission {
             source_id: "synthetic.microphone.primary".into(),
         }
@@ -129,7 +146,7 @@ fn validates_host_messages_and_rejects_duplicate_tracks_or_sources() {
 }
 
 #[test]
-fn validates_provider_sources_packets_levels_and_events() {
+fn validates_provider_sources_pcm_frames_levels_and_events() {
     let sources = AudioProviderMessage::Sources {
         revision: 1,
         sources: vec![microphone()],
@@ -155,14 +172,16 @@ fn validates_provider_sources_packets_levels_and_events() {
         Err(AudioMessageError::InvalidSources)
     );
 
-    assert_eq!(packet(4).validate(), Ok(()));
-    let invalid_duration = AudioProviderMessage::AudioPacket {
+    assert_eq!(pcm_frame(960).validate(), Ok(()));
+    let invalid_duration = AudioProviderMessage::PcmFrame {
         session_id: "session-fixture-1".into(),
         track_id: "pilot-microphone".into(),
-        packet_sequence: 1,
+        frame_sequence: 1,
         provider_monotonic_ns: 1_020_000,
-        duration_48khz_frames: 720,
-        payload_bytes: 4,
+        channels: 1,
+        sample_rate_hz: 48_000,
+        frame_count: 720,
+        payload_bytes: 1_440,
     };
     assert_eq!(
         invalid_duration.validate(),
@@ -182,6 +201,14 @@ fn validates_provider_sources_packets_levels_and_events() {
     );
 
     assert_eq!(gap(Some(960)).validate(), Ok(()));
+    assert_eq!(
+        AudioProviderMessage::DrainComplete {
+            session_id: "session-fixture-1".into(),
+            frame_count: 1,
+        }
+        .validate(),
+        Ok(())
+    );
 
     let malformed_gap = gap(None);
     assert_eq!(
@@ -206,13 +233,13 @@ fn round_trips_bounded_host_and_provider_frames() {
         host
     );
 
-    let body = [0xf8, 0xff, 0xfe, 0x00];
-    let provider = AudioEnvelope::new(2, packet(body.len() as u32));
+    let body = vec![0_u8; 1_920];
+    let provider = AudioEnvelope::new(2, pcm_frame(960));
     bytes.clear();
     write_provider_frame(&mut bytes, &provider, &body).expect("provider frame should encode");
     assert_eq!(
         read_provider_frame(&mut bytes.as_slice()).expect("provider frame should decode"),
-        (provider, body.to_vec())
+        (provider, body)
     );
 }
 
@@ -220,7 +247,7 @@ fn round_trips_bounded_host_and_provider_frames() {
 fn rejects_oversized_or_inconsistent_bodies_before_payload_allocation() {
     let oversized = [
         1_u32.to_be_bytes(),
-        ((MAX_ENCODED_AUDIO_PACKET_BYTES as u32) + 1).to_be_bytes(),
+        ((MAX_PCM_AUDIO_FRAME_BYTES as u32) + 1).to_be_bytes(),
     ]
     .concat();
     assert!(matches!(
@@ -240,7 +267,7 @@ fn rejects_oversized_or_inconsistent_bodies_before_payload_allocation() {
         Err(AudioFrameError::UnexpectedBody)
     ));
 
-    let declared = AudioEnvelope::new(1, packet(4));
+    let declared = AudioEnvelope::new(1, pcm_frame(120));
     assert!(matches!(
         write_provider_frame(&mut Vec::new(), &declared, &[]),
         Err(AudioFrameError::MissingBody)
@@ -266,16 +293,16 @@ fn rejects_truncated_and_malformed_host_frames() {
 }
 
 #[test]
-fn validates_sanitized_version_one_fixtures() {
+fn validates_sanitized_version_two_fixtures() {
     let host: AudioEnvelope<AudioHostMessage> = serde_json::from_str(include_str!(
-        "../../../../schemas/fixtures/audio-provider-host-hello-v1.json"
+        "../../../../schemas/fixtures/audio-provider-host-hello-v2.json"
     ))
     .expect("host fixture should deserialize");
     host.validate_header().expect("header should validate");
     host.payload.validate().expect("message should validate");
 
     let permission: AudioEnvelope<AudioHostMessage> = serde_json::from_str(include_str!(
-        "../../../../schemas/fixtures/audio-provider-request-permission-v1.json"
+        "../../../../schemas/fixtures/audio-provider-request-permission-v2.json"
     ))
     .expect("permission fixture should deserialize");
     permission
@@ -287,7 +314,7 @@ fn validates_sanitized_version_one_fixtures() {
         .expect("permission message should validate");
 
     let provider: AudioEnvelope<AudioProviderMessage> = serde_json::from_str(include_str!(
-        "../../../../schemas/fixtures/audio-provider-hello-v1.json"
+        "../../../../schemas/fixtures/audio-provider-hello-v2.json"
     ))
     .expect("provider fixture should deserialize");
     provider.validate_header().expect("header should validate");
@@ -297,31 +324,32 @@ fn validates_sanitized_version_one_fixtures() {
         .expect("message should validate");
 
     let sources: AudioEnvelope<AudioProviderMessage> = serde_json::from_str(include_str!(
-        "../../../../schemas/fixtures/audio-provider-sources-v1.json"
+        "../../../../schemas/fixtures/audio-provider-sources-v2.json"
     ))
     .expect("sources fixture should deserialize");
     sources.payload.validate().expect("sources should validate");
 
     let clock: AudioEnvelope<AudioProviderMessage> = serde_json::from_str(include_str!(
-        "../../../../schemas/fixtures/audio-provider-clock-v1.json"
+        "../../../../schemas/fixtures/audio-provider-clock-v2.json"
     ))
     .expect("clock fixture should deserialize");
     clock.payload.validate().expect("clock should validate");
 
-    let packet_header: AudioEnvelope<AudioProviderMessage> = serde_json::from_str(include_str!(
-        "../../../../schemas/fixtures/audio-provider-packet-header-v1.json"
+    let frame_header: AudioEnvelope<AudioProviderMessage> = serde_json::from_str(include_str!(
+        "../../../../schemas/fixtures/audio-provider-pcm-frame-header-v2.json"
     ))
-    .expect("packet fixture should deserialize");
-    packet_header
+    .expect("PCM frame fixture should deserialize");
+    frame_header
         .payload
         .validate()
-        .expect("packet metadata should validate");
-    let packet_body =
-        include_str!("../../../../schemas/fixtures/audio-provider-packet-body-v1.hex").trim();
-    assert_eq!(packet_body, "f8fffe00");
+        .expect("PCM frame metadata should validate");
+    let frame_body =
+        include_str!("../../../../schemas/fixtures/audio-provider-pcm-frame-body-v2.hex").trim();
+    assert_eq!(frame_body.len(), 480);
+    assert!(frame_body.chars().all(|character| character == '0'));
 
     let event: AudioEnvelope<AudioProviderMessage> = serde_json::from_str(include_str!(
-        "../../../../schemas/fixtures/audio-provider-capture-event-v1.json"
+        "../../../../schemas/fixtures/audio-provider-capture-event-v2.json"
     ))
     .expect("event fixture should deserialize");
     event.payload.validate().expect("event should validate");
@@ -330,7 +358,7 @@ fn validates_sanitized_version_one_fixtures() {
 #[test]
 fn rejects_unknown_fields_and_non_increasing_sequences() {
     let mut value: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../../schemas/fixtures/audio-provider-host-hello-v1.json"
+        "../../../../schemas/fixtures/audio-provider-host-hello-v2.json"
     ))
     .expect("fixture should parse");
     value["payload"]["unexpected"] = serde_json::json!(true);
@@ -344,7 +372,7 @@ fn rejects_unknown_fields_and_non_increasing_sequences() {
 #[test]
 fn keeps_schema_limits_aligned_with_the_rust_contract() {
     let envelope_schema: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../../schemas/audio-provider-envelope-v1.schema.json"
+        "../../../../schemas/audio-provider-envelope-v2.schema.json"
     ))
     .expect("envelope schema should be valid JSON");
     assert_eq!(
@@ -360,8 +388,8 @@ fn keeps_schema_limits_aligned_with_the_rust_contract() {
         MAX_AUDIO_TRACKS
     );
     assert_eq!(
-        envelope_schema["$defs"]["audioPacket"]["properties"]["payload_bytes"]["maximum"],
-        MAX_ENCODED_AUDIO_PACKET_BYTES
+        envelope_schema["$defs"]["pcmFrame"]["properties"]["payload_bytes"]["maximum"],
+        MAX_PCM_AUDIO_FRAME_BYTES
     );
 
     let source_schema: serde_json::Value = serde_json::from_str(include_str!(
@@ -378,7 +406,7 @@ fn keeps_schema_limits_aligned_with_the_rust_contract() {
     );
 
     let manifest_schema: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../../schemas/audio-provider-manifest-v1.schema.json"
+        "../../../../schemas/audio-provider-manifest-v2.schema.json"
     ))
     .expect("manifest schema should be valid JSON");
     assert_eq!(

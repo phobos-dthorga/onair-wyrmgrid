@@ -4,7 +4,7 @@ use thiserror::Error;
 
 use crate::{
     AudioEnvelope, AudioHostMessage, AudioProviderMessage, MAX_AUDIO_CONTROL_FRAME_BYTES,
-    MAX_ENCODED_AUDIO_PACKET_BYTES,
+    MAX_PCM_AUDIO_FRAME_BYTES,
 };
 
 #[derive(Debug, Error)]
@@ -29,11 +29,11 @@ pub enum AudioFrameError {
     InvalidEnvelope,
     #[error("audio provider message is invalid")]
     InvalidMessage,
-    #[error("only an audio packet may carry a binary body")]
+    #[error("only a PCM frame may carry a binary body")]
     UnexpectedBody,
-    #[error("audio packet binary body is missing")]
+    #[error("PCM frame binary body is missing")]
     MissingBody,
-    #[error("audio packet binary body length does not match its declaration")]
+    #[error("PCM frame binary body length does not match its declaration")]
     BodyLengthMismatch,
 }
 
@@ -86,7 +86,7 @@ pub fn write_provider_frame<W: Write>(
             maximum: MAX_AUDIO_CONTROL_FRAME_BYTES,
         })?;
     let body_length = u32::try_from(body.len()).map_err(|_| AudioFrameError::BodyTooLarge {
-        maximum: MAX_ENCODED_AUDIO_PACKET_BYTES,
+        maximum: MAX_PCM_AUDIO_FRAME_BYTES,
     })?;
     writer
         .write_all(&header_length.to_be_bytes())
@@ -203,9 +203,9 @@ fn validate_lengths(header_length: usize, body_length: usize) -> Result<(), Audi
             maximum: MAX_AUDIO_CONTROL_FRAME_BYTES,
         });
     }
-    if body_length > MAX_ENCODED_AUDIO_PACKET_BYTES {
+    if body_length > MAX_PCM_AUDIO_FRAME_BYTES {
         return Err(AudioFrameError::BodyTooLarge {
-            maximum: MAX_ENCODED_AUDIO_PACKET_BYTES,
+            maximum: MAX_PCM_AUDIO_FRAME_BYTES,
         });
     }
     Ok(())

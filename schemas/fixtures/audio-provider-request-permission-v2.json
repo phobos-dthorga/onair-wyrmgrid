@@ -1,0 +1,8 @@
+{
+  "protocol_version": 2,
+  "sequence": 3,
+  "payload": {
+    "type": "request_permission",
+    "source_id": "synthetic.microphone.primary"
+  }
+}

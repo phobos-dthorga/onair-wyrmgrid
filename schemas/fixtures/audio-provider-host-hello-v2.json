@@ -1,0 +1,9 @@
+{
+  "protocol_version": 2,
+  "sequence": 1,
+  "payload": {
+    "type": "hello",
+    "host_version": "0.3.1",
+    "provider_id": "dev.wyrmgrid.fake-audio"
+  }
+}
