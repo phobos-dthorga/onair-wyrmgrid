@@ -6102,7 +6102,7 @@ dependencies = [
 
 [[package]]
 name = "wyrmgrid-application"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "chacha20poly1305",
  "chrono",
@@ -6129,7 +6129,7 @@ dependencies = [
 
 [[package]]
 name = "wyrmgrid-audio-provider-protocol"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -6139,7 +6139,7 @@ dependencies = [
 
 [[package]]
 name = "wyrmgrid-bridge-protocol"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -6149,7 +6149,7 @@ dependencies = [
 
 [[package]]
 name = "wyrmgrid-desktop"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "chrono",
  "getrandom 0.4.3",
@@ -6171,7 +6171,7 @@ dependencies = [
 
 [[package]]
 name = "wyrmgrid-domain"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -6183,7 +6183,7 @@ dependencies = [
 
 [[package]]
 name = "wyrmgrid-fake-audio-provider"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "tempfile",
  "wyrmgrid-application",
@@ -6194,7 +6194,7 @@ dependencies = [
 
 [[package]]
 name = "wyrmgrid-onair-api"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "chrono",
  "reqwest 0.12.28",
@@ -6209,7 +6209,7 @@ dependencies = [
 
 [[package]]
 name = "wyrmgrid-plugin-protocol"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "chrono",
  "serde",
@@ -6221,7 +6221,7 @@ dependencies = [
 
 [[package]]
 name = "wyrmgrid-simbrief-api"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "chrono",
  "reqwest 0.12.28",
@@ -6235,7 +6235,7 @@ dependencies = [
 
 [[package]]
 name = "wyrmgrid-simconnect-provider"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "chrono",
  "libloading 0.9.0",
@@ -6246,7 +6246,7 @@ dependencies = [
 
 [[package]]
 name = "wyrmgrid-storage"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "chrono",
  "rusqlite",
