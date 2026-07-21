@@ -7,6 +7,93 @@ rendering, credentials, stable provider contracts, permission persistence, and
 process state. A weather provider plugin owns only request URL construction and
 translation of its raw response into those stable contracts.
 
+## External delivery invariant
+
+Every WyrmGrid component described as a plugin or provider must be deliverable
+as an external artifact. Installing, replacing, disabling, updating, or
+removing it must not require compiling or relinking the WyrmGrid desktop.
+First-party and community packages use the same public contracts and lifecycle;
+an official installer may seed first-party packages as a convenience, but no
+plugin may exist only as compile-time embedded code.
+
+The payload format follows the integration need rather than one mandated
+implementation language. A package may contain Python or another supported
+script runtime, a standalone executable, a platform-native library loaded by a
+simulator, or a future validated runtime such as WebAssembly. Native code must
+never be loaded into the WyrmGrid desktop process: when a simulator requires an
+in-process module, that module belongs to the simulator-facing package and
+communicates with a separately supervised WyrmGrid provider.
+
+Format flexibility does not bypass trust controls. Each supported package kind
+needs a versioned manifest, bounded contents, a declared entry point and
+runtime, compatibility metadata, complete capabilities and network origins,
+deterministic validation, and safe install, update, rollback, disable, and
+removal behaviour. Unknown formats remain inert until WyrmGrid has an explicit
+adapter and compatibility decision.
+
+Local installation is a core offline capability and must not depend on WyrmGrid
+Aerie, an account, or a network connection. Aerie may later add discovery,
+publisher identity, signatures, revocation metadata, and convenient updates;
+it is not the source of the plugin model or a prerequisite for loading an
+already verified local package. This direction is recorded in
+[ADR-0021](../architecture/decisions/0021-externally-installable-extensions.md).
+
+The current developer preview implements the first ordinary-plugin vertical
+slice. Forge can inspect and install a local `.wyrmplugin` file without Aerie,
+store immutable versions outside the executable, activate a new version while
+retaining one rollback target, disable or enable discovery, and remove the
+managed package. Installation does not start the process or approve its
+capabilities. The four first-party Python plugins are now deterministic,
+separately distributable `.wyrmplugin` files seeded through the same managed
+installer. Simulator sidecars now use a distinct `.wyrmprovider` contract and
+managed lifecycle; audio providers remain the next migration boundary.
+
+## Ordinary plugin packages
+
+Package schema version 1 is a bounded ZIP envelope with the `.wyrmplugin`
+extension. Its root `wyrmgrid-package.json` identifies an
+`ordinary_plugin`, fixes the enclosed manifest at `plugin.json`, and inventories
+every payload file with its size and lowercase SHA-256 digest. WyrmGrid rejects
+undeclared files, digest or identity mismatches, traversal, links, directories,
+case collisions, encrypted entries, unsupported compression, excessive sizes,
+and unknown schema versions before extraction.
+
+To install a local package:
+
+1. open **WyrmGrid Forge** and choose **Choose package…**;
+2. select a `.wyrmplugin` file;
+3. review its identity, author, version, runtime, size, file count, and complete
+   archive digest;
+4. heed the unsigned-package warning and confirm installation only when the
+   file's source is trusted; and
+5. review capabilities separately before starting the installed plugin.
+
+The package format proves content consistency, not publisher identity. Schema
+version 1 is unsigned and Forge always reports its publisher as unverified.
+The exact compatibility decision, limits, managed lifecycle, and security
+consequences are in
+[ADR-0022](../architecture/decisions/0022-ordinary-plugin-package-format-v1.md).
+The canonical package manifest schema and fixture are
+`schemas/extension-package-manifest-v1.schema.json` and
+`schemas/fixtures/extension-package-manifest-plugin-v1.json`.
+
+Authors can build the envelope from an existing plugin directory without
+compiling WyrmGrid:
+
+```powershell
+npm run plugin:package -- --source path\to\plugin --output dist\my-plugin.wyrmplugin
+```
+
+The packager refuses to overwrite an output unless `--force` is explicit. A
+shared runtime file can be placed at a canonical package path with a repeatable
+`--include SOURCE=PACKAGE_PATH` argument. For example, the current zero-
+dependency Python SDK may be added as
+`--include sdk/python/wyrmgrid_sdk/__init__.py=src/wyrmgrid_sdk/__init__.py`.
+The command validates paths, identity, version, entry-point presence, file and
+archive limits, creates a complete digest inventory, and emits deterministic
+ZIP bytes. The desktop independently performs the full validation again; the
+authoring command is not a trust decision.
+
 `plugin.json` declares identity, compatibility, entry point, and requested
 permissions. The host validates it before launch. A manifest is not a sandbox:
 process isolation, operating-system controls, message validation, timeouts, and
@@ -66,9 +153,10 @@ The complete framing, lifecycle, limit, and compatibility contract is in
 [protocol version 1](protocol-v1.md).
 
 WyrmGrid Aerie is a future distribution and discovery service, not part of the
-current protocol proof. Its proposal keeps upload quarantine, validation,
-moderation, publisher signatures, repository approval, desktop verification,
-installation and rollback as distinct steps. See
+current protocol proof and not a prerequisite for local package installation.
+Its proposal keeps upload quarantine, validation, moderation, publisher
+signatures, repository approval, desktop verification, installation, and
+rollback as distinct steps. See
 [ADR-0019](../architecture/decisions/0019-hosted-web-aerie-and-private-vault.md)
 and the
 [hosted-platform implementation plan](../operations/hosted-platform.md).
@@ -125,11 +213,12 @@ and keep their own service credentials outside host snapshots.
 See the [external integrations programme](../integrations/README.md) for planned
 provider boundaries and
 [simulator provider authoring](../integrations/simulator-provider-authoring.md)
-for the distinction between providers and ordinary plugins.
+for the distinct `.wyrmprovider` envelope, native trust warning, and Bridge
+lifecycle.
 
 ## First-party weather providers
 
-The independently installable providers in `plugins/` are:
+The first-party provider source packages in `plugins/` are:
 
 - Open-Meteo for a coarse, host-selected global model grid;
 - AviationWeather.gov for explicit plan-airport METAR and TAF requests; and

@@ -1,4 +1,8 @@
-use crate::{FleetSnapshotView, OnAirSession, SimulatorBridgeService, SnapshotAvailability};
+use crate::{
+    ExtensionPackageManagementError, ExtensionPackageService, FleetSnapshotView,
+    ManagedPluginPackageView, OnAirSession, PluginPackageInspection, SimulatorBridgeService,
+    SnapshotAvailability, inspect_plugin_package,
+};
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -41,25 +45,18 @@ const AIRPORT_WEATHER_RESPONSE_TIMEOUT: Duration = Duration::from_secs(20);
 const GLOBAL_WEATHER_RESPONSE_TIMEOUT: Duration = Duration::from_secs(90);
 const MAX_WEATHER_LAYERS_PER_PLUGIN: usize = 4;
 const MAX_RADAR_FRAMES_PER_LAYER: usize = 6;
+#[cfg(test)]
 const BUNDLED_PLUGIN_ID: &str = "org.wyrmgrid.example.fleet-locations";
 const OPEN_METEO_PLUGIN_ID: &str = "org.wyrmgrid.provider.open-meteo";
+#[cfg(test)]
 const AVIATION_WEATHER_PLUGIN_ID: &str = "org.wyrmgrid.provider.aviation-weather";
 const RAINVIEWER_PLUGIN_ID: &str = "org.wyrmgrid.provider.rainviewer";
 const PYTHON_BOOTSTRAP: &str = "import runpy,sys;sys.path.insert(0,sys.argv[1]);runpy.run_path(sys.argv[2],run_name='__main__')";
 
-const BUNDLED_MANIFEST: &str =
-    include_str!("../../../examples/plugins/fleet-locations/plugin.json");
-const BUNDLED_ENTRY_POINT: &str =
-    include_str!("../../../examples/plugins/fleet-locations/src/main.py");
+#[cfg(test)]
 const BUNDLED_PYTHON_SDK: &str = include_str!("../../../sdk/python/wyrmgrid_sdk/__init__.py");
+#[cfg(test)]
 const OPEN_METEO_MANIFEST: &str = include_str!("../../../plugins/open-meteo/plugin.json");
-const OPEN_METEO_ENTRY_POINT: &str = include_str!("../../../plugins/open-meteo/src/main.py");
-const AVIATION_WEATHER_MANIFEST: &str =
-    include_str!("../../../plugins/aviation-weather/plugin.json");
-const AVIATION_WEATHER_ENTRY_POINT: &str =
-    include_str!("../../../plugins/aviation-weather/src/main.py");
-const RAINVIEWER_MANIFEST: &str = include_str!("../../../plugins/rainviewer/plugin.json");
-const RAINVIEWER_ENTRY_POINT: &str = include_str!("../../../plugins/rainviewer/src/main.py");
 
 #[derive(Debug, Error, Clone, Copy, PartialEq, Eq)]
 pub enum PluginError {
@@ -97,6 +94,16 @@ pub enum PluginError {
     UnknownConfiguration,
     #[error("That plugin setting value is not supported.")]
     InvalidConfiguration,
+    #[error("The selected plugin package is invalid or unsupported.")]
+    InvalidPackage,
+    #[error("Local plugin-package storage is unavailable.")]
+    PackageStorageUnavailable,
+    #[error("That plugin version is already installed from different package contents.")]
+    PackageVersionConflict,
+    #[error("Stop this plugin before changing its installed package.")]
+    PackageInUse,
+    #[error("No previous plugin version is available for rollback.")]
+    RollbackUnavailable,
 }
 
 #[derive(Debug, Error, Clone, Copy, PartialEq, Eq)]
@@ -342,6 +349,8 @@ pub struct PluginService {
 struct PluginServiceInner {
     root: Option<PathBuf>,
     initialization_error: Option<String>,
+    packages: ExtensionPackageService,
+    package_notice: Mutex<Option<String>>,
     authorization: AuthorizationService<Store>,
     preferences: Store,
     onair: OnAirSession,
@@ -435,6 +444,22 @@ impl PluginService {
         authorization_runtime: AuthorizationRuntime,
         diagnostic_observer: Option<Arc<dyn PluginDiagnosticObserver>>,
     ) -> Self {
+        let package_root = root.as_ref().map(|root| {
+            if root.file_name().and_then(|name| name.to_str()) == Some("plugins") {
+                root.parent()
+                    .unwrap_or(root.as_path())
+                    .join("extensions-v1")
+            } else {
+                root.join(".extensions-v1")
+            }
+        });
+        let packages = ExtensionPackageService::new(package_root, store.clone());
+        let mut package_seed_failed = false;
+        for path in development_first_party_plugin_package_paths() {
+            if packages.seed_first_party_plugin_package(&path).is_err() {
+                package_seed_failed = true;
+            }
+        }
         let (root, initialization_error) = match root {
             Some(root) => match initialize_plugin_root(&root) {
                 Ok(()) => (Some(root), None),
@@ -452,6 +477,10 @@ impl PluginService {
             inner: Arc::new(PluginServiceInner {
                 root,
                 initialization_error,
+                packages,
+                package_notice: Mutex::new(package_seed_failed.then(|| {
+                    "One or more first-party plugin packages could not be installed.".to_owned()
+                })),
                 authorization: AuthorizationService::with_runtime(
                     store.clone(),
                     authorization_runtime,
@@ -477,7 +506,7 @@ impl PluginService {
             });
         };
 
-        let (installed, invalid_found) = discover_plugins(root)?;
+        let (installed, invalid_found) = discover_plugins(root, &self.inner.packages)?;
         let runtimes = self
             .inner
             .runtimes
@@ -583,14 +612,130 @@ impl PluginService {
             });
         }
 
+        let package_notice = self
+            .inner
+            .package_notice
+            .lock()
+            .map_err(|_| PluginError::StateUnavailable)?
+            .clone();
         Ok(PluginHostView {
             available: true,
-            notice: invalid_found
-                .then(|| "One or more invalid plugin folders were ignored.".to_owned()),
+            notice: package_notice.or_else(|| {
+                invalid_found.then(|| "One or more invalid plugin folders were ignored.".to_owned())
+            }),
             plugins,
             layers: published_layers,
             weather_layers: published_weather_layers,
         })
+    }
+
+    pub fn inspect_plugin_package(
+        &self,
+        path: &Path,
+    ) -> Result<PluginPackageInspection, PluginError> {
+        inspect_plugin_package(path).map_err(|_| PluginError::InvalidPackage)
+    }
+
+    pub fn list_managed_plugin_packages(
+        &self,
+    ) -> Result<Vec<ManagedPluginPackageView>, PluginError> {
+        self.inner
+            .packages
+            .list_plugin_packages()
+            .map_err(plugin_package_error)
+    }
+
+    pub fn seed_first_party_plugin_packages(&self, paths: &[PathBuf]) -> Result<(), PluginError> {
+        let mut failed = false;
+        for path in paths {
+            if self
+                .inner
+                .packages
+                .seed_first_party_plugin_package(path)
+                .is_err()
+            {
+                failed = true;
+            }
+        }
+        *self
+            .inner
+            .package_notice
+            .lock()
+            .map_err(|_| PluginError::StateUnavailable)? = failed
+            .then(|| "One or more first-party plugin packages could not be installed.".to_owned());
+        if failed {
+            Err(PluginError::InvalidPackage)
+        } else {
+            Ok(())
+        }
+    }
+
+    pub fn install_plugin_package(
+        &self,
+        path: &Path,
+    ) -> Result<ManagedPluginPackageView, PluginError> {
+        let inspection = self.inspect_plugin_package(path)?;
+        self.ensure_plugin_inactive(&inspection.id)?;
+        self.inner
+            .packages
+            .install_plugin_package(path)
+            .map_err(plugin_package_error)
+    }
+
+    pub fn set_managed_plugin_enabled(
+        &self,
+        plugin_id: &str,
+        enabled: bool,
+    ) -> Result<ManagedPluginPackageView, PluginError> {
+        self.ensure_plugin_inactive(plugin_id)?;
+        self.inner
+            .packages
+            .set_plugin_enabled(plugin_id, enabled)
+            .map_err(plugin_package_error)
+    }
+
+    pub fn rollback_managed_plugin(
+        &self,
+        plugin_id: &str,
+    ) -> Result<ManagedPluginPackageView, PluginError> {
+        self.ensure_plugin_inactive(plugin_id)?;
+        self.inner
+            .packages
+            .rollback_plugin(plugin_id)
+            .map_err(plugin_package_error)
+    }
+
+    pub fn remove_managed_plugin(&self, plugin_id: &str) -> Result<(), PluginError> {
+        self.ensure_plugin_inactive(plugin_id)?;
+        self.inner
+            .authorization
+            .revoke_subject(&AuthorizationSubject::plugin(plugin_id))
+            .map_err(plugin_authorization_error)?;
+        self.inner
+            .preferences
+            .delete_plugin_preferences_record(plugin_id)
+            .map_err(|_| PluginError::StorageUnavailable)?;
+        self.clear_startup_failure(plugin_id)?;
+        self.inner
+            .packages
+            .remove_plugin(plugin_id)
+            .map_err(plugin_package_error)
+    }
+
+    fn ensure_plugin_inactive(&self, plugin_id: &str) -> Result<(), PluginError> {
+        let runtimes = self
+            .inner
+            .runtimes
+            .lock()
+            .map_err(|_| PluginError::StateUnavailable)?;
+        if runtimes
+            .get(plugin_id)
+            .is_some_and(|runtime| runtime_state(runtime).is_ok_and(PluginProcessState::is_active))
+        {
+            Err(PluginError::PackageInUse)
+        } else {
+            Ok(())
+        }
     }
 
     pub fn enrich_dispatch_route_weather(
@@ -785,7 +930,7 @@ impl PluginService {
             .root
             .as_deref()
             .ok_or(PluginError::RootUnavailable)?;
-        let (installed, _) = discover_plugins(root)?;
+        let (installed, _) = discover_plugins(root, &self.inner.packages)?;
         let mut enabled = Vec::new();
         for plugin in installed {
             if self.start_with_wyrmgrid(&plugin.manifest)? {
@@ -1077,7 +1222,7 @@ impl PluginService {
             .root
             .as_deref()
             .ok_or(PluginError::RootUnavailable)?;
-        discover_plugins(root)?
+        discover_plugins(root, &self.inner.packages)?
             .0
             .into_iter()
             .find(|plugin| plugin.manifest.id == plugin_id)
@@ -1484,64 +1629,34 @@ impl Drop for PluginServiceInner {
 }
 
 fn initialize_plugin_root(root: &Path) -> Result<(), io::Error> {
-    fs::create_dir_all(root)?;
-    install_bundled_python_plugin(
-        root,
-        BUNDLED_PLUGIN_ID,
-        BUNDLED_MANIFEST,
-        BUNDLED_ENTRY_POINT,
-    )?;
-    install_bundled_python_plugin(
-        root,
-        OPEN_METEO_PLUGIN_ID,
-        OPEN_METEO_MANIFEST,
-        OPEN_METEO_ENTRY_POINT,
-    )?;
-    install_bundled_python_plugin(
-        root,
-        AVIATION_WEATHER_PLUGIN_ID,
-        AVIATION_WEATHER_MANIFEST,
-        AVIATION_WEATHER_ENTRY_POINT,
-    )?;
-    install_bundled_python_plugin(
-        root,
-        RAINVIEWER_PLUGIN_ID,
-        RAINVIEWER_MANIFEST,
-        RAINVIEWER_ENTRY_POINT,
-    )
+    fs::create_dir_all(root)
 }
 
-fn install_bundled_python_plugin(
-    root: &Path,
-    plugin_id: &str,
-    manifest: &str,
-    entry_point: &str,
-) -> Result<(), io::Error> {
-    let plugin_root = root.join(plugin_id);
-    let source_root = plugin_root.join("src");
-    let sdk_root = source_root.join("wyrmgrid_sdk");
-    fs::create_dir_all(&sdk_root)?;
-    write_bundled_file(&plugin_root.join("plugin.json"), manifest)?;
-    write_bundled_file(&source_root.join("main.py"), entry_point)?;
-    write_bundled_file(&sdk_root.join("__init__.py"), BUNDLED_PYTHON_SDK)
-}
-
-fn write_bundled_file(path: &Path, contents: &str) -> Result<(), io::Error> {
-    match fs::read_to_string(path) {
-        Ok(existing) if existing == contents => {}
-        Ok(_) => fs::write(path, contents)?,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => fs::write(path, contents)?,
-        Err(error) => return Err(error),
+fn development_first_party_plugin_package_paths() -> Vec<PathBuf> {
+    if !cfg!(any(debug_assertions, test)) {
+        return Vec::new();
     }
-    Ok(())
+    let package_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/plugin-packages");
+    [
+        "fleet-locations.wyrmplugin",
+        "open-meteo.wyrmplugin",
+        "aviation-weather.wyrmplugin",
+        "rainviewer.wyrmplugin",
+    ]
+    .into_iter()
+    .map(|name| package_root.join(name))
+    .collect()
 }
 
-fn discover_plugins(root: &Path) -> Result<(Vec<InstalledPlugin>, bool), PluginError> {
+fn discover_plugins(
+    root: &Path,
+    packages: &ExtensionPackageService,
+) -> Result<(Vec<InstalledPlugin>, bool), PluginError> {
     let canonical_root = root
         .canonicalize()
         .map_err(|_| PluginError::RootUnavailable)?;
     let entries = fs::read_dir(&canonical_root).map_err(|_| PluginError::RootUnavailable)?;
-    let mut installed = Vec::new();
+    let mut installed = BTreeMap::new();
     let mut invalid_found = false;
     for entry in entries.take(MAX_INSTALLED_PLUGINS + 1) {
         if installed.len() >= MAX_INSTALLED_PLUGINS {
@@ -1556,14 +1671,40 @@ fn discover_plugins(root: &Path) -> Result<(Vec<InstalledPlugin>, bool), PluginE
             invalid_found = true;
             continue;
         };
+        if entry.file_name() == ".extensions-v1" {
+            continue;
+        }
         if !file_type.is_dir() || file_type.is_symlink() {
             continue;
         }
         match read_installed_plugin(&canonical_root, &entry.path()) {
-            Ok(plugin) => installed.push(plugin),
+            Ok(plugin) => {
+                if installed
+                    .insert(plugin.manifest.id.clone(), plugin)
+                    .is_some()
+                {
+                    invalid_found = true;
+                }
+            }
             Err(_) => invalid_found = true,
         }
     }
+    for managed in packages
+        .active_managed_plugins()
+        .map_err(plugin_package_error)?
+    {
+        if installed.len() >= MAX_INSTALLED_PLUGINS && !installed.contains_key(&managed.id) {
+            invalid_found = true;
+            break;
+        }
+        match read_plugin_payload(&managed.root, &managed.id, Some(&managed.version)) {
+            Ok(plugin) => {
+                installed.insert(plugin.manifest.id.clone(), plugin);
+            }
+            Err(_) => invalid_found = true,
+        }
+    }
+    let mut installed = installed.into_values().collect::<Vec<_>>();
     installed.sort_by(|left, right| left.manifest.name.cmp(&right.manifest.name));
     Ok((installed, invalid_found))
 }
@@ -1575,6 +1716,21 @@ fn read_installed_plugin(root: &Path, directory: &Path) -> Result<InstalledPlugi
     if !canonical_directory.starts_with(root) {
         return Err(PluginError::InvalidPlugin);
     }
+    let expected_id = directory
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or(PluginError::InvalidPlugin)?;
+    read_plugin_payload(&canonical_directory, expected_id, None)
+}
+
+fn read_plugin_payload(
+    directory: &Path,
+    expected_id: &str,
+    expected_version: Option<&str>,
+) -> Result<InstalledPlugin, PluginError> {
+    let canonical_directory = directory
+        .canonicalize()
+        .map_err(|_| PluginError::InvalidPlugin)?;
     let manifest_path = canonical_directory.join("plugin.json");
     let metadata = fs::symlink_metadata(&manifest_path).map_err(|_| PluginError::InvalidPlugin)?;
     if !metadata.file_type().is_file()
@@ -1590,7 +1746,9 @@ fn read_installed_plugin(root: &Path, directory: &Path) -> Result<InstalledPlugi
     manifest
         .validate()
         .map_err(|_| PluginError::InvalidPlugin)?;
-    if directory.file_name().and_then(|name| name.to_str()) != Some(manifest.id.as_str()) {
+    if manifest.id != expected_id
+        || expected_version.is_some_and(|version| manifest.version != version)
+    {
         return Err(PluginError::InvalidPlugin);
     }
     let entry_point = canonical_directory
@@ -1800,6 +1958,18 @@ fn plugin_authorization_error(error: AuthorizationError) -> PluginError {
         AuthorizationError::InvalidSubject | AuthorizationError::InvalidScopeRevision => {
             PluginError::InvalidPlugin
         }
+    }
+}
+
+fn plugin_package_error(error: ExtensionPackageManagementError) -> PluginError {
+    match error {
+        ExtensionPackageManagementError::InvalidPackage(_) => PluginError::InvalidPackage,
+        ExtensionPackageManagementError::VersionConflict => PluginError::PackageVersionConflict,
+        ExtensionPackageManagementError::RollbackUnavailable => PluginError::RollbackUnavailable,
+        ExtensionPackageManagementError::StateUnavailable => PluginError::StateUnavailable,
+        ExtensionPackageManagementError::RootUnavailable
+        | ExtensionPackageManagementError::StorageUnavailable
+        | ExtensionPackageManagementError::FileOperation => PluginError::PackageStorageUnavailable,
     }
 }
 

@@ -63,8 +63,9 @@ Online networks --------------------------+--> Atlas overlays     |
    implemented; job payload and deadline checks await those OnAir contracts.)
 6. Export simulator-neutral routes and implement the MSFS 2024 Bridge telemetry
    slice. (The read-only Bridge protocol, provider supervisor, SimConnect
-   sidecar, desktop controls, and plugin snapshot delivery are implemented;
-   route export, live certification, and release bundling remain.)
+   sidecar, external `.wyrmprovider` lifecycle, desktop controls, and plugin
+   snapshot delivery are implemented; route export, live certification, and
+   any licensed SimConnect-client redistribution remain.)
 7. Add read-only SayIntentions local active-flight correlation through a reviewed
    documented transport and selected SAPI reads, followed by explicit
    user-initiated ACARS, crew, or gate actions.
@@ -128,6 +129,7 @@ the [high-value provider integration process](high-value-provider-process.md).
 - [Simulator connection, recording, in-game control, and graphs](simulator-experience-roadmap.md)
 - [Simulator-synchronised audio recording](simulator-audio-recording.md)
 - [Audio Capture Provider protocol version 2](audio-capture-provider-protocol.md)
+- [Audio provider authoring and packaging](audio-provider-authoring.md)
 - [Audio Codec Provider protocol version 1](audio-codec-provider-protocol.md)
 - [Telemetry lifecycle and SimBrief correlation](telemetry-plan-correlation.md)
 

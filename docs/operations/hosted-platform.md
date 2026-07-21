@@ -10,6 +10,8 @@ publication, a production deployment, or a release.
 
 The governing architecture decision is
 [ADR-0019](../architecture/decisions/0019-hosted-web-aerie-and-private-vault.md).
+Local external-plugin delivery is governed independently by
+[ADR-0021](../architecture/decisions/0021-externally-installable-extensions.md).
 The legal and dependency questions are tracked in the
 [hosted-platform licensing and compliance register](../legal/hosted-platform-licensing.md).
 
@@ -36,6 +38,8 @@ hosted-service outage.
   substitutes for signed repository metadata and target digests.
 - Introduce no automatic update, install hook, undeclared dependency download,
   or uploaded-code execution path.
+- Treat Aerie as an optional source of packages and trust metadata. It extends
+  the Rust-owned offline local installer and never becomes its prerequisite.
 - Add operational complexity only after measured demand. One well-separated
   host is the initial deployment target, not an assumption that one machine is
   sufficient forever.
@@ -424,9 +428,11 @@ invitation-only pilot.
 
 ### Phase 4: executable community plugins
 
-- Finalize the out-of-process plugin package contract, permission UX, SDK
-  conformance, resource controls, compatibility, staged install, rollback, and
-  revocation response.
+- Extend the already implemented local external-package contract with Aerie
+  publisher, repository, and revocation metadata; do not create a second
+  catalogue-only installation path.
+- Finalize permission UX, SDK conformance, resource controls, compatibility,
+  signed update verification, and revocation response.
 - Do not enable automatic updates initially. Collect evidence from explicit
   user-approved installs and failure recovery.
 

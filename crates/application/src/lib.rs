@@ -4,12 +4,14 @@ mod atlas_preferences;
 mod audio_codec;
 mod audio_media;
 mod audio_provider;
+mod audio_provider_packages;
 mod audio_recording;
 mod authorization;
 mod credentials;
 mod data_protection;
 mod dispatch;
 mod display;
+mod extension_packages;
 mod flight_operation;
 mod flight_plan_map;
 mod flight_weather_map;
@@ -24,6 +26,7 @@ pub use atlas_preferences::*;
 pub use audio_codec::*;
 pub use audio_media::*;
 pub use audio_provider::*;
+pub use audio_provider_packages::*;
 pub use audio_recording::*;
 pub use authorization::{
     AUTHORIZATION_DECISION_RETENTION_LIMIT, AuthorizationGrantLifetime, AuthorizationRuntime,
@@ -36,6 +39,7 @@ pub use credentials::*;
 pub use data_protection::*;
 pub use dispatch::*;
 pub use display::*;
+pub use extension_packages::*;
 pub use flight_operation::*;
 pub use flight_plan_map::*;
 pub use flight_weather_map::*;
@@ -1230,6 +1234,15 @@ impl From<PluginError> for OperationError {
             PluginError::StateUnavailable => ("plugin.state_unavailable", true, true),
             PluginError::UnknownConfiguration => ("plugin.unknown_configuration", false, false),
             PluginError::InvalidConfiguration => ("plugin.invalid_configuration", false, false),
+            PluginError::InvalidPackage => ("plugin.invalid_package", false, false),
+            PluginError::PackageStorageUnavailable => {
+                ("plugin.package_storage_unavailable", true, true)
+            }
+            PluginError::PackageVersionConflict => {
+                ("plugin.package_version_conflict", false, false)
+            }
+            PluginError::PackageInUse => ("plugin.package_in_use", false, false),
+            PluginError::RollbackUnavailable => ("plugin.rollback_unavailable", false, false),
         };
         Self {
             code,
@@ -1269,6 +1282,21 @@ impl From<SimulatorBridgeError> for OperationError {
             }
             SimulatorBridgeError::InvalidPreferences => {
                 ("simulator.invalid_preferences", false, false)
+            }
+            SimulatorBridgeError::InvalidPackage => {
+                ("simulator.invalid_provider_package", false, false)
+            }
+            SimulatorBridgeError::PackageStorageUnavailable => {
+                ("simulator.provider_package_storage_unavailable", true, true)
+            }
+            SimulatorBridgeError::PackageVersionConflict => {
+                ("simulator.provider_package_version_conflict", false, false)
+            }
+            SimulatorBridgeError::PackageInUse => {
+                ("simulator.provider_package_in_use", false, false)
+            }
+            SimulatorBridgeError::RollbackUnavailable => {
+                ("simulator.provider_rollback_unavailable", false, false)
             }
         };
         Self {
@@ -1358,6 +1386,22 @@ impl From<AudioRecordingError> for OperationError {
             AudioRecordingError::StateUnavailable => ("audio.state_unavailable", true, true),
             AudioRecordingError::ProviderFailed => ("audio.provider_failed", true, true),
             AudioRecordingError::CodecFailed => ("audio.codec_failed", true, true),
+            AudioRecordingError::InvalidProviderPackage => {
+                ("audio.provider_package_invalid", false, false)
+            }
+            AudioRecordingError::ProviderPackageStorageUnavailable => {
+                ("audio.provider_package_storage_unavailable", true, true)
+            }
+            AudioRecordingError::ProviderPackageVersionConflict => {
+                ("audio.provider_package_version_conflict", false, false)
+            }
+            AudioRecordingError::ProviderPackageInUse => {
+                ("audio.provider_package_in_use", false, false)
+            }
+            AudioRecordingError::ProviderRollbackUnavailable => {
+                ("audio.provider_rollback_unavailable", false, false)
+            }
+            AudioRecordingError::UnknownProvider => ("audio.provider_unknown", false, false),
         };
         Self {
             code,

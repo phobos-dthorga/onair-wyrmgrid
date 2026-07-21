@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "kind": "ordinary_plugin",
+  "id": "org.wyrmgrid.example.fleet-locations",
+  "version": "0.1.0",
+  "manifest_path": "plugin.json",
+  "files": [
+    {
+      "path": "plugin.json",
+      "size": 289,
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "path": "src/main.py",
+      "size": 4096,
+      "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+    }
+  ]
+}

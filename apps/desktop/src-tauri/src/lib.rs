@@ -704,6 +704,79 @@ fn plugin_host_status(
 }
 
 #[tauri::command]
+async fn inspect_plugin_package_file(
+    state: tauri::State<'_, DesktopState>,
+    source: String,
+) -> Result<wyrmgrid_application::PluginPackageInspection, wyrmgrid_application::OperationError> {
+    let plugins = state.plugins.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        plugins.inspect_plugin_package(std::path::Path::new(&source))
+    })
+    .await
+    .map_err(|_| operation_error(wyrmgrid_application::PluginError::StateUnavailable))?
+    .map_err(operation_error)
+}
+
+#[tauri::command]
+fn managed_plugin_packages(
+    state: tauri::State<'_, DesktopState>,
+) -> Result<Vec<wyrmgrid_application::ManagedPluginPackageView>, wyrmgrid_application::OperationError>
+{
+    state
+        .plugins
+        .list_managed_plugin_packages()
+        .map_err(operation_error)
+}
+
+#[tauri::command]
+async fn install_plugin_package_file(
+    state: tauri::State<'_, DesktopState>,
+    source: String,
+) -> Result<wyrmgrid_application::ManagedPluginPackageView, wyrmgrid_application::OperationError> {
+    let plugins = state.plugins.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        plugins.install_plugin_package(std::path::Path::new(&source))
+    })
+    .await
+    .map_err(|_| operation_error(wyrmgrid_application::PluginError::StateUnavailable))?
+    .map_err(operation_error)
+}
+
+#[tauri::command]
+fn set_managed_plugin_enabled(
+    state: tauri::State<'_, DesktopState>,
+    plugin_id: String,
+    enabled: bool,
+) -> Result<wyrmgrid_application::ManagedPluginPackageView, wyrmgrid_application::OperationError> {
+    state
+        .plugins
+        .set_managed_plugin_enabled(&plugin_id, enabled)
+        .map_err(operation_error)
+}
+
+#[tauri::command]
+fn rollback_managed_plugin(
+    state: tauri::State<'_, DesktopState>,
+    plugin_id: String,
+) -> Result<wyrmgrid_application::ManagedPluginPackageView, wyrmgrid_application::OperationError> {
+    state
+        .plugins
+        .rollback_managed_plugin(&plugin_id)
+        .map_err(operation_error)
+}
+
+#[tauri::command]
+fn remove_managed_plugin(
+    state: tauri::State<'_, DesktopState>,
+    plugin_id: String,
+) -> Result<(), wyrmgrid_application::OperationError> {
+    state
+        .plugins
+        .remove_managed_plugin(&plugin_id)
+        .map_err(operation_error)
+}
+
+#[tauri::command]
 fn approve_plugin_permissions(
     state: tauri::State<'_, DesktopState>,
     plugin_id: String,
@@ -830,6 +903,93 @@ async fn stop_simulator_provider(
 }
 
 #[tauri::command]
+async fn inspect_simulator_provider_package_file(
+    state: tauri::State<'_, DesktopState>,
+    source: String,
+) -> Result<
+    wyrmgrid_application::SimulatorProviderPackageInspection,
+    wyrmgrid_application::OperationError,
+> {
+    let simulator = state.simulator.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        simulator.inspect_provider_package(std::path::Path::new(&source))
+    })
+    .await
+    .map_err(|_| operation_error(wyrmgrid_application::SimulatorBridgeError::StateUnavailable))?
+    .map_err(operation_error)
+}
+
+#[tauri::command]
+fn managed_simulator_provider_packages(
+    state: tauri::State<'_, DesktopState>,
+) -> Result<
+    Vec<wyrmgrid_application::ManagedSimulatorProviderPackageView>,
+    wyrmgrid_application::OperationError,
+> {
+    state
+        .simulator
+        .list_managed_provider_packages()
+        .map_err(operation_error)
+}
+
+#[tauri::command]
+async fn install_simulator_provider_package_file(
+    state: tauri::State<'_, DesktopState>,
+    source: String,
+) -> Result<
+    wyrmgrid_application::ManagedSimulatorProviderPackageView,
+    wyrmgrid_application::OperationError,
+> {
+    let simulator = state.simulator.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        simulator.install_provider_package(std::path::Path::new(&source))
+    })
+    .await
+    .map_err(|_| operation_error(wyrmgrid_application::SimulatorBridgeError::StateUnavailable))?
+    .map_err(operation_error)
+}
+
+#[tauri::command]
+fn set_managed_simulator_provider_enabled(
+    state: tauri::State<'_, DesktopState>,
+    provider_id: String,
+    enabled: bool,
+) -> Result<
+    wyrmgrid_application::ManagedSimulatorProviderPackageView,
+    wyrmgrid_application::OperationError,
+> {
+    state
+        .simulator_settings
+        .set_managed_provider_enabled(&provider_id, enabled)
+        .map_err(operation_error)
+}
+
+#[tauri::command]
+fn rollback_managed_simulator_provider(
+    state: tauri::State<'_, DesktopState>,
+    provider_id: String,
+) -> Result<
+    wyrmgrid_application::ManagedSimulatorProviderPackageView,
+    wyrmgrid_application::OperationError,
+> {
+    state
+        .simulator
+        .rollback_managed_provider(&provider_id)
+        .map_err(operation_error)
+}
+
+#[tauri::command]
+fn remove_managed_simulator_provider(
+    state: tauri::State<'_, DesktopState>,
+    provider_id: String,
+) -> Result<(), wyrmgrid_application::OperationError> {
+    state
+        .simulator_settings
+        .remove_managed_provider(&provider_id)
+        .map_err(operation_error)
+}
+
+#[tauri::command]
 fn simulator_recording_status(
     state: tauri::State<'_, DesktopState>,
 ) -> Result<wyrmgrid_application::SimulatorRecordingView, wyrmgrid_application::OperationError> {
@@ -884,6 +1044,104 @@ fn audio_recording_status(
     state: tauri::State<'_, DesktopState>,
 ) -> Result<wyrmgrid_application::AudioRecordingView, wyrmgrid_application::OperationError> {
     state.audio_recording.status().map_err(operation_error)
+}
+
+#[tauri::command]
+async fn inspect_audio_provider_package_file(
+    state: tauri::State<'_, DesktopState>,
+    source: String,
+) -> Result<
+    wyrmgrid_application::AudioProviderPackageInspection,
+    wyrmgrid_application::OperationError,
+> {
+    let audio = state.audio_recording.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        audio.inspect_provider_package(std::path::Path::new(&source))
+    })
+    .await
+    .map_err(|_| operation_error(wyrmgrid_application::AudioRecordingError::StateUnavailable))?
+    .map_err(operation_error)
+}
+
+#[tauri::command]
+fn managed_audio_provider_packages(
+    state: tauri::State<'_, DesktopState>,
+) -> Result<
+    Vec<wyrmgrid_application::ManagedAudioProviderPackageView>,
+    wyrmgrid_application::OperationError,
+> {
+    state
+        .audio_recording
+        .list_managed_provider_packages()
+        .map_err(operation_error)
+}
+
+#[tauri::command]
+async fn install_audio_provider_package_file(
+    state: tauri::State<'_, DesktopState>,
+    source: String,
+) -> Result<
+    wyrmgrid_application::ManagedAudioProviderPackageView,
+    wyrmgrid_application::OperationError,
+> {
+    let audio = state.audio_recording.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        audio.install_provider_package(std::path::Path::new(&source))
+    })
+    .await
+    .map_err(|_| operation_error(wyrmgrid_application::AudioRecordingError::StateUnavailable))?
+    .map_err(operation_error)
+}
+
+#[tauri::command]
+fn select_managed_audio_provider(
+    state: tauri::State<'_, DesktopState>,
+    provider_id: String,
+) -> Result<wyrmgrid_application::AudioRecordingView, wyrmgrid_application::OperationError> {
+    state
+        .audio_recording
+        .select_managed_provider(&provider_id)
+        .map_err(operation_error)
+}
+
+#[tauri::command]
+fn set_managed_audio_provider_enabled(
+    state: tauri::State<'_, DesktopState>,
+    provider_id: String,
+    enabled: bool,
+) -> Result<
+    wyrmgrid_application::ManagedAudioProviderPackageView,
+    wyrmgrid_application::OperationError,
+> {
+    state
+        .audio_recording
+        .set_managed_provider_enabled(&provider_id, enabled)
+        .map_err(operation_error)
+}
+
+#[tauri::command]
+fn rollback_managed_audio_provider(
+    state: tauri::State<'_, DesktopState>,
+    provider_id: String,
+) -> Result<
+    wyrmgrid_application::ManagedAudioProviderPackageView,
+    wyrmgrid_application::OperationError,
+> {
+    state
+        .audio_recording
+        .rollback_managed_provider(&provider_id)
+        .map_err(operation_error)
+}
+
+#[tauri::command]
+fn remove_managed_audio_provider(
+    state: tauri::State<'_, DesktopState>,
+    provider_id: String,
+) -> Result<(), wyrmgrid_application::OperationError> {
+    state
+        .audio_recording
+        .remove_managed_provider(&provider_id)
+        .map_err(operation_error)
 }
 
 #[tauri::command]
@@ -1138,23 +1396,23 @@ pub fn run() {
             );
             let flight_operations =
                 wyrmgrid_application::FlightOperationService::new(store.clone());
-            let simulator_provider =
-                wyrmgrid_application::SimulatorProviderRegistration::from_manifest_json(
-                    include_str!("../../../../providers/msfs2024-simconnect/provider.json"),
-                    simulator_provider_path(),
-                )
-                .expect("bundled simulator provider manifest should validate");
             let simulator_recording =
                 wyrmgrid_application::SimulatorRecordingService::new(store.clone());
-            let audio_provider = development_audio_provider().map(|provider| {
-                Arc::new(provider) as Arc<dyn wyrmgrid_application::AudioCaptureProvider>
-            });
-            let audio_recording = wyrmgrid_application::AudioRecordingService::new(
+            let extension_packages = wyrmgrid_application::ExtensionPackageService::new(
+                Some(app_data_directory.join("extensions-v1")),
                 store.clone(),
-                audio_media,
-                audio_provider,
-                development_audio_codecs(),
             );
+            let audio_provider_packages = wyrmgrid_application::AudioProviderPackageService::new(
+                extension_packages.clone(),
+                store.clone(),
+            );
+            let audio_recording =
+                wyrmgrid_application::AudioRecordingService::with_managed_provider_packages(
+                    store.clone(),
+                    audio_media,
+                    audio_provider_packages,
+                    development_audio_codecs(),
+                );
             let _ = audio_recording.recover_interrupted_sessions();
             let (audio_sender, audio_receiver) = mpsc::channel::<AudioSyncRequest>();
             let audio_worker = audio_recording.clone();
@@ -1169,17 +1427,21 @@ pub fn run() {
                     let _ = audio_worker.poll_active_capture();
                 }
             });
-            let simulator = wyrmgrid_application::SimulatorBridgeService::with_telemetry_observer(
-                vec![simulator_provider],
+            let simulator = wyrmgrid_application::SimulatorBridgeService::with_extension_packages(
+                Vec::new(),
+                extension_packages,
                 Some(Arc::new(RecordingTelemetryObserver {
                     simulator_recording: simulator_recording.clone(),
                     audio_sender: audio_sender.clone(),
                     last_audio_request: Mutex::new(None),
                 })),
             );
-            let simulator_settings = wyrmgrid_application::SimulatorSettingsService::new(
+            if let Some(package) = first_party_simulator_provider_package(app) {
+                let _ = simulator.seed_first_party_provider_package(&package);
+            }
+            let simulator_settings = wyrmgrid_application::SimulatorSettingsService::with_bridge(
                 store.clone(),
-                simulator.provider_ids(),
+                simulator.clone(),
             );
             let automatic_provider = if parsed_startup_options.weather_gallery {
                 None
@@ -1195,6 +1457,8 @@ pub fn run() {
                     authorization_runtime,
                     Some(Arc::new(diagnostic_reporting::PluginObserver)),
                 );
+            let _ =
+                plugins.seed_first_party_plugin_packages(&first_party_plugin_package_paths(app));
             let dispatch = wyrmgrid_application::DispatchSession::with_plugin_weather_provider(
                 plugins.clone(),
             );
@@ -1313,6 +1577,12 @@ pub fn run() {
             select_language_pack,
             import_language_pack,
             plugin_host_status,
+            inspect_plugin_package_file,
+            managed_plugin_packages,
+            install_plugin_package_file,
+            set_managed_plugin_enabled,
+            rollback_managed_plugin,
+            remove_managed_plugin,
             approve_plugin_permissions,
             update_plugin_startup_preference,
             update_plugin_configuration,
@@ -1324,6 +1594,12 @@ pub fn run() {
             update_simulator_preferences,
             start_simulator_provider,
             stop_simulator_provider,
+            inspect_simulator_provider_package_file,
+            managed_simulator_provider_packages,
+            install_simulator_provider_package_file,
+            set_managed_simulator_provider_enabled,
+            rollback_managed_simulator_provider,
+            remove_managed_simulator_provider,
             simulator_recording_status,
             update_simulator_recording_preferences,
             start_simulator_recording,
@@ -1335,6 +1611,13 @@ pub fn run() {
             delete_simulator_recording,
             delete_all_simulator_recordings,
             audio_recording_status,
+            inspect_audio_provider_package_file,
+            managed_audio_provider_packages,
+            install_audio_provider_package_file,
+            select_managed_audio_provider,
+            set_managed_audio_provider_enabled,
+            rollback_managed_audio_provider,
+            remove_managed_audio_provider,
             update_audio_recording_preferences,
             refresh_audio_sources,
             request_audio_source_permission,
@@ -1379,43 +1662,27 @@ where
     options
 }
 
-fn simulator_provider_path() -> std::path::PathBuf {
-    let workspace_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
-    resolve_simulator_provider_path(
-        std::env::var_os("WYRMGRID_SIMULATOR_PROVIDER_PATH"),
-        std::env::current_exe().ok(),
-        &workspace_root,
-        cfg!(debug_assertions),
-    )
+fn first_party_plugin_package_paths(app: &tauri::App) -> Vec<std::path::PathBuf> {
+    let Ok(resource_directory) = app.path().resource_dir() else {
+        return Vec::new();
+    };
+    [
+        "fleet-locations.wyrmplugin",
+        "open-meteo.wyrmplugin",
+        "aviation-weather.wyrmplugin",
+        "rainviewer.wyrmplugin",
+    ]
+    .into_iter()
+    .map(|name| resource_directory.join("plugin-packages").join(name))
+    .collect()
 }
 
-fn development_audio_provider() -> Option<wyrmgrid_application::ProcessAudioCaptureProvider> {
-    if !cfg!(debug_assertions) {
-        return None;
-    }
-    let workspace_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
-    let use_windows_microphone =
-        std::env::var("WYRMGRID_AUDIO_PROVIDER").is_ok_and(|value| value == "windows-microphone");
-    let (configured_path, manifest, executable_name) = if use_windows_microphone {
-        (
-            "WYRMGRID_WINDOWS_AUDIO_PROVIDER_PATH",
-            include_str!("../../../../providers/windows-audio/provider.json"),
-            "wyrmgrid-windows-audio-provider",
-        )
-    } else {
-        (
-            "WYRMGRID_FAKE_AUDIO_PROVIDER_PATH",
-            include_str!("../../../../providers/fake-audio/provider.json"),
-            "wyrmgrid-fake-audio-provider",
-        )
-    };
-    let executable = std::env::var_os(configured_path)
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| development_binary(&workspace_root, executable_name));
-    let registration =
-        wyrmgrid_application::AudioProviderRegistration::from_manifest_json(manifest, executable)
-            .ok()?;
-    wyrmgrid_application::ProcessAudioCaptureProvider::new(registration).ok()
+fn first_party_simulator_provider_package(app: &tauri::App) -> Option<std::path::PathBuf> {
+    app.path().resource_dir().ok().map(|directory| {
+        directory
+            .join("provider-packages")
+            .join("msfs2024-simconnect.wyrmprovider")
+    })
 }
 
 fn development_audio_codecs() -> Vec<Arc<dyn wyrmgrid_application::AudioCodecProvider>> {
@@ -1449,52 +1716,6 @@ fn development_binary(workspace_root: &std::path::Path, name: &str) -> std::path
     }
     target.join("debug").join(filename)
 }
-
-const SIMULATOR_PROVIDER_EXECUTABLE: &str = "wyrmgrid-simconnect-provider.exe";
-
-fn resolve_simulator_provider_path(
-    configured: Option<std::ffi::OsString>,
-    current_executable: Option<std::path::PathBuf>,
-    workspace_root: &std::path::Path,
-    development_mode: bool,
-) -> std::path::PathBuf {
-    if let Some(path) = configured {
-        let path = std::path::PathBuf::from(path);
-        if path.is_absolute()
-            && path.file_name().and_then(|name| name.to_str())
-                == Some(SIMULATOR_PROVIDER_EXECUTABLE)
-        {
-            return path;
-        }
-    }
-    if let Some(directory) = current_executable
-        .as_deref()
-        .and_then(std::path::Path::parent)
-    {
-        let adjacent = directory.join(SIMULATOR_PROVIDER_EXECUTABLE);
-        if adjacent.is_file() {
-            return adjacent;
-        }
-    }
-    if development_mode {
-        let development = workspace_root
-            .join("target/debug")
-            .join(SIMULATOR_PROVIDER_EXECUTABLE);
-        if development.is_file() {
-            return development;
-        }
-        return development;
-    }
-    current_executable
-        .as_deref()
-        .and_then(std::path::Path::parent)
-        .map(|directory| directory.join(SIMULATOR_PROVIDER_EXECUTABLE))
-        .unwrap_or_else(|| std::path::PathBuf::from(SIMULATOR_PROVIDER_EXECUTABLE))
-}
-
-#[cfg(test)]
-#[path = "tests/simulator_provider.rs"]
-mod simulator_provider_tests;
 
 #[cfg(test)]
 #[path = "tests/startup_options.rs"]

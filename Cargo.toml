@@ -47,6 +47,7 @@ tokio = { version = "1.47.1", features = ["macros", "rt-multi-thread"] }
 url = "2.5.4"
 uuid = { version = "1.17.0", features = ["serde", "v4"] }
 zeroize = { version = "1.8.2", features = ["zeroize_derive"] }
+zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
 
 [profile.release]
 lto = "thin"

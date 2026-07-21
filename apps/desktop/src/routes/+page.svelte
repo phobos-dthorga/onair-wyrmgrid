@@ -105,8 +105,15 @@
   import ForgeDialog from "$lib/forge/ForgeDialog.svelte";
   import {
     approvePluginPermissions,
+    choosePluginPackage,
+    inspectPluginPackageFile,
+    installPluginPackageFile,
+    loadManagedPluginPackages,
     loadPluginHost,
+    removeManagedPlugin,
     revokePluginPermissions,
+    rollbackManagedPlugin,
+    setManagedPluginEnabled,
     startPlugin,
     stopPlugin,
     updatePluginConfiguration,
@@ -119,7 +126,9 @@
   } from "$lib/forge/sample";
   import type {
     AuthorizationGrantLifetime,
+    ManagedPluginPackage,
     PluginHostView,
+    PluginPackageInspection,
   } from "$lib/forge/types";
   import LegalDialog from "$lib/legal/LegalDialog.svelte";
   import OpenSourceLicencesDialog from "$lib/legal/OpenSourceLicencesDialog.svelte";
@@ -163,12 +172,16 @@
     type OnAirConnectionStatus,
   } from "$lib/onair/types";
   import {
+    chooseSimulatorProviderPackage,
+    chooseAudioProviderPackage,
     chooseAudioExportDestination,
     deleteAudioRecording,
     exportAudioTrack,
     loadAudioPlayback,
     loadAudioRecording,
+    loadManagedAudioProviderPackages,
     loadSimulatorBridge,
+    loadManagedSimulatorProviderPackages,
     loadSimulatorPreferences,
     loadSimulatorRecording,
     loadSimulatorRecordingDebrief,
@@ -187,6 +200,17 @@
     deleteAllSimulatorRecordings,
     exportSimulatorRecording,
     pinSimulatorRecording,
+    inspectSimulatorProviderPackage,
+    inspectAudioProviderPackage,
+    installAudioProviderPackage,
+    installSimulatorProviderPackage,
+    removeManagedSimulatorProvider,
+    rollbackManagedSimulatorProvider,
+    setManagedSimulatorProviderEnabled,
+    removeManagedAudioProvider,
+    rollbackManagedAudioProvider,
+    selectManagedAudioProvider,
+    setManagedAudioProviderEnabled,
   } from "$lib/simulator/client";
   import SimulatorDialog from "$lib/simulator/SimulatorDialog.svelte";
   import {
@@ -194,13 +218,17 @@
     emptySimulatorBridge,
     emptySimulatorRecording,
     defaultSimulatorPreferences,
+    type ManagedSimulatorProviderPackage,
+    type ManagedAudioProviderPackage,
     type SimulatorBridgeView,
+    type SimulatorProviderPackageInspection,
     type SimulatorPreferences,
     type SimulatorRecordingPreferences,
     type SimulatorRecordingView,
     type SimulatorSessionDebrief,
     type SimulatorSessionView,
     type AudioPlaybackView,
+    type AudioProviderPackageInspection,
     type AudioRecordingPreferences,
     type AudioRecordingView,
     type AudioSourceSelection,
@@ -331,6 +359,10 @@
   let simulatorBridge = $state<SimulatorBridgeView>(emptySimulatorBridge);
   let simulatorBusy = $state(false);
   let simulatorError = $state("");
+  let managedSimulatorProviders = $state<ManagedSimulatorProviderPackage[]>([]);
+  let pendingSimulatorProviderPackage =
+    $state<SimulatorProviderPackageInspection>();
+  let pendingSimulatorProviderSource = $state<string>();
   let simulatorPreferences = $state<SimulatorPreferences>(
     defaultSimulatorPreferences,
   );
@@ -340,6 +372,9 @@
   let simulatorRecordingSession = $state<SimulatorSessionView>();
   let simulatorRecordingDebrief = $state<SimulatorSessionDebrief>();
   let audioRecording = $state<AudioRecordingView>(emptyAudioRecording);
+  let managedAudioProviders = $state<ManagedAudioProviderPackage[]>([]);
+  let pendingAudioProviderPackage = $state<AudioProviderPackageInspection>();
+  let pendingAudioProviderSource = $state<string>();
   let audioPlayback = $state<AudioPlaybackView>();
   let audioBusy = $state(false);
   let atlasFlightRoute = $state<AtlasFlightRoute>();
@@ -381,6 +416,11 @@
   let timelineBusy = $state(false);
   let timelineError = $state("");
   let pluginHost = $state<PluginHostView>(forgePreviewStopped);
+  let managedPluginPackages = $state<ManagedPluginPackage[]>([]);
+  let pendingPluginPackageSource = $state<string | null>(null);
+  let pendingPluginPackageInspection = $state<PluginPackageInspection | null>(
+    null,
+  );
   let pluginBusy = $state(false);
   let pluginError = $state("");
   let workspaceInitialized = false;
@@ -965,6 +1005,21 @@
     }
   }
 
+  async function refreshManagedSimulatorProviders(): Promise<void> {
+    if (!isDesktopRuntime()) {
+      managedSimulatorProviders = [];
+      return;
+    }
+    try {
+      managedSimulatorProviders = await loadManagedSimulatorProviderPackages();
+    } catch (error) {
+      simulatorError = operationErrorMessage(
+        error,
+        "WyrmGrid could not read installed simulator provider packages.",
+      );
+    }
+  }
+
   async function refreshSimulatorRecording(): Promise<void> {
     if (!isDesktopRuntime()) {
       simulatorRecording = simulatorRecordingPreview;
@@ -1026,13 +1081,30 @@
     }
   }
 
+  async function refreshManagedAudioProviders(): Promise<void> {
+    if (!isDesktopRuntime()) {
+      managedAudioProviders = [];
+      return;
+    }
+    try {
+      managedAudioProviders = await loadManagedAudioProviderPackages();
+    } catch (error) {
+      simulatorError = operationErrorMessage(
+        error,
+        "WyrmGrid could not read installed audio provider packages.",
+      );
+    }
+  }
+
   function openSimulator(): void {
     simulatorError = "";
     openRootDialog("simulator");
     void Promise.all([
       refreshSimulatorBridge(),
+      refreshManagedSimulatorProviders(),
       refreshSimulatorRecording(),
       refreshAudioRecording(),
+      refreshManagedAudioProviders(),
     ]);
   }
 
@@ -1373,6 +1445,157 @@
     }
   }
 
+  async function chooseSimulatorProviderPackageForReview(): Promise<void> {
+    if (!isDesktopRuntime() || simulatorBusy) return;
+    simulatorBusy = true;
+    simulatorError = "";
+    try {
+      const source = await chooseSimulatorProviderPackage();
+      if (!source) return;
+      pendingSimulatorProviderPackage =
+        await inspectSimulatorProviderPackage(source);
+      pendingSimulatorProviderSource = source;
+    } catch (error) {
+      simulatorError = operationErrorMessage(
+        error,
+        "WyrmGrid could not inspect that simulator provider package.",
+      );
+    } finally {
+      simulatorBusy = false;
+    }
+  }
+
+  function cancelSimulatorProviderPackageReview(): void {
+    pendingSimulatorProviderPackage = undefined;
+    pendingSimulatorProviderSource = undefined;
+  }
+
+  async function installReviewedSimulatorProviderPackage(): Promise<void> {
+    if (!pendingSimulatorProviderSource || simulatorBusy) return;
+    simulatorBusy = true;
+    simulatorError = "";
+    try {
+      await installSimulatorProviderPackage(pendingSimulatorProviderSource);
+      cancelSimulatorProviderPackageReview();
+      await Promise.all([
+        refreshSimulatorBridge(),
+        refreshManagedSimulatorProviders(),
+      ]);
+    } catch (error) {
+      simulatorError = operationErrorMessage(
+        error,
+        "WyrmGrid could not install that simulator provider package.",
+      );
+    } finally {
+      simulatorBusy = false;
+    }
+  }
+
+  async function runManagedSimulatorProviderAction(
+    action: "enable" | "disable" | "rollback" | "remove",
+    providerId: string,
+  ): Promise<void> {
+    if (!isDesktopRuntime() || simulatorBusy) return;
+    simulatorBusy = true;
+    simulatorError = "";
+    try {
+      if (action === "enable")
+        await setManagedSimulatorProviderEnabled(providerId, true);
+      if (action === "disable")
+        await setManagedSimulatorProviderEnabled(providerId, false);
+      if (action === "rollback")
+        await rollbackManagedSimulatorProvider(providerId);
+      if (action === "remove") await removeManagedSimulatorProvider(providerId);
+      await Promise.all([
+        refreshSimulatorBridge(),
+        refreshManagedSimulatorProviders(),
+      ]);
+    } catch (error) {
+      simulatorError = operationErrorMessage(
+        error,
+        "WyrmGrid could not update that simulator provider package.",
+      );
+    } finally {
+      simulatorBusy = false;
+    }
+  }
+
+  async function chooseAudioProviderPackageForReview(): Promise<void> {
+    if (!isDesktopRuntime() || audioBusy) return;
+    audioBusy = true;
+    simulatorError = "";
+    try {
+      const source = await chooseAudioProviderPackage();
+      if (!source) return;
+      pendingAudioProviderPackage = await inspectAudioProviderPackage(source);
+      pendingAudioProviderSource = source;
+    } catch (error) {
+      simulatorError = operationErrorMessage(
+        error,
+        "WyrmGrid could not inspect that audio provider package.",
+      );
+    } finally {
+      audioBusy = false;
+    }
+  }
+
+  function cancelAudioProviderPackageReview(): void {
+    pendingAudioProviderPackage = undefined;
+    pendingAudioProviderSource = undefined;
+  }
+
+  async function installReviewedAudioProviderPackage(): Promise<void> {
+    if (!pendingAudioProviderSource || audioBusy) return;
+    audioBusy = true;
+    simulatorError = "";
+    try {
+      await installAudioProviderPackage(pendingAudioProviderSource);
+      cancelAudioProviderPackageReview();
+      await Promise.all([
+        refreshManagedAudioProviders(),
+        refreshAudioRecording(),
+      ]);
+    } catch (error) {
+      simulatorError = operationErrorMessage(
+        error,
+        "WyrmGrid could not install that audio provider package.",
+      );
+    } finally {
+      audioBusy = false;
+    }
+  }
+
+  async function runManagedAudioProviderAction(
+    action: "select" | "enable" | "disable" | "rollback" | "remove",
+    providerId: string,
+  ): Promise<void> {
+    if (!isDesktopRuntime() || audioBusy) return;
+    audioBusy = true;
+    simulatorError = "";
+    try {
+      if (action === "select")
+        audioRecording = await selectManagedAudioProvider(providerId);
+      if (action === "enable")
+        await setManagedAudioProviderEnabled(providerId, true);
+      if (action === "disable")
+        await setManagedAudioProviderEnabled(providerId, false);
+      if (action === "rollback")
+        await rollbackManagedAudioProvider(providerId);
+      if (action === "remove") await removeManagedAudioProvider(providerId);
+      await Promise.all([
+        refreshManagedAudioProviders(),
+        refreshAudioRecording(),
+      ]);
+    } catch (error) {
+      simulatorError = operationErrorMessage(
+        error,
+        "WyrmGrid could not update that audio provider package.",
+      );
+    } finally {
+      audioBusy = false;
+    }
+  }
+
   async function viewHistoricalMoment(): Promise<void> {
     const selectedAt = timeline.observation_times[timelineCursor];
     if (!selectedAt || timelineBusy) return;
@@ -1510,7 +1733,10 @@
   async function refreshPluginHost(): Promise<void> {
     if (!isDesktopRuntime()) return;
     try {
-      pluginHost = await loadPluginHost();
+      [pluginHost, managedPluginPackages] = await Promise.all([
+        loadPluginHost(),
+        loadManagedPluginPackages(),
+      ]);
       if (dispatchStatus.atlas_plan && !dispatchBusy) {
         await refreshDispatchStatus();
       }
@@ -1871,6 +2097,75 @@
     pluginError = "";
     openRootDialog("forge");
     void refreshPluginHost();
+  }
+
+  async function choosePluginPackageForReview(): Promise<void> {
+    if (pluginBusy || !isDesktopRuntime()) return;
+    pluginBusy = true;
+    pluginError = "";
+    try {
+      const source = await choosePluginPackage();
+      if (!source) return;
+      pendingPluginPackageInspection = await inspectPluginPackageFile(source);
+      pendingPluginPackageSource = source;
+    } catch (error) {
+      pendingPluginPackageInspection = null;
+      pendingPluginPackageSource = null;
+      pluginError = operationErrorMessage(
+        error,
+        "WyrmGrid could not inspect that plugin package.",
+      );
+    } finally {
+      pluginBusy = false;
+    }
+  }
+
+  function cancelPluginPackageInstall(): void {
+    pendingPluginPackageInspection = null;
+    pendingPluginPackageSource = null;
+  }
+
+  async function confirmPluginPackageInstall(): Promise<void> {
+    if (pluginBusy || !pendingPluginPackageSource) return;
+    pluginBusy = true;
+    pluginError = "";
+    try {
+      await installPluginPackageFile(pendingPluginPackageSource);
+      cancelPluginPackageInstall();
+      await refreshPluginHost();
+    } catch (error) {
+      pluginError = operationErrorMessage(
+        error,
+        "WyrmGrid could not install that plugin package.",
+      );
+    } finally {
+      pluginBusy = false;
+    }
+  }
+
+  async function runManagedPluginPackageAction(
+    action: "enable" | "disable" | "rollback" | "remove",
+    pluginId: string,
+  ): Promise<void> {
+    if (pluginBusy) return;
+    pluginBusy = true;
+    pluginError = "";
+    try {
+      if (action === "enable") await setManagedPluginEnabled(pluginId, true);
+      else if (action === "disable")
+        await setManagedPluginEnabled(pluginId, false);
+      else if (action === "rollback") await rollbackManagedPlugin(pluginId);
+      else await removeManagedPlugin(pluginId);
+      await refreshPluginHost();
+    } catch (error) {
+      pluginError = operationErrorMessage(
+        error,
+        "WyrmGrid could not change that installed plugin package.",
+      );
+      await refreshPluginHost();
+    } finally {
+      pluginBusy = false;
+    }
   }
 
   async function runPluginAction(
@@ -2299,11 +2594,15 @@
         simulatorBridge,
         simulatorRecording,
         audioRecording,
+        managedSimulatorProviders,
+        managedAudioProviders,
       ] = await Promise.all([
         loadSimulatorPreferences(),
         loadSimulatorBridge(),
         loadSimulatorRecording(),
         loadAudioRecording(),
+        loadManagedSimulatorProviderPackages(),
+        loadManagedAudioProviderPackages(),
       ]);
     } catch (error) {
       settingsError = operationErrorMessage(
@@ -3561,6 +3860,8 @@
   <SimulatorDialog
     open={showSimulatorDialog}
     status={simulatorBridge}
+    managedProviders={managedSimulatorProviders}
+    pendingProviderPackage={pendingSimulatorProviderPackage}
     busy={simulatorBusy}
     errorMessage={simulatorError}
     {displayPreferences}
@@ -3570,10 +3871,26 @@
     recordingBusy={simulatorRecordingBusy}
     audioStatus={audioRecording}
     {audioPlayback}
+    {managedAudioProviders}
+    pendingAudioProviderPackage={pendingAudioProviderPackage}
     {audioBusy}
     onrefresh={() => void refreshSimulatorBridge()}
     onstart={(providerId) => void runSimulatorAction("start", providerId)}
     onstop={(providerId) => void runSimulatorAction("stop", providerId)}
+    onchooseproviderpackage={() =>
+      void chooseSimulatorProviderPackageForReview()}
+    oncancelproviderpackage={cancelSimulatorProviderPackageReview}
+    oninstallproviderpackage={() =>
+      void installReviewedSimulatorProviderPackage()}
+    onproviderpackageenable={(providerId, enabled) =>
+      void runManagedSimulatorProviderAction(
+        enabled ? "enable" : "disable",
+        providerId,
+      )}
+    onproviderpackagerollback={(providerId) =>
+      void runManagedSimulatorProviderAction("rollback", providerId)}
+    onproviderpackageremove={(providerId) =>
+      void runManagedSimulatorProviderAction("remove", providerId)}
     onrecordstart={() => void runRecordingAction("start")}
     onrecordstop={() => void runRecordingAction("stop")}
     onsessionselect={(sessionId) => void selectRecordingSession(sessionId)}
@@ -3586,6 +3903,22 @@
     onexport={(sessionId, format) => void exportRecording(sessionId, format)}
     onviewatlas={openRecordingRouteInAtlas}
     onaudiopreferences={(preferences) => void saveAudioPreferences(preferences)}
+    onaudiochooseproviderpackage={() =>
+      void chooseAudioProviderPackageForReview()}
+    onaudiocancelproviderpackage={cancelAudioProviderPackageReview}
+    onaudioinstallproviderpackage={() =>
+      void installReviewedAudioProviderPackage()}
+    onaudioproviderselect={(providerId) =>
+      void runManagedAudioProviderAction("select", providerId)}
+    onaudioproviderenable={(providerId, enabled) =>
+      void runManagedAudioProviderAction(
+        enabled ? "enable" : "disable",
+        providerId,
+      )}
+    onaudioproviderrollback={(providerId) =>
+      void runManagedAudioProviderAction("rollback", providerId)}
+    onaudioproviderremove={(providerId) =>
+      void runManagedAudioProviderAction("remove", providerId)}
     onaudiorefresh={() => void discoverAudioSources()}
     onaudiopermission={(sourceId) => void reviewAudioPermission(sourceId)}
     onaudiosource={(selection) => void persistAudioSource(selection)}
@@ -3748,6 +4081,20 @@
     status={pluginHost}
     busy={pluginBusy}
     errorMessage={pluginError}
+    managedPackages={managedPluginPackages}
+    pendingPackage={pendingPluginPackageInspection}
+    onchoosepackage={() => void choosePluginPackageForReview()}
+    oncancelpackage={cancelPluginPackageInstall}
+    oninstallpackage={() => void confirmPluginPackageInstall()}
+    onpackageenable={(pluginId, enabled) =>
+      void runManagedPluginPackageAction(
+        enabled ? "enable" : "disable",
+        pluginId,
+      )}
+    onpackagerollback={(pluginId) =>
+      void runManagedPluginPackageAction("rollback", pluginId)}
+    onpackageremove={(pluginId) =>
+      void runManagedPluginPackageAction("remove", pluginId)}
     onapprove={(pluginId, lifetime) =>
       void runPluginAction("approve", pluginId, lifetime)}
     onrevoke={(pluginId) => void runPluginAction("revoke", pluginId)}

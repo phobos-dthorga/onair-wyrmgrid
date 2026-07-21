@@ -13,14 +13,18 @@ model, multi-registration supervisor with one selected active provider, the
 MSFS 2024 SimConnect provider executable, desktop connection controls, and
 permission-filtered telemetry delivery to ordinary plugins. The provider is
 compiled and exercised by automated handshake, translation, validation,
-shutdown, and unavailable-simulator tests.
+shutdown, and unavailable-simulator tests. Version-one `.wyrmprovider`
+packaging adds offline inspection, managed install, disable, update, rollback,
+and removal without rebuilding WyrmGrid.
 
 Live MSFS 2024 behaviour has not yet been certified. A sanitized
 outside-repository session with the simulator and representative aircraft is
 still required before the project describes the provider as live-supported.
-The WyrmGrid provider executable is staged as a Windows-only declared Tauri
-external binary. Bundling the Microsoft SimConnect client remains pending
-review of the SDK redistribution terms; no Microsoft binary is committed here.
+The Windows x86-64 WyrmGrid provider executable is carried in a deterministic,
+separately distributable package that an official installer may seed through
+the same managed lifecycle as a local community file. Bundling the Microsoft
+SimConnect client remains pending review of the SDK redistribution terms; no
+Microsoft binary is committed here.
 
 [SayIntentions.AI](sayintentions.md) is a separate account provider. Its local
 `flight.json` and SAPI describe the AI ATC session, communications, and
@@ -75,8 +79,10 @@ KiB JSON telemetry channel and couple audio backpressure to simulator facts.
 Bridge providers continue to supply attributed radio state and session evidence.
 The separate Audio Capture Provider version 2 defines capability-labelled
 sources and bounded PCM. Audio Codec Provider version 1 separately defines
-user-selected encoding. A debug-only Windows microphone provider and first-
-party Opus codec sidecar exist, but neither is packaged or live-certified.
+user-selected encoding. The external `.wyrmaudio` lifecycle and a synthetic
+reference package are implemented. A debug-only Windows microphone provider and
+first-party Opus codec sidecar also exist, but neither is released or
+live-certified.
 
 MSFS 2024's documented COM facts do not establish isolated COM audio. X-Plane
 12's named audio groups make isolated capture a feasibility candidate, but its
@@ -90,6 +96,8 @@ and the [simulator-audio plan](simulator-audio-recording.md).
 The implemented wire contract is documented separately in the
 [Audio Capture Provider](audio-capture-provider-protocol.md) and
 [Audio Codec Provider](audio-codec-provider-protocol.md) protocol references.
+Capture-provider package authors should also read
+[audio provider authoring and packaging](audio-provider-authoring.md).
 
 ## MSFS 2024 slice
 

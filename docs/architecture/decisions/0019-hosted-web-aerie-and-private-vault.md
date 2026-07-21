@@ -87,13 +87,20 @@ deployable boundaries:
 12. **Availability remains optional**. A website, catalogue, identity, vault,
     DNS, certificate-authority, or CDN outage must not prevent local WyrmGrid
     startup, existing plugin use, offline Hoard access, backup creation, or
-    manual installation of an already verified local package.
+    manual installation of a local package. Local validation and an explicit
+    trust decision remain required, but Aerie verification is not.
 
 Public package kinds may share catalogue identity, version, publisher, licence,
 digest, compatibility, and moderation concepts, but each kind has an explicit
 schema and validator. Data-only themes and language packs may reach curated
 distribution before executable plugins. Ordinary plugins and native simulator
 providers remain different trust classes.
+
+The desktop's external package lifecycle is a local product capability governed
+by [ADR-0021](0021-externally-installable-extensions.md), not a hosted-service
+phase. Aerie can supply stronger publisher and repository provenance to that
+existing installer, but must not be the only source from which a package can be
+installed.
 
 ## Trust and data separation
 
@@ -136,7 +143,8 @@ quarantined, structurally valid, rejected, awaiting review, approved, published,
 yanked, and revoked. Upload does not equal publication. Publication does not
 claim that WyrmGrid proved the code safe.
 
-The final package contract must define at least:
+The final Aerie publication contract must build on the local package contract
+and define at least:
 
 - a deterministic archive and canonical path encoding;
 - one root manifest with independently versioned package and plugin contracts;

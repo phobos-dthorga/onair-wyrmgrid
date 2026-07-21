@@ -8,21 +8,60 @@ major application version.
 
 ### New features
 
+- Added the first external ordinary-plugin package slice: bounded
+  `.wyrmplugin` archives with an exact SHA-256 inventory, offline inspection
+  and confirmation in Forge, versioned managed storage, immutable version
+  identities, enable/disable controls, one-step rollback, removal with access
+  revocation, and interrupted-removal recovery. Package schema version 1 is
+  independently versioned from plugin protocol version 1 and does not claim
+  publisher verification.
+- Added external simulator-provider packages: bounded `.wyrmprovider` archives
+  declare platform, simulator, executable, Bridge version, and capabilities;
+  support offline inspection, managed install, enable/disable, immutable
+  updates, rollback, removal, and safe unavailable states; and seed the MSFS
+  2024 SimConnect provider through the same public lifecycle while keeping its
+  release artifact separately distributable.
+- Added external Audio Capture Provider packages: bounded `.wyrmaudio` archives
+  declare platform, executable stem, Audio Capture Provider protocol version,
+  and capabilities;
+  support offline native-code review, managed install, explicit selection,
+  enable/disable, immutable updates, rollback, and removal; keep installation
+  separate from device permission and recording consent; and provide a
+  deterministic synthetic reference artifact without claiming native capture.
 - Added a debug-only Windows microphone capture provider and a specialised,
   out-of-process codec-provider contract. Codec choice is stored per source;
   exact provider-version and codec-format provenance is snapshotted per track.
   WyrmGrid's first-party Opus encoder uses the same bounded protocol intended
-  for future end-user codec providers. None of these sidecars is packaged or
-  live-certified yet.
+  for future end-user codec providers. The Windows and codec sidecars are not
+  released or live-certified yet.
 
 ### Changes
 
+- Established external, independently installable artifacts as the required
+  delivery boundary for every plugin and provider. First-party packages may be
+  included by an installer, but users must also be able to install, replace,
+  disable, update, and remove them without rebuilding WyrmGrid; local
+  installation remains independent of the future Aerie catalogue.
+- Removed the SimConnect provider's installer-only external-binary authority.
+  The desktop now discovers only validated managed provider packages, and the
+  provider reports an independently versioned `0.1.0` identity matching its
+  manifest and Bridge handshake.
+- Replaced the desktop's fixed development-only audio provider injection with
+  managed package discovery and a persisted selected-provider boundary. Audio
+  provider hello now has to match the installed manifest's identity, version,
+  platform, and complete capability set.
 - Audio Capture Provider protocol version 2 now transports bounded 48 kHz PCM
   separately from encoding. Unreleased version 1 schemas and fixtures are
   retained as compatibility evidence; migration 20 preserves earlier audio
   metadata with explicit first-party Opus provenance.
-- Advanced the English source catalogue to version 20 for codec selection and
-  unavailable-codec wording.
+- Advanced the canonical source catalogue to version 21. Version 20 added
+  codec selection and unavailable-codec wording; version 21 adds audio-provider
+  package inspection, selection, native-code trust, lifecycle, and destructive-
+  removal wording. Community language packs must review the protected messages
+  and update their declared source version before re-import.
+- Advanced the application database to schema 21: migration 20 records audio
+  codec provenance, and migration 21 adds managed external-package lifecycle
+  state.
 
 ### Removed
 

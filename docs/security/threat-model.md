@@ -212,6 +212,19 @@
 - provider executable paths are host-owned, entry-point names are manifest
   validated, child environments are scrubbed, and only absolute approved
   SimConnect SDK/client paths cross into the first-party provider;
+- simulator provider packages are bounded exact-inventory archives with
+  immutable version identities, staged extraction, host-owned canonical paths,
+  explicit unverified-native-code review, default-no-launch installation,
+  single-step rollback, disable, and tombstoned removal. The provider manifest,
+  package identity, entry point, platform, capabilities, and Bridge hello are
+  validated at their respective boundaries;
+- audio provider packages use a distinct bounded exact-inventory archive kind,
+  explicit unverified-native-code review, staged managed versions, persisted
+  selection, rollback, disable, and tombstoned removal. Installation neither
+  selects nor launches a provider and grants no device permission or recording
+  consent. Disabling/removing the selected provider clears selection; active
+  recording blocks package mutation; and provider hello must match the installed
+  ID, name, version, platform, and capability set;
 - only one selected telemetry provider is active in protocol version 1; the host
   neither merges values nor silently falls back from SimConnect to FSUIPC;
 - simulator recording is explicit and local; automation is separately opt-in
@@ -250,6 +263,17 @@
 - plugin directories, manifests, and entry points are bounded and canonicalized;
   symlinked folders/files, path escape, malformed metadata, and unsupported
   runtimes or capabilities are rejected;
+- ordinary plugin package schema version 1 caps compressed, expanded,
+  manifest, per-file, file-count, path-length, and path-depth dimensions. It
+  accepts only stored or Deflate ZIP entries, exact ASCII inventory paths and
+  SHA-256 content matches, and rejects traversal, links, directories,
+  encryption, undeclared entries, duplicates, case collisions, Windows device
+  names, identity/version disagreement, and version reuse with different
+  archive bytes before create-new extraction into a fresh staging directory;
+- managed plugin activation keeps immutable version trees and one explicit
+  rollback pointer. Disable removes a package from supervisor discovery without
+  rewriting it. Removal uses a database-reconciled tombstone and revokes saved
+  host access; interrupted staging and removal have deterministic recovery;
 - plugin protocol v1 uses a 1 MiB length-prefixed JSON ceiling, independent
   monotonic sequences, a three-second identity/version handshake, bounded text
   and WGS84 validation, at most 16 map layers per plugin, at most 10,000 points
@@ -495,11 +519,13 @@
 ## Implemented simulator-audio application controls and remaining release gates
 
 Simulator-synchronised native audio remains unavailable to users. Its
-independently versioned capture and codec contracts, application services,
-debug-only Windows microphone provider, and first-party Opus provider are
-implemented; packaging, legal approval, and live-device support are not. Before
-any native capture path ships, the remaining controls are gates rather than
-claims about the current application:
+independently versioned capture and codec contracts, external capture-provider
+package lifecycle, application services, debug-only Windows microphone
+provider, and first-party Opus provider are implemented. The synthetic capture
+provider has a separately installable reference package; native release, codec
+package lifecycle, legal approval, and live-device support are not complete.
+Before any native capture path ships, the remaining controls are gates rather
+than claims about the current application:
 
 - Codec choice is explicit and per source. The first-party Opus implementation
   is an out-of-process Audio Codec Provider with no privileged in-process path;
@@ -518,10 +544,12 @@ claims about the current application:
   mismatches. Capture PCM and codec packets have independent bounds. Protocol
   errors contain neither source labels nor media bytes.
 - The deterministic fake capture provider is never staged as live and uses only
-  synthetic identities, timestamps, events, and PCM. The Windows microphone
-  provider is debug-selected, hashes raw device IDs, uses bounded non-blocking
-  callback queues, and is never opened by automated tests. Neither establishes
-  packaged or live-certified capture.
+  synthetic identities, timestamps, events, and PCM. Its `.wyrmaudio` package
+  exercises the same offline inspection, managed storage, enable/disable,
+  selection, rollback, and removal path available to other capture providers.
+  The Windows microphone provider hashes raw device IDs, uses bounded
+  non-blocking callback queues, and is never opened by automated tests. Neither
+  establishes released or live-certified capture.
 - The first-party Opus provider uses the same codec protocol intended for
   future end-user choices. Its synthetic encode/decode test establishes
   integration only, not independent conformance, quality, or security
@@ -765,9 +793,25 @@ this guidance must change without weakening secret handling.
   sandbox. A Python plugin still runs as the current user and may access files,
   processes, and ambient network facilities allowed to that account even when
   `external_network` is not granted. Run only trusted code in this preview.
-- Plugin packages and publishers are not signed, updates are not authenticated,
-  and installed files have no tamper-evident integrity record. The bundled proof
-  is copied only when absent so user files are not silently overwritten.
+- Plugin packages and publishers are not signed and updates are not
+  authenticated. Ordinary package installation records the accepted archive
+  digest and exact payload inventory, but the supervisor does not yet re-hash
+  every installed file before each launch. First-party Python plugins use the
+  same deterministic external package and managed installer as local community
+  files. The first-party SimConnect sidecar likewise uses the same deterministic
+  `.wyrmprovider` and managed installer as a local community provider. Audio
+  provider packaging remains deferred.
+- External local installation deliberately permits packages obtained without
+  Aerie. Local structural validation cannot establish publisher identity, code
+  intent, safety, or rights. The installer must show unverified provenance and
+  requested authority clearly, require deliberate approval, record the exact
+  accepted content, and never convert an unsigned package into a trusted one.
+- Supporting scripts, executables, and simulator-native libraries expands the
+  platform-specific attack surface. Unknown package kinds remain inert; each
+  executable kind needs bounded staging, canonical paths, content inventory,
+  atomic activation, rollback, disable/removal, and its own isolation and
+  conformance evidence. A simulator-loaded library has the simulator's
+  privileges even though it never enters the WyrmGrid desktop process.
 - The supervisor bounds frames, layers, points, paths, startup, and shutdown but
   does not yet impose CPU, memory, total-process, message-rate, restart, or disk
   quotas. A hostile plugin can still exhaust local resources within operating-
@@ -781,7 +825,12 @@ this guidance must change without weakening secret handling.
   update/rollback are required before recommending unreviewed community plugins.
 
 The exact implemented boundary and deferred hardening are recorded in
-[plugin protocol version 1](../plugins/protocol-v1.md).
+[plugin protocol version 1](../plugins/protocol-v1.md) and
+[ADR-0021](../architecture/decisions/0021-externally-installable-extensions.md),
+with the ordinary package security and compatibility decision in
+[ADR-0022](../architecture/decisions/0022-ordinary-plugin-package-format-v1.md)
+and the native simulator-provider decision in
+[ADR-0023](../architecture/decisions/0023-simulator-provider-package-format-v1.md).
 
 ## Residual Hoard risks
 
@@ -913,9 +962,12 @@ to an external report.
   alter data where the provider has no authentication mechanism.
 - A provider is a native executable with the ambient rights of the user's
   account. Process separation and protocol validation contain malformed output
-  but do not make an unreviewed provider safe. Community provider loading stays
-  disabled until publisher identity, signing, tamper checks, install-root
-  controls, resource limits, and safe update/rollback exist.
+  but do not make an unreviewed provider safe. Deliberate local package
+  installation is supported with bounded validation, managed install-root
+  controls, immutable updates, rollback, disable, and removal, but WyrmGrid
+  must not recommend unreviewed providers until publisher identity, signing,
+  authenticated updates, pre-launch tamper checks, resource limits, and
+  revocation exist.
 - Provider auto-start is user-controlled, default-off, and limited to the
   persisted ID of an installed manifest-validated provider. It cannot accept an
   arbitrary executable path from the frontend or a community plugin.

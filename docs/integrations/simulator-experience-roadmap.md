@@ -3,8 +3,8 @@
 The simulator experience has three separate states. WyrmGrid must name them
 honestly instead of treating all three as “telemetry”:
 
-1. **Provider available**: the approved sidecar executable is installed and can
-   be launched.
+1. **Provider available**: an enabled, manifest-validated provider package
+   supports this host and its sidecar executable can be launched.
 2. **Provider connected**: the sidecar has completed the Bridge handshake and is
    receiving live simulator facts.
 3. **Flight recording active**: the user has chosen to persist a bounded session
@@ -232,10 +232,12 @@ user-selected sessions, and exclude raw high-frequency data by default.
 6. Prove simulator weather-mode and ambient-condition observability, then add a
    versioned, gap-preserving recording contract that remains distinct from
    external weather.
-7. Add the separately consented Audio Capture Provider contract, Opus media
-   store, and fake-provider tests before native capture. Deliver Windows/MSFS
-   sources first, then X-Plane on its supported desktop systems; isolated
-   X-Plane radio tracks wait for the plugin feasibility and licensing decision.
+7. Add separately consented Audio Capture and Audio Codec Provider contracts,
+   the encrypted Opus media store, managed capture-provider packages, and
+   synthetic tests before native release. Implemented for the non-shipping
+   foundation; live Windows/MSFS evidence comes next, then X-Plane on its
+   supported desktop systems. Isolated X-Plane radio tracks wait for the plugin
+   feasibility and licensing decision.
 
 ## Questions and suggestions
 

@@ -68,21 +68,34 @@ fn installs_all_bundled_plugins_with_no_implicit_grants() {
 }
 
 #[test]
-fn refreshes_reserved_bundled_plugin_files_when_the_shipped_provider_changes() {
+fn first_party_plugins_are_seeded_as_managed_external_packages() {
     let directory = tempfile::tempdir().expect("temporary directory should open");
-    initialize_plugin_root(directory.path()).expect("bundled plugins should install");
-    let entry_point = directory
-        .path()
-        .join(RAINVIEWER_PLUGIN_ID)
-        .join("src")
-        .join("main.py");
-    std::fs::write(&entry_point, "stale bundled provider").expect("stale provider should save");
+    let store = Store::open_in_memory().expect("store should open");
+    let service = PluginService::new(
+        Some(directory.path().to_path_buf()),
+        store.clone(),
+        OnAirSession::with_default_store(store),
+        SimulatorBridgeService::new(Vec::new()),
+    );
 
-    initialize_plugin_root(directory.path()).expect("bundled plugins should refresh");
-
-    assert_eq!(
-        std::fs::read_to_string(entry_point).expect("provider should read"),
-        RAINVIEWER_ENTRY_POINT
+    let packages = service.list_managed_plugin_packages().unwrap();
+    assert_eq!(packages.len(), 4);
+    assert!(
+        packages
+            .iter()
+            .all(|package| package.source == "first_party")
+    );
+    assert!(
+        !directory.path().join(RAINVIEWER_PLUGIN_ID).exists(),
+        "first-party source must not be materialized into the legacy scan root"
+    );
+    assert!(
+        directory
+            .path()
+            .join(".extensions-v1")
+            .join("ordinary_plugin")
+            .join(RAINVIEWER_PLUGIN_ID)
+            .is_dir()
     );
 }
 
@@ -275,20 +288,9 @@ fn plugin_scope_changes_disable_automatic_start_until_reviewed_again() {
         .set_start_with_wyrmgrid(BUNDLED_PLUGIN_ID, true)
         .expect("automatic startup should enable");
 
-    let manifest_path = directory.path().join(BUNDLED_PLUGIN_ID).join("plugin.json");
-    let mut manifest: serde_json::Value = serde_json::from_str(
-        &std::fs::read_to_string(&manifest_path).expect("manifest should read"),
-    )
-    .expect("manifest should parse");
-    manifest["version"] = serde_json::Value::String("0.2.0".into());
-    std::fs::write(
-        manifest_path,
-        serde_json::to_vec_pretty(&manifest).expect("manifest should serialize"),
-    )
-    .expect("manifest should save");
-
-    let status = service.status().expect("status should load");
-    assert!(!plugin_view(&status, BUNDLED_PLUGIN_ID).start_with_wyrmgrid);
+    let mut manifest = service.find_plugin(BUNDLED_PLUGIN_ID).unwrap().manifest;
+    manifest.version = "0.2.0".into();
+    assert!(!service.start_with_wyrmgrid(&manifest).unwrap());
 }
 
 #[test]
@@ -336,30 +338,10 @@ fn plugin_version_changes_require_a_fresh_permission_review() {
         .approve_requested_permissions(BUNDLED_PLUGIN_ID)
         .expect("initial permissions should approve");
 
-    let manifest_path = directory.path().join(BUNDLED_PLUGIN_ID).join("plugin.json");
-    let mut manifest: serde_json::Value = serde_json::from_str(
-        &std::fs::read_to_string(&manifest_path).expect("manifest should read"),
-    )
-    .expect("manifest should parse");
-    manifest["version"] = serde_json::Value::String("0.2.0".into());
-    std::fs::write(
-        &manifest_path,
-        serde_json::to_vec_pretty(&manifest).expect("manifest should serialize"),
-    )
-    .expect("updated manifest should save");
-
-    let status = service
-        .status()
-        .expect("updated plugin should remain visible");
-    assert!(
-        plugin_view(&status, BUNDLED_PLUGIN_ID)
-            .granted_permissions
-            .is_empty()
-    );
-    assert!(matches!(
-        service.start(BUNDLED_PLUGIN_ID),
-        Err(PluginError::PermissionRequired)
-    ));
+    let mut manifest = service.find_plugin(BUNDLED_PLUGIN_ID).unwrap().manifest;
+    manifest.version = "0.2.0".into();
+    assert!(service.grants_for(&manifest).unwrap().is_empty());
+    assert_eq!(service.grant_lifetime_for(&manifest).unwrap(), None);
 }
 
 #[test]

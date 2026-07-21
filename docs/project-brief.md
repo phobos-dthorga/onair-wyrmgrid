@@ -34,6 +34,12 @@ and SQLite.
 Public plugins run as separate processes over a language-neutral, versioned,
 permission-controlled protocol. Python is the first executable SDK;
 Rust, C++, and TypeScript SDKs can follow once the protocol is proven.
+Every plugin and provider also has an external delivery boundary: it can be
+installed, replaced, disabled, updated, and removed independently of the
+WyrmGrid build. Payloads may be scripts, executables, native libraries required
+by another host such as a simulator, or future validated runtimes. Official
+installers may include first-party packages for convenience, but compilation
+into the desktop is never the only plugin delivery route.
 
 English (Australia) is the canonical interface source, but language is not a
 business-logic concern. Stable semantic keys cross from Rust into Svelte, where

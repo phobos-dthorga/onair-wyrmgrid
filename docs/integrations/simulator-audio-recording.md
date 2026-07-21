@@ -1,7 +1,8 @@
 # Simulator-synchronised audio recording
 
-Status: debug-only Windows microphone capture and first-party Opus codec
-provider implemented; not packaged or live-certified
+Status: managed external capture-provider packages, debug-only Windows
+microphone capture, and a first-party Opus codec provider implemented; native
+capture and codec sidecars are not released or live-certified
 
 WyrmGrid will offer optional audio recording aligned with a local simulator
 telemetry session. Codec choice is an end-user selection implemented through a
@@ -32,9 +33,11 @@ Capture Provider protocol version 2 supplies bounded PCM to the host; Audio
 Codec Provider protocol version 1 converts it to bounded encoded packets.
 Default-off consent, application orchestration, encrypted media lifecycle,
 authenticated packet inspection/export, a deterministic fake capture provider,
-a debug-only Windows microphone provider, and a first-party Opus codec provider
-now exist. None is packaged or live-certified. Either sidecar may fail or be
-absent without taking down WyrmGrid, telemetry, or the simulator.
+a managed external `.wyrmaudio` lifecycle, a debug-only Windows microphone
+provider, and a first-party Opus codec provider now exist. The fake provider has
+a separately installable reference package; the native and codec sidecars are
+not released or live-certified. Either process may fail or be absent without
+taking down WyrmGrid, telemetry, or the simulator.
 
 The Rust application service is authoritative for consent, source selection,
 session lifecycle, time correlation, storage policy, deletion, and export.
@@ -51,13 +54,13 @@ supersedes its encoded-packet path with [Audio Capture Provider version
 bounded PCM and encoded framing, sanitized fixtures, and deterministic process
 tests. Version-one capture fixtures remain compatibility evidence.
 
-Slices 2–4 implement independent persisted consent, explicit permission
-requests, debug fake-provider orchestration, schema-18 metadata, authenticated
-external packet segments, recovery, retention, tombstoned deletion, portable-
+Slices 2–5 implement independent persisted consent, explicit permission
+requests, managed external-provider selection, schema-21 package state,
+authenticated external packet segments, recovery, retention, tombstoned deletion, portable-
 backup omission, bounded authenticated packet inspection, and separately
 warned plaintext packet export. These slices do not enable a microphone or
-native simulator capture and do not establish audible playback, packaging, or
-live certification.
+native simulator capture and do not establish audible playback or live
+certification.
 
 Slice 5A implements a debug-only Windows microphone provider through CPAL/WASAPI
 with explicit source selection, explicit permission probing, hashed raw device

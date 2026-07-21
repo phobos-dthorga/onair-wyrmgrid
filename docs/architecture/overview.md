@@ -176,6 +176,18 @@ timeouts and size limits, and owns all privileged actions. Declarative map,
 table, form, chart, notification, command, and inspector contributions come
 before unrestricted custom UI.
 
+Every plugin and capability provider is also an external installable artifact.
+Users must be able to add, replace, disable, update, and remove one without
+rebuilding or relinking WyrmGrid. A package may contain a supported script,
+executable, or platform-native payload; its package kind, manifest, entry point,
+compatibility, permissions, and lifecycle remain explicit and host-validated.
+First-party packages may be seeded by an official installer, but must use the
+same external boundary and remain independently distributable. See
+[ADR-0021](decisions/0021-externally-installable-extensions.md). The currently
+implemented envelopes are `.wyrmplugin` for ordinary processes,
+`.wyrmprovider` for native simulator sidecars, and `.wyrmaudio` for native
+Audio Capture Providers.
+
 ## Maintainability boundary
 
 WyrmGrid is designed to remain sustainable for one maintainer. Community-ready

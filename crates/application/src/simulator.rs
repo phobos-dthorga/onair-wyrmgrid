@@ -1,3 +1,7 @@
+use crate::{
+    ExtensionPackageManagementError, ExtensionPackageService, ManagedSimulatorProviderPackageView,
+    SimulatorProviderPackageInspection, inspect_simulator_provider_package,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
 use std::fs;
@@ -47,6 +51,16 @@ pub enum SimulatorBridgeError {
     PreferencesUnavailable,
     #[error("Choose an installed simulator provider before enabling automatic start.")]
     InvalidPreferences,
+    #[error("The selected simulator provider package is invalid or unsupported.")]
+    InvalidPackage,
+    #[error("Local simulator provider package storage is unavailable.")]
+    PackageStorageUnavailable,
+    #[error("That simulator provider version already exists with different package contents.")]
+    PackageVersionConflict,
+    #[error("Stop this simulator provider before changing its installed package.")]
+    PackageInUse,
+    #[error("No previous simulator provider version is available for rollback.")]
+    RollbackUnavailable,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -90,22 +104,35 @@ impl SimulatorPreferencesRepository for Store {
 
 pub struct SimulatorSettingsService<R> {
     repository: R,
-    provider_ids: Vec<String>,
+    providers: SimulatorProviderIds,
+}
+
+enum SimulatorProviderIds {
+    Static(Vec<String>),
+    Bridge(SimulatorBridgeService),
 }
 
 impl<R: SimulatorPreferencesRepository> SimulatorSettingsService<R> {
     pub fn new(repository: R, provider_ids: Vec<String>) -> Self {
         Self {
             repository,
-            provider_ids,
+            providers: SimulatorProviderIds::Static(provider_ids),
+        }
+    }
+
+    pub fn with_bridge(repository: R, bridge: SimulatorBridgeService) -> Self {
+        Self {
+            repository,
+            providers: SimulatorProviderIds::Bridge(bridge),
         }
     }
 
     pub fn status(&self) -> Result<SimulatorPreferences, SimulatorBridgeError> {
         let stored = self.repository.load_simulator_preferences()?;
+        let provider_ids = self.provider_ids()?;
         Ok(match stored {
-            Some(preferences) if self.valid(&preferences) => preferences,
-            _ => self.defaults(),
+            Some(preferences) if self.valid(&preferences, &provider_ids) => preferences,
+            _ => self.defaults(&provider_ids),
         })
     }
 
@@ -113,7 +140,8 @@ impl<R: SimulatorPreferencesRepository> SimulatorSettingsService<R> {
         &self,
         preferences: SimulatorPreferences,
     ) -> Result<SimulatorPreferences, SimulatorBridgeError> {
-        if !self.valid(&preferences) {
+        let provider_ids = self.provider_ids()?;
+        if !self.valid(&preferences, &provider_ids) {
             return Err(SimulatorBridgeError::InvalidPreferences);
         }
         self.repository.save_simulator_preferences(&preferences)?;
@@ -124,7 +152,11 @@ impl<R: SimulatorPreferencesRepository> SimulatorSettingsService<R> {
         &self,
         provider_id: &str,
     ) -> Result<SimulatorPreferences, SimulatorBridgeError> {
-        if !self.provider_ids.iter().any(|known| known == provider_id) {
+        if !self
+            .provider_ids()?
+            .iter()
+            .any(|known| known == provider_id)
+        {
             return Err(SimulatorBridgeError::UnknownProvider);
         }
         let mut preferences = self.status()?;
@@ -140,20 +172,68 @@ impl<R: SimulatorPreferencesRepository> SimulatorSettingsService<R> {
             .flatten())
     }
 
-    fn defaults(&self) -> SimulatorPreferences {
+    pub fn remove_managed_provider(&self, provider_id: &str) -> Result<(), SimulatorBridgeError> {
+        let SimulatorProviderIds::Bridge(bridge) = &self.providers else {
+            return Err(SimulatorBridgeError::PackageStorageUnavailable);
+        };
+        bridge.ensure_provider_inactive(provider_id)?;
+        if self
+            .repository
+            .load_simulator_preferences()?
+            .is_some_and(|preferences| {
+                preferences.selected_provider_id.as_deref() == Some(provider_id)
+            })
+        {
+            self.repository
+                .save_simulator_preferences(&SimulatorPreferences {
+                    selected_provider_id: None,
+                    start_with_wyrmgrid: false,
+                })?;
+        }
+        bridge.remove_managed_provider(provider_id)
+    }
+
+    pub fn set_managed_provider_enabled(
+        &self,
+        provider_id: &str,
+        enabled: bool,
+    ) -> Result<ManagedSimulatorProviderPackageView, SimulatorBridgeError> {
+        let SimulatorProviderIds::Bridge(bridge) = &self.providers else {
+            return Err(SimulatorBridgeError::PackageStorageUnavailable);
+        };
+        bridge.ensure_provider_inactive(provider_id)?;
+        if !enabled
+            && let Some(mut preferences) = self.repository.load_simulator_preferences()?
+            && preferences.selected_provider_id.as_deref() == Some(provider_id)
+            && preferences.start_with_wyrmgrid
+        {
+            preferences.start_with_wyrmgrid = false;
+            self.repository.save_simulator_preferences(&preferences)?;
+        }
+        bridge.set_managed_provider_enabled(provider_id, enabled)
+    }
+
+    fn defaults(&self, provider_ids: &[String]) -> SimulatorPreferences {
         SimulatorPreferences {
-            selected_provider_id: self.provider_ids.first().cloned(),
+            selected_provider_id: provider_ids.first().cloned(),
             start_with_wyrmgrid: false,
         }
     }
 
-    fn valid(&self, preferences: &SimulatorPreferences) -> bool {
+    fn valid(&self, preferences: &SimulatorPreferences, provider_ids: &[String]) -> bool {
         let selected_is_known = preferences
             .selected_provider_id
             .as_ref()
-            .is_none_or(|selected| self.provider_ids.iter().any(|known| known == selected));
+            .is_none_or(|selected| provider_ids.iter().any(|known| known == selected));
         selected_is_known
             && (!preferences.start_with_wyrmgrid || preferences.selected_provider_id.is_some())
+    }
+
+    fn provider_ids(&self) -> Result<Vec<String>, SimulatorBridgeError> {
+        match &self.providers {
+            SimulatorProviderIds::Static(provider_ids) => Ok(provider_ids.clone()),
+            SimulatorProviderIds::Bridge(bridge) => bridge.provider_ids_checked(),
+        }
     }
 }
 
@@ -189,6 +269,23 @@ impl SimulatorProviderRegistration {
             .and_then(|name| name.to_str())
             .ok_or(SimulatorBridgeError::InvalidProvider)?;
         if executable_name != declared_name {
+            return Err(SimulatorBridgeError::InvalidProvider);
+        }
+        Ok(Self {
+            manifest,
+            executable,
+        })
+    }
+
+    fn from_managed_package(
+        manifest: ProviderManifest,
+        package_root: PathBuf,
+    ) -> Result<Self, SimulatorBridgeError> {
+        manifest
+            .validate()
+            .map_err(|_| SimulatorBridgeError::InvalidProvider)?;
+        let executable = package_root.join(&manifest.entry_point);
+        if !executable.is_file() {
             return Err(SimulatorBridgeError::InvalidProvider);
         }
         Ok(Self {
@@ -255,6 +352,7 @@ pub struct SimulatorBridgeService {
 
 struct SimulatorBridgeInner {
     registrations: BTreeMap<String, SimulatorProviderRegistration>,
+    packages: Option<ExtensionPackageService>,
     runtime: Mutex<Option<Arc<RunningProvider>>>,
     telemetry_observer: Option<Arc<dyn SimulatorTelemetryObserver>>,
 }
@@ -282,6 +380,22 @@ impl SimulatorBridgeService {
         registrations: Vec<SimulatorProviderRegistration>,
         telemetry_observer: Option<Arc<dyn SimulatorTelemetryObserver>>,
     ) -> Self {
+        Self::with_optional_extension_packages(registrations, None, telemetry_observer)
+    }
+
+    pub fn with_extension_packages(
+        registrations: Vec<SimulatorProviderRegistration>,
+        packages: ExtensionPackageService,
+        telemetry_observer: Option<Arc<dyn SimulatorTelemetryObserver>>,
+    ) -> Self {
+        Self::with_optional_extension_packages(registrations, Some(packages), telemetry_observer)
+    }
+
+    fn with_optional_extension_packages(
+        registrations: Vec<SimulatorProviderRegistration>,
+        packages: Option<ExtensionPackageService>,
+        telemetry_observer: Option<Arc<dyn SimulatorTelemetryObserver>>,
+    ) -> Self {
         let registrations = registrations
             .into_iter()
             .map(|registration| (registration.manifest.id.clone(), registration))
@@ -289,6 +403,7 @@ impl SimulatorBridgeService {
         Self {
             inner: Arc::new(SimulatorBridgeInner {
                 registrations,
+                packages,
                 runtime: Mutex::new(None),
                 telemetry_observer,
             }),
@@ -296,14 +411,15 @@ impl SimulatorBridgeService {
     }
 
     pub fn status(&self) -> Result<SimulatorBridgeView, SimulatorBridgeError> {
+        let registrations = self.registrations()?;
         let runtime = self
             .inner
             .runtime
             .lock()
             .map_err(|_| SimulatorBridgeError::StateUnavailable)?
             .clone();
-        let mut providers = Vec::with_capacity(self.inner.registrations.len());
-        for registration in self.inner.registrations.values() {
+        let mut providers = Vec::with_capacity(registrations.len());
+        for registration in registrations.values() {
             let supported =
                 platform_supported(&registration.manifest) && registration.executable.is_file();
             let matching_runtime = runtime
@@ -461,9 +577,8 @@ impl SimulatorBridgeService {
     }
 
     pub fn start(&self, provider_id: &str) -> Result<SimulatorBridgeView, SimulatorBridgeError> {
-        let registration = self
-            .inner
-            .registrations
+        let registrations = self.registrations()?;
+        let registration = registrations
             .get(provider_id)
             .ok_or(SimulatorBridgeError::UnknownProvider)?;
         if !platform_supported(&registration.manifest) || !registration.executable.is_file() {
@@ -563,14 +678,128 @@ impl SimulatorBridgeService {
     }
 
     pub fn provider_ids(&self) -> Vec<String> {
-        self.inner.registrations.keys().cloned().collect()
+        self.provider_ids_checked().unwrap_or_default()
+    }
+
+    pub fn inspect_provider_package(
+        &self,
+        path: &Path,
+    ) -> Result<SimulatorProviderPackageInspection, SimulatorBridgeError> {
+        inspect_simulator_provider_package(path).map_err(|_| SimulatorBridgeError::InvalidPackage)
+    }
+
+    pub fn list_managed_provider_packages(
+        &self,
+    ) -> Result<Vec<ManagedSimulatorProviderPackageView>, SimulatorBridgeError> {
+        self.packages()?
+            .list_simulator_provider_packages()
+            .map_err(simulator_package_error)
+    }
+
+    pub fn seed_first_party_provider_package(
+        &self,
+        path: &Path,
+    ) -> Result<(), SimulatorBridgeError> {
+        self.packages()?
+            .seed_first_party_simulator_provider_package(path)
+            .map(|_| ())
+            .map_err(simulator_package_error)
+    }
+
+    pub fn install_provider_package(
+        &self,
+        path: &Path,
+    ) -> Result<ManagedSimulatorProviderPackageView, SimulatorBridgeError> {
+        let inspection = self.inspect_provider_package(path)?;
+        self.ensure_provider_inactive(&inspection.id)?;
+        self.packages()?
+            .install_simulator_provider_package(path)
+            .map_err(simulator_package_error)
+    }
+
+    pub fn set_managed_provider_enabled(
+        &self,
+        provider_id: &str,
+        enabled: bool,
+    ) -> Result<ManagedSimulatorProviderPackageView, SimulatorBridgeError> {
+        self.ensure_provider_inactive(provider_id)?;
+        self.packages()?
+            .set_simulator_provider_enabled(provider_id, enabled)
+            .map_err(simulator_package_error)
+    }
+
+    pub fn rollback_managed_provider(
+        &self,
+        provider_id: &str,
+    ) -> Result<ManagedSimulatorProviderPackageView, SimulatorBridgeError> {
+        self.ensure_provider_inactive(provider_id)?;
+        self.packages()?
+            .rollback_simulator_provider(provider_id)
+            .map_err(simulator_package_error)
+    }
+
+    pub fn remove_managed_provider(&self, provider_id: &str) -> Result<(), SimulatorBridgeError> {
+        self.ensure_provider_inactive(provider_id)?;
+        self.packages()?
+            .remove_simulator_provider(provider_id)
+            .map_err(simulator_package_error)
+    }
+
+    fn registrations(
+        &self,
+    ) -> Result<BTreeMap<String, SimulatorProviderRegistration>, SimulatorBridgeError> {
+        let mut registrations = self.inner.registrations.clone();
+        if let Some(packages) = self.inner.packages.as_ref() {
+            for managed in packages
+                .active_managed_simulator_providers()
+                .map_err(simulator_package_error)?
+            {
+                let provider_id = managed.manifest.id.clone();
+                let registration = SimulatorProviderRegistration::from_managed_package(
+                    managed.manifest,
+                    managed.root,
+                )?;
+                registrations.insert(provider_id, registration);
+            }
+        }
+        Ok(registrations)
+    }
+
+    fn provider_ids_checked(&self) -> Result<Vec<String>, SimulatorBridgeError> {
+        self.registrations()
+            .map(|registrations| registrations.into_keys().collect())
+    }
+
+    fn packages(&self) -> Result<&ExtensionPackageService, SimulatorBridgeError> {
+        self.inner
+            .packages
+            .as_ref()
+            .ok_or(SimulatorBridgeError::PackageStorageUnavailable)
+    }
+
+    fn ensure_provider_inactive(&self, provider_id: &str) -> Result<(), SimulatorBridgeError> {
+        let runtime = self
+            .inner
+            .runtime
+            .lock()
+            .map_err(|_| SimulatorBridgeError::StateUnavailable)?;
+        if runtime.as_ref().is_some_and(|runtime| {
+            runtime.provider_id == provider_id
+                && runtime
+                    .process_state
+                    .lock()
+                    .is_ok_and(|state| state.is_active())
+        }) {
+            Err(SimulatorBridgeError::PackageInUse)
+        } else {
+            Ok(())
+        }
     }
 
     pub fn stop(&self, provider_id: &str) -> Result<SimulatorBridgeView, SimulatorBridgeError> {
-        self.inner
-            .registrations
-            .get(provider_id)
-            .ok_or(SimulatorBridgeError::UnknownProvider)?;
+        if !self.registrations()?.contains_key(provider_id) {
+            return Err(SimulatorBridgeError::UnknownProvider);
+        }
         let runtime = self
             .inner
             .runtime
@@ -617,6 +846,24 @@ impl SimulatorBridgeService {
             .lock()
             .map_err(|_| SimulatorBridgeError::StateUnavailable)? = None;
         self.status()
+    }
+}
+
+fn simulator_package_error(error: ExtensionPackageManagementError) -> SimulatorBridgeError {
+    match error {
+        ExtensionPackageManagementError::InvalidPackage(_) => SimulatorBridgeError::InvalidPackage,
+        ExtensionPackageManagementError::VersionConflict => {
+            SimulatorBridgeError::PackageVersionConflict
+        }
+        ExtensionPackageManagementError::RollbackUnavailable => {
+            SimulatorBridgeError::RollbackUnavailable
+        }
+        ExtensionPackageManagementError::StateUnavailable => SimulatorBridgeError::StateUnavailable,
+        ExtensionPackageManagementError::RootUnavailable
+        | ExtensionPackageManagementError::StorageUnavailable
+        | ExtensionPackageManagementError::FileOperation => {
+            SimulatorBridgeError::PackageStorageUnavailable
+        }
     }
 }
 

@@ -4,7 +4,7 @@ use wyrmgrid_application::{
     AudioCaptureMode, AudioCaptureProvider, AudioCodecError, AudioCodecProvider, AudioMediaKey,
     AudioProviderPcmFrame, AudioProviderRegistration, AudioRecordingPreferences,
     AudioRecordingService, AudioSourceSelection, EncodedAudioPacket, EncryptedAudioMediaStore,
-    FakeAudioProviderProcess,
+    ProcessAudioCaptureProvider,
 };
 use wyrmgrid_audio_codec_protocol::AudioCodecProfile;
 use wyrmgrid_domain::AudioProfileId;
@@ -79,7 +79,7 @@ fn application_orchestrates_the_development_provider_without_implicit_permission
     let registration =
         AudioProviderRegistration::from_manifest_json(include_str!("../provider.json"), executable)
             .unwrap();
-    let provider = Arc::new(FakeAudioProviderProcess::new(registration).unwrap());
+    let provider = Arc::new(ProcessAudioCaptureProvider::new(registration).unwrap());
     let initial_sources = provider.sources().unwrap();
     assert_eq!(initial_sources.len(), 2);
     assert!(!initial_sources[0].is_capture_ready());

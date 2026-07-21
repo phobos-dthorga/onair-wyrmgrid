@@ -11,6 +11,11 @@
   recommendations using provenance metadata.
 - Community plugins are out-of-process. Do not introduce public Rust, C++, Qt,
   or operating-system ABI coupling.
+- Every component described as a plugin or provider must have an external,
+  independently installable artifact boundary. Installing, replacing, disabling,
+  updating, or removing it must not require rebuilding or relinking WyrmGrid.
+  First-party inclusion in an installer is a convenience, never the only
+  supported delivery path.
 - Plugin permissions are deny-by-default and capability-oriented.
 
 ## Architecture

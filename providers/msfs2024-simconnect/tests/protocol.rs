@@ -1,7 +1,7 @@
 use std::process::{Command, Stdio};
 use wyrmgrid_bridge_protocol::{
     BridgeCapability, BridgeEnvelope, BridgeHostMessage, BridgeProviderMessage,
-    ProviderConnectionState, read_frame, write_frame,
+    ProviderConnectionState, ProviderManifest, read_frame, write_frame,
 };
 
 const PROVIDER_ID: &str = "io.github.phobosdthorga.wyrmgrid-simconnect-msfs2024";
@@ -35,12 +35,14 @@ fn sidecar_completes_the_handshake_and_stops_cleanly() {
     .expect("host hello should be written");
     let hello: BridgeEnvelope<BridgeProviderMessage> =
         read_frame(&mut stdout).expect("provider hello should be returned");
-    assert!(matches!(
-        hello.payload,
-        BridgeProviderMessage::Hello { provider }
-            if provider.id == PROVIDER_ID
-                && provider.capabilities == vec![BridgeCapability::TelemetryRead]
-    ));
+    let BridgeProviderMessage::Hello { provider } = hello.payload else {
+        panic!("provider hello should carry its descriptor");
+    };
+    let manifest: ProviderManifest = serde_json::from_str(include_str!("../provider.json"))
+        .expect("checked-in provider manifest should parse");
+    assert_eq!(provider.id, PROVIDER_ID);
+    assert_eq!(provider.version, manifest.version);
+    assert_eq!(provider.capabilities, vec![BridgeCapability::TelemetryRead]);
 
     write_frame(
         &mut stdin,

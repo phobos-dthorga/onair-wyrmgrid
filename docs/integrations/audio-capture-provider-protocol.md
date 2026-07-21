@@ -1,7 +1,7 @@
 # Audio Capture Provider protocol version 2
 
-Status: implemented with deterministic fake and debug-only Windows microphone
-providers; not packaged or live-certified
+Status: protocol, external package lifecycle, deterministic fake provider, and
+Windows microphone provider implemented; not installer-seeded or live-certified
 
 Audio Capture Provider version 2 is the supervised boundary between an exact,
 explicitly approved audio source and WyrmGrid. It enumerates capabilities,
@@ -23,6 +23,10 @@ This internal protocol change does not change application semantic version
 interpretation, or enum values requires another explicit compatibility
 decision.
 
+Application schema 21 and English source catalogue 21 add managed package
+state, persistent capture-provider selection, codec provenance, and interface
+wording without changing those public compatibility markers.
+
 ## Process and authority boundary
 
 Starting a provider does not authorize capture. WyrmGrid applies default-off
@@ -42,6 +46,20 @@ Both directions use a 32-bit big-endian JSON-header length. Provider frames add
 a 32-bit big-endian binary-body length. JSON headers and PCM bodies are each
 limited to 64 KiB and their declared and actual lengths must match before
 allocation or interpretation.
+
+## Package lifecycle
+
+Package format version 1 now establishes deliberate local community-provider
+installation through bounded `.wyrmaudio` archives, canonical managed paths,
+staged validation, explicit native-code trust review, update, rollback,
+disable/removal, and persistent selection. Installation grants no recording,
+source, operating-system permission, OnAir, simulator, plugin, or network
+authority. Publisher identity, signing, revocation, sandboxing, and Aerie
+recommendation remain separate hardening work. See
+[audio provider authoring](audio-provider-authoring.md) and
+[ADR-0024](../architecture/decisions/0024-audio-provider-package-format-v1.md).
+
+## PCM limits
 
 PCM frames are signed 16-bit little-endian, interleaved, exactly 48 kHz, one of
 the contract's bounded durations (120–2,880 frames per channel), and compatible
@@ -79,15 +97,15 @@ raw OS device identifiers before they become source IDs, downmixes an approved
 48 kHz stream to bounded mono PCM, never blocks the realtime callback, and
 reports dropped frames as backpressure.
 
-The Windows provider is selected only by the development environment setting
-`WYRMGRID_AUDIO_PROVIDER=windows-microphone`. It is not staged into an
-installer, is not automatically opened by tests, and does not establish live
-microphone availability. Output, process-loopback, MSFS, and X-Plane capture
-remain unimplemented.
+The Windows provider uses the same separately installable package boundary and
+is not automatically selected or opened by tests. Its implementation does not
+establish released or live microphone availability. Output, process-loopback,
+MSFS, and X-Plane capture remain unimplemented.
 
 Schemas and sanitized fixtures:
 
 - `schemas/audio-provider-manifest-v2.schema.json`
+- `schemas/audio-provider-package-manifest-v1.schema.json`
 - `schemas/audio-provider-envelope-v2.schema.json`
 - v2 hello, permission, sources, clock, PCM-header/body, and event fixtures in
   `schemas/fixtures/`

@@ -21,6 +21,7 @@ thiserror.workspace = true
 tokio.workspace = true
 uuid.workspace = true
 zeroize.workspace = true
+zip.workspace = true
 wyrmgrid-domain = { path = "../domain" }
 wyrmgrid-audio-codec-protocol = { path = "../audio-codec-protocol" }
 wyrmgrid-audio-provider-protocol = { path = "../audio-provider-protocol" }

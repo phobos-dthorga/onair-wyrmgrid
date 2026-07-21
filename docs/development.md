@@ -123,7 +123,7 @@ inspector without placing credentials in project configuration.
 ## MSFS 2024 SimConnect provider
 
 The desktop and the simulator integration are separate executables. `npm run
-dev` now builds the debug provider and stages its target-suffixed Tauri sidecar
+dev` builds the debug provider and stages an ignored `.wyrmprovider` package
 automatically before the desktop starts:
 
 ```powershell
@@ -132,19 +132,21 @@ npm run dev
 
 Run `npm run provider:prepare` to perform that preparation without launching the
 desktop. The command is covered by the Windows CI smoke path. Tauri release
-preparation builds the release provider, stages it under the ignored
-`apps/desktop/src-tauri/binaries` directory, then builds the interface. The
-provider executable is therefore a Windows-only declared Tauri external binary
-rather than a hand-copied release artifact. Non-Windows builds skip the native
-provider.
+preparation builds the release provider, packages it under the ignored
+`apps/desktop/src-tauri/provider-packages` directory, then builds the interface.
+Tauri carries that package only as an optional first-party seed; startup
+validates and installs it through the same managed lifecycle as a local
+community package. Non-Windows builds skip the Windows-only reference provider.
 
-The desktop discovers the development binary under `target/debug`. Set
-`WYRMGRID_SIMULATOR_PROVIDER_PATH` to an absolute provider executable path only
-when testing another approved build. The provider discovers `SimConnect.dll`
-beside itself, through an absolute `WYRMGRID_SIMCONNECT_DLL`, through an absolute
-`MSFS2024_SDK` root, or in the standard MSFS 2024 SDK installation directory.
-The provider safely reports unavailable if the SDK client or simulator is
-absent; neither is needed for normal non-Windows core builds.
+Run `npm run provider:distribution` to create the deterministic release package
+under `assets/provider-packages` for independent distribution. Another
+provider is tested by building a `.wyrmprovider` and deliberately installing it
+through the simulator interface, not by supplying an arbitrary executable path.
+The provider discovers `SimConnect.dll` beside itself, through an absolute
+`WYRMGRID_SIMCONNECT_DLL`, through an absolute `MSFS2024_SDK` root, or in the
+standard MSFS 2024 SDK installation directory. The provider safely reports
+unavailable if the SDK client or simulator is absent; neither is needed for
+normal non-Windows core builds.
 
 Do not copy Microsoft SDK files into the repository or release artifacts. The
 first release bundle must follow an explicit redistribution review. See
@@ -152,9 +154,22 @@ first release bundle must follow an explicit redistribution review. See
 the protocol, FSUIPC path, live-validation requirements, and community-provider
 release gate.
 
-## Debug audio capture and codecs
+## Audio Capture Provider packages
 
-Build the explicitly registered development audio sidecars with:
+Run `npm run audio-provider:distribution` on Windows to build the deterministic
+fake provider and create its independently installable `.wyrmaudio` reference
+artifact under `assets/audio-provider-packages`. It contains only synthetic
+sources and PCM frames and is not staged or seeded by the desktop installer.
+
+Use `npm run audio-provider:package -- --source <directory> --output
+<file.wyrmaudio>` for another provider payload. Install the result through the
+Audio recording panel so inspection, explicit trust review, selection, disable,
+update, rollback, and removal all exercise the public lifecycle. See
+[audio provider authoring](integrations/audio-provider-authoring.md).
+
+## Development audio capture and codecs
+
+Build the provider and codec sidecars with:
 
 ```powershell
 cargo build -p wyrmgrid-fake-audio-provider `
@@ -162,19 +177,21 @@ cargo build -p wyrmgrid-fake-audio-provider `
   -p wyrmgrid-opus-codec
 ```
 
-The desktop uses the deterministic fake capture provider by default. To make a
-deliberate local microphone test, launch with
-`WYRMGRID_AUDIO_PROVIDER=windows-microphone`; WyrmGrid still requires master
-consent, a source selection, and an explicit permission action. An approved
-absolute development binary may be selected with
-`WYRMGRID_AUDIO_PROVIDER_PATH`. The first-party Opus codec is discovered from
-the development target directory or `WYRMGRID_AUDIO_CODEC_PATH`.
+Capture providers must be installed as `.wyrmaudio` packages; the desktop no
+longer has a compile-time or environment-variable provider injection path. A
+deliberate Windows microphone test still requires packaging and installing the
+Windows provider, selecting it, enabling master consent and a source, and
+performing an explicit permission action. The first-party Opus codec is
+discovered from the development target directory or an explicitly approved
+absolute `WYRMGRID_AUDIO_CODEC_PATH` until its managed package lifecycle is
+implemented.
 
-Automated tests never set the Windows selector and never open a microphone.
-These sidecars are not staged into the installer. Do not infer packaged or live
-support from a successful local device test, and never include device labels,
-raw identifiers, PCM, encoded packets, or paths in test reports or optional-AI
-handoffs.
+Automated tests never install or select the Windows provider and never open a
+microphone.
+The native Windows and codec sidecars are not staged into the installer. Do not
+infer released or live support from a successful local device test, and never
+include device labels, raw identifiers, PCM, encoded packets, or paths in test
+reports or optional-AI handoffs.
 
 ## Repository layout
 

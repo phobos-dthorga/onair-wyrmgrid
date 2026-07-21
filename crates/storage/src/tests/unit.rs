@@ -6,8 +6,228 @@ fn initializes_the_database_schema() {
     let store = Store::open_in_memory().expect("in-memory database should open");
     assert_eq!(
         store.schema_version().expect("version should be readable"),
-        20
+        CURRENT_SCHEMA_VERSION
     );
+}
+
+#[test]
+fn extension_package_migration_is_idempotent_after_version_twenty() {
+    let connection = Connection::open_in_memory().expect("database should open");
+    connection.execute_batch(INITIAL_SCHEMA).unwrap();
+    connection
+        .execute_batch(FLIGHT_OPERATION_AIRCRAFT_ASSIGNMENTS_SCHEMA)
+        .unwrap();
+    connection
+        .execute_batch(
+            "INSERT OR IGNORE INTO schema_migrations (version) VALUES (20);
+             PRAGMA user_version = 20;",
+        )
+        .unwrap();
+    connection.execute_batch(EXTENSION_PACKAGES_SCHEMA).unwrap();
+    connection.execute_batch(EXTENSION_PACKAGES_SCHEMA).unwrap();
+    assert_eq!(
+        connection
+            .query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0))
+            .unwrap(),
+        CURRENT_SCHEMA_VERSION
+    );
+    let tables: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master
+             WHERE type = 'table' AND name IN (
+                'extension_package_versions', 'extension_package_state',
+                'audio_provider_preferences'
+             )",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(tables, 3);
+}
+
+#[test]
+fn extension_package_versions_activate_disable_and_rollback_without_overwrite() {
+    let store = Store::open_in_memory().expect("store should initialize");
+    let version_one = new_extension_package("1.0.0", 'a');
+    let first_state = store
+        .activate_extension_package_version_record(&version_one)
+        .unwrap();
+    assert_eq!(first_state.active_version, "1.0.0");
+    assert_eq!(first_state.rollback_version, None);
+    assert!(first_state.enabled);
+
+    store
+        .set_extension_package_enabled("ordinary_plugin", &version_one.extension_id, false)
+        .unwrap();
+    let version_two = new_extension_package("1.1.0", 'b');
+    let updated_state = store
+        .activate_extension_package_version_record(&version_two)
+        .unwrap();
+    assert_eq!(updated_state.active_version, "1.1.0");
+    assert_eq!(updated_state.rollback_version.as_deref(), Some("1.0.0"));
+    assert!(!updated_state.enabled);
+
+    let rolled_back = store
+        .rollback_extension_package("ordinary_plugin", &version_one.extension_id)
+        .unwrap();
+    assert_eq!(rolled_back.active_version, "1.0.0");
+    assert_eq!(rolled_back.rollback_version.as_deref(), Some("1.1.0"));
+    assert!(!rolled_back.enabled);
+    assert_eq!(
+        store
+            .list_extension_package_version_records("ordinary_plugin", &version_one.extension_id,)
+            .unwrap()
+            .len(),
+        2
+    );
+}
+
+#[test]
+fn extension_package_version_identity_rejects_different_archive_content() {
+    let store = Store::open_in_memory().expect("store should initialize");
+    let version = new_extension_package("1.0.0", 'a');
+    store
+        .activate_extension_package_version_record(&version)
+        .unwrap();
+    let conflicting = NewExtensionPackageVersionRecord {
+        archive_sha256: "b".repeat(64),
+        ..version
+    };
+    assert!(matches!(
+        store.activate_extension_package_version_record(&conflicting),
+        Err(StorageError::InvalidRecord)
+    ));
+}
+
+#[test]
+fn first_party_seed_adds_a_version_without_downgrading_an_existing_active_version() {
+    let store = Store::open_in_memory().expect("store should initialize");
+    let bundled = NewExtensionPackageVersionRecord {
+        source: "first_party".into(),
+        ..new_extension_package("1.0.0", 'a')
+    };
+    store
+        .seed_extension_package_version_record(&bundled)
+        .unwrap();
+    let update = new_extension_package("2.0.0", 'b');
+    store
+        .activate_extension_package_version_record(&update)
+        .unwrap();
+
+    let seeded_again = store
+        .seed_extension_package_version_record(&bundled)
+        .unwrap();
+    assert_eq!(seeded_again.active_version, "2.0.0");
+    assert_eq!(seeded_again.rollback_version.as_deref(), Some("1.0.0"));
+}
+
+#[test]
+fn persists_simulator_provider_package_state_independently_from_plugins() {
+    let store = Store::open_in_memory().expect("store should initialize");
+    let plugin = new_extension_package("1.0.0", 'a');
+    store
+        .activate_extension_package_version_record(&plugin)
+        .unwrap();
+    let provider = NewExtensionPackageVersionRecord {
+        package_kind: "simulator_provider".into(),
+        extension_id: "org.wyrmgrid.test.simulator-provider".into(),
+        archive_sha256: "b".repeat(64),
+        extension_manifest_json: "{\"kind\":\"provider\"}".into(),
+        ..plugin.clone()
+    };
+    store
+        .activate_extension_package_version_record(&provider)
+        .unwrap();
+
+    assert_eq!(
+        store
+            .list_extension_package_state_records("ordinary_plugin")
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        store
+            .list_extension_package_state_records("simulator_provider")
+            .unwrap()[0]
+            .extension_id,
+        provider.extension_id
+    );
+}
+
+#[test]
+fn persists_audio_provider_package_state_and_selection_independently() {
+    let store = Store::open_in_memory().expect("store should initialize");
+    let audio = NewExtensionPackageVersionRecord {
+        package_kind: "audio_provider".into(),
+        extension_id: "org.wyrmgrid.test.audio-provider".into(),
+        extension_manifest_json: "{\"kind\":\"audio_provider\"}".into(),
+        ..new_extension_package("1.0.0", 'c')
+    };
+    store
+        .activate_extension_package_version_record(&audio)
+        .unwrap();
+    store
+        .save_audio_provider_preferences_record(&AudioProviderPreferencesRecord {
+            selected_provider_id: Some(audio.extension_id.clone()),
+        })
+        .unwrap();
+
+    assert_eq!(
+        store
+            .list_extension_package_state_records("audio_provider")
+            .unwrap()[0]
+            .extension_id,
+        audio.extension_id
+    );
+    assert_eq!(
+        store
+            .load_audio_provider_preferences_record()
+            .unwrap()
+            .unwrap()
+            .selected_provider_id,
+        Some(audio.extension_id)
+    );
+}
+
+#[test]
+fn extension_package_removal_deletes_state_and_version_history() {
+    let store = Store::open_in_memory().expect("store should initialize");
+    let version = new_extension_package("1.0.0", 'a');
+    store
+        .activate_extension_package_version_record(&version)
+        .unwrap();
+    store
+        .delete_extension_package_records("ordinary_plugin", &version.extension_id)
+        .unwrap();
+    assert_eq!(
+        store
+            .load_extension_package_state_record("ordinary_plugin", &version.extension_id)
+            .unwrap(),
+        None
+    );
+    assert!(
+        store
+            .list_extension_package_version_records("ordinary_plugin", &version.extension_id,)
+            .unwrap()
+            .is_empty()
+    );
+}
+
+fn new_extension_package(
+    version: &str,
+    digest_character: char,
+) -> NewExtensionPackageVersionRecord {
+    NewExtensionPackageVersionRecord {
+        package_kind: "ordinary_plugin".into(),
+        extension_id: "org.wyrmgrid.test.package".into(),
+        version: version.into(),
+        archive_sha256: digest_character.to_string().repeat(64),
+        package_schema_version: 1,
+        source: "local_file".into(),
+        package_manifest_json: "{}".into(),
+        extension_manifest_json: "{}".into(),
+    }
 }
 
 #[test]

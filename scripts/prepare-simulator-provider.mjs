@@ -1,15 +1,16 @@
-import { copyFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { cargoTargetDirectory } from "./cargo-target-directory.mjs";
+import { buildSimulatorProviderPackage } from "./package-plugin.mjs";
 
 const repositoryRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
 );
-const release = process.argv.includes("--release");
+const distribution = process.argv.includes("--distribution");
+const release = process.argv.includes("--release") || distribution;
 const buildFrontend = process.argv.includes("--build-frontend");
 const profile = release ? "release" : "debug";
 
@@ -47,21 +48,41 @@ if (targetTriple.includes("windows")) {
 
   const executableName = "wyrmgrid-simconnect-provider.exe";
   const builtProvider = path.join(targetDirectory, profile, executableName);
-  const bundleDirectory = path.join(
+  const providerDirectory = path.join(
     repositoryRoot,
-    "apps",
-    "desktop",
-    "src-tauri",
-    "binaries",
+    "providers",
+    "msfs2024-simconnect",
   );
-  const bundledProvider = path.join(
-    bundleDirectory,
-    `wyrmgrid-simconnect-provider-${targetTriple}.exe`,
-  );
-  await mkdir(bundleDirectory, { recursive: true });
-  await copyFile(builtProvider, bundledProvider);
+  const packagePath = distribution
+    ? path.join(
+        repositoryRoot,
+        "assets",
+        "provider-packages",
+        "msfs2024-simconnect.wyrmprovider",
+      )
+    : path.join(
+        repositoryRoot,
+        "apps",
+        "desktop",
+        "src-tauri",
+        "provider-packages",
+        "msfs2024-simconnect.wyrmprovider",
+      );
+  const packaged = await buildSimulatorProviderPackage({
+    sourceDirectory: providerDirectory,
+    outputPath: packagePath,
+    includeSourceDirectory: false,
+    includes: [
+      {
+        source: path.join(providerDirectory, "provider.json"),
+        destination: "provider.json",
+      },
+      { source: builtProvider, destination: executableName },
+    ],
+    force: true,
+  });
   console.log(
-    `Prepared simulator provider: ${path.relative(repositoryRoot, bundledProvider)}`,
+    `Prepared simulator provider package: ${path.relative(repositoryRoot, packagePath)} (sha256 ${packaged.archiveSha256})`,
   );
 } else {
   console.log(

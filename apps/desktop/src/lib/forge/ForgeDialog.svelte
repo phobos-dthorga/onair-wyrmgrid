@@ -11,7 +11,9 @@
   } from "./configuration";
   import type {
     AuthorizationGrantLifetime,
+    ManagedPluginPackage,
     PluginHostView,
+    PluginPackageInspection,
     PluginPermission,
     PluginView,
   } from "./types";
@@ -29,6 +31,14 @@
     status,
     busy,
     errorMessage,
+    managedPackages,
+    pendingPackage,
+    onchoosepackage,
+    oncancelpackage,
+    oninstallpackage,
+    onpackageenable,
+    onpackagerollback,
+    onpackageremove,
     onapprove,
     onrevoke,
     onstart,
@@ -41,6 +51,14 @@
     status: PluginHostView;
     busy: boolean;
     errorMessage: string;
+    managedPackages: ManagedPluginPackage[];
+    pendingPackage: PluginPackageInspection | null;
+    onchoosepackage: () => void;
+    oncancelpackage: () => void;
+    oninstallpackage: () => void;
+    onpackageenable: (pluginId: string, enabled: boolean) => void;
+    onpackagerollback: (pluginId: string) => void;
+    onpackageremove: (pluginId: string) => void;
     onapprove: (pluginId: string, lifetime: AuthorizationGrantLifetime) => void;
     onrevoke: (pluginId: string) => void;
     onstart: (pluginId: string) => void;
@@ -55,6 +73,7 @@
   } = $props();
 
   let approvalLifetime = $state<AuthorizationGrantLifetime>("session");
+  let removalCandidate = $state<string | null>(null);
   let filters = $state<ForgeFilters>({ ...defaultForgeFilters });
   const visiblePlugins = $derived(filterForgePlugins(status.plugins, filters));
   const filterOptions = $derived(forgeFilterOptions(status.plugins));
@@ -83,6 +102,20 @@
     if (plugin.state === "stopping") return "Stopping";
     if (plugin.state === "failed") return "Needs attention";
     return allRequestedGranted(plugin) ? "Ready" : "Permission review";
+  }
+
+  function packageProcessIsActive(pluginId: string): boolean {
+    return status.plugins.some(
+      (plugin) =>
+        plugin.id === pluginId &&
+        ["starting", "running", "stopping"].includes(plugin.state),
+    );
+  }
+
+  function compactBytes(bytes: number): string {
+    if (bytes >= 1024 * 1024)
+      return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
+    return `${Math.max(1, Math.ceil(bytes / 1024))} KiB`;
   }
 
   function handleKeydown(event: KeyboardEvent): void {
@@ -122,6 +155,147 @@
           not an operating-system sandbox, so only run plugin code you trust.
         </span>
       </div>
+
+      <section
+        class="package-workshop"
+        aria-labelledby="package-workshop-title"
+      >
+        <div class="package-workshop-heading">
+          <div>
+            <span class="eyebrow">External packages</span>
+            <h3 id="package-workshop-title">Install from a file</h3>
+            <p>
+              Review a <code>.wyrmplugin</code> package before WyrmGrid copies it
+              into managed local storage. Installation never starts it.
+            </p>
+          </div>
+          <button
+            class="secondary package-choice"
+            type="button"
+            disabled={busy || pendingPackage !== null}
+            onclick={onchoosepackage}>Choose package…</button
+          >
+        </div>
+
+        {#if pendingPackage}
+          <div class="package-review" role="group" aria-label="Package review">
+            <div>
+              <strong>{pendingPackage.name}</strong>
+              <span>{pendingPackage.author} · v{pendingPackage.version}</span>
+            </div>
+            <dl>
+              <div>
+                <dt>Identity</dt>
+                <dd>{pendingPackage.id}</dd>
+              </div>
+              <div>
+                <dt>Runtime</dt>
+                <dd>{pendingPackage.runtime ?? "Unsupported metadata only"}</dd>
+              </div>
+              <div>
+                <dt>Contents</dt>
+                <dd>
+                  {pendingPackage.file_count} files · {compactBytes(
+                    pendingPackage.expanded_size,
+                  )}
+                </dd>
+              </div>
+              <div>
+                <dt>SHA-256</dt>
+                <dd class="package-digest">{pendingPackage.archive_sha256}</dd>
+              </div>
+            </dl>
+            <p class="publisher-warning">
+              Publisher identity is not verified in package format v1. Install
+              only if you trust where this file came from.
+            </p>
+            <div class="package-actions">
+              <button
+                class="secondary"
+                type="button"
+                disabled={busy}
+                onclick={oncancelpackage}>Cancel</button
+              >
+              <button
+                class="primary"
+                type="button"
+                disabled={busy}
+                onclick={oninstallpackage}>Install package</button
+              >
+            </div>
+          </div>
+        {/if}
+
+        {#if managedPackages.length > 0}
+          <div class="managed-package-list">
+            {#each managedPackages as managed (managed.id)}
+              <article class="managed-package">
+                <div>
+                  <strong>{managed.name}</strong>
+                  <span>
+                    v{managed.active_version} · {managed.enabled
+                      ? "Enabled"
+                      : "Disabled"}
+                  </span>
+                  <small>{managed.id}</small>
+                </div>
+                {#if removalCandidate === managed.id}
+                  <div class="removal-confirmation">
+                    <span
+                      >Remove every installed version and revoke its saved
+                      access?</span
+                    >
+                    <button
+                      class="secondary"
+                      type="button"
+                      disabled={busy}
+                      onclick={() => (removalCandidate = null)}>Keep</button
+                    >
+                    <button
+                      class="danger"
+                      type="button"
+                      disabled={busy}
+                      onclick={() => {
+                        removalCandidate = null;
+                        onpackageremove(managed.id);
+                      }}>Remove</button
+                    >
+                  </div>
+                {:else}
+                  <div class="managed-package-actions">
+                    <button
+                      class="secondary"
+                      type="button"
+                      disabled={busy || packageProcessIsActive(managed.id)}
+                      onclick={() =>
+                        onpackageenable(managed.id, !managed.enabled)}
+                      >{managed.enabled ? "Disable" : "Enable"}</button
+                    >
+                    <button
+                      class="secondary"
+                      type="button"
+                      disabled={busy ||
+                        !managed.rollback_version ||
+                        packageProcessIsActive(managed.id)}
+                      onclick={() => onpackagerollback(managed.id)}
+                      >Rollback{managed.rollback_version
+                        ? ` to v${managed.rollback_version}`
+                        : ""}</button
+                    >
+                    <button
+                      class="danger"
+                      type="button"
+                      disabled={busy || packageProcessIsActive(managed.id)}
+                      onclick={() => (removalCandidate = managed.id)}
+                      >Remove</button
+                    >
+                  </div>
+                {/if}
+              </article>
+            {/each}
+          </div>
+        {/if}
+      </section>
 
       {#if status.notice}<p class="notice">{status.notice}</p>{/if}
       {#if !status.available}
@@ -478,6 +652,121 @@
     letter-spacing: 0.08em;
     font-size: 9px;
   }
+  .package-workshop {
+    display: grid;
+    gap: 12px;
+    margin: 14px 24px 0;
+    padding: 15px;
+    border: 1px solid var(--color-line-faint);
+    background: var(--color-surface-soft);
+  }
+  .package-workshop-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+  }
+  .package-workshop-heading h3 {
+    font-size: 18px;
+  }
+  .package-workshop-heading p,
+  .package-review span,
+  .managed-package span,
+  .managed-package small {
+    display: block;
+    margin-top: 4px;
+    color: var(--color-text-muted);
+    font-size: 10px;
+    line-height: 1.45;
+  }
+  .package-workshop code {
+    color: var(--color-highlight);
+  }
+  .package-workshop button {
+    padding: 8px 11px;
+    border-radius: 4px;
+    font: inherit;
+    font-size: 10px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .package-choice {
+    flex: 0 0 auto;
+  }
+  .package-review {
+    display: grid;
+    gap: 12px;
+    padding: 13px;
+    border: 1px solid var(--color-highlight-border);
+    background: var(--color-highlight-soft);
+  }
+  .package-review dl {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+    margin: 0;
+  }
+  .package-review dl div {
+    min-width: 0;
+  }
+  .package-review dt {
+    color: var(--color-text-muted);
+    font-size: 8px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .package-review dd {
+    margin: 3px 0 0;
+    color: var(--color-text);
+    font-size: 10px;
+  }
+  .package-digest {
+    overflow-wrap: anywhere;
+    font-family: monospace;
+  }
+  .publisher-warning {
+    padding: 9px 10px;
+    border-left: 2px solid var(--color-highlight);
+    color: var(--color-text-muted);
+    background: var(--color-surface-soft-translucent);
+    font-size: 10px;
+  }
+  .package-actions,
+  .managed-package-actions,
+  .removal-confirmation {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 7px;
+  }
+  .managed-package-list {
+    display: grid;
+    gap: 8px;
+  }
+  .managed-package {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 12px;
+  }
+  .managed-package > div:first-child {
+    min-width: 0;
+  }
+  .managed-package small {
+    overflow-wrap: anywhere;
+  }
+  .removal-confirmation span {
+    max-width: 230px;
+    color: var(--color-danger);
+    font-size: 9px;
+  }
+  .danger {
+    border: 1px solid var(--color-danger-border);
+    color: var(--color-danger);
+    background: var(--color-danger-soft);
+  }
   .notice,
   .error-message {
     margin: 14px 24px 0;
@@ -802,7 +1091,17 @@
       max-height: calc(100vh - 24px);
     }
     .safety-note,
+    .package-workshop-heading,
+    .managed-package,
     article footer {
+      grid-template-columns: 1fr;
+    }
+    .package-workshop-heading,
+    .managed-package {
+      align-items: stretch;
+      flex-direction: column;
+    }
+    .package-review dl {
       grid-template-columns: 1fr;
     }
     .forge-filter-grid {
