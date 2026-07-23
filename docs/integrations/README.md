@@ -79,9 +79,10 @@ Online networks --------------------------+--> Atlas overlays     |
     with capability-labelled Windows/MSFS sources and user-selected codec
     providers. (Capture protocol v2, codec protocol v1, consent, encrypted
     storage, deterministic fake capture, debug-only Windows microphone capture,
-    and first-party Opus-as-a-provider are implemented; packaging and live
-    certification remain.) Extend capture to Windows output and X-Plane only
-    after their platform, legal, and plugin feasibility gates pass.
+    managed capture and codec packages, and first-party Opus-as-a-provider are
+    implemented; live certification remains.) Extend capture to Windows output
+    and X-Plane only after their platform, legal, and plugin feasibility gates
+    pass.
 
 Provider work does not bypass the quality gates. Each protocol or schema change
 needs sanitized fixtures, bounded validation tests, documentation, and an
@@ -131,6 +132,7 @@ the [high-value provider integration process](high-value-provider-process.md).
 - [Audio Capture Provider protocol version 2](audio-capture-provider-protocol.md)
 - [Audio provider authoring and packaging](audio-provider-authoring.md)
 - [Audio Codec Provider protocol version 1](audio-codec-provider-protocol.md)
+- [Authoring external WyrmGrid extensions](extension-authoring.md)
 - [Telemetry lifecycle and SimBrief correlation](telemetry-plan-correlation.md)
 
 ## Local automation and community handoff

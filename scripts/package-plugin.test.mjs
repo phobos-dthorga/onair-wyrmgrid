@@ -6,6 +6,7 @@ import test from "node:test";
 import { inflateRawSync } from "node:zlib";
 import {
   PACKAGE_MANIFEST_NAME,
+  buildAudioCodecPackage,
   buildAudioProviderPackage,
   buildPluginPackage,
   buildSimulatorProviderPackage,
@@ -207,5 +208,57 @@ test("builds a distinct audio provider package contract", async (t) => {
   assert.deepEqual(
     [...entries.keys()],
     [PACKAGE_MANIFEST_NAME, "audio-provider.exe", "audio-provider.json"],
+  );
+});
+
+test("builds a distinct audio codec package contract", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "wyrmgrid-codec-package-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const manifestPath = join(root, "audio-codec.json");
+  const executablePath = join(root, "audio-codec.exe");
+  const outputPath = join(root, "test.wyrmcodec");
+  await writeFile(
+    manifestPath,
+    JSON.stringify({
+      schema_version: 1,
+      id: "org.wyrmgrid.test.audio-codec",
+      name: "Audio codec package test",
+      version: "1.0.0",
+      codec_protocol_version: 1,
+      author: "Tests",
+      entry_point: "audio-codec",
+      platforms: ["windows_x86_64"],
+      capabilities: ["encode_pcm_s16le"],
+      profiles: [
+        {
+          id: "pilot_microphone_v1",
+          codec_id: "test-codec",
+          media_type: "audio/test",
+          channels: 1,
+          sample_rate_hz: 48000,
+          target_bitrate_bps: 32000,
+          packet_duration_48khz_frames: 960,
+        },
+      ],
+    }),
+  );
+  await writeFile(executablePath, "sanitized codec executable fixture");
+
+  await buildAudioCodecPackage({
+    sourceDirectory: root,
+    outputPath,
+    includeSourceDirectory: false,
+    includes: [
+      { source: manifestPath, destination: "audio-codec.json" },
+      { source: executablePath, destination: "audio-codec.exe" },
+    ],
+  });
+  const entries = zipEntries(await readFile(outputPath));
+  const manifest = JSON.parse(entries.get(PACKAGE_MANIFEST_NAME).toString());
+  assert.equal(manifest.kind, "audio_codec_provider");
+  assert.equal(manifest.manifest_path, "audio-codec.json");
+  assert.deepEqual(
+    [...entries.keys()],
+    [PACKAGE_MANIFEST_NAME, "audio-codec.exe", "audio-codec.json"],
   );
 });

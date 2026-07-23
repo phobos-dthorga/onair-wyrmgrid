@@ -2,6 +2,7 @@
 
 mod atlas_preferences;
 mod audio_codec;
+mod audio_codec_packages;
 mod audio_media;
 mod audio_provider;
 mod audio_provider_packages;
@@ -24,6 +25,7 @@ mod simulator_recording;
 
 pub use atlas_preferences::*;
 pub use audio_codec::*;
+pub use audio_codec_packages::*;
 pub use audio_media::*;
 pub use audio_provider::*;
 pub use audio_provider_packages::*;
@@ -1402,6 +1404,19 @@ impl From<AudioRecordingError> for OperationError {
                 ("audio.provider_rollback_unavailable", false, false)
             }
             AudioRecordingError::UnknownProvider => ("audio.provider_unknown", false, false),
+            AudioRecordingError::InvalidCodecPackage => {
+                ("audio.codec_package_invalid", false, false)
+            }
+            AudioRecordingError::CodecPackageStorageUnavailable => {
+                ("audio.codec_package_storage_unavailable", true, true)
+            }
+            AudioRecordingError::CodecPackageVersionConflict => {
+                ("audio.codec_package_version_conflict", false, false)
+            }
+            AudioRecordingError::CodecPackageInUse => ("audio.codec_package_in_use", false, false),
+            AudioRecordingError::CodecRollbackUnavailable => {
+                ("audio.codec_rollback_unavailable", false, false)
+            }
         };
         Self {
             code,

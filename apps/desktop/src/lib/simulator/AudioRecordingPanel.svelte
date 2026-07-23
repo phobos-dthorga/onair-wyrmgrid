@@ -4,6 +4,7 @@
   import { formatLocalDateTime } from "$lib/presentation/dateTime";
   import type {
     AudioPlaybackView,
+    AudioCodecPackageInspection,
     AudioProviderPackageInspection,
     AudioRecordingPreferences,
     AudioRecordingView,
@@ -11,6 +12,7 @@
     AudioSourceSelection,
     AudioSourceView,
     ManagedAudioProviderPackage,
+    ManagedAudioCodecPackage,
   } from "./types";
 
   let {
@@ -18,6 +20,8 @@
     playback,
     managedProviders,
     pendingProviderPackage,
+    managedCodecs,
+    pendingCodecPackage,
     busy = false,
     onpreferences,
     onchooseproviderpackage,
@@ -27,6 +31,12 @@
     onproviderenable,
     onproviderrollback,
     onproviderremove,
+    onchoosecodecpackage,
+    oncancelcodecpackage,
+    oninstallcodecpackage,
+    oncodecenable,
+    oncodecrollback,
+    oncodecremove,
     onrefresh,
     onpermission,
     onsource,
@@ -38,6 +48,8 @@
     playback?: AudioPlaybackView;
     managedProviders: ManagedAudioProviderPackage[];
     pendingProviderPackage?: AudioProviderPackageInspection;
+    managedCodecs: ManagedAudioCodecPackage[];
+    pendingCodecPackage?: AudioCodecPackageInspection;
     busy?: boolean;
     onpreferences: (preferences: AudioRecordingPreferences) => void;
     onchooseproviderpackage: () => void;
@@ -47,6 +59,12 @@
     onproviderenable: (providerId: string, enabled: boolean) => void;
     onproviderrollback: (providerId: string) => void;
     onproviderremove: (providerId: string) => void;
+    onchoosecodecpackage: () => void;
+    oncancelcodecpackage: () => void;
+    oninstallcodecpackage: () => void;
+    oncodecenable: (providerId: string, enabled: boolean) => void;
+    oncodecrollback: (providerId: string) => void;
+    oncodecremove: (providerId: string) => void;
     onrefresh: () => void;
     onpermission: (sourceId: string) => void;
     onsource: (selection: AudioSourceSelection) => void;
@@ -56,6 +74,7 @@
   } = $props();
 
   let removalCandidate = $state<string>();
+  let codecRemovalCandidate = $state<string>();
 
   const availabilityLabels = {
     available: "audio-source-available",
@@ -329,6 +348,183 @@
                   type="button"
                   disabled={busy || status.recording_active}
                   onclick={() => (removalCandidate = managed.id)}
+                  >{$translation("audio-provider-package-remove-menu")}</button
+                >
+              </div>
+            {/if}
+          </article>
+        {/each}
+      </div>
+    {/if}
+  </section>
+
+  <section
+    class="provider-packages audio-codec-packages"
+    aria-labelledby="audio-codec-package-title"
+  >
+    <div class="provider-package-heading">
+      <div>
+        <span class="eyebrow"
+          >{$translation("audio-codec-packages-eyebrow")}</span
+        >
+        <h4 id="audio-codec-package-title">
+          {$translation("audio-codec-packages-title")}
+        </h4>
+        <p>{$translation("audio-codec-packages-introduction")}</p>
+      </div>
+      <button
+        type="button"
+        disabled={busy ||
+          status.recording_active ||
+          pendingCodecPackage !== undefined}
+        onclick={onchoosecodecpackage}
+        >{$translation("audio-codec-packages-choose")}</button
+      >
+    </div>
+
+    {#if pendingCodecPackage}
+      <div class="provider-package-review">
+        <div>
+          <strong>{pendingCodecPackage.name}</strong>
+          <span>
+            {$translation("audio-provider-package-by-author", {
+              author: pendingCodecPackage.author,
+              version: pendingCodecPackage.version,
+            })}
+          </span>
+        </div>
+        <dl>
+          <div>
+            <dt>{$translation("audio-provider-package-identity")}</dt>
+            <dd>{pendingCodecPackage.id}</dd>
+          </div>
+          <div>
+            <dt>{$translation("audio-provider-package-compatibility")}</dt>
+            <dd>
+              {$translation("audio-codec-package-compatibility-value", {
+                platforms: pendingCodecPackage.platforms.join(" · "),
+                protocol: pendingCodecPackage.codec_protocol_version,
+              })}
+            </dd>
+          </div>
+          <div>
+            <dt>{$translation("audio-provider-package-contents")}</dt>
+            <dd>
+              {$translation("audio-provider-package-contents-value", {
+                count: pendingCodecPackage.file_count,
+                size: compactBytes(pendingCodecPackage.expanded_size),
+              })}
+            </dd>
+          </div>
+          <div>
+            <dt>{$translation("audio-codec-package-profiles")}</dt>
+            <dd>{pendingCodecPackage.profiles
+                .map((profile) => profile.id)
+                .join(" · ")}</dd>
+          </div>
+          <div>
+            <dt>{$translation("audio-provider-package-archive-digest")}</dt>
+            <dd class="provider-package-digest">
+              {pendingCodecPackage.archive_sha256}
+            </dd>
+          </div>
+        </dl>
+        <p class="provider-package-warning">
+          {$translation("security-audio-codec-package-warning")}
+        </p>
+        <div class="provider-package-actions">
+          <button
+            class="secondary"
+            type="button"
+            disabled={busy}
+            onclick={oncancelcodecpackage}
+            >{$translation("action-cancel")}</button
+          >
+          <button
+            type="button"
+            disabled={busy || status.recording_active}
+            onclick={oninstallcodecpackage}
+            >{$translation("audio-provider-package-install")}</button
+          >
+        </div>
+      </div>
+    {/if}
+
+    {#if managedCodecs.length === 0}
+      <p class="audio-empty-state">
+        {$translation("audio-codec-packages-empty")}
+      </p>
+    {:else}
+      <div class="managed-provider-packages">
+        {#each managedCodecs as managed (managed.id)}
+          <article>
+            <div class="managed-provider-summary">
+              <strong>{managed.name}</strong>
+              <span>
+                {managed.enabled
+                  ? $translation("audio-provider-package-enabled", {
+                      version: managed.active_version,
+                    })
+                  : $translation("audio-provider-package-disabled", {
+                      version: managed.active_version,
+                    })}
+              </span>
+              <small>
+                {managed.id} ·
+                {managed.profiles.map((profile) => profile.id).join(" · ")}
+              </small>
+            </div>
+            {#if codecRemovalCandidate === managed.id}
+              <div class="provider-removal-confirmation">
+                <span
+                  >{$translation(
+                    "destructive-audio-codec-package-remove-confirm",
+                  )}</span
+                >
+                <button
+                  class="secondary"
+                  type="button"
+                  disabled={busy}
+                  onclick={() => (codecRemovalCandidate = undefined)}
+                  >{$translation("audio-provider-package-keep")}</button
+                >
+                <button
+                  class="stop"
+                  type="button"
+                  disabled={busy}
+                  onclick={() => {
+                    codecRemovalCandidate = undefined;
+                    oncodecremove(managed.id);
+                  }}
+                  >{$translation("audio-provider-package-remove")}</button
+                >
+              </div>
+            {:else}
+              <div class="provider-package-actions">
+                <button
+                  class="secondary"
+                  type="button"
+                  disabled={busy || status.recording_active}
+                  onclick={() => oncodecenable(managed.id, !managed.enabled)}
+                >
+                  {managed.enabled
+                    ? $translation("audio-provider-package-disable")
+                    : $translation("audio-provider-package-enable")}
+                </button>
+                <button
+                  class="secondary"
+                  type="button"
+                  disabled={busy ||
+                    !managed.rollback_version ||
+                    status.recording_active}
+                  onclick={() => oncodecrollback(managed.id)}
+                  >{$translation("audio-provider-package-rollback")}</button
+                >
+                <button
+                  class="stop"
+                  type="button"
+                  disabled={busy || status.recording_active}
+                  onclick={() => (codecRemovalCandidate = managed.id)}
                   >{$translation("audio-provider-package-remove-menu")}</button
                 >
               </div>

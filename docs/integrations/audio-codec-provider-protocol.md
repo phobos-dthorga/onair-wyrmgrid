@@ -1,7 +1,8 @@
 # Audio Codec Provider protocol version 1
 
-Status: protocol, explicit development registration, and first-party Opus
-provider implemented; community installation and packaging not implemented
+Status: protocol, managed `.wyrmcodec` packaging and lifecycle, first-party
+Opus package, and synthetic end-to-end grounding implemented; publisher
+signing, OS resource isolation, and live certification remain release gates
 
 Audio Codec Providers let an end user choose the encoder for each approved
 source without coupling that choice to Windows, macOS, Linux, MSFS, or X-Plane
@@ -48,23 +49,49 @@ destination, retention authority, Sentry channel, optional-AI channel, or
 network capability from this contract. WyrmGrid encrypts returned packets and
 persists only encoded segments.
 
-Future community support must add verified installation roots, publisher and
-package identity, signing and integrity, explicit trust presentation, version
-resolution, updates and rollback, process resource limits, removal, and a clear
-privacy disclosure before arbitrary codec executables may be registered.
+Community packages use a verified host-owned installation root, exact package
+identity and SHA-256 inventory, explicit unverified-native-code trust
+presentation, immutable versions, one-step rollback, disable, and tombstoned
+removal. Installation never starts a codec or grants recording consent. Active
+recording blocks codec mutation. Publisher signing, authenticated updates,
+revocation, OS-enforced process resource limits, and the release privacy/legal
+disclosure remain future gates; local integrity is not publisher trust.
+
+## Package and managed lifecycle
+
+Audio Codec package schema version 1 uses the `.wyrmcodec` suffix and
+`audio_codec_provider` package kind. Offline inspection exposes the declared
+ID, version, author, codec protocol, platforms, capabilities, and profiles
+before the user accepts the native-code warning. Installation stages and
+validates the exact inventory under a canonical per-user root. Only the enabled
+active version for the current platform enters codec discovery.
+
+An unavailable, disabled, removed, malformed, or incompatible selected codec
+fails closed. WyrmGrid does not rewrite the saved source choice or silently
+substitute another encoder. See
+[Authoring external WyrmGrid extensions](extension-authoring.md) for the
+scaffolder, packager, compatibility rules, and community test checklist.
 
 ## First-party Opus provider
 
-`dev.wyrmgrid.opus` is implemented as a normal provider using the pure-Rust
+`dev.wyrmgrid.opus` is implemented and seeded as a normal `.wyrmcodec` provider
+using the pure-Rust
 `opus2` Mousiki backend. It supports the microphone, isolated-voice, and mixed-
 stereo profiles with 20 ms packets. A black-box test starts the executable,
 encodes synthetic zero PCM, decodes the packet, and verifies its duration. This
 is integration evidence only; it does not claim independent Opus conformance,
 audio quality, security certification, or real-device support.
 
+On Windows, a second application test installs the separately distributable
+deterministic `.wyrmaudio` and Opus `.wyrmcodec` artifacts, performs explicit
+permission and source selection, captures synthetic PCM, encodes it through the
+managed Opus process, stores it in authenticated encrypted media, and reads it
+back with exact codec provenance.
+
 Schemas and sanitized fixtures:
 
 - `schemas/audio-codec-manifest-v1.schema.json`
+- `schemas/audio-codec-package-manifest-v1.schema.json`
 - `schemas/audio-codec-envelope-v1.schema.json`
 - host hello, start-track, PCM-header/body, and encoded-header/body fixtures in
   `schemas/fixtures/`

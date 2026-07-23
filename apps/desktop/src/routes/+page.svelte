@@ -174,12 +174,14 @@
   import {
     chooseSimulatorProviderPackage,
     chooseAudioProviderPackage,
+    chooseAudioCodecPackage,
     chooseAudioExportDestination,
     deleteAudioRecording,
     exportAudioTrack,
     loadAudioPlayback,
     loadAudioRecording,
     loadManagedAudioProviderPackages,
+    loadManagedAudioCodecPackages,
     loadSimulatorBridge,
     loadManagedSimulatorProviderPackages,
     loadSimulatorPreferences,
@@ -202,7 +204,9 @@
     pinSimulatorRecording,
     inspectSimulatorProviderPackage,
     inspectAudioProviderPackage,
+    inspectAudioCodecPackage,
     installAudioProviderPackage,
+    installAudioCodecPackage,
     installSimulatorProviderPackage,
     removeManagedSimulatorProvider,
     rollbackManagedSimulatorProvider,
@@ -211,6 +215,9 @@
     rollbackManagedAudioProvider,
     selectManagedAudioProvider,
     setManagedAudioProviderEnabled,
+    removeManagedAudioCodec,
+    rollbackManagedAudioCodec,
+    setManagedAudioCodecEnabled,
   } from "$lib/simulator/client";
   import SimulatorDialog from "$lib/simulator/SimulatorDialog.svelte";
   import {
@@ -220,6 +227,7 @@
     defaultSimulatorPreferences,
     type ManagedSimulatorProviderPackage,
     type ManagedAudioProviderPackage,
+    type ManagedAudioCodecPackage,
     type SimulatorBridgeView,
     type SimulatorProviderPackageInspection,
     type SimulatorPreferences,
@@ -229,6 +237,7 @@
     type SimulatorSessionView,
     type AudioPlaybackView,
     type AudioProviderPackageInspection,
+    type AudioCodecPackageInspection,
     type AudioRecordingPreferences,
     type AudioRecordingView,
     type AudioSourceSelection,
@@ -373,8 +382,11 @@
   let simulatorRecordingDebrief = $state<SimulatorSessionDebrief>();
   let audioRecording = $state<AudioRecordingView>(emptyAudioRecording);
   let managedAudioProviders = $state<ManagedAudioProviderPackage[]>([]);
+  let managedAudioCodecs = $state<ManagedAudioCodecPackage[]>([]);
   let pendingAudioProviderPackage = $state<AudioProviderPackageInspection>();
   let pendingAudioProviderSource = $state<string>();
+  let pendingAudioCodecPackage = $state<AudioCodecPackageInspection>();
+  let pendingAudioCodecSource = $state<string>();
   let audioPlayback = $state<AudioPlaybackView>();
   let audioBusy = $state(false);
   let atlasFlightRoute = $state<AtlasFlightRoute>();
@@ -1096,6 +1108,21 @@
     }
   }
 
+  async function refreshManagedAudioCodecs(): Promise<void> {
+    if (!isDesktopRuntime()) {
+      managedAudioCodecs = [];
+      return;
+    }
+    try {
+      managedAudioCodecs = await loadManagedAudioCodecPackages();
+    } catch (error) {
+      simulatorError = operationErrorMessage(
+        error,
+        "WyrmGrid could not read installed audio codec packages.",
+      );
+    }
+  }
+
   function openSimulator(): void {
     simulatorError = "";
     openRootDialog("simulator");
@@ -1105,6 +1132,7 @@
       refreshSimulatorRecording(),
       refreshAudioRecording(),
       refreshManagedAudioProviders(),
+      refreshManagedAudioCodecs(),
     ]);
   }
 
@@ -1590,6 +1618,80 @@
       simulatorError = operationErrorMessage(
         error,
         "WyrmGrid could not update that audio provider package.",
+      );
+    } finally {
+      audioBusy = false;
+    }
+  }
+
+  async function chooseAudioCodecPackageForReview(): Promise<void> {
+    if (!isDesktopRuntime() || audioBusy) return;
+    audioBusy = true;
+    simulatorError = "";
+    try {
+      const source = await chooseAudioCodecPackage();
+      if (!source) return;
+      pendingAudioCodecPackage = await inspectAudioCodecPackage(source);
+      pendingAudioCodecSource = source;
+    } catch (error) {
+      simulatorError = operationErrorMessage(
+        error,
+        "WyrmGrid could not inspect that audio codec package.",
+      );
+    } finally {
+      audioBusy = false;
+    }
+  }
+
+  function cancelAudioCodecPackageReview(): void {
+    pendingAudioCodecPackage = undefined;
+    pendingAudioCodecSource = undefined;
+  }
+
+  async function installReviewedAudioCodecPackage(): Promise<void> {
+    if (!pendingAudioCodecSource || audioBusy) return;
+    audioBusy = true;
+    simulatorError = "";
+    try {
+      await installAudioCodecPackage(pendingAudioCodecSource);
+      cancelAudioCodecPackageReview();
+      await Promise.all([
+        refreshManagedAudioCodecs(),
+        refreshAudioRecording(),
+      ]);
+    } catch (error) {
+      simulatorError = operationErrorMessage(
+        error,
+        "WyrmGrid could not install that audio codec package.",
+      );
+    } finally {
+      audioBusy = false;
+    }
+  }
+
+  async function runManagedAudioCodecAction(
+    action: "enable" | "disable" | "rollback" | "remove",
+    providerId: string,
+  ): Promise<void> {
+    if (!isDesktopRuntime() || audioBusy) return;
+    audioBusy = true;
+    simulatorError = "";
+    try {
+      if (action === "enable")
+        await setManagedAudioCodecEnabled(providerId, true);
+      if (action === "disable")
+        await setManagedAudioCodecEnabled(providerId, false);
+      if (action === "rollback")
+        await rollbackManagedAudioCodec(providerId);
+      if (action === "remove") await removeManagedAudioCodec(providerId);
+      await Promise.all([
+        refreshManagedAudioCodecs(),
+        refreshAudioRecording(),
+      ]);
+    } catch (error) {
+      simulatorError = operationErrorMessage(
+        error,
+        "WyrmGrid could not update that audio codec package.",
       );
     } finally {
       audioBusy = false;
@@ -2596,6 +2698,7 @@
         audioRecording,
         managedSimulatorProviders,
         managedAudioProviders,
+        managedAudioCodecs,
       ] = await Promise.all([
         loadSimulatorPreferences(),
         loadSimulatorBridge(),
@@ -2603,6 +2706,7 @@
         loadAudioRecording(),
         loadManagedSimulatorProviderPackages(),
         loadManagedAudioProviderPackages(),
+        loadManagedAudioCodecPackages(),
       ]);
     } catch (error) {
       settingsError = operationErrorMessage(
@@ -3873,6 +3977,8 @@
     {audioPlayback}
     {managedAudioProviders}
     pendingAudioProviderPackage={pendingAudioProviderPackage}
+    {managedAudioCodecs}
+    pendingAudioCodecPackage={pendingAudioCodecPackage}
     {audioBusy}
     onrefresh={() => void refreshSimulatorBridge()}
     onstart={(providerId) => void runSimulatorAction("start", providerId)}
@@ -3919,6 +4025,18 @@
       void runManagedAudioProviderAction("rollback", providerId)}
     onaudioproviderremove={(providerId) =>
       void runManagedAudioProviderAction("remove", providerId)}
+    onaudiochoosecodecpackage={() => void chooseAudioCodecPackageForReview()}
+    onaudiocancelcodecpackage={cancelAudioCodecPackageReview}
+    onaudioinstallcodecpackage={() => void installReviewedAudioCodecPackage()}
+    onaudiocodecenable={(providerId, enabled) =>
+      void runManagedAudioCodecAction(
+        enabled ? "enable" : "disable",
+        providerId,
+      )}
+    onaudiocodecrollback={(providerId) =>
+      void runManagedAudioCodecAction("rollback", providerId)}
+    onaudiocodecremove={(providerId) =>
+      void runManagedAudioCodecAction("remove", providerId)}
     onaudiorefresh={() => void discoverAudioSources()}
     onaudiopermission={(sourceId) => void reviewAudioPermission(sourceId)}
     onaudiosource={(selection) => void persistAudioSource(selection)}

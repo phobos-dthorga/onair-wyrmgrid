@@ -318,6 +318,24 @@ export function buildAudioProviderPackage(options) {
   });
 }
 
+export function buildAudioCodecPackage(options) {
+  return buildExtensionPackage({
+    ...options,
+    packageExtension: ".wyrmcodec",
+    packageKind: "audio_codec_provider",
+    manifestPath: "audio-codec.json",
+    entryPointPaths: (manifest) => [
+      ...new Set(
+        manifest.platforms.map((platform) =>
+          platform === "windows_x86_64"
+            ? `${manifest.entry_point}.exe`
+            : manifest.entry_point,
+        ),
+      ),
+    ],
+  });
+}
+
 function parseArguments(arguments_) {
   const options = { includes: [], force: false };
   for (let index = 0; index < arguments_.length; index += 1) {

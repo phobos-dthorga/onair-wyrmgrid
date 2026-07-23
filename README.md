@@ -24,9 +24,10 @@ WyrmGrid.
 > plugin snapshots are also implemented. Ordinary plugin and simulator
 > provider package version 1 add offline inspection and installation, immutable
 > managed versions, disable, rollback, removal, and separately distributable
-> first-party artifacts. Live simulator certification, external audio-provider
-> packaging, broader user-token credential support, publisher signing,
-> sandboxing, and broader operational integrations remain ahead.
+> first-party artifacts. Audio capture and codec providers now have matching
+> `.wyrmaudio` and `.wyrmcodec` lifecycles with synthetic reference grounding.
+> Live native certification, broader user-token credential support, publisher
+> signing, sandboxing, and broader operational integrations remain ahead.
 
 ## Vision
 
@@ -81,6 +82,11 @@ into the desktop process.
 Audio Capture Providers use the separate supervised audio protocol and ship as
 independently installable `.wyrmaudio` artifacts. The current deterministic
 reference package is synthetic and does not claim native capture.
+
+Audio Codec Providers ship as independently installable `.wyrmcodec`
+artifacts. The first-party Opus codec is packaged, seeded, updated, disabled,
+rolled back, and removed through the same public lifecycle as a local community
+codec; this does not claim publisher verification or live-device certification.
 
 ## Core promises
 
@@ -142,6 +148,7 @@ See [Development](docs/development.md), [Architecture](docs/architecture/overvie
 [remembered accounts and credentials](docs/user-guide/accounts-and-credentials.md),
 [External integrations](docs/integrations/README.md),
 [Simulator provider authoring](docs/integrations/simulator-provider-authoring.md),
+[external extension authoring](docs/integrations/extension-authoring.md),
 the [simulator experience roadmap](docs/integrations/simulator-experience-roadmap.md),
 and [Contributing](CONTRIBUTING.md) before making structural changes.
 

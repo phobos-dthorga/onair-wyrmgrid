@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
-    AudioProviderPackageService, OnAirSession, PluginService, SimulatorBridgeService,
-    SimulatorPreferences, SimulatorSettingsService,
+    AudioCodecPackageService, AudioProviderPackageService, OnAirSession, PluginService,
+    SimulatorBridgeService, SimulatorPreferences, SimulatorSettingsService,
 };
 use serde_json::json;
 use std::collections::BTreeMap;
@@ -14,6 +14,7 @@ use zip::write::SimpleFileOptions;
 const PLUGIN_ID: &str = "org.wyrmgrid.test.external-package";
 const PROVIDER_ID: &str = "org.wyrmgrid.test.simulator-provider";
 const AUDIO_PROVIDER_ID: &str = "org.wyrmgrid.test.audio-provider";
+const AUDIO_CODEC_ID: &str = "org.wyrmgrid.test.audio-codec";
 
 fn plugin_manifest(version: &str) -> Vec<u8> {
     serde_json::to_vec_pretty(&json!({
@@ -236,6 +237,87 @@ fn write_audio_provider_package(bytes: &[u8]) -> (TempDir, PathBuf) {
     (directory, path)
 }
 
+fn audio_codec_package_bytes(version: &str, executable: &[u8]) -> Vec<u8> {
+    let executable_name = if cfg!(windows) {
+        "audio-codec.exe"
+    } else {
+        "audio-codec"
+    };
+    let platform = if cfg!(windows) {
+        "windows_x86_64"
+    } else if cfg!(target_os = "linux") {
+        "linux_x86_64"
+    } else if cfg!(target_arch = "aarch64") {
+        "macos_aarch64"
+    } else {
+        "macos_x86_64"
+    };
+    let codec_manifest = serde_json::to_vec_pretty(&json!({
+        "schema_version": 1,
+        "id": AUDIO_CODEC_ID,
+        "name": "Audio Codec Test",
+        "version": version,
+        "codec_protocol_version": 1,
+        "author": "WyrmGrid tests",
+        "entry_point": "audio-codec",
+        "platforms": [platform],
+        "capabilities": ["encode_pcm_s16le"],
+        "profiles": [{
+            "id": "pilot_microphone_v1",
+            "codec_id": "test-codec",
+            "media_type": "audio/test",
+            "channels": 1,
+            "sample_rate_hz": 48_000,
+            "target_bitrate_bps": 32_000,
+            "packet_duration_48khz_frames": 960
+        }]
+    }))
+    .unwrap();
+    let payload = BTreeMap::from([
+        (executable_name.to_owned(), executable.to_vec()),
+        ("audio-codec.json".to_owned(), codec_manifest),
+    ]);
+    let files = payload
+        .iter()
+        .map(|(path, contents)| {
+            json!({
+                "path": path,
+                "size": contents.len(),
+                "sha256": hex_sha256(contents),
+            })
+        })
+        .collect::<Vec<_>>();
+    let manifest = json!({
+        "schema_version": 1,
+        "kind": "audio_codec_provider",
+        "id": AUDIO_CODEC_ID,
+        "version": version,
+        "manifest_path": "audio-codec.json",
+        "files": files,
+    });
+    let cursor = Cursor::new(Vec::new());
+    let mut writer = ZipWriter::new(cursor);
+    let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+    writer
+        .start_file(EXTENSION_PACKAGE_MANIFEST_NAME, options)
+        .unwrap();
+    writer
+        .write_all(&serde_json::to_vec_pretty(&manifest).unwrap())
+        .unwrap();
+    for (path, contents) in payload {
+        writer.start_file(path, options).unwrap();
+        writer.write_all(&contents).unwrap();
+    }
+    writer.finish().unwrap().into_inner()
+}
+
+fn write_audio_codec_package(bytes: &[u8]) -> (TempDir, PathBuf) {
+    let directory = TempDir::new().unwrap();
+    let path = directory.path().join("test.wyrmcodec");
+    std::fs::write(&path, bytes).unwrap();
+    (directory, path)
+}
+
 #[test]
 fn version_one_manifest_fixture_is_valid() {
     let fixture =
@@ -261,6 +343,14 @@ fn audio_provider_package_fixture_is_valid() {
     let manifest: ExtensionPackageManifest = serde_json::from_str(fixture).unwrap();
     manifest.validate().unwrap();
     assert_eq!(manifest.kind.as_str(), "audio_provider");
+}
+
+#[test]
+fn audio_codec_package_fixture_is_valid() {
+    let fixture = include_str!("../../../../schemas/fixtures/audio-codec-package-manifest-v1.json");
+    let manifest: ExtensionPackageManifest = serde_json::from_str(fixture).unwrap();
+    manifest.validate().unwrap();
+    assert_eq!(manifest.kind.as_str(), "audio_codec_provider");
 }
 
 #[test]
@@ -669,6 +759,40 @@ fn manages_audio_provider_packages_and_clears_disabled_selection() {
     assert_eq!(rolled_back.active_version, "1.0.0");
     service.remove(AUDIO_PROVIDER_ID).unwrap();
     assert!(service.list_packages().unwrap().is_empty());
+    drop((one_directory, two_directory));
+}
+
+#[test]
+fn manages_audio_codec_packages_through_the_public_lifecycle() {
+    let package_root = TempDir::new().unwrap();
+    let packages = ExtensionPackageService::new(
+        Some(package_root.path().join("extensions-v1")),
+        Store::open_in_memory().unwrap(),
+    );
+    let service = AudioCodecPackageService::new(packages);
+    let (one_directory, one_path) =
+        write_audio_codec_package(&audio_codec_package_bytes("1.0.0", b"codec one"));
+    let installed = service.install_package(&one_path).unwrap();
+    assert!(installed.enabled);
+    assert_eq!(installed.profiles[0].codec_id, "test-codec");
+    assert_eq!(service.providers().unwrap().len(), 1);
+
+    let disabled = service.set_enabled(AUDIO_CODEC_ID, false).unwrap();
+    assert!(!disabled.enabled);
+    assert!(service.providers().unwrap().is_empty());
+
+    service.set_enabled(AUDIO_CODEC_ID, true).unwrap();
+    let (two_directory, two_path) =
+        write_audio_codec_package(&audio_codec_package_bytes("2.0.0", b"codec two"));
+    let updated = service.install_package(&two_path).unwrap();
+    assert_eq!(updated.active_version, "2.0.0");
+    assert_eq!(updated.rollback_version.as_deref(), Some("1.0.0"));
+
+    let rolled_back = service.rollback(AUDIO_CODEC_ID).unwrap();
+    assert_eq!(rolled_back.active_version, "1.0.0");
+    service.remove(AUDIO_CODEC_ID).unwrap();
+    assert!(service.list_packages().unwrap().is_empty());
+    assert!(service.providers().unwrap().is_empty());
     drop((one_directory, two_directory));
 }
 

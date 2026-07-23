@@ -18,10 +18,12 @@ use wyrmgrid_storage::{
 };
 
 use crate::{
-    AudioCaptureProvider, AudioCodecError, AudioCodecProvider, AudioMediaError, AudioProviderError,
+    AudioCaptureProvider, AudioCodecError, AudioCodecPackageError, AudioCodecPackageInspection,
+    AudioCodecPackageService, AudioCodecProvider, AudioMediaError, AudioProviderError,
     AudioProviderLevel, AudioProviderPackageError, AudioProviderPackageInspection,
     AudioProviderPackageService, AudioSegmentContext, EncodedAudioPacket, EncryptedAudioMediaStore,
-    ManagedAudioProviderPackageView, encode_packet_export, source_truth_id,
+    ManagedAudioCodecPackageView, ManagedAudioProviderPackageView, encode_packet_export,
+    source_truth_id,
 };
 
 pub const DEFAULT_AUDIO_RETENTION_DAYS: u32 = 30;
@@ -231,6 +233,16 @@ pub enum AudioRecordingError {
     ProviderRollbackUnavailable,
     #[error("That audio provider is not installed, enabled, or available on this platform.")]
     UnknownProvider,
+    #[error("The selected audio codec package is invalid or unsupported.")]
+    InvalidCodecPackage,
+    #[error("Local audio codec package storage is unavailable.")]
+    CodecPackageStorageUnavailable,
+    #[error("That audio codec version already exists with different package contents.")]
+    CodecPackageVersionConflict,
+    #[error("Stop audio recording before changing an audio codec package.")]
+    CodecPackageInUse,
+    #[error("No previous audio codec version is available for rollback.")]
+    CodecRollbackUnavailable,
 }
 
 #[derive(Clone)]
@@ -242,7 +254,7 @@ struct AudioRecordingInner {
     store: Store,
     media: EncryptedAudioMediaStore,
     provider: AudioProviderAccess,
-    codecs: BTreeMap<String, Arc<dyn AudioCodecProvider>>,
+    codecs: AudioCodecAccess,
     state: Mutex<AudioRuntimeState>,
     operation: Mutex<()>,
 }
@@ -250,6 +262,11 @@ struct AudioRecordingInner {
 enum AudioProviderAccess {
     Static(Option<Arc<dyn AudioCaptureProvider>>),
     Managed(AudioProviderPackageService),
+}
+
+enum AudioCodecAccess {
+    Static(BTreeMap<String, Arc<dyn AudioCodecProvider>>),
+    Managed(AudioCodecPackageService),
 }
 
 #[derive(Default)]
@@ -299,7 +316,7 @@ impl AudioRecordingService {
                 store,
                 media,
                 provider: AudioProviderAccess::Static(provider),
-                codecs: index_codecs(codecs),
+                codecs: AudioCodecAccess::Static(index_codecs(codecs)),
                 state: Mutex::new(AudioRuntimeState::default()),
                 operation: Mutex::new(()),
             }),
@@ -317,7 +334,25 @@ impl AudioRecordingService {
                 store,
                 media,
                 provider: AudioProviderAccess::Managed(provider_packages),
-                codecs: index_codecs(codecs),
+                codecs: AudioCodecAccess::Static(index_codecs(codecs)),
+                state: Mutex::new(AudioRuntimeState::default()),
+                operation: Mutex::new(()),
+            }),
+        }
+    }
+
+    pub fn with_managed_packages(
+        store: Store,
+        media: EncryptedAudioMediaStore,
+        provider_packages: AudioProviderPackageService,
+        codec_packages: AudioCodecPackageService,
+    ) -> Self {
+        Self {
+            inner: Arc::new(AudioRecordingInner {
+                store,
+                media,
+                provider: AudioProviderAccess::Managed(provider_packages),
+                codecs: AudioCodecAccess::Managed(codec_packages),
                 state: Mutex::new(AudioRuntimeState::default()),
                 operation: Mutex::new(()),
             }),
@@ -348,8 +383,7 @@ impl AudioRecordingService {
             .map(session_summary)
             .collect::<Result<Vec<_>, _>>()?;
         let codecs = self
-            .inner
-            .codecs
+            .codecs()?
             .values()
             .map(|codec| AudioCodecView {
                 id: codec.provider_id().into(),
@@ -469,6 +503,71 @@ impl AudioRecordingService {
             self.clear_provider_runtime_state()?;
         }
         Ok(())
+    }
+
+    pub fn inspect_codec_package(
+        &self,
+        path: &Path,
+    ) -> Result<AudioCodecPackageInspection, AudioRecordingError> {
+        self.managed_codec_packages()?
+            .inspect_package(path)
+            .map_err(map_codec_package_error)
+    }
+
+    pub fn list_managed_codec_packages(
+        &self,
+    ) -> Result<Vec<ManagedAudioCodecPackageView>, AudioRecordingError> {
+        self.managed_codec_packages()?
+            .list_packages()
+            .map_err(map_codec_package_error)
+    }
+
+    pub fn install_codec_package(
+        &self,
+        path: &Path,
+    ) -> Result<ManagedAudioCodecPackageView, AudioRecordingError> {
+        let _operation = self.codec_package_mutation_guard()?;
+        self.managed_codec_packages()?
+            .install_package(path)
+            .map_err(map_codec_package_error)
+    }
+
+    pub fn seed_first_party_codec_package(
+        &self,
+        path: &Path,
+    ) -> Result<ManagedAudioCodecPackageView, AudioRecordingError> {
+        let _operation = self.codec_package_mutation_guard()?;
+        self.managed_codec_packages()?
+            .seed_first_party_package(path)
+            .map_err(map_codec_package_error)
+    }
+
+    pub fn set_managed_codec_enabled(
+        &self,
+        provider_id: &str,
+        enabled: bool,
+    ) -> Result<ManagedAudioCodecPackageView, AudioRecordingError> {
+        let _operation = self.codec_package_mutation_guard()?;
+        self.managed_codec_packages()?
+            .set_enabled(provider_id, enabled)
+            .map_err(map_codec_package_error)
+    }
+
+    pub fn rollback_managed_codec(
+        &self,
+        provider_id: &str,
+    ) -> Result<ManagedAudioCodecPackageView, AudioRecordingError> {
+        let _operation = self.codec_package_mutation_guard()?;
+        self.managed_codec_packages()?
+            .rollback(provider_id)
+            .map_err(map_codec_package_error)
+    }
+
+    pub fn remove_managed_codec(&self, provider_id: &str) -> Result<(), AudioRecordingError> {
+        let _operation = self.codec_package_mutation_guard()?;
+        self.managed_codec_packages()?
+            .remove(provider_id)
+            .map_err(map_codec_package_error)
     }
 
     pub fn recover_interrupted_sessions(&self) -> Result<AudioRecordingView, AudioRecordingError> {
@@ -623,9 +722,8 @@ impl AudioRecordingService {
         {
             return Err(AudioRecordingError::InvalidPreference);
         }
-        let codec = self
-            .inner
-            .codecs
+        let codecs = self.codecs()?;
+        let codec = codecs
             .get(&selection.codec_provider_id)
             .ok_or(AudioRecordingError::CodecUnavailable)?;
         if !codec
@@ -724,6 +822,7 @@ impl AudioRecordingService {
         let sources = provider.sources().map_err(map_provider_error)?;
         validate_source_list(&sources)?;
         let selections = self.load_selections()?;
+        let codecs = self.codecs()?;
         let selected = selections
             .iter()
             .filter(|selection| {
@@ -748,9 +847,7 @@ impl AudioRecordingService {
             {
                 return Err(AudioRecordingError::SourceUnavailable);
             }
-            let codec = self
-                .inner
-                .codecs
+            let codec = codecs
                 .get(&selection.codec_provider_id)
                 .ok_or(AudioRecordingError::CodecUnavailable)?;
             if !codec.profiles().iter().any(|profile| {
@@ -782,14 +879,12 @@ impl AudioRecordingService {
             let codec_id = track_codecs
                 .get(&request.track_id)
                 .ok_or(AudioRecordingError::CodecUnavailable)?;
-            let codec = self
-                .inner
-                .codecs
+            let codec = codecs
                 .get(codec_id)
                 .ok_or(AudioRecordingError::CodecUnavailable)?;
             if let Err(error) = codec.start_track(&session_id, &request.track_id, request.profile) {
                 for (started_codec_id, started_track_id) in &started_codecs {
-                    if let Some(started_codec) = self.inner.codecs.get(started_codec_id) {
+                    if let Some(started_codec) = codecs.get(started_codec_id) {
                         let _ = started_codec.stop_track(&session_id, started_track_id);
                     }
                 }
@@ -810,9 +905,7 @@ impl AudioRecordingService {
                 let codec_provider_id = track_codecs
                     .get(&started.track_id)
                     .ok_or(AudioRecordingError::CodecUnavailable)?;
-                let codec = self
-                    .inner
-                    .codecs
+                let codec = codecs
                     .get(codec_provider_id)
                     .ok_or(AudioRecordingError::CodecUnavailable)?;
                 let codec_profile = codec
@@ -859,7 +952,7 @@ impl AudioRecordingService {
             .create_audio_session_record(&session, &tracks)
         {
             for (codec_id, track_id) in &started_codecs {
-                if let Some(codec) = self.inner.codecs.get(codec_id) {
+                if let Some(codec) = codecs.get(codec_id) {
                     let _ = codec.stop_track(&session_id, track_id);
                 }
             }
@@ -965,6 +1058,7 @@ impl AudioRecordingService {
             .map_err(|_| AudioRecordingError::StateUnavailable)?
             .track_codecs
             .clone();
+        let codecs = self.codecs()?;
         let drained_frame_count = batch.frames.len();
         let mut packets = Vec::with_capacity(drained_frame_count);
         for frame in &batch.frames {
@@ -974,9 +1068,7 @@ impl AudioRecordingService {
             let codec_id = track_codecs
                 .get(&frame.track_id)
                 .ok_or(AudioRecordingError::ProviderFailed)?;
-            let codec = self
-                .inner
-                .codecs
+            let codec = codecs
                 .get(codec_id)
                 .ok_or(AudioRecordingError::CodecUnavailable)?;
             packets.push(EncodedTrackPacket {
@@ -1004,12 +1096,13 @@ impl AudioRecordingService {
             Ok(state) => state.track_codecs.clone(),
             Err(_) => return false,
         };
+        let Ok(codecs) = self.codecs() else {
+            return false;
+        };
         track_codecs
             .into_iter()
             .fold(true, |all_stopped, (track_id, codec_id)| {
-                let stopped = self
-                    .inner
-                    .codecs
+                let stopped = codecs
                     .get(&codec_id)
                     .is_some_and(|codec| codec.stop_track(session_id, &track_id).is_ok());
                 all_stopped && stopped
@@ -1495,6 +1588,23 @@ impl AudioRecordingService {
         }
     }
 
+    fn managed_codec_packages(&self) -> Result<&AudioCodecPackageService, AudioRecordingError> {
+        match &self.inner.codecs {
+            AudioCodecAccess::Managed(packages) => Ok(packages),
+            AudioCodecAccess::Static(_) => Err(AudioRecordingError::CodecPackageStorageUnavailable),
+        }
+    }
+
+    fn codecs(&self) -> Result<BTreeMap<String, Arc<dyn AudioCodecProvider>>, AudioRecordingError> {
+        match &self.inner.codecs {
+            AudioCodecAccess::Static(codecs) => Ok(codecs.clone()),
+            AudioCodecAccess::Managed(packages) => packages
+                .providers()
+                .map(index_codecs)
+                .map_err(map_codec_package_error),
+        }
+    }
+
     fn package_mutation_guard(&self) -> Result<std::sync::MutexGuard<'_, ()>, AudioRecordingError> {
         let guard = self
             .inner
@@ -1503,6 +1613,20 @@ impl AudioRecordingService {
             .map_err(|_| AudioRecordingError::StateUnavailable)?;
         if self.active_session_id()?.is_some() {
             return Err(AudioRecordingError::ProviderPackageInUse);
+        }
+        Ok(guard)
+    }
+
+    fn codec_package_mutation_guard(
+        &self,
+    ) -> Result<std::sync::MutexGuard<'_, ()>, AudioRecordingError> {
+        let guard = self
+            .inner
+            .operation
+            .lock()
+            .map_err(|_| AudioRecordingError::StateUnavailable)?;
+        if self.active_session_id()?.is_some() {
+            return Err(AudioRecordingError::CodecPackageInUse);
         }
         Ok(guard)
     }
@@ -1786,6 +1910,22 @@ fn map_provider_package_error(error: AudioProviderPackageError) -> AudioRecordin
         }
         AudioProviderPackageError::UnknownProvider
         | AudioProviderPackageError::ProviderUnavailable => AudioRecordingError::UnknownProvider,
+    }
+}
+fn map_codec_package_error(error: AudioCodecPackageError) -> AudioRecordingError {
+    match error {
+        AudioCodecPackageError::InvalidPackage => AudioRecordingError::InvalidCodecPackage,
+        AudioCodecPackageError::PackageStorageUnavailable
+        | AudioCodecPackageError::StateUnavailable => {
+            AudioRecordingError::CodecPackageStorageUnavailable
+        }
+        AudioCodecPackageError::PackageVersionConflict => {
+            AudioRecordingError::CodecPackageVersionConflict
+        }
+        AudioCodecPackageError::RollbackUnavailable => {
+            AudioRecordingError::CodecRollbackUnavailable
+        }
+        AudioCodecPackageError::ProviderUnavailable => AudioRecordingError::CodecUnavailable,
     }
 }
 fn map_codec_error(error: AudioCodecError) -> AudioRecordingError {

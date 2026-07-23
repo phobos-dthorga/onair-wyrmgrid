@@ -39,6 +39,29 @@ impl AudioCodecRegistration {
             executable: executable.into(),
         })
     }
+
+    pub(crate) fn from_managed_package(
+        manifest: AudioCodecManifest,
+        root: PathBuf,
+    ) -> Result<Self, AudioCodecError> {
+        manifest
+            .validate()
+            .map_err(|_| AudioCodecError::InvalidManifest)?;
+        let executable = codec_executable_in(&root, &manifest);
+        let canonical_root = root
+            .canonicalize()
+            .map_err(|_| AudioCodecError::Unavailable)?;
+        let canonical_executable = executable
+            .canonicalize()
+            .map_err(|_| AudioCodecError::Unavailable)?;
+        if !canonical_executable.starts_with(&canonical_root) || !canonical_executable.is_file() {
+            return Err(AudioCodecError::Unavailable);
+        }
+        Ok(Self {
+            manifest,
+            executable: canonical_executable,
+        })
+    }
 }
 
 pub trait AudioCodecProvider: Send + Sync + 'static {
@@ -364,7 +387,7 @@ fn codec_platform_supported(manifest: &AudioCodecManifest) -> bool {
     manifest.platforms.contains(&current_codec_platform())
 }
 
-fn current_codec_platform() -> AudioCodecPlatform {
+pub(crate) fn current_codec_platform() -> AudioCodecPlatform {
     #[cfg(target_os = "windows")]
     return AudioCodecPlatform::WindowsX86_64;
     #[cfg(target_os = "linux")]
