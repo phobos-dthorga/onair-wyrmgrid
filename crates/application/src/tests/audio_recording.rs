@@ -2,6 +2,8 @@ use super::*;
 use crate::{
     AudioProviderCaptureBatch, AudioProviderDrainBatch, AudioProviderEvent, AudioProviderPcmFrame,
 };
+#[cfg(target_os = "windows")]
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use wyrmgrid_audio_codec_protocol::AudioCodecProfile;
 use wyrmgrid_audio_provider_protocol::{AudioCaptureEventKind, AudioStartedTrack, AudioStopReason};
@@ -760,4 +762,107 @@ fn restored_backup_metadata_does_not_retain_an_external_segment() {
     let recovered = service.recover_interrupted_sessions().unwrap();
     assert_eq!(recovered.sessions.len(), 1);
     assert!(!segment_path.exists());
+}
+
+#[cfg(target_os = "windows")]
+#[test]
+fn packaged_audio_provider_and_codec_complete_an_authenticated_capture_chain() {
+    let assets = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../assets");
+    let provider_package = assets
+        .join("audio-provider-packages")
+        .join("deterministic-fake-audio.wyrmaudio");
+    let codec_package = assets.join("codec-packages").join("opus.wyrmcodec");
+    assert!(
+        provider_package.is_file(),
+        "the deterministic audio provider package fixture must exist"
+    );
+    assert!(
+        codec_package.is_file(),
+        "the Opus codec package fixture must exist"
+    );
+
+    let package_directory = tempfile::tempdir().unwrap();
+    let media_directory = tempfile::tempdir().unwrap();
+    let store = Store::open_in_memory().unwrap();
+    let packages = crate::ExtensionPackageService::new(
+        Some(package_directory.path().join("extensions-v1")),
+        store.clone(),
+    );
+    let provider_packages = AudioProviderPackageService::new(packages.clone(), store.clone());
+    let codec_packages = AudioCodecPackageService::new(packages);
+    let service = AudioRecordingService::with_managed_packages(
+        store,
+        EncryptedAudioMediaStore::new(
+            media_directory.path(),
+            crate::AudioMediaKey::from_test_bytes([24; 32]),
+        ),
+        provider_packages,
+        codec_packages,
+    );
+
+    let provider = service.install_provider_package(&provider_package).unwrap();
+    assert_eq!(provider.id, "dev.wyrmgrid.fake-audio");
+    service
+        .select_managed_provider("dev.wyrmgrid.fake-audio")
+        .unwrap();
+    let codec = service.install_codec_package(&codec_package).unwrap();
+    assert_eq!(codec.id, "dev.wyrmgrid.opus");
+    assert!(
+        service
+            .status()
+            .unwrap()
+            .codecs
+            .iter()
+            .any(|codec| codec.id == "dev.wyrmgrid.opus")
+    );
+
+    service
+        .update_preferences(AudioRecordingPreferences {
+            enabled: true,
+            capture_manual: true,
+            capture_automatic: false,
+            retention_days: 30,
+            storage_budget_bytes: 64 * 1024 * 1024,
+        })
+        .unwrap();
+    service.refresh_sources().unwrap();
+    service
+        .update_source_selection(AudioSourceSelection {
+            provider_id: "dev.wyrmgrid.fake-audio".into(),
+            source_id: "synthetic.microphone.primary".into(),
+            profile_id: AudioProfileId::PilotMicrophoneV1,
+            codec_provider_id: "dev.wyrmgrid.opus".into(),
+            enabled: true,
+            playback_muted: false,
+            playback_solo: false,
+            playback_volume_percent: 100,
+        })
+        .unwrap();
+    assert!(matches!(
+        service.start(None, AudioCaptureMode::Manual),
+        Err(AudioRecordingError::PermissionRequired)
+    ));
+
+    service
+        .request_source_permission("synthetic.microphone.primary")
+        .unwrap();
+    let active = service.start(None, AudioCaptureMode::Manual).unwrap();
+    let session_id = active.active_session_id.unwrap();
+    assert!(matches!(
+        service.set_managed_codec_enabled("dev.wyrmgrid.opus", false),
+        Err(AudioRecordingError::CodecPackageInUse)
+    ));
+    service.poll_active_capture().unwrap();
+    service.stop().unwrap();
+
+    let playback = service.playback(&session_id).unwrap();
+    assert!(playback.authenticated);
+    assert_eq!(playback.tracks.len(), 1);
+    let track = &playback.tracks[0];
+    assert_eq!(track.codec_provider_id, "dev.wyrmgrid.opus");
+    assert_eq!(track.codec_id, "opus");
+    assert_eq!(track.codec_media_type, "audio/opus");
+    assert_eq!(track.frame_count, 960);
+    assert_eq!(track.packets.len(), 1);
+    assert!(!track.packets[0].bytes.is_empty());
 }

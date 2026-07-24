@@ -169,15 +169,18 @@ not replace completion of the current vertical slice.
   budgets, deletion, playback, and explicit export. The independent provider
   protocols, source/profile models, schemas, fixtures, deterministic fake
   capture, debug-only Windows microphone provider, and Opus codec sidecar are
-  implemented; packaging and live certification remain unavailable.
+  implemented. Managed `.wyrmaudio` and `.wyrmcodec` lifecycles plus synthetic
+  packaged-chain grounding are implemented; native live certification remains
+  unavailable.
 - Windows/MSFS capability-labelled application, endpoint, or
   mixed-output capture; SimConnect COM facts remain metadata rather than
   isolated radio audio
 - Cross-platform X-Plane microphone and mixed-output capture after the Web API
   telemetry provider, followed by isolated COM1/COM2 or pilot/copilot tracks
   only if the thin audio-tap stability and licensing spike succeeds
-- Verified end-user codec-provider installation, signing, integrity, resource
-  controls, updates, rollback, removal, trust presentation, and privacy notice
+- Publisher signing, authenticated updates, revocation, OS resource controls,
+  release privacy/legal approval, and live certification for end-user codec
+  providers
 
 ### Navigation, networks, and automation
 
@@ -247,6 +250,15 @@ without rebuilding WyrmGrid.
   the same install, disable, update, rollback, and removal lifecycle offered to
   community artifacts. The deterministic fake provider proves packaging and
   protocol conformance without claiming live native capture support.
+- Audio codec package schema version 1 gives encoder sidecars their own
+  `.wyrmcodec` contract, exact inventory, native-code trust review, managed
+  install, enable/disable, immutable update, rollback, and removal lifecycle.
+  First-party Opus is seeded and separately distributable through that same
+  boundary. A Windows test grounds the complete packaged synthetic capture,
+  managed Opus encode, encrypted storage, and authenticated playback chain.
+- A no-overwrite extension scaffolder and unified author guide create starting
+  trees for all four package kinds while keeping protocol implementation,
+  capability choice, validation, and release claims explicit.
 - Prove offline manual installation, application upgrade compatibility,
   independent plugin failure, absent runtime/provider behaviour, and recovery
   from corrupt or permission-changing updates.

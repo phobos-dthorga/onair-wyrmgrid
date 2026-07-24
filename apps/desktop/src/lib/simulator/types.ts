@@ -50,6 +50,53 @@ export type ManagedAudioProviderPackage = {
   capabilities: AudioProviderCapability[];
 };
 
+export type AudioCodecCapability = "encode_pcm_s16le";
+
+export type AudioCodecProfile = {
+  id: AudioProfileId;
+  codec_id: string;
+  media_type: string;
+  channels: number;
+  sample_rate_hz: number;
+  target_bitrate_bps: number;
+  packet_duration_48khz_frames: number;
+};
+
+export type AudioCodecPackageInspection = {
+  package_schema_version: number;
+  package_kind: "audio_codec_provider";
+  id: string;
+  name: string;
+  version: string;
+  author: string;
+  codec_protocol_version: number;
+  platforms: ProviderPlatform[];
+  capabilities: AudioCodecCapability[];
+  profiles: AudioCodecProfile[];
+  archive_sha256: string;
+  archive_size: number;
+  expanded_size: number;
+  file_count: number;
+  publisher_verified: false;
+};
+
+export type ManagedAudioCodecPackage = {
+  id: string;
+  name: string;
+  author: string;
+  active_version: string;
+  rollback_version?: string;
+  enabled: boolean;
+  installed_versions: string[];
+  active_archive_sha256: string;
+  source: "local_file" | "first_party";
+  publisher_verified: false;
+  codec_protocol_version: number;
+  platforms: ProviderPlatform[];
+  capabilities: AudioCodecCapability[];
+  profiles: AudioCodecProfile[];
+};
+
 export type SimulatorProviderPackageInspection = {
   package_schema_version: number;
   package_kind: "simulator_provider";

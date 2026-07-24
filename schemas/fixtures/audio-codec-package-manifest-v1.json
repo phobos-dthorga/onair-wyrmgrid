@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "kind": "audio_codec_provider",
+  "id": "dev.wyrmgrid.opus",
+  "version": "0.3.1",
+  "manifest_path": "audio-codec.json",
+  "files": [
+    {
+      "path": "audio-codec.json",
+      "size": 1382,
+      "sha256": "2c258ce21f8bcf67301742b7c12c81c86c19814067f8c4790419501f2af06c39"
+    },
+    {
+      "path": "wyrmgrid-opus-codec.exe",
+      "size": 4096,
+      "sha256": "fa76220dafe664646ca084d24d5c710409e4f8e6b57b8747bb51248209d47e2d"
+    }
+  ]
+}

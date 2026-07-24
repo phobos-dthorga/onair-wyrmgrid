@@ -2,12 +2,14 @@ import { invokeDesktop } from "$lib/desktop/client";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import type {
   AudioExportView,
+  AudioCodecPackageInspection,
   AudioProviderPackageInspection,
   AudioPlaybackView,
   AudioRecordingPreferences,
   AudioRecordingView,
   AudioSourceSelection,
   ManagedAudioProviderPackage,
+  ManagedAudioCodecPackage,
   SimulatorBridgeView,
   ManagedSimulatorProviderPackage,
   SimulatorPreferences,
@@ -27,6 +29,11 @@ const simulatorProviderPackageFilter = {
 const audioProviderPackageFilter = {
   name: "WyrmGrid audio provider packages",
   extensions: ["wyrmaudio"],
+};
+
+const audioCodecPackageFilter = {
+  name: "WyrmGrid audio codec packages",
+  extensions: ["wyrmcodec"],
 };
 
 const audioPacketFilter = {
@@ -224,6 +231,53 @@ export function rollbackManagedAudioProvider(
 
 export function removeManagedAudioProvider(providerId: string): Promise<void> {
   return invokeDesktop("remove_managed_audio_provider", { providerId });
+}
+
+export async function chooseAudioCodecPackage(): Promise<string | null> {
+  const selected = await open({
+    multiple: false,
+    directory: false,
+    filters: [audioCodecPackageFilter],
+  });
+  return typeof selected === "string" ? selected : null;
+}
+
+export function inspectAudioCodecPackage(
+  source: string,
+): Promise<AudioCodecPackageInspection> {
+  return invokeDesktop("inspect_audio_codec_package_file", { source });
+}
+
+export function loadManagedAudioCodecPackages(): Promise<
+  ManagedAudioCodecPackage[]
+> {
+  return invokeDesktop("managed_audio_codec_packages");
+}
+
+export function installAudioCodecPackage(
+  source: string,
+): Promise<ManagedAudioCodecPackage> {
+  return invokeDesktop("install_audio_codec_package_file", { source });
+}
+
+export function setManagedAudioCodecEnabled(
+  providerId: string,
+  enabled: boolean,
+): Promise<ManagedAudioCodecPackage> {
+  return invokeDesktop("set_managed_audio_codec_enabled", {
+    providerId,
+    enabled,
+  });
+}
+
+export function rollbackManagedAudioCodec(
+  providerId: string,
+): Promise<ManagedAudioCodecPackage> {
+  return invokeDesktop("rollback_managed_audio_codec", { providerId });
+}
+
+export function removeManagedAudioCodec(providerId: string): Promise<void> {
+  return invokeDesktop("remove_managed_audio_codec", { providerId });
 }
 
 export function saveAudioRecordingPreferences(

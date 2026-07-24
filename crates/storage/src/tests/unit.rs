@@ -11,8 +11,8 @@ fn initializes_the_database_schema() {
 }
 
 #[test]
-fn extension_package_migration_is_idempotent_after_version_twenty() {
-    let connection = Connection::open_in_memory().expect("database should open");
+fn extension_package_migrations_are_idempotent_after_version_twenty() {
+    let mut connection = Connection::open_in_memory().expect("database should open");
     connection.execute_batch(INITIAL_SCHEMA).unwrap();
     connection
         .execute_batch(FLIGHT_OPERATION_AIRCRAFT_ASSIGNMENTS_SCHEMA)
@@ -25,6 +25,8 @@ fn extension_package_migration_is_idempotent_after_version_twenty() {
         .unwrap();
     connection.execute_batch(EXTENSION_PACKAGES_SCHEMA).unwrap();
     connection.execute_batch(EXTENSION_PACKAGES_SCHEMA).unwrap();
+    apply_audio_codec_package_migration(&mut connection).unwrap();
+    apply_audio_codec_package_migration(&mut connection).unwrap();
     assert_eq!(
         connection
             .query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0))
@@ -43,6 +45,76 @@ fn extension_package_migration_is_idempotent_after_version_twenty() {
         )
         .unwrap();
     assert_eq!(tables, 3);
+}
+
+#[test]
+fn audio_codec_package_migration_preserves_existing_extension_state() {
+    let mut connection = Connection::open_in_memory().expect("database should open");
+    connection.execute_batch(INITIAL_SCHEMA).unwrap();
+    connection
+        .execute_batch(FLIGHT_OPERATION_AIRCRAFT_ASSIGNMENTS_SCHEMA)
+        .unwrap();
+    connection
+        .execute_batch(
+            "INSERT OR IGNORE INTO schema_migrations (version) VALUES (20);
+             PRAGMA user_version = 20;",
+        )
+        .unwrap();
+    connection.execute_batch(EXTENSION_PACKAGES_SCHEMA).unwrap();
+    connection
+        .execute(
+            "INSERT INTO extension_package_versions (
+                package_kind, extension_id, version, archive_sha256,
+                package_schema_version, source, package_manifest_json,
+                extension_manifest_json
+             ) VALUES ('ordinary_plugin', 'org.wyrmgrid.test.preserved',
+                       '1.0.0', ?1, 1, 'local_file', '{}', '{}')",
+            ["a".repeat(64)],
+        )
+        .unwrap();
+    connection
+        .execute(
+            "INSERT INTO extension_package_state (
+                package_kind, extension_id, active_version, enabled
+             ) VALUES ('ordinary_plugin', 'org.wyrmgrid.test.preserved',
+                       '1.0.0', 0)",
+            [],
+        )
+        .unwrap();
+
+    apply_audio_codec_package_migration(&mut connection).unwrap();
+
+    assert_eq!(
+        connection
+            .query_row(
+                "SELECT active_version || ':' || enabled
+                 FROM extension_package_state
+                 WHERE package_kind = 'ordinary_plugin'
+                   AND extension_id = 'org.wyrmgrid.test.preserved'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .unwrap(),
+        "1.0.0:0"
+    );
+    connection
+        .execute(
+            "INSERT INTO extension_package_versions (
+                package_kind, extension_id, version, archive_sha256,
+                package_schema_version, source, package_manifest_json,
+                extension_manifest_json
+             ) VALUES ('audio_codec_provider', 'org.wyrmgrid.test.codec',
+                       '1.0.0', ?1, 1, 'local_file', '{}', '{}')",
+            ["b".repeat(64)],
+        )
+        .unwrap();
+    assert!(
+        connection
+            .query_row("PRAGMA foreign_key_check", [], |_| Ok(()))
+            .optional()
+            .unwrap()
+            .is_none()
+    );
 }
 
 #[test]
@@ -187,6 +259,34 @@ fn persists_audio_provider_package_state_and_selection_independently() {
             .unwrap()
             .selected_provider_id,
         Some(audio.extension_id)
+    );
+}
+
+#[test]
+fn persists_audio_codec_package_state_independently() {
+    let store = Store::open_in_memory().expect("store should initialize");
+    let codec = NewExtensionPackageVersionRecord {
+        package_kind: "audio_codec_provider".into(),
+        extension_id: "org.wyrmgrid.test.audio-codec".into(),
+        extension_manifest_json: "{\"kind\":\"audio_codec_provider\"}".into(),
+        ..new_extension_package("1.0.0", 'd')
+    };
+    store
+        .activate_extension_package_version_record(&codec)
+        .unwrap();
+
+    assert_eq!(
+        store
+            .list_extension_package_state_records("audio_codec_provider")
+            .unwrap()[0]
+            .extension_id,
+        codec.extension_id
+    );
+    assert!(
+        store
+            .list_extension_package_state_records("audio_provider")
+            .unwrap()
+            .is_empty()
     );
 }
 

@@ -1145,6 +1145,85 @@ fn remove_managed_audio_provider(
 }
 
 #[tauri::command]
+async fn inspect_audio_codec_package_file(
+    state: tauri::State<'_, DesktopState>,
+    source: String,
+) -> Result<wyrmgrid_application::AudioCodecPackageInspection, wyrmgrid_application::OperationError>
+{
+    let audio = state.audio_recording.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        audio.inspect_codec_package(std::path::Path::new(&source))
+    })
+    .await
+    .map_err(|_| operation_error(wyrmgrid_application::AudioRecordingError::StateUnavailable))?
+    .map_err(operation_error)
+}
+
+#[tauri::command]
+fn managed_audio_codec_packages(
+    state: tauri::State<'_, DesktopState>,
+) -> Result<
+    Vec<wyrmgrid_application::ManagedAudioCodecPackageView>,
+    wyrmgrid_application::OperationError,
+> {
+    state
+        .audio_recording
+        .list_managed_codec_packages()
+        .map_err(operation_error)
+}
+
+#[tauri::command]
+async fn install_audio_codec_package_file(
+    state: tauri::State<'_, DesktopState>,
+    source: String,
+) -> Result<wyrmgrid_application::ManagedAudioCodecPackageView, wyrmgrid_application::OperationError>
+{
+    let audio = state.audio_recording.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        audio.install_codec_package(std::path::Path::new(&source))
+    })
+    .await
+    .map_err(|_| operation_error(wyrmgrid_application::AudioRecordingError::StateUnavailable))?
+    .map_err(operation_error)
+}
+
+#[tauri::command]
+fn set_managed_audio_codec_enabled(
+    state: tauri::State<'_, DesktopState>,
+    provider_id: String,
+    enabled: bool,
+) -> Result<wyrmgrid_application::ManagedAudioCodecPackageView, wyrmgrid_application::OperationError>
+{
+    state
+        .audio_recording
+        .set_managed_codec_enabled(&provider_id, enabled)
+        .map_err(operation_error)
+}
+
+#[tauri::command]
+fn rollback_managed_audio_codec(
+    state: tauri::State<'_, DesktopState>,
+    provider_id: String,
+) -> Result<wyrmgrid_application::ManagedAudioCodecPackageView, wyrmgrid_application::OperationError>
+{
+    state
+        .audio_recording
+        .rollback_managed_codec(&provider_id)
+        .map_err(operation_error)
+}
+
+#[tauri::command]
+fn remove_managed_audio_codec(
+    state: tauri::State<'_, DesktopState>,
+    provider_id: String,
+) -> Result<(), wyrmgrid_application::OperationError> {
+    state
+        .audio_recording
+        .remove_managed_codec(&provider_id)
+        .map_err(operation_error)
+}
+
+#[tauri::command]
 async fn update_audio_recording_preferences(
     state: tauri::State<'_, DesktopState>,
     preferences: wyrmgrid_application::AudioRecordingPreferences,
@@ -1406,13 +1485,18 @@ pub fn run() {
                 extension_packages.clone(),
                 store.clone(),
             );
+            let audio_codec_packages =
+                wyrmgrid_application::AudioCodecPackageService::new(extension_packages.clone());
             let audio_recording =
-                wyrmgrid_application::AudioRecordingService::with_managed_provider_packages(
+                wyrmgrid_application::AudioRecordingService::with_managed_packages(
                     store.clone(),
                     audio_media,
                     audio_provider_packages,
-                    development_audio_codecs(),
+                    audio_codec_packages,
                 );
+            if let Some(package) = first_party_audio_codec_package(app) {
+                let _ = audio_recording.seed_first_party_codec_package(&package);
+            }
             let _ = audio_recording.recover_interrupted_sessions();
             let (audio_sender, audio_receiver) = mpsc::channel::<AudioSyncRequest>();
             let audio_worker = audio_recording.clone();
@@ -1618,6 +1702,12 @@ pub fn run() {
             set_managed_audio_provider_enabled,
             rollback_managed_audio_provider,
             remove_managed_audio_provider,
+            inspect_audio_codec_package_file,
+            managed_audio_codec_packages,
+            install_audio_codec_package_file,
+            set_managed_audio_codec_enabled,
+            rollback_managed_audio_codec,
+            remove_managed_audio_codec,
             update_audio_recording_preferences,
             refresh_audio_sources,
             request_audio_source_permission,
@@ -1685,36 +1775,11 @@ fn first_party_simulator_provider_package(app: &tauri::App) -> Option<std::path:
     })
 }
 
-fn development_audio_codecs() -> Vec<Arc<dyn wyrmgrid_application::AudioCodecProvider>> {
-    if !cfg!(debug_assertions) {
-        return Vec::new();
-    }
-    let workspace_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
-    let executable = std::env::var_os("WYRMGRID_OPUS_CODEC_PATH")
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| development_binary(&workspace_root, "wyrmgrid-opus-codec"));
-    let Some(codec) = wyrmgrid_application::AudioCodecRegistration::from_manifest_json(
-        include_str!("../../../../codecs/opus/codec.json"),
-        executable,
-    )
-    .ok()
-    .and_then(|registration| {
-        wyrmgrid_application::ProcessAudioCodecProvider::new(registration).ok()
-    }) else {
-        return Vec::new();
-    };
-    vec![Arc::new(codec)]
-}
-
-fn development_binary(workspace_root: &std::path::Path, name: &str) -> std::path::PathBuf {
-    let target = std::env::var_os("CARGO_TARGET_DIR")
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| workspace_root.join("target"));
-    let mut filename = name.to_owned();
-    if cfg!(windows) {
-        filename.push_str(".exe");
-    }
-    target.join("debug").join(filename)
+fn first_party_audio_codec_package(app: &tauri::App) -> Option<std::path::PathBuf> {
+    app.path()
+        .resource_dir()
+        .ok()
+        .map(|directory| directory.join("codec-packages").join("opus.wyrmcodec"))
 }
 
 #[cfg(test)]

@@ -1,8 +1,9 @@
 # Simulator-synchronised audio recording
 
-Status: managed external capture-provider packages, debug-only Windows
-microphone capture, and a first-party Opus codec provider implemented; native
-capture and codec sidecars are not released or live-certified
+Status: managed external capture-provider and codec-provider packages,
+debug-only Windows microphone capture, and a first-party Opus codec package
+implemented; native capture and codec sidecars are not released or
+live-certified
 
 WyrmGrid will offer optional audio recording aligned with a local simulator
 telemetry session. Codec choice is an end-user selection implemented through a
@@ -33,11 +34,11 @@ Capture Provider protocol version 2 supplies bounded PCM to the host; Audio
 Codec Provider protocol version 1 converts it to bounded encoded packets.
 Default-off consent, application orchestration, encrypted media lifecycle,
 authenticated packet inspection/export, a deterministic fake capture provider,
-a managed external `.wyrmaudio` lifecycle, a debug-only Windows microphone
-provider, and a first-party Opus codec provider now exist. The fake provider has
-a separately installable reference package; the native and codec sidecars are
-not released or live-certified. Either process may fail or be absent without
-taking down WyrmGrid, telemetry, or the simulator.
+managed external `.wyrmaudio` and `.wyrmcodec` lifecycles, a debug-only Windows
+microphone provider, and a first-party Opus codec package now exist. The fake
+provider and Opus codec have separately installable reference packages; the
+native sidecars are not released or live-certified. Either process may fail or
+be absent without taking down WyrmGrid, telemetry, or the simulator.
 
 The Rust application service is authoritative for consent, source selection,
 session lifecycle, time correlation, storage policy, deletion, and export.
@@ -55,7 +56,7 @@ bounded PCM and encoded framing, sanitized fixtures, and deterministic process
 tests. Version-one capture fixtures remain compatibility evidence.
 
 Slices 2–5 implement independent persisted consent, explicit permission
-requests, managed external-provider selection, schema-21 package state,
+requests, managed external-provider selection, schema-22 package state,
 authenticated external packet segments, recovery, retention, tombstoned deletion, portable-
 backup omission, bounded authenticated packet inspection, and separately
 warned plaintext packet export. These slices do not enable a microphone or
@@ -67,8 +68,10 @@ with explicit source selection, explicit permission probing, hashed raw device
 identities, bounded non-blocking capture queues, PCM conversion, and
 backpressure events. Slice 5B implements per-source codec selection, schema-20
 codec provenance, host orchestration, and `dev.wyrmgrid.opus` as a normal
-out-of-process codec provider. Automated tests use synthetic audio and never
-open a real microphone.
+out-of-process codec provider. Slice 5C adds `.wyrmcodec` inspection,
+installation, immutable updates, enable/disable, rollback, removal, first-party
+seeding, and a packaged synthetic capture-to-Opus-to-encrypted-playback test.
+Automated tests use synthetic audio and never open a real microphone.
 
 ## Simulator and operating-system support
 
@@ -295,6 +298,10 @@ tracks. Schema-19 rows receive `dev.wyrmgrid.opus`, `legacy-unversioned`,
 `opus`, and `audio/opus`, the only previously implied format without an
 invented historical provider version, without rewriting migration 18.
 
+Append-only migration 22 preserves every schema-21 managed plugin, simulator
+provider, and audio provider version and active/rollback state while extending
+the constrained package-kind catalogue with `audio_codec_provider`.
+
 The version-one media envelope uses XChaCha20-Poly1305 with a fresh random
 24-byte nonce per segment. HKDF-SHA256 derives a purpose-separated media key
 from the installation's uniformly random database key using fixed versioned
@@ -350,7 +357,7 @@ software. Before implementation ships:
 - source identifiers, labels, and failures must be redacted from diagnostics;
 - general plugins receive no audio capability; an explicitly selected codec
   provider necessarily receives only that selected source's transient PCM and
-  requires a separate future installation and trust disclosure; and
+  requires the separate native-code package trust disclosure; and
 - support tooling, Sentry, optional AI, crash attachments, and public services
   must be unable to receive audio or media paths by default.
 
@@ -427,7 +434,8 @@ does not establish another.
 5. Separate capture and codecs: implement Audio Capture Provider version 2,
    Audio Codec Provider version 1, user codec selection, schema-20 provenance,
    a debug-only Windows microphone provider (5A), and first-party Opus as a
-   normal codec provider (5B). (Implemented without packaging or live-device
+   normal codec provider (5B), followed by managed `.wyrmcodec` packaging and
+   synthetic packaged-chain grounding (5C). (Implemented without live-device
    certification.)
 6. Extend the Windows provider to explicitly selected MSFS, application, or
    endpoint output, with SimConnect COM facts presented as metadata only.
@@ -439,9 +447,11 @@ does not establish another.
    COM2, pilot, or copilot sources only after the separate review succeeds.
 10. Add explicitly selected external ATC application capture where each platform
     can enforce truthful source selection and current service rules permit it.
-11. Add verified codec-provider discovery, publisher/package identity, signing,
-    integrity, resource limits, updates, rollback, removal, and explicit trust
-    presentation before accepting user-installed codec executables.
+11. Add verified codec-provider discovery, exact package identity and integrity,
+    updates, rollback, removal, and explicit trust presentation before
+    accepting user-installed codec executables. (Implemented for deliberate
+    unsigned local packages; publisher signing, authenticated updates,
+    revocation, and OS resource limits remain release hardening.)
 12. Update the Privacy Notice, legal versions, threat model, user guide, licence
     bundle, installers, and release notes only for capabilities actually ready to
     ship.
@@ -452,7 +462,8 @@ support without maintainer authorization and the required release evidence.
 ## Decisions deliberately deferred
 
 - packaged Windows audio dependencies and minimum operating-system version;
-- community codec discovery, signing, resource controls, updates, and removal;
+- community codec publisher signing, authenticated updates, revocation, and OS
+  resource controls;
 - Windows application, endpoint, and process-loopback capture;
 - whether X-Plane FMOD tapping is stable and distributable;
 - native-provider segment duration after benchmarks and live certification;

@@ -7,6 +7,9 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
 use uuid::Uuid;
+use wyrmgrid_audio_codec_protocol::{
+    AudioCodecCapability, AudioCodecManifest, AudioCodecPlatform, AudioCodecProfile,
+};
 use wyrmgrid_audio_provider_protocol::{
     AudioProviderCapability, AudioProviderManifest, AudioProviderPlatform,
 };
@@ -15,7 +18,10 @@ use wyrmgrid_plugin_protocol::{PluginManifest, PluginRuntime};
 use wyrmgrid_storage::{NewExtensionPackageVersionRecord, StorageError, Store};
 use zip::{CompressionMethod, ZipArchive};
 
-use crate::{current_audio_provider_platform, provider_executable_in};
+use crate::{
+    codec_executable_in, current_audio_provider_platform, current_codec_platform,
+    provider_executable_in,
+};
 
 pub const EXTENSION_PACKAGE_SCHEMA_VERSION: u32 = 1;
 pub const EXTENSION_PACKAGE_MANIFEST_NAME: &str = "wyrmgrid-package.json";
@@ -27,6 +33,8 @@ pub const SIMULATOR_PROVIDER_PACKAGE_MEDIA_TYPE: &str =
 pub const AUDIO_PROVIDER_PACKAGE_EXTENSION: &str = "wyrmaudio";
 pub const AUDIO_PROVIDER_PACKAGE_MEDIA_TYPE: &str =
     "application/vnd.wyrmgrid.audio-provider-package+zip";
+pub const AUDIO_CODEC_PACKAGE_EXTENSION: &str = "wyrmcodec";
+pub const AUDIO_CODEC_PACKAGE_MEDIA_TYPE: &str = "application/vnd.wyrmgrid.audio-codec-package+zip";
 pub const EXTENSION_PACKAGE_SOURCE_LOCAL_FILE: &str = "local_file";
 pub const EXTENSION_PACKAGE_SOURCE_FIRST_PARTY: &str = "first_party";
 
@@ -48,6 +56,7 @@ pub enum ExtensionPackageKind {
     OrdinaryPlugin,
     SimulatorProvider,
     AudioProvider,
+    AudioCodecProvider,
 }
 
 impl ExtensionPackageKind {
@@ -56,6 +65,7 @@ impl ExtensionPackageKind {
             Self::OrdinaryPlugin => "ordinary_plugin",
             Self::SimulatorProvider => "simulator_provider",
             Self::AudioProvider => "audio_provider",
+            Self::AudioCodecProvider => "audio_codec_provider",
         }
     }
 
@@ -64,6 +74,7 @@ impl ExtensionPackageKind {
             Self::OrdinaryPlugin => "plugin.json",
             Self::SimulatorProvider => "provider.json",
             Self::AudioProvider => "audio-provider.json",
+            Self::AudioCodecProvider => "audio-codec.json",
         }
     }
 }
@@ -237,6 +248,44 @@ pub struct ManagedAudioProviderPackageView {
     pub capabilities: Vec<AudioProviderCapability>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct AudioCodecPackageInspection {
+    pub package_schema_version: u32,
+    pub package_kind: ExtensionPackageKind,
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub author: String,
+    pub codec_protocol_version: u32,
+    pub platforms: Vec<AudioCodecPlatform>,
+    pub capabilities: Vec<AudioCodecCapability>,
+    pub profiles: Vec<AudioCodecProfile>,
+    pub archive_sha256: String,
+    pub archive_size: u64,
+    pub expanded_size: u64,
+    pub file_count: usize,
+    pub publisher_verified: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ManagedAudioCodecPackageView {
+    pub id: String,
+    pub name: String,
+    pub author: String,
+    pub active_version: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rollback_version: Option<String>,
+    pub enabled: bool,
+    pub installed_versions: Vec<String>,
+    pub active_archive_sha256: String,
+    pub source: String,
+    pub publisher_verified: bool,
+    pub codec_protocol_version: u32,
+    pub platforms: Vec<AudioCodecPlatform>,
+    pub capabilities: Vec<AudioCodecCapability>,
+    pub profiles: Vec<AudioCodecProfile>,
+}
+
 #[derive(Debug, Error, Clone, Copy, PartialEq, Eq)]
 pub enum ExtensionPackageError {
     #[error("The selected extension package could not be read.")]
@@ -263,6 +312,8 @@ pub enum ExtensionPackageError {
     InvalidSimulatorProviderManifest,
     #[error("That extension package does not contain a valid audio provider manifest.")]
     InvalidAudioProviderManifest,
+    #[error("That extension package does not contain a valid audio codec manifest.")]
+    InvalidAudioCodecManifest,
     #[error("WyrmGrid could not stage the extension package.")]
     ExtractionFailed,
 }
@@ -309,6 +360,11 @@ pub(crate) struct ActiveManagedSimulatorProvider {
 
 pub(crate) struct ActiveManagedAudioProvider {
     pub manifest: AudioProviderManifest,
+    pub root: PathBuf,
+}
+
+pub(crate) struct ActiveManagedAudioCodec {
+    pub manifest: AudioCodecManifest,
     pub root: PathBuf,
 }
 
@@ -394,6 +450,30 @@ impl ExtensionPackageService {
         )
     }
 
+    pub fn install_audio_codec_package(
+        &self,
+        path: &Path,
+    ) -> Result<ManagedAudioCodecPackageView, ExtensionPackageManagementError> {
+        let package = read_audio_codec_package(path)?;
+        self.install_validated_audio_codec_package(
+            package,
+            EXTENSION_PACKAGE_SOURCE_LOCAL_FILE,
+            true,
+        )
+    }
+
+    pub fn seed_first_party_audio_codec_package(
+        &self,
+        path: &Path,
+    ) -> Result<ManagedAudioCodecPackageView, ExtensionPackageManagementError> {
+        let package = read_audio_codec_package(path)?;
+        self.install_validated_audio_codec_package(
+            package,
+            EXTENSION_PACKAGE_SOURCE_FIRST_PARTY,
+            false,
+        )
+    }
+
     pub fn list_plugin_packages(
         &self,
     ) -> Result<Vec<ManagedPluginPackageView>, ExtensionPackageManagementError> {
@@ -436,6 +516,21 @@ impl ExtensionPackageService {
         states
             .into_iter()
             .map(|state| managed_audio_provider_view(&self.inner.store, root, state))
+            .collect()
+    }
+
+    pub fn list_audio_codec_packages(
+        &self,
+    ) -> Result<Vec<ManagedAudioCodecPackageView>, ExtensionPackageManagementError> {
+        let root = self.root()?;
+        let states = self
+            .inner
+            .store
+            .list_extension_package_state_records(ExtensionPackageKind::AudioCodecProvider.as_str())
+            .map_err(|_| ExtensionPackageManagementError::StorageUnavailable)?;
+        states
+            .into_iter()
+            .map(|state| managed_audio_codec_view(&self.inner.store, root, state))
             .collect()
     }
 
@@ -568,6 +663,50 @@ impl ExtensionPackageService {
             .collect()
     }
 
+    pub(crate) fn active_managed_audio_codecs(
+        &self,
+    ) -> Result<Vec<ActiveManagedAudioCodec>, ExtensionPackageManagementError> {
+        let root = self.root()?;
+        self.inner
+            .store
+            .list_extension_package_state_records(ExtensionPackageKind::AudioCodecProvider.as_str())
+            .map_err(|_| ExtensionPackageManagementError::StorageUnavailable)?
+            .into_iter()
+            .filter(|state| state.enabled)
+            .map(|state| {
+                let version = self
+                    .inner
+                    .store
+                    .load_extension_package_version_record(
+                        &state.package_kind,
+                        &state.extension_id,
+                        &state.active_version,
+                    )
+                    .map_err(|_| ExtensionPackageManagementError::StorageUnavailable)?
+                    .ok_or(ExtensionPackageManagementError::StorageUnavailable)?;
+                let manifest: AudioCodecManifest =
+                    serde_json::from_str(&version.extension_manifest_json)
+                        .map_err(|_| ExtensionPackageManagementError::StorageUnavailable)?;
+                manifest
+                    .validate()
+                    .map_err(|_| ExtensionPackageManagementError::StorageUnavailable)?;
+                if manifest.id != state.extension_id || manifest.version != state.active_version {
+                    return Err(ExtensionPackageManagementError::StorageUnavailable);
+                }
+                Ok(ActiveManagedAudioCodec {
+                    root: managed_payload_root(
+                        root,
+                        ExtensionPackageKind::AudioCodecProvider,
+                        &state.extension_id,
+                        &state.active_version,
+                        &version.archive_sha256,
+                    )?,
+                    manifest,
+                })
+            })
+            .collect()
+    }
+
     pub fn set_plugin_enabled(
         &self,
         plugin_id: &str,
@@ -634,6 +773,28 @@ impl ExtensionPackageService {
         self.load_audio_provider_view(provider_id)
     }
 
+    pub fn set_audio_codec_enabled(
+        &self,
+        provider_id: &str,
+        enabled: bool,
+    ) -> Result<ManagedAudioCodecPackageView, ExtensionPackageManagementError> {
+        let _guard = self
+            .inner
+            .mutation_lock
+            .lock()
+            .map_err(|_| ExtensionPackageManagementError::StateUnavailable)?;
+        self.root()?;
+        self.inner
+            .store
+            .set_extension_package_enabled(
+                ExtensionPackageKind::AudioCodecProvider.as_str(),
+                provider_id,
+                enabled,
+            )
+            .map_err(|_| ExtensionPackageManagementError::StorageUnavailable)?;
+        self.load_audio_codec_view(provider_id)
+    }
+
     pub fn rollback_plugin(
         &self,
         plugin_id: &str,
@@ -697,6 +858,29 @@ impl ExtensionPackageService {
         self.load_audio_provider_view(provider_id)
     }
 
+    pub fn rollback_audio_codec(
+        &self,
+        provider_id: &str,
+    ) -> Result<ManagedAudioCodecPackageView, ExtensionPackageManagementError> {
+        let _guard = self
+            .inner
+            .mutation_lock
+            .lock()
+            .map_err(|_| ExtensionPackageManagementError::StateUnavailable)?;
+        self.root()?;
+        self.inner
+            .store
+            .rollback_extension_package(
+                ExtensionPackageKind::AudioCodecProvider.as_str(),
+                provider_id,
+            )
+            .map_err(|error| match error {
+                StorageError::InvalidRecord => ExtensionPackageManagementError::RollbackUnavailable,
+                _ => ExtensionPackageManagementError::StorageUnavailable,
+            })?;
+        self.load_audio_codec_view(provider_id)
+    }
+
     pub fn remove_plugin(&self, plugin_id: &str) -> Result<(), ExtensionPackageManagementError> {
         self.remove_package(ExtensionPackageKind::OrdinaryPlugin, plugin_id)
     }
@@ -713,6 +897,13 @@ impl ExtensionPackageService {
         provider_id: &str,
     ) -> Result<(), ExtensionPackageManagementError> {
         self.remove_package(ExtensionPackageKind::AudioProvider, provider_id)
+    }
+
+    pub fn remove_audio_codec(
+        &self,
+        provider_id: &str,
+    ) -> Result<(), ExtensionPackageManagementError> {
+        self.remove_package(ExtensionPackageKind::AudioCodecProvider, provider_id)
     }
 
     fn remove_package(
@@ -1006,6 +1197,90 @@ impl ExtensionPackageService {
         self.load_audio_provider_view(&provider_id)
     }
 
+    fn install_validated_audio_codec_package(
+        &self,
+        package: ValidatedAudioCodecPackage,
+        source: &str,
+        activate: bool,
+    ) -> Result<ManagedAudioCodecPackageView, ExtensionPackageManagementError> {
+        let _guard = self
+            .inner
+            .mutation_lock
+            .lock()
+            .map_err(|_| ExtensionPackageManagementError::StateUnavailable)?;
+        let root = self.root()?;
+        let package_kind = package.package_manifest.kind.as_str();
+        let package_root = managed_kind_root(root, package.package_manifest.kind)?;
+        let staging_root = verified_descendant_directory(root, &root.join(STAGING_DIRECTORY))?;
+        let provider_id = package.package_manifest.id.clone();
+        let version = package.package_manifest.version.clone();
+        let activate = activate
+            || (source == EXTENSION_PACKAGE_SOURCE_FIRST_PARTY
+                && self.first_party_seed_should_activate(package_kind, &provider_id, &version)?);
+        if let Some(existing) = self
+            .inner
+            .store
+            .load_extension_package_version_record(package_kind, &provider_id, &version)
+            .map_err(|_| ExtensionPackageManagementError::StorageUnavailable)?
+            && existing.archive_sha256 != package.archive_sha256
+        {
+            return Err(ExtensionPackageManagementError::VersionConflict);
+        }
+
+        let staging = staging_root.join(Uuid::new_v4().simple().to_string());
+        package.extract_to(&staging)?;
+        let destination = package_root
+            .join(&provider_id)
+            .join(&version)
+            .join(&package.archive_sha256);
+        let created_destination = if destination.exists() {
+            fs::remove_dir_all(&staging)
+                .map_err(|_| ExtensionPackageManagementError::FileOperation)?;
+            false
+        } else {
+            fs::create_dir_all(
+                destination
+                    .parent()
+                    .ok_or(ExtensionPackageManagementError::FileOperation)?,
+            )
+            .map_err(|_| ExtensionPackageManagementError::FileOperation)?;
+            fs::rename(&staging, &destination)
+                .map_err(|_| ExtensionPackageManagementError::FileOperation)?;
+            true
+        };
+        let record = NewExtensionPackageVersionRecord {
+            package_kind: package_kind.to_owned(),
+            extension_id: provider_id.clone(),
+            version,
+            archive_sha256: package.archive_sha256.clone(),
+            package_schema_version: package.package_manifest.schema_version,
+            source: source.to_owned(),
+            package_manifest_json: serde_json::to_string(&package.package_manifest)
+                .map_err(|_| ExtensionPackageManagementError::StorageUnavailable)?,
+            extension_manifest_json: serde_json::to_string(&package.codec_manifest)
+                .map_err(|_| ExtensionPackageManagementError::StorageUnavailable)?,
+        };
+        let saved = if activate {
+            self.inner
+                .store
+                .activate_extension_package_version_record(&record)
+        } else {
+            self.inner
+                .store
+                .seed_extension_package_version_record(&record)
+        };
+        if let Err(error) = saved {
+            if created_destination {
+                let _ = fs::remove_dir_all(&destination);
+            }
+            return Err(match error {
+                StorageError::InvalidRecord => ExtensionPackageManagementError::VersionConflict,
+                _ => ExtensionPackageManagementError::StorageUnavailable,
+            });
+        }
+        self.load_audio_codec_view(&provider_id)
+    }
+
     fn first_party_seed_should_activate(
         &self,
         package_kind: &str,
@@ -1079,6 +1354,23 @@ impl ExtensionPackageService {
             .map_err(|_| ExtensionPackageManagementError::StorageUnavailable)?
             .ok_or(ExtensionPackageManagementError::StorageUnavailable)?;
         managed_audio_provider_view(&self.inner.store, root, state)
+    }
+
+    fn load_audio_codec_view(
+        &self,
+        provider_id: &str,
+    ) -> Result<ManagedAudioCodecPackageView, ExtensionPackageManagementError> {
+        let root = self.root()?;
+        let state = self
+            .inner
+            .store
+            .load_extension_package_state_record(
+                ExtensionPackageKind::AudioCodecProvider.as_str(),
+                provider_id,
+            )
+            .map_err(|_| ExtensionPackageManagementError::StorageUnavailable)?
+            .ok_or(ExtensionPackageManagementError::StorageUnavailable)?;
+        managed_audio_codec_view(&self.inner.store, root, state)
     }
 
     fn root(&self) -> Result<&Path, ExtensionPackageManagementError> {
@@ -1208,6 +1500,49 @@ impl ValidatedAudioProviderPackage {
     }
 }
 
+pub(crate) struct ValidatedAudioCodecPackage {
+    bytes: Vec<u8>,
+    pub package_manifest: ExtensionPackageManifest,
+    pub codec_manifest: AudioCodecManifest,
+    pub archive_sha256: String,
+}
+
+impl ValidatedAudioCodecPackage {
+    pub fn inspection(&self) -> AudioCodecPackageInspection {
+        AudioCodecPackageInspection {
+            package_schema_version: self.package_manifest.schema_version,
+            package_kind: self.package_manifest.kind,
+            id: self.package_manifest.id.clone(),
+            name: self.codec_manifest.name.clone(),
+            version: self.package_manifest.version.clone(),
+            author: self.codec_manifest.author.clone(),
+            codec_protocol_version: self.codec_manifest.codec_protocol_version,
+            platforms: self.codec_manifest.platforms.clone(),
+            capabilities: self.codec_manifest.capabilities.clone(),
+            profiles: self.codec_manifest.profiles.clone(),
+            archive_sha256: self.archive_sha256.clone(),
+            archive_size: self.bytes.len() as u64,
+            expanded_size: self.package_manifest.expanded_size(),
+            file_count: self.package_manifest.files.len(),
+            publisher_verified: false,
+        }
+    }
+
+    pub fn extract_to(&self, destination: &Path) -> Result<(), ExtensionPackageError> {
+        extract_validated_package(&self.bytes, &self.package_manifest, destination)?;
+        if self
+            .codec_manifest
+            .platforms
+            .contains(&current_codec_platform())
+        {
+            let entry_point = codec_executable_in(destination, &self.codec_manifest);
+            set_provider_entry_point_executable_path(&entry_point)
+        } else {
+            Ok(())
+        }
+    }
+}
+
 pub fn inspect_plugin_package(
     path: &Path,
 ) -> Result<PluginPackageInspection, ExtensionPackageError> {
@@ -1224,6 +1559,12 @@ pub fn inspect_audio_provider_package(
     path: &Path,
 ) -> Result<AudioProviderPackageInspection, ExtensionPackageError> {
     read_audio_provider_package(path).map(|package| package.inspection())
+}
+
+pub fn inspect_audio_codec_package(
+    path: &Path,
+) -> Result<AudioCodecPackageInspection, ExtensionPackageError> {
+    read_audio_codec_package(path).map(|package| package.inspection())
 }
 
 pub(crate) fn read_plugin_package(
@@ -1342,6 +1683,48 @@ pub(crate) fn read_audio_provider_package(
     })
 }
 
+pub(crate) fn read_audio_codec_package(
+    path: &Path,
+) -> Result<ValidatedAudioCodecPackage, ExtensionPackageError> {
+    let metadata = fs::symlink_metadata(path).map_err(|_| ExtensionPackageError::Unavailable)?;
+    if !metadata.file_type().is_file() || metadata.file_type().is_symlink() {
+        return Err(ExtensionPackageError::Unavailable);
+    }
+    if metadata.len() > MAX_PACKAGE_ARCHIVE_BYTES {
+        return Err(ExtensionPackageError::ArchiveTooLarge);
+    }
+    let bytes = fs::read(path).map_err(|_| ExtensionPackageError::Unavailable)?;
+    let archive_sha256 = hex_sha256(&bytes);
+    let (package_manifest, manifest_json) =
+        validate_package_bytes(&bytes, ExtensionPackageKind::AudioCodecProvider)?;
+    let codec_manifest: AudioCodecManifest = serde_json::from_slice(&manifest_json)
+        .map_err(|_| ExtensionPackageError::InvalidAudioCodecManifest)?;
+    codec_manifest
+        .validate()
+        .map_err(|_| ExtensionPackageError::InvalidAudioCodecManifest)?;
+    if codec_manifest.id != package_manifest.id
+        || codec_manifest.version != package_manifest.version
+        || codec_manifest.entry_point == package_manifest.manifest_path
+        || package_manifest.files.len() < 2
+        || !audio_codec_entry_points(&codec_manifest)
+            .iter()
+            .all(|entry_point| {
+                package_manifest
+                    .files
+                    .iter()
+                    .any(|file| &file.path == entry_point)
+            })
+    {
+        return Err(ExtensionPackageError::InvalidAudioCodecManifest);
+    }
+    Ok(ValidatedAudioCodecPackage {
+        bytes,
+        package_manifest,
+        codec_manifest,
+        archive_sha256,
+    })
+}
+
 fn set_provider_entry_point_executable(
     destination: &Path,
     entry_point: &str,
@@ -1373,6 +1756,18 @@ fn audio_provider_entry_points(manifest: &AudioProviderManifest) -> Vec<String> 
     for platform in &manifest.platforms {
         let mut entry_point = manifest.entry_point.clone();
         if *platform == AudioProviderPlatform::WindowsX86_64 {
+            entry_point.push_str(".exe");
+        }
+        entry_points.insert(entry_point);
+    }
+    entry_points.into_iter().collect()
+}
+
+fn audio_codec_entry_points(manifest: &AudioCodecManifest) -> Vec<String> {
+    let mut entry_points = BTreeSet::new();
+    for platform in &manifest.platforms {
+        let mut entry_point = manifest.entry_point.clone();
+        if *platform == AudioCodecPlatform::WindowsX86_64 {
             entry_point.push_str(".exe");
         }
         entry_points.insert(entry_point);
@@ -1422,6 +1817,7 @@ fn prepare_package_root(root: PathBuf) -> Result<PathBuf, std::io::Error> {
         ExtensionPackageKind::OrdinaryPlugin,
         ExtensionPackageKind::SimulatorProvider,
         ExtensionPackageKind::AudioProvider,
+        ExtensionPackageKind::AudioCodecProvider,
     ] {
         ensure_directory(&root.join(kind.as_str()))?;
         ensure_directory(&root.join(REMOVAL_DIRECTORY).join(kind.as_str()))?;
@@ -1456,6 +1852,7 @@ fn recover_pending_removals(root: &Path, store: &Store) -> Result<(), std::io::E
         ExtensionPackageKind::OrdinaryPlugin,
         ExtensionPackageKind::SimulatorProvider,
         ExtensionPackageKind::AudioProvider,
+        ExtensionPackageKind::AudioCodecProvider,
     ] {
         recover_pending_removals_for_kind(root, store, kind)?;
     }
@@ -1705,6 +2102,54 @@ fn managed_audio_provider_view(
         audio_protocol_version: manifest.audio_protocol_version,
         platforms: manifest.platforms,
         capabilities: manifest.capabilities,
+    })
+}
+
+fn managed_audio_codec_view(
+    store: &Store,
+    root: &Path,
+    state: wyrmgrid_storage::ExtensionPackageStateRecord,
+) -> Result<ManagedAudioCodecPackageView, ExtensionPackageManagementError> {
+    let versions = store
+        .list_extension_package_version_records(&state.package_kind, &state.extension_id)
+        .map_err(|_| ExtensionPackageManagementError::StorageUnavailable)?;
+    let active = versions
+        .iter()
+        .find(|version| version.version == state.active_version)
+        .ok_or(ExtensionPackageManagementError::StorageUnavailable)?;
+    let manifest: AudioCodecManifest = serde_json::from_str(&active.extension_manifest_json)
+        .map_err(|_| ExtensionPackageManagementError::StorageUnavailable)?;
+    manifest
+        .validate()
+        .map_err(|_| ExtensionPackageManagementError::StorageUnavailable)?;
+    if manifest.id != state.extension_id || manifest.version != state.active_version {
+        return Err(ExtensionPackageManagementError::StorageUnavailable);
+    }
+    managed_payload_root(
+        root,
+        ExtensionPackageKind::AudioCodecProvider,
+        &state.extension_id,
+        &state.active_version,
+        &active.archive_sha256,
+    )?;
+    Ok(ManagedAudioCodecPackageView {
+        id: state.extension_id,
+        name: manifest.name,
+        author: manifest.author,
+        active_version: state.active_version,
+        rollback_version: state.rollback_version,
+        enabled: state.enabled,
+        installed_versions: versions
+            .iter()
+            .map(|version| version.version.clone())
+            .collect(),
+        active_archive_sha256: active.archive_sha256.clone(),
+        source: active.source.clone(),
+        publisher_verified: false,
+        codec_protocol_version: manifest.codec_protocol_version,
+        platforms: manifest.platforms,
+        capabilities: manifest.capabilities,
+        profiles: manifest.profiles,
     })
 }
 

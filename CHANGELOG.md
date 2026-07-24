@@ -28,12 +28,22 @@ major application version.
   enable/disable, immutable updates, rollback, and removal; keep installation
   separate from device permission and recording consent; and provide a
   deterministic synthetic reference artifact without claiming native capture.
+- Added external Audio Codec Provider packages: bounded `.wyrmcodec` archives
+  declare platform, executable stem, codec protocol version, capabilities, and
+  profiles; support offline native-code review, managed install,
+  enable/disable, immutable updates, rollback, removal, and first-party Opus
+  seeding; and ground the real packaged capture-to-codec-to-encrypted-playback
+  chain with synthetic Windows fixtures.
 - Added a debug-only Windows microphone capture provider and a specialised,
   out-of-process codec-provider contract. Codec choice is stored per source;
   exact provider-version and codec-format provenance is snapshotted per track.
   WyrmGrid's first-party Opus encoder uses the same bounded protocol intended
-  for future end-user codec providers. The Windows and codec sidecars are not
-  released or live-certified yet.
+  for end-user codec providers. The Windows and codec sidecars are not released
+  or live-certified yet.
+- Added a no-overwrite extension scaffolder and unified author guide for
+  `.wyrmplugin`, `.wyrmprovider`, `.wyrmaudio`, and `.wyrmcodec` projects. The
+  generated starting trees keep permissions and capabilities narrow and leave
+  native protocol implementation explicit.
 
 ### Changes
 
@@ -54,14 +64,17 @@ major application version.
   separately from encoding. Unreleased version 1 schemas and fixtures are
   retained as compatibility evidence; migration 20 preserves earlier audio
   metadata with explicit first-party Opus provenance.
-- Advanced the canonical source catalogue to version 21. Version 20 added
+- Advanced the canonical source catalogue to version 22. Version 20 added
   codec selection and unavailable-codec wording; version 21 adds audio-provider
   package inspection, selection, native-code trust, lifecycle, and destructive-
-  removal wording. Community language packs must review the protected messages
-  and update their declared source version before re-import.
-- Advanced the application database to schema 21: migration 20 records audio
-  codec provenance, and migration 21 adds managed external-package lifecycle
-  state.
+  removal wording; version 22 adds matching audio-codec package inspection,
+  trust, profile, lifecycle, and destructive-removal wording. Community
+  language packs must review the protected messages and update their declared
+  source version before re-import.
+- Advanced the application database to schema 22: migration 20 records audio
+  codec provenance, migration 21 adds managed external-package lifecycle state,
+  and migration 22 preserves that state while adding the
+  `audio_codec_provider` package kind.
 
 ### Removed
 

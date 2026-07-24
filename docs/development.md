@@ -167,6 +167,23 @@ Audio recording panel so inspection, explicit trust review, selection, disable,
 update, rollback, and removal all exercise the public lifecycle. See
 [audio provider authoring](integrations/audio-provider-authoring.md).
 
+## Audio Codec Provider packages
+
+Run `npm run audio-codec:distribution` to build the first-party Opus provider
+and create its independently installable `.wyrmcodec` artifact under
+`assets/codec-packages`. `npm run audio-codec:prepare` stages an ignored debug
+package for desktop development. Tauri release preparation builds and stages
+the release package as an optional installer seed; startup validates it through
+the same managed lifecycle as a deliberately installed community package.
+
+Use `npm run audio-codec:package -- --source <directory> --output
+<file.wyrmcodec> --include <executable>=<package-entry-point>` for another
+codec. Inspect and install the result through the Audio recording panel so its
+native-code warning, profiles, enable/disable, immutable update, rollback, and
+removal use the public lifecycle. See
+[Audio Codec Provider protocol version 1](integrations/audio-codec-provider-protocol.md)
+and [extension authoring](integrations/extension-authoring.md).
+
 ## Development audio capture and codecs
 
 Build the provider and codec sidecars with:
@@ -181,17 +198,27 @@ Capture providers must be installed as `.wyrmaudio` packages; the desktop no
 longer has a compile-time or environment-variable provider injection path. A
 deliberate Windows microphone test still requires packaging and installing the
 Windows provider, selecting it, enabling master consent and a source, and
-performing an explicit permission action. The first-party Opus codec is
-discovered from the development target directory or an explicitly approved
-absolute `WYRMGRID_AUDIO_CODEC_PATH` until its managed package lifecycle is
-implemented.
+performing an explicit permission action. Codecs likewise come only from
+validated managed `.wyrmcodec` packages. There is no arbitrary executable-path
+or environment-variable codec injection path.
 
 Automated tests never install or select the Windows provider and never open a
 microphone.
-The native Windows and codec sidecars are not staged into the installer. Do not
-infer released or live support from a successful local device test, and never
-include device labels, raw identifiers, PCM, encoded packets, or paths in test
-reports or optional-AI handoffs.
+The installer may contain the first-party Opus package as a seed, but the same
+artifact remains separately distributable and removable. The Windows
+microphone provider is not staged. Do not infer released or live support from a
+successful local device test, and never include device labels, raw identifiers,
+PCM, encoded packets, or paths in test reports or optional-AI handoffs.
+
+## Extension creator tools
+
+Run `npm run extension:scaffold -- --kind <kind> --directory <directory> --id
+<reverse-domain-id> --name <name> --author <author>` to create a safe starting
+tree for an ordinary plugin, simulator provider, audio provider, or audio
+codec. The command refuses a non-empty target and does not generate a fake
+native implementation. Follow the generated README and
+[authoring guide](integrations/extension-authoring.md), then run
+`npm run test:tooling` before sharing tooling changes.
 
 ## Repository layout
 

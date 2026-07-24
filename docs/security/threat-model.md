@@ -225,6 +225,17 @@
   consent. Disabling/removing the selected provider clears selection; active
   recording blocks package mutation; and provider hello must match the installed
   ID, name, version, platform, and capability set;
+- audio codec packages use another distinct bounded exact-inventory kind and
+  native-code trust presentation. Only an enabled active version compatible
+  with the current platform enters codec discovery. Installation does not
+  launch the codec or grant recording consent; active recording blocks codec
+  install, enable/disable, rollback, and removal; and handshake identity,
+  version, platform, profiles, and encoded-packet metadata must match the exact
+  installed manifest and active track;
+- append-only migration 22 rebuilds the constrained extension-package tables
+  transactionally, copies every schema-21 version and active/rollback state,
+  adds only `audio_codec_provider`, verifies foreign-key integrity, and leaves
+  the earlier shipped migration unchanged;
 - only one selected telemetry provider is active in protocol version 1; the host
   neither merges values nor silently falls back from SimConnect to FSUIPC;
 - simulator recording is explicit and local; automation is separately opt-in
@@ -518,12 +529,13 @@
 
 ## Implemented simulator-audio application controls and remaining release gates
 
-Simulator-synchronised native audio remains unavailable to users. Its
-independently versioned capture and codec contracts, external capture-provider
-package lifecycle, application services, debug-only Windows microphone
-provider, and first-party Opus provider are implemented. The synthetic capture
-provider has a separately installable reference package; native release, codec
-package lifecycle, legal approval, and live-device support are not complete.
+Simulator-synchronised native audio remains unavailable as a released support
+claim. Its independently versioned capture and codec contracts, external
+capture-provider and codec-provider package lifecycles, application services,
+debug-only Windows microphone provider, and first-party Opus provider are
+implemented. The synthetic capture provider and Opus codec have separately
+installable reference packages; native release, publisher signing, OS resource
+isolation, legal approval, and live-device support are not complete.
 Before any native capture path ships, the remaining controls are gates rather
 than claims about the current application:
 
@@ -551,9 +563,10 @@ than claims about the current application:
   non-blocking callback queues, and is never opened by automated tests. Neither
   establishes released or live-certified capture.
 - The first-party Opus provider uses the same codec protocol intended for
-  future end-user choices. Its synthetic encode/decode test establishes
-  integration only, not independent conformance, quality, or security
-  certification.
+  end-user choices and is seeded only through the managed `.wyrmcodec`
+  lifecycle. Its synthetic encode/decode test and packaged capture-to-codec
+  chain establish integration only, not independent conformance, quality,
+  publisher trust, or security certification.
 - Microphone and communications consent is separate, explicit, default-off,
   source-specific, and visibly active. Telemetry recording and its automation
   grant no audio authority, and full desktop audio is never implicit.
@@ -582,10 +595,12 @@ than claims about the current application:
 - Project policy excludes audio content, labels, identifiers, and media paths
   from general plugins, Sentry, diagnostics, optional-AI packets, support
   bundles, and public services. A deliberately selected codec provider is the
-  narrow exception for its selected source's transient PCM; community codec
-  installation still requires signing, integrity, trust, resource, update,
-  rollback, removal, and privacy presentation. Stable bounded status codes may
-  describe failures without carrying private values.
+  narrow exception for its selected source's transient PCM. Deliberate unsigned
+  local codec installation now has exact integrity, native-code trust,
+  immutable update, rollback, disable, removal, and privacy presentation;
+  publisher signing, authenticated updates, revocation, OS resource limits, and
+  release legal approval remain gates. Stable bounded status codes may describe
+  failures without carrying private values.
 - A first-party X-Plane in-process tap can proceed only after stability,
   licensing, signing, installation/removal, local authentication, backpressure,
   third-party-aircraft, and cross-platform review. It has no business logic and
@@ -598,6 +613,8 @@ than claims about the current application:
 The accepted boundary and full test matrix are recorded in
 [ADR-0017](../architecture/decisions/0017-simulator-synchronised-audio-recording.md)
 and [ADR-0020](../architecture/decisions/0020-out-of-process-audio-codec-providers.md),
+[ADR-0024](../architecture/decisions/0024-audio-provider-package-format-v1.md),
+and [ADR-0025](../architecture/decisions/0025-audio-codec-package-format-v1.md),
 plus the
 [simulator-audio plan](../integrations/simulator-audio-recording.md).
 
@@ -800,7 +817,8 @@ this guidance must change without weakening secret handling.
   same deterministic external package and managed installer as local community
   files. The first-party SimConnect sidecar likewise uses the same deterministic
   `.wyrmprovider` and managed installer as a local community provider. Audio
-  provider packaging remains deferred.
+  capture and codec providers use the distinct `.wyrmaudio` and `.wyrmcodec`
+  formats and managed installers appropriate to their narrower contracts.
 - External local installation deliberately permits packages obtained without
   Aerie. Local structural validation cannot establish publisher identity, code
   intent, safety, or rights. The installer must show unverified provenance and
@@ -830,7 +848,11 @@ The exact implemented boundary and deferred hardening are recorded in
 with the ordinary package security and compatibility decision in
 [ADR-0022](../architecture/decisions/0022-ordinary-plugin-package-format-v1.md)
 and the native simulator-provider decision in
-[ADR-0023](../architecture/decisions/0023-simulator-provider-package-format-v1.md).
+[ADR-0023](../architecture/decisions/0023-simulator-provider-package-format-v1.md),
+the audio-provider decision in
+[ADR-0024](../architecture/decisions/0024-audio-provider-package-format-v1.md),
+and the audio-codec decision in
+[ADR-0025](../architecture/decisions/0025-audio-codec-package-format-v1.md).
 
 ## Residual Hoard risks
 

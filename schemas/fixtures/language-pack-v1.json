@@ -5,7 +5,7 @@
   "name": "Français communautaire (exemple)",
   "author": "WyrmGrid fixture",
   "source_locale": "en-AU",
-  "source_catalog_version": 21,
+  "source_catalog_version": 22,
   "direction": "left_to_right",
   "messages": {
     "action-try-again": "Réessayer",

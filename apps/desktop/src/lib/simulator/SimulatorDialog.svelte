@@ -23,11 +23,13 @@
     ProviderConnectionState,
     SimulatorBridgeView,
     AudioPlaybackView,
+    AudioCodecPackageInspection,
     AudioProviderPackageInspection,
     AudioRecordingPreferences,
     AudioRecordingView,
     AudioSourceSelection,
     ManagedAudioProviderPackage,
+    ManagedAudioCodecPackage,
     ManagedSimulatorProviderPackage,
     SimulatorProviderView,
     SimulatorProviderPackageInspection,
@@ -52,6 +54,8 @@
     audioPlayback,
     managedAudioProviders,
     pendingAudioProviderPackage,
+    managedAudioCodecs,
+    pendingAudioCodecPackage,
     audioBusy = false,
     onrefresh,
     onstart,
@@ -79,6 +83,12 @@
     onaudioproviderenable,
     onaudioproviderrollback,
     onaudioproviderremove,
+    onaudiochoosecodecpackage,
+    onaudiocancelcodecpackage,
+    onaudioinstallcodecpackage,
+    onaudiocodecenable,
+    onaudiocodecrollback,
+    onaudiocodecremove,
     onaudiorefresh,
     onaudiopermission,
     onaudiosource,
@@ -102,6 +112,8 @@
     audioPlayback?: AudioPlaybackView;
     managedAudioProviders: ManagedAudioProviderPackage[];
     pendingAudioProviderPackage?: AudioProviderPackageInspection;
+    managedAudioCodecs: ManagedAudioCodecPackage[];
+    pendingAudioCodecPackage?: AudioCodecPackageInspection;
     audioBusy?: boolean;
     onrefresh: () => void;
     onstart: (providerId: string) => void;
@@ -129,6 +141,12 @@
     onaudioproviderenable: (providerId: string, enabled: boolean) => void;
     onaudioproviderrollback: (providerId: string) => void;
     onaudioproviderremove: (providerId: string) => void;
+    onaudiochoosecodecpackage: () => void;
+    onaudiocancelcodecpackage: () => void;
+    onaudioinstallcodecpackage: () => void;
+    onaudiocodecenable: (providerId: string, enabled: boolean) => void;
+    onaudiocodecrollback: (providerId: string) => void;
+    onaudiocodecremove: (providerId: string) => void;
     onaudiorefresh: () => void;
     onaudiopermission: (sourceId: string) => void;
     onaudiosource: (selection: AudioSourceSelection) => void;
@@ -662,6 +680,8 @@
         playback={audioPlayback}
         managedProviders={managedAudioProviders}
         pendingProviderPackage={pendingAudioProviderPackage}
+        managedCodecs={managedAudioCodecs}
+        pendingCodecPackage={pendingAudioCodecPackage}
         busy={audioBusy}
         onpreferences={onaudiopreferences}
         onchooseproviderpackage={onaudiochooseproviderpackage}
@@ -671,6 +691,12 @@
         onproviderenable={onaudioproviderenable}
         onproviderrollback={onaudioproviderrollback}
         onproviderremove={onaudioproviderremove}
+        onchoosecodecpackage={onaudiochoosecodecpackage}
+        oncancelcodecpackage={onaudiocancelcodecpackage}
+        oninstallcodecpackage={onaudioinstallcodecpackage}
+        oncodecenable={onaudiocodecenable}
+        oncodecrollback={onaudiocodecrollback}
+        oncodecremove={onaudiocodecremove}
         onrefresh={onaudiorefresh}
         onpermission={onaudiopermission}
         onsource={onaudiosource}

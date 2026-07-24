@@ -44,7 +44,9 @@ const FLIGHT_OPERATION_AIRCRAFT_ASSIGNMENTS_SCHEMA: &str =
 const AUDIO_CODEC_PROVIDERS_SCHEMA: &str =
     include_str!("../migrations/0020_audio_codec_providers.sql");
 const EXTENSION_PACKAGES_SCHEMA: &str = include_str!("../migrations/0021_extension_packages.sql");
-pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 21;
+const AUDIO_CODEC_PACKAGES_SCHEMA: &str =
+    include_str!("../migrations/0022_audio_codec_packages.sql");
+pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 22;
 
 #[derive(Debug, Error)]
 pub enum StorageError {
@@ -358,6 +360,30 @@ fn apply_audio_codec_provider_migration(connection: &mut Connection) -> Result<(
     Ok(())
 }
 
+fn apply_audio_codec_package_migration(connection: &mut Connection) -> Result<(), StorageError> {
+    let already_applied = connection.query_row(
+        "SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = 22)",
+        [],
+        |row| row.get::<_, bool>(0),
+    )?;
+    if already_applied {
+        return Ok(());
+    }
+
+    let transaction = connection.transaction()?;
+    transaction.execute_batch(AUDIO_CODEC_PACKAGES_SCHEMA)?;
+    let foreign_key_errors = transaction
+        .prepare("PRAGMA foreign_key_check")?
+        .query([])?
+        .next()?
+        .is_some();
+    if foreign_key_errors {
+        return Err(StorageError::InvalidRecord);
+    }
+    transaction.commit()?;
+    Ok(())
+}
+
 impl Store {
     pub fn open(path: impl AsRef<Path>, key: &DatabaseKey) -> Result<Self, StorageError> {
         let path = path.as_ref().to_path_buf();
@@ -401,6 +427,7 @@ impl Store {
         connection.execute_batch(FLIGHT_OPERATION_AIRCRAFT_ASSIGNMENTS_SCHEMA)?;
         apply_audio_codec_provider_migration(&mut connection)?;
         connection.execute_batch(EXTENSION_PACKAGES_SCHEMA)?;
+        apply_audio_codec_package_migration(&mut connection)?;
         if path.is_some() {
             data_protection::mark_wyrmgrid_database(&connection)?;
         }
