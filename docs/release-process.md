@@ -30,9 +30,10 @@
 8. GitHub-hosted runners build the Windows NSIS setup executable, Linux AppImage
    and Debian package, and macOS DMG. The Windows runner silently installs the
    NSIS output and verifies that both the desktop executable and SimConnect
-   provider sidecar are present. After the first release, it installs the
-   closest older published setup first, installs the new setup over it, and
-   verifies that existing application data survives.
+   provider sidecar are present, together with the complete platform-neutral
+   EDK resource directory. After the first release, it installs the closest
+   older published setup first, installs the new setup over it, and verifies
+   that existing application data survives.
 9. A single least-privilege publication job downloads the platform outputs,
    produces `SHA256SUMS.txt`, records GitHub artifact provenance, extracts the
    matching reviewed changelog entry, and attaches the files and notes to a

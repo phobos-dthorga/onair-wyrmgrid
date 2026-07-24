@@ -88,6 +88,15 @@ artifacts. The first-party Opus codec is packaged, seeded, updated, disabled,
 rolled back, and removed through the same public lifecycle as a local community
 codec; this does not claim publisher verification or live-device certification.
 
+Extension Developer Kit v1 provides the separately versioned
+`wyrmgrid-extension` command for scaffolding, validating, reproducibly
+packaging, and locally testing every extension kind without compiling or
+checking out WyrmGrid. See the
+[extension author guide](docs/integrations/extension-authoring.md). Desktop
+installers include the same platform-neutral npm package; Forge can open its
+installed directory and the current author-documentation site. Node.js remains
+an explicit author prerequisite rather than an application runtime.
+
 ## Core promises
 
 1. Plugins do not receive the raw OnAir API key.

@@ -5,7 +5,8 @@
   "description": "A modular operations and intelligence platform for OnAir Airline Manager.",
   "license": "MIT",
   "workspaces": [
-    "apps/desktop"
+    "apps/desktop",
+    "packages/extension-developer-kit"
   ],
   "scripts": {
     "build": "npm run build --workspace @wyrmgrid/desktop",
@@ -36,6 +37,11 @@
     "ai:contribution:land": "node scripts/optional-ai-landing.mjs land",
     "atlas:regions": "node scripts/prepare-atlas-regions.mjs",
     "extension:scaffold": "node scripts/scaffold-extension.mjs",
+    "edk": "node packages/extension-developer-kit/bin/wyrmgrid-extension.mjs",
+    "edk:prepare": "node scripts/prepare-edk.mjs",
+    "edk:prepare-bundle": "node scripts/prepare-bundled-edk.mjs",
+    "edk:test": "npm run edk:prepare && npm test --workspace @wyrmgrid/extension-developer-kit",
+    "edk:pack": "npm run edk:prepare && npm pack --workspace @wyrmgrid/extension-developer-kit",
     "plugin:package": "node scripts/package-plugin.mjs",
     "provider:package": "node scripts/package-simulator-provider.mjs",
     "audio-provider:package": "node scripts/package-audio-provider.mjs",
@@ -46,7 +52,7 @@
     "audio-provider:distribution": "node scripts/prepare-audio-provider.mjs --distribution",
     "audio-codec:prepare": "node scripts/prepare-audio-codec.mjs",
     "audio-codec:distribution": "node scripts/prepare-audio-codec.mjs --distribution",
-    "test:tooling": "node --test scripts/*.test.mjs",
+    "test:tooling": "npm run edk:prepare && node --test scripts/*.test.mjs packages/extension-developer-kit/test/*.test.mjs",
     "tauri": "npm run tauri --workspace @wyrmgrid/desktop --"
   },
   "devDependencies": {

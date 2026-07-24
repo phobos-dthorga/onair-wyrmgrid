@@ -27,6 +27,7 @@ keyring.workspace = true
 secrecy.workspace = true
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2.7.1"
+tauri-plugin-opener = "2.5.4"
 sentry.workspace = true
 serde.workspace = true
 serde_json.workspace = true

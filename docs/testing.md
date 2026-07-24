@@ -32,12 +32,26 @@ test code from normal application builds.
   wrong-password restores, retention behaviour, staged activation, and rollback.
 - Protocols and community data: versioned fixtures, unknown fields, size limits,
   deny-by-default permissions, and backwards-compatibility decisions.
+- Extension tools: all supported kinds, malformed manifests and archives,
+  deterministic double-builds, exact inventory and digest reinspection,
+  no-overwrite behavior, runtime launch failure, framing/identity/sequence
+  errors, timeouts, shutdown, privacy-reduced reports, and standalone execution
+  from the packed npm artifact.
+- Desktop packaging: the prepared resource contains the installable EDK
+  manifest, command, licence, README, and schema catalogue; the installer
+  contract retains its cross-platform resource mapping; and an NSIS smoke test
+  confirms those files exist after installation.
 - Interface: important user journeys, empty/loading/error states, keyboard use,
   and localized text expansion. Business-rule assertions belong in Rust rather
   than Svelte tests.
 
 A bug fix starts with a failing regression test at the lowest meaningful layer.
 Avoid tests that merely repeat a type definition or lock in incidental markup.
+
+Run `npm run test:tooling` for repository tooling and EDK contract tests, or
+`npm run edk:test` for the focused EDK suite. Runtime conformance fixtures are
+synthetic processes for all four extension kinds; they prove the handshake
+host, not live simulator, device, codec-quality, or publisher claims.
 
 ## Validation execution policy
 

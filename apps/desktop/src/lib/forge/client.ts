@@ -14,6 +14,14 @@ export async function loadPluginHost(): Promise<PluginHostView> {
     : forgePreviewStopped;
 }
 
+export function openExtensionDeveloperKitDirectory(): Promise<void> {
+  return invokeDesktop<void>("open_extension_developer_kit_directory");
+}
+
+export function openExtensionDocumentation(): Promise<void> {
+  return invokeDesktop<void>("open_extension_documentation");
+}
+
 export function approvePluginPermissions(
   pluginId: string,
   lifetime: AuthorizationGrantLifetime,

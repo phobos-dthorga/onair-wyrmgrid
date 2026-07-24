@@ -4,7 +4,7 @@
   "description": "OnAir WyrmGrid desktop application",
   "type": "module",
   "scripts": {
-    "predev": "node ../../scripts/prepare-plugin-packages.mjs && node ../../scripts/prepare-simulator-provider.mjs && node ../../scripts/prepare-audio-codec.mjs",
+    "predev": "node ../../scripts/prepare-plugin-packages.mjs && node ../../scripts/prepare-simulator-provider.mjs && node ../../scripts/prepare-audio-codec.mjs && node ../../scripts/prepare-bundled-edk.mjs",
     "dev": "vite dev",
     "build": "vite build",
     "postbuild": "node ../../scripts/verify-desktop-key-art.mjs",
@@ -13,7 +13,7 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "tauri": "tauri",
-    "tauri:before-build": "node ../../scripts/prepare-plugin-packages.mjs && node ../../scripts/prepare-simulator-provider.mjs --release && node ../../scripts/prepare-audio-codec.mjs --release && npm run build"
+    "tauri:before-build": "node ../../scripts/prepare-plugin-packages.mjs && node ../../scripts/prepare-simulator-provider.mjs --release && node ../../scripts/prepare-audio-codec.mjs --release && node ../../scripts/prepare-bundled-edk.mjs && npm run build"
   },
   "license": "MIT",
   "dependencies": {

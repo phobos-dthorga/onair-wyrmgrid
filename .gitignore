@@ -2,6 +2,11 @@
 /apps/desktop/src-tauri/binaries/
 /apps/desktop/src-tauri/provider-packages/
 /apps/desktop/src-tauri/codec-packages/
+/apps/desktop/src-tauri/extension-developer-kit/*
+!/apps/desktop/src-tauri/extension-developer-kit/BUNDLED-README.txt
+/packages/extension-developer-kit/schemas/
+/packages/extension-developer-kit/sdks/
+/packages/extension-developer-kit/LICENSE
 /node_modules/
 **/node_modules/
 **/build/

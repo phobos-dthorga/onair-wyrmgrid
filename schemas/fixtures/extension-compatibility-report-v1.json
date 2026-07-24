@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "tool": {
+    "name": "@wyrmgrid/extension-developer-kit",
+    "version": "1.0.0"
+  },
+  "command": "test",
+  "target": {
+    "type": "package",
+    "name": "sample.wyrmplugin"
+  },
+  "status": "passed",
+  "extension": {
+    "kind": "plugin",
+    "id": "org.example.sample",
+    "version": "1.0.0"
+  },
+  "compatibility": {
+    "package_schema_version": 1,
+    "manifest_schema": "plugin-manifest.schema.json",
+    "protocol": {
+      "name": "Plugin API",
+      "version": 1
+    }
+  },
+  "archive_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "checks": [
+    {
+      "id": "manifest-contract",
+      "status": "passed",
+      "summary": "plugin.json matches the EDK v1 contract"
+    },
+    {
+      "id": "runtime-handshake",
+      "status": "passed",
+      "summary": "Plugin API v1 startup and shutdown completed"
+    }
+  ],
+  "issues": []
+}

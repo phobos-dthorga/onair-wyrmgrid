@@ -12,6 +12,9 @@ function validConfiguration() {
     identifier: installerIdentity.identifier,
     bundle: {
       targets: ["nsis"],
+      resources: {
+        "extension-developer-kit/": "extension-developer-kit/",
+      },
       windows: {
         allowDowngrades: false,
         nsis: { installMode: installerIdentity.installMode },
@@ -43,5 +46,15 @@ test("rejects downgrade permission or a changed installation scope", () => {
   assert.throws(
     () => verifyInstallerConfiguration(configuration),
     /allowDowngrades must be false[\s\S]*installMode must remain 'currentUser'/,
+  );
+});
+
+test("rejects an installer that omits the bundled Extension Developer Kit", () => {
+  const configuration = validConfiguration();
+  delete configuration.bundle.resources["extension-developer-kit/"];
+
+  assert.throws(
+    () => verifyInstallerConfiguration(configuration),
+    /platform-neutral Extension Developer Kit directory/,
   );
 });

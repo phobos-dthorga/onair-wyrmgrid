@@ -137,7 +137,7 @@ test("builds a distinct simulator provider package contract", async (t) => {
   await writeFile(
     manifestPath,
     JSON.stringify({
-      schema_version: 2,
+      schema_version: 1,
       id: "org.wyrmgrid.test.simulator-provider",
       name: "Provider package test",
       version: "1.0.0",

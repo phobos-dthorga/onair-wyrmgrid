@@ -27,6 +27,14 @@ export function verifyInstallerConfiguration(configuration) {
   if (!configuration.bundle?.targets?.includes("nsis")) {
     failures.push("bundle.targets must include nsis");
   }
+  if (
+    configuration.bundle?.resources?.["extension-developer-kit/"] !==
+    "extension-developer-kit/"
+  ) {
+    failures.push(
+      "bundle.resources must install the platform-neutral Extension Developer Kit directory",
+    );
+  }
   if (configuration.bundle?.windows?.allowDowngrades !== false) {
     failures.push("bundle.windows.allowDowngrades must be false");
   }

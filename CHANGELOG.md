@@ -44,6 +44,18 @@ major application version.
   `.wyrmplugin`, `.wyrmprovider`, `.wyrmaudio`, and `.wyrmcodec` projects. The
   generated starting trees keep permissions and capabilities narrow and leave
   native protocol implementation explicit.
+- Added Extension Developer Kit v1 as a standalone, dependency-free npm
+  package. Its `wyrmgrid-extension` command scaffolds all four extension kinds,
+  validates sources and completed packages, builds deterministic exact-inventory
+  artifacts, proves byte reproducibility, exercises bounded startup/shutdown
+  handshakes, exports its pinned schema bundle, and writes privacy-reduced
+  compatibility-report schema version 1 results without requiring a WyrmGrid
+  source checkout. The package carries the zero-dependency Python plugin SDK
+  and places it directly into new ordinary-plugin scaffolds.
+- Added the same platform-neutral EDK contents to every desktop bundle,
+  including the Windows NSIS installer. Forge can open the installed developer
+  kit directory or the fixed `https://wyrmgr.id/` documentation destination
+  without exposing a general-purpose path or URL opener.
 
 ### Changes
 
@@ -64,17 +76,22 @@ major application version.
   separately from encoding. Unreleased version 1 schemas and fixtures are
   retained as compatibility evidence; migration 20 preserves earlier audio
   metadata with explicit first-party Opus provenance.
-- Advanced the canonical source catalogue to version 22. Version 20 added
+- Advanced the canonical source catalogue to version 23. Version 20 added
   codec selection and unavailable-codec wording; version 21 adds audio-provider
   package inspection, selection, native-code trust, lifecycle, and destructive-
   removal wording; version 22 adds matching audio-codec package inspection,
-  trust, profile, lifecycle, and destructive-removal wording. Community
+  trust, profile, lifecycle, and destructive-removal wording; and version 23
+  adds Forge extension-development and recovery wording. Community
   language packs must review the protected messages and update their declared
   source version before re-import.
 - Advanced the application database to schema 22: migration 20 records audio
   codec provenance, migration 21 adds managed external-package lifecycle state,
   and migration 22 preserves that state while adding the
   `audio_codec_provider` package kind.
+- Consolidated the repository's four extension packagers and scaffolder behind
+  the EDK's authoritative implementation, leaving the existing npm commands as
+  compatibility wrappers so first-party and community artifacts use the same
+  validation and deterministic archive behavior.
 
 ### Removed
 
