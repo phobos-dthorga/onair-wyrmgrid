@@ -33,6 +33,24 @@ wyrmgrid-extension new `
   --author "Example Author"
 ```
 
+Every WyrmGrid desktop bundle, including the Windows NSIS installer, includes
+the same unpacked npm package. In **Forge**, select **Open developer kit** to
+open its installed directory, then run
+`npm install --global "<opened directory>"`. WyrmGrid does not silently install
+the command or Node.js. **Documentation** currently opens
+`https://wyrmgr.id/`; that fixed destination can move to the published author
+guide later without changing the EDK format.
+
+The JavaScript EDK is platform-neutral and ships identically on Windows, Linux,
+and macOS. Native extensions still declare and provide their own platform
+entry points. A runtime conformance check can launch only a compatible build
+for its current host; use `--skip-runtime` only for the explicitly incomplete
+cross-compilation case described below.
+
+An ordinary-plugin scaffold includes the compatible zero-dependency Python SDK
+at `src/wyrmgrid_sdk/__init__.py`. Keep that file with the plugin package; an
+author does not need to find or copy SDK code from the WyrmGrid repository.
+
 `--kind` accepts `plugin`, `simulator-provider`, `audio-provider`, or
 `audio-codec`. `--version` defaults to `0.1.0`. The command validates the
 reverse-domain ID and semantic version and refuses to overwrite a non-empty

@@ -50,7 +50,12 @@ major application version.
   artifacts, proves byte reproducibility, exercises bounded startup/shutdown
   handshakes, exports its pinned schema bundle, and writes privacy-reduced
   compatibility-report schema version 1 results without requiring a WyrmGrid
-  source checkout.
+  source checkout. The package carries the zero-dependency Python plugin SDK
+  and places it directly into new ordinary-plugin scaffolds.
+- Added the same platform-neutral EDK contents to every desktop bundle,
+  including the Windows NSIS installer. Forge can open the installed developer
+  kit directory or the fixed `https://wyrmgr.id/` documentation destination
+  without exposing a general-purpose path or URL opener.
 
 ### Changes
 
@@ -71,11 +76,12 @@ major application version.
   separately from encoding. Unreleased version 1 schemas and fixtures are
   retained as compatibility evidence; migration 20 preserves earlier audio
   metadata with explicit first-party Opus provenance.
-- Advanced the canonical source catalogue to version 22. Version 20 added
+- Advanced the canonical source catalogue to version 23. Version 20 added
   codec selection and unavailable-codec wording; version 21 adds audio-provider
   package inspection, selection, native-code trust, lifecycle, and destructive-
   removal wording; version 22 adds matching audio-codec package inspection,
-  trust, profile, lifecycle, and destructive-removal wording. Community
+  trust, profile, lifecycle, and destructive-removal wording; and version 23
+  adds Forge extension-development and recovery wording. Community
   language packs must review the protected messages and update their declared
   source version before re-import.
 - Advanced the application database to schema 22: migration 20 records audio

@@ -19,7 +19,23 @@ After publication, the intended command is:
 npm install --global @wyrmgrid/extension-developer-kit
 ```
 
+WyrmGrid desktop distributions also carry the same unpacked, installable npm
+package. Open **Forge → Open developer kit**, then install that directory with
+`npm install --global "<opened directory>"`. WyrmGrid does not silently install
+the command or a Node.js runtime.
+
 Node.js 22.12 or newer is required.
+
+The EDK JavaScript package is platform-neutral and is bundled identically on
+Windows, Linux, and macOS. Scaffolding, validation, packaging, schema export,
+and archive inspection use the same implementation on each platform. Runtime
+conformance can naturally launch only an extension built for the current
+supported host; native provider artifacts remain platform-specific.
+
+The package also carries WyrmGrid's zero-dependency Python plugin SDK. Creating
+an ordinary plugin copies the compatible SDK into
+`src/wyrmgrid_sdk/__init__.py`, so the generated project can be packaged and
+shared without referring back to a WyrmGrid checkout.
 
 ## First extension
 

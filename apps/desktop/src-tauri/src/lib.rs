@@ -1,5 +1,6 @@
 mod credential_store;
 mod database_key;
+mod developer_resources;
 mod diagnostic_reporting;
 mod diagnostics;
 mod observability;
@@ -106,6 +107,18 @@ fn startup_options(state: tauri::State<'_, DesktopState>) -> StartupOptions {
 #[tauri::command]
 fn platform_status() -> wyrmgrid_application::PlatformStatus {
     wyrmgrid_application::platform_status()
+}
+
+#[tauri::command]
+fn open_extension_developer_kit_directory(
+    app: tauri::AppHandle,
+) -> Result<(), wyrmgrid_application::OperationError> {
+    developer_resources::open_extension_developer_kit(&app).map_err(operation_error)
+}
+
+#[tauri::command]
+fn open_extension_documentation() -> Result<(), wyrmgrid_application::OperationError> {
+    developer_resources::open_extension_documentation().map_err(operation_error)
 }
 
 #[tauri::command]
@@ -1610,6 +1623,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             startup_options,
             platform_status,
+            open_extension_developer_kit_directory,
+            open_extension_documentation,
             onair_connection_status,
             onair_credential_profile_status,
             connect_onair,

@@ -863,6 +863,17 @@ this guidance must change without weakening secret handling.
   desktop ignores it and repeats authoritative package validation. A malicious
   author can alter a report or tool, and a passing handshake cannot prove
   behavior after startup.
+- Desktop bundles carry the EDK as inert npm-package files. Forge may open only
+  the fixed resolved resource directory and the fixed `https://wyrmgr.id/`
+  documentation URL; the frontend cannot supply an arbitrary path, program, or
+  destination. Opening the directory does not execute or install the kit.
+  Running it later through Node.js still uses the current account's ambient
+  operating-system rights, and WyrmGrid never trusts the installed copy as a
+  substitute for its own package validation.
+- The EDK copies the reviewed zero-dependency Python SDK into each ordinary
+  plugin scaffold. This avoids a checkout-relative dependency but does not turn
+  that SDK into a sandbox: the packaged plugin still runs as the current user
+  and remains constrained only by the host protocol and granted capabilities.
 
 The exact implemented boundary and deferred hardening are recorded in
 [plugin protocol version 1](../plugins/protocol-v1.md) and

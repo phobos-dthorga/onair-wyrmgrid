@@ -33,6 +33,8 @@ function Install-WyrmGridSetup {
 }
 
 function Get-InstalledComponents {
+    param([switch]$RequireExtensionDeveloperKit)
+
     if (-not (Test-Path -LiteralPath $destination -PathType Container)) {
         throw "NSIS installer did not create the requested installation directory."
     }
@@ -54,9 +56,29 @@ function Get-InstalledComponents {
         throw "NSIS installation must contain exactly one SimConnect provider sidecar; found $($provider.Count)."
     }
 
+    $extensionDeveloperKit = Join-Path $destination 'extension-developer-kit'
+    if ($RequireExtensionDeveloperKit) {
+        $requiredEdkFiles = @(
+            'package.json',
+            'README.md',
+            'LICENSE',
+            'BUNDLED-README.txt',
+            'bin\wyrmgrid-extension.mjs',
+            'schemas\schema-catalog-v1.json',
+            'sdks\python\wyrmgrid_sdk\__init__.py'
+        )
+        foreach ($relativePath in $requiredEdkFiles) {
+            $path = Join-Path $extensionDeveloperKit $relativePath
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+                throw "NSIS installation is missing bundled Extension Developer Kit file: $relativePath"
+            }
+        }
+    }
+
     return @{
         Application = $application[0]
         Provider = $provider[0]
+        ExtensionDeveloperKit = $extensionDeveloperKit
     }
 }
 
@@ -75,7 +97,7 @@ if ($PreviousInstallerPath) {
 }
 
 Install-WyrmGridSetup -SetupPath $installer
-$components = Get-InstalledComponents
+$components = Get-InstalledComponents -RequireExtensionDeveloperKit
 
 if ($PreviousInstallerPath) {
     $currentApplicationHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $components.Application.FullName).Hash
@@ -94,3 +116,4 @@ if ($PreviousInstallerPath) {
 Write-Host "Verified NSIS installation at $destination"
 Write-Host "Application: $($components.Application.Name)"
 Write-Host "Provider:    $($components.Provider.Name)"
+Write-Host "Developer kit: $($components.ExtensionDeveloperKit)"

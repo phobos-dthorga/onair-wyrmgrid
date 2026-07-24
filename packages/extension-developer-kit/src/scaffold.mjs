@@ -1,10 +1,19 @@
-import { mkdir, readdir, stat, writeFile } from "node:fs/promises";
-import { basename, join, resolve } from "node:path";
+import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { basename, dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { EXTENSIONS } from "./catalog.mjs";
 import { ID_PATTERN, VERSION_PATTERN } from "./contract.mjs";
 
 const KINDS = new Set(Object.keys(EXTENSIONS));
+const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
+const pythonSdkPath = join(
+  packageRoot,
+  "sdks",
+  "python",
+  "wyrmgrid_sdk",
+  "__init__.py",
+);
 
 function json(value) {
   return `${JSON.stringify(value, null, 2)}\n`;
@@ -58,7 +67,7 @@ for the complete trust, compatibility, and release checklist.
 `;
 }
 
-function pluginFiles(options) {
+async function pluginFiles(options) {
   const manifest = {
     id: options.id,
     name: options.name,
@@ -69,6 +78,7 @@ function pluginFiles(options) {
     entry_point: "src/main.py",
     permissions: [],
   };
+  const pythonSdk = await readFile(pythonSdkPath, "utf8");
   return new Map([
     ["plugin.json", json(manifest)],
     [
@@ -84,6 +94,7 @@ Plugin(
 ).run()
 `,
     ],
+    ["src/wyrmgrid_sdk/__init__.py", pythonSdk],
     [
       "README.md",
       commonReadme({
@@ -212,10 +223,10 @@ function audioCodecFiles(options) {
   ]);
 }
 
-function scaffoldFiles(options) {
+async function scaffoldFiles(options) {
   switch (options.kind) {
     case "plugin":
-      return pluginFiles(options);
+      return await pluginFiles(options);
     case "simulator-provider":
       return simulatorProviderFiles(options);
     case "audio-provider":
@@ -265,7 +276,7 @@ export async function scaffoldExtension(options) {
     if (error?.code !== "ENOENT") throw error;
   }
 
-  const files = scaffoldFiles(normalized);
+  const files = await scaffoldFiles(normalized);
   await mkdir(normalized.directory, { recursive: true });
   for (const [path, contents] of files) {
     const destination = join(normalized.directory, path);

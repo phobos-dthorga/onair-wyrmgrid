@@ -33,6 +33,8 @@
     errorMessage,
     managedPackages,
     pendingPackage,
+    onopenkit,
+    onopendocumentation,
     onchoosepackage,
     oncancelpackage,
     oninstallpackage,
@@ -53,6 +55,8 @@
     errorMessage: string;
     managedPackages: ManagedPluginPackage[];
     pendingPackage: PluginPackageInspection | null;
+    onopenkit: () => void;
+    onopendocumentation: () => void;
     onchoosepackage: () => void;
     oncancelpackage: () => void;
     oninstallpackage: () => void;
@@ -155,6 +159,37 @@
           not an operating-system sandbox, so only run plugin code you trust.
         </span>
       </div>
+
+      <section
+        class="developer-workshop"
+        aria-labelledby="developer-workshop-title"
+      >
+        <div>
+          <span class="eyebrow"
+            >{$translation("forge-extension-development-eyebrow")}</span
+          >
+          <h3 id="developer-workshop-title">
+            {$translation("forge-extension-development-title")}
+          </h3>
+          <p>{$translation("forge-extension-development-detail")}</p>
+        </div>
+        <div class="developer-actions">
+          <button
+            class="primary"
+            type="button"
+            disabled={busy}
+            onclick={onopenkit}
+            >{$translation("forge-extension-development-open-kit")}</button
+          >
+          <button
+            class="secondary"
+            type="button"
+            disabled={busy}
+            onclick={onopendocumentation}
+            >{$translation("forge-extension-development-documentation")}</button
+          >
+        </div>
+      </section>
 
       <section
         class="package-workshop"
@@ -660,6 +695,33 @@
     border: 1px solid var(--color-line-faint);
     background: var(--color-surface-soft);
   }
+  .developer-workshop {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    margin: 14px 24px 0;
+    padding: 15px;
+    border: 1px solid var(--color-accent-border);
+    background: var(--color-accent-soft);
+  }
+  .developer-workshop h3 {
+    font-size: 18px;
+  }
+  .developer-workshop p {
+    max-width: 500px;
+    margin-top: 4px;
+    color: var(--color-text-muted);
+    font-size: 10px;
+    line-height: 1.45;
+  }
+  .developer-actions {
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 7px;
+  }
   .package-workshop-heading {
     display: flex;
     align-items: center;
@@ -682,7 +744,8 @@
   .package-workshop code {
     color: var(--color-highlight);
   }
-  .package-workshop button {
+  .package-workshop button,
+  .developer-workshop button {
     padding: 8px 11px;
     border-radius: 4px;
     font: inherit;
@@ -1091,15 +1154,23 @@
       max-height: calc(100vh - 24px);
     }
     .safety-note,
+    .developer-workshop,
     .package-workshop-heading,
     .managed-package,
     article footer {
       grid-template-columns: 1fr;
     }
     .package-workshop-heading,
+    .developer-workshop,
     .managed-package {
       align-items: stretch;
       flex-direction: column;
+    }
+    .developer-actions {
+      justify-content: stretch;
+    }
+    .developer-actions button {
+      flex: 1 1 180px;
     }
     .package-review dl {
       grid-template-columns: 1fr;

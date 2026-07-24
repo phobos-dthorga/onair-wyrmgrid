@@ -95,6 +95,7 @@ test("standalone CLI scaffolds, validates, packages, and inspects a plugin", asy
   const entries = readZipEntries(await readFile(output));
   assert.ok(entries.has(PACKAGE_MANIFEST_NAME));
   assert.ok(entries.has("plugin.json"));
+  assert.ok(entries.has("src/wyrmgrid_sdk/__init__.py"));
   const jsonReportPath = join(
     dirname(directory),
     "compatibility-json-mode.json",

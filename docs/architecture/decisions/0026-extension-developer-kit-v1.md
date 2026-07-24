@@ -43,6 +43,15 @@ The EDK owns the authoritative JavaScript scaffolder and package builder.
 Existing repository commands remain thin compatibility wrappers so first-party
 package preparation and community package creation cannot silently diverge.
 
+Every desktop distribution bundles the same unpacked npm-package contents under
+the application resource directory. This includes Windows NSIS, Linux, and
+macOS bundles; it does not create a Windows-specific EDK variant. Forge exposes
+two fixed host actions: open that installed directory, and open
+`https://wyrmgr.id/` as the temporary documentation destination. The desktop
+accepts no caller-provided path, executable, or URL through these commands.
+Opening the directory never executes or globally installs the EDK, and
+WyrmGrid does not bundle Node.js.
+
 Compatibility report schema version 1 is a JSON artifact independent from the
 EDK package version. It contains the tool and contract versions, operation,
 basename-only target, extension identity, bounded check results, stable issue
@@ -74,8 +83,11 @@ operating-system rights. `--skip-runtime` is an explicit cross-compilation or
 incomplete-scaffold escape hatch and remains visibly `skipped` in the report.
 
 The npm package includes its license, schemas, schema catalogue, command, and
-runtime implementation. Test-only fixtures and repository scripts are excluded.
-Publication uses npm provenance when a separately authorized release is made.
+runtime implementation. It also includes the zero-dependency Python plugin SDK;
+ordinary-plugin scaffolds copy that SDK into their own source tree so the
+resulting project is independent from both the EDK installation and WyrmGrid
+checkout. Test-only fixtures and repository scripts are excluded. Publication
+uses npm provenance when a separately authorized release is made.
 
 ## Compatibility
 
@@ -87,10 +99,14 @@ package-schema version 1 variants.
 This decision adds EDK version `1.0.0` and compatibility-report schema version
 
 1. It does not change the WyrmGrid application semantic version, any extension
-   package, manifest, or process-protocol version, the application database, or
-   the source localisation catalogue. Future EDK releases may add checks without
-   changing an extension protocol, but a breaking command/report contract requires
-   the corresponding EDK or report-schema compatibility decision.
+   package, manifest, or process-protocol version, or the application database.
+   Future EDK releases may add checks without changing an extension protocol, but
+   a breaking command/report contract requires the corresponding EDK or
+   report-schema compatibility decision.
+
+Bundling the unchanged package and adding fixed discovery actions do not change
+EDK version 1, any extension contract, or the application semantic version.
+The English source catalogue advances to version 23 for the new Forge wording.
 
 An EDK report is evidence about a specific tool invocation, not a signature or
 WyrmGrid acceptance receipt. WyrmGrid continues to validate every installed

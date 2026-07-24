@@ -7,6 +7,12 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const packageRoot = join(repositoryRoot, "packages", "extension-developer-kit");
 const sourceSchemaDirectory = join(repositoryRoot, "schemas");
 const targetSchemaDirectory = join(packageRoot, "schemas");
+const targetPythonSdkDirectory = join(
+  packageRoot,
+  "sdks",
+  "python",
+  "wyrmgrid_sdk",
+);
 const schemaFiles = [
   "plugin-manifest.schema.json",
   "extension-package-manifest-v1.schema.json",
@@ -44,6 +50,15 @@ export async function prepareEdk() {
     "utf8",
   );
   await copyFile(join(repositoryRoot, "LICENSE"), join(packageRoot, "LICENSE"));
+  await mkdir(targetPythonSdkDirectory, { recursive: true });
+  await copyFile(
+    join(repositoryRoot, "sdk", "python", "wyrmgrid_sdk", "__init__.py"),
+    join(targetPythonSdkDirectory, "__init__.py"),
+  );
+  await copyFile(
+    join(repositoryRoot, "sdk", "python", "README.md"),
+    join(packageRoot, "sdks", "python", "README.md"),
+  );
   return { packageRoot, schemas };
 }
 

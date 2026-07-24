@@ -245,6 +245,12 @@ native implementation. Follow the generated README and
 [authoring guide](integrations/extension-authoring.md), then run
 `npm run test:tooling` before sharing tooling changes.
 
+`npm run edk:prepare-bundle` creates the exact unpacked npm-package surface that
+Tauri includes under `extension-developer-kit/` for every desktop target. Keep
+that generated directory out of source control except for its stable
+`BUNDLED-README.txt` sentinel. The Forge action opens only the resolved bundle
+resource directory; it must never accept an arbitrary frontend path or URL.
+
 ## Repository layout
 
 ```text

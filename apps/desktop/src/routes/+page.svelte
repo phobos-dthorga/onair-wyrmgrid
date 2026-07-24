@@ -110,6 +110,8 @@
     installPluginPackageFile,
     loadManagedPluginPackages,
     loadPluginHost,
+    openExtensionDeveloperKitDirectory,
+    openExtensionDocumentation,
     removeManagedPlugin,
     revokePluginPermissions,
     rollbackManagedPlugin,
@@ -2222,6 +2224,29 @@
     }
   }
 
+  async function openForgeDeveloperResource(
+    resource: "kit" | "documentation",
+  ): Promise<void> {
+    if (pluginBusy) return;
+    pluginBusy = true;
+    pluginError = "";
+    try {
+      if (resource === "kit") await openExtensionDeveloperKitDirectory();
+      else await openExtensionDocumentation();
+    } catch (error) {
+      pluginError = operationErrorMessage(
+        error,
+        resource === "kit"
+          ? $translation("error-developer-resources-edk-open-failed")
+          : $translation(
+              "error-developer-resources-documentation-open-failed",
+            ),
+      );
+    } finally {
+      pluginBusy = false;
+    }
+  }
+
   function cancelPluginPackageInstall(): void {
     pendingPluginPackageInspection = null;
     pendingPluginPackageSource = null;
@@ -4201,6 +4226,9 @@
     errorMessage={pluginError}
     managedPackages={managedPluginPackages}
     pendingPackage={pendingPluginPackageInspection}
+    onopenkit={() => void openForgeDeveloperResource("kit")}
+    onopendocumentation={() =>
+      void openForgeDeveloperResource("documentation")}
     onchoosepackage={() => void choosePluginPackageForReview()}
     oncancelpackage={cancelPluginPackageInstall}
     oninstallpackage={() => void confirmPluginPackageInstall()}

@@ -37,6 +37,10 @@ test code from normal application builds.
   no-overwrite behavior, runtime launch failure, framing/identity/sequence
   errors, timeouts, shutdown, privacy-reduced reports, and standalone execution
   from the packed npm artifact.
+- Desktop packaging: the prepared resource contains the installable EDK
+  manifest, command, licence, README, and schema catalogue; the installer
+  contract retains its cross-platform resource mapping; and an NSIS smoke test
+  confirms those files exist after installation.
 - Interface: important user journeys, empty/loading/error states, keyboard use,
   and localized text expansion. Business-rule assertions belong in Rust rather
   than Svelte tests.

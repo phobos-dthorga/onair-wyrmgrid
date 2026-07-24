@@ -45,6 +45,8 @@ export async function verifyPackageContents() {
   await Promise.all([
     access(join(packageRoot, "README.md")),
     access(join(packageRoot, "LICENSE")),
+    access(join(packageRoot, "sdks", "python", "README.md")),
+    access(join(packageRoot, "sdks", "python", "wyrmgrid_sdk", "__init__.py")),
   ]);
   return {
     version: EDK_VERSION,

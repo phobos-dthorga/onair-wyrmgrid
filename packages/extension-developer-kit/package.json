@@ -33,6 +33,7 @@
     "bin/",
     "src/",
     "schemas/",
+    "sdks/",
     "README.md",
     "LICENSE"
   ],

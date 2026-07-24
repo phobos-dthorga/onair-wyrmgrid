@@ -29,7 +29,8 @@
     "active": true,
     "targets": ["nsis", "app", "dmg", "appimage", "deb"],
     "resources": {
-      "../../../assets/plugin-packages/*.wyrmplugin": "plugin-packages/"
+      "../../../assets/plugin-packages/*.wyrmplugin": "plugin-packages/",
+      "extension-developer-kit/": "extension-developer-kit/"
     },
     "windows": {
       "allowDowngrades": false,

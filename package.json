@@ -39,6 +39,7 @@
     "extension:scaffold": "node scripts/scaffold-extension.mjs",
     "edk": "node packages/extension-developer-kit/bin/wyrmgrid-extension.mjs",
     "edk:prepare": "node scripts/prepare-edk.mjs",
+    "edk:prepare-bundle": "node scripts/prepare-bundled-edk.mjs",
     "edk:test": "npm run edk:prepare && npm test --workspace @wyrmgrid/extension-developer-kit",
     "edk:pack": "npm run edk:prepare && npm pack --workspace @wyrmgrid/extension-developer-kit",
     "plugin:package": "node scripts/package-plugin.mjs",

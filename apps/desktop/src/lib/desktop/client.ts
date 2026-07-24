@@ -66,6 +66,14 @@ const operationErrorMessageKeys: Readonly<Record<string, TranslationKey>> = {
   "atlas.preferences_storage_unavailable":
     "error-atlas-preferences-storage-unavailable",
   "atlas.invalid_preference": "error-atlas-invalid-preference",
+  "developer_resources.directory_unavailable":
+    "error-developer-resources-directory-unavailable",
+  "developer_resources.edk_unavailable":
+    "error-developer-resources-edk-unavailable",
+  "developer_resources.edk_open_failed":
+    "error-developer-resources-edk-open-failed",
+  "developer_resources.documentation_open_failed":
+    "error-developer-resources-documentation-open-failed",
   "theme.duplicate": "error-theme-duplicate",
   "theme.bundled_delete_forbidden": "error-theme-bundled-delete",
 };
