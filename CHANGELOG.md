@@ -44,6 +44,13 @@ major application version.
   `.wyrmplugin`, `.wyrmprovider`, `.wyrmaudio`, and `.wyrmcodec` projects. The
   generated starting trees keep permissions and capabilities narrow and leave
   native protocol implementation explicit.
+- Added Extension Developer Kit v1 as a standalone, dependency-free npm
+  package. Its `wyrmgrid-extension` command scaffolds all four extension kinds,
+  validates sources and completed packages, builds deterministic exact-inventory
+  artifacts, proves byte reproducibility, exercises bounded startup/shutdown
+  handshakes, exports its pinned schema bundle, and writes privacy-reduced
+  compatibility-report schema version 1 results without requiring a WyrmGrid
+  source checkout.
 
 ### Changes
 
@@ -75,6 +82,10 @@ major application version.
   codec provenance, migration 21 adds managed external-package lifecycle state,
   and migration 22 preserves that state while adding the
   `audio_codec_provider` package kind.
+- Consolidated the repository's four extension packagers and scaffolder behind
+  the EDK's authoritative implementation, leaving the existing npm commands as
+  compatibility wrappers so first-party and community artifacts use the same
+  validation and deterministic archive behavior.
 
 ### Removed
 

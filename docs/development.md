@@ -64,6 +64,31 @@ npm run dev
 See the [testing strategy](testing.md) for test placement, required cases, CI
 gates, and the safe scope for automated test-writing agents.
 
+## Extension Developer Kit
+
+The independently distributable EDK is a workspace package with its own
+`1.x` version line; it does not inherit the desktop application's version.
+Prepare its bundled schemas and run its contract suite with:
+
+```powershell
+npm run edk:test
+```
+
+Build the release-candidate npm tarball with `npm run edk:pack`. The repository
+first copies the canonical schemas and license into the ignored package staging
+area; the package's own prepack check then verifies its version, required files,
+schema identities, and every catalogued SHA-256 digest without reaching back
+into the repository. Before any separately authorized publication, extract
+that tarball outside the repository and run its command, schema export,
+scaffold, validation, package, and no-runtime conformance flow from the
+extracted package. Do not publish it merely because a local tarball succeeds.
+Review the package inventory, version, changelog, compatibility decision, npm
+identity, provenance configuration, and release authority first.
+
+Repository commands for preparing first-party extension packages delegate to
+the EDK's packager. Add format behavior to the EDK implementation and its tests,
+not to an individual wrapper.
+
 ## Local formatting
 
 Use one repository command to repair all supported source and documentation

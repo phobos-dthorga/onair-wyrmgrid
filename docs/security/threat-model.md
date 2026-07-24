@@ -232,6 +232,16 @@
   install, enable/disable, rollback, and removal; and handshake identity,
   version, platform, profiles, and encoded-packet metadata must match the exact
   installed manifest and active track;
+- Extension Developer Kit v1 independently reinspects package framing,
+  compression, canonical paths, collisions, links, size bounds, CRC-32, exact
+  inventory, SHA-256 payload digests, manifest identity, compatibility
+  versions, and entry points. Its conformance command builds twice, requires
+  byte equality, and launches runtime tests with a scrubbed environment,
+  bounded protocol frames and output buffering, response deadlines, and a
+  shutdown deadline. Standard error is drained but its contents are omitted.
+  Compatibility reports retain basenames and contract evidence, not absolute
+  paths, environment variables, credentials, process output, or payload
+  contents;
 - append-only migration 22 rebuilds the constrained extension-package tables
   transactionally, copies every schema-21 version and active/rollback state,
   adds only `audio_codec_provider`, verifies foreign-key integrity, and leaves
@@ -841,6 +851,18 @@ this guidance must change without weakening secret handling.
   Signed runtime packaging, supported-version policy, dependency locking, SDK
   conformance testing, sandbox profiles, revocation testing, and safe
   update/rollback are required before recommending unreviewed community plugins.
+- EDK runtime conformance deliberately executes an author's extension with the
+  current account's ambient operating-system rights. Environment scrubbing and
+  process/protocol bounds reduce accidental disclosure and hangs but do not
+  sandbox filesystem, process, network, CPU, or memory access. Authors must run
+  it only on code they trust, preferably in a disposable development
+  environment. `--skip-runtime` avoids execution but produces explicitly
+  incomplete evidence.
+- An EDK compatibility report is self-asserted local evidence, not a signature,
+  publisher identity, WyrmGrid approval, or installation authorization. The
+  desktop ignores it and repeats authoritative package validation. A malicious
+  author can alter a report or tool, and a passing handshake cannot prove
+  behavior after startup.
 
 The exact implemented boundary and deferred hardening are recorded in
 [plugin protocol version 1](../plugins/protocol-v1.md) and
@@ -853,6 +875,8 @@ the audio-provider decision in
 [ADR-0024](../architecture/decisions/0024-audio-provider-package-format-v1.md),
 and the audio-codec decision in
 [ADR-0025](../architecture/decisions/0025-audio-codec-package-format-v1.md).
+The separate author-tool boundary is recorded in
+[ADR-0026](../architecture/decisions/0026-extension-developer-kit-v1.md).
 
 ## Residual Hoard risks
 

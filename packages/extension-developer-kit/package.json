@@ -1,0 +1,51 @@
+{
+  "name": "@wyrmgrid/extension-developer-kit",
+  "version": "1.0.0",
+  "description": "Standalone scaffolding, validation, packaging, and conformance tools for WyrmGrid extensions.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/phobos-dthorga/onair-wyrmgrid.git",
+    "directory": "packages/extension-developer-kit"
+  },
+  "homepage": "https://github.com/phobos-dthorga/onair-wyrmgrid#readme",
+  "bugs": {
+    "url": "https://github.com/phobos-dthorga/onair-wyrmgrid/issues"
+  },
+  "keywords": [
+    "wyrmgrid",
+    "plugin",
+    "extension",
+    "developer-kit"
+  ],
+  "type": "module",
+  "bin": {
+    "wyrmgrid-extension": "./bin/wyrmgrid-extension.mjs"
+  },
+  "exports": {
+    ".": "./src/index.mjs",
+    "./package": "./src/package.mjs",
+    "./scaffold": "./src/scaffold.mjs",
+    "./validate": "./src/validate.mjs",
+    "./test": "./src/test.mjs"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "schemas/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "prepack": "node ./src/verify-package.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=22.12.0",
+    "npm": ">=10.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

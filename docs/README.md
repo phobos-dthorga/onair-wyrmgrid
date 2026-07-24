@@ -39,7 +39,7 @@
   - [Simulator-synchronised audio recording](integrations/simulator-audio-recording.md)
   - [Audio Capture Provider protocol version 2](integrations/audio-capture-provider-protocol.md)
   - [Audio Codec Provider protocol version 1](integrations/audio-codec-provider-protocol.md)
-  - [Authoring external WyrmGrid extensions](integrations/extension-authoring.md)
+  - [Extension Developer Kit and external extension authoring](integrations/extension-authoring.md)
 - [Observability and Sentry plan](operations/observability.md)
 - [CI/CD hardening and enrichment plan](operations/ci-cd-enhancement-plan.md)
 - [Local review automation and bounded Hoardmind delegation plan](operations/local-review-automation.md)

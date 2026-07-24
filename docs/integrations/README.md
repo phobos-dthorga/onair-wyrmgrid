@@ -132,7 +132,7 @@ the [high-value provider integration process](high-value-provider-process.md).
 - [Audio Capture Provider protocol version 2](audio-capture-provider-protocol.md)
 - [Audio provider authoring and packaging](audio-provider-authoring.md)
 - [Audio Codec Provider protocol version 1](audio-codec-provider-protocol.md)
-- [Authoring external WyrmGrid extensions](extension-authoring.md)
+- [Extension Developer Kit and external extension authoring](extension-authoring.md)
 - [Telemetry lifecycle and SimBrief correlation](telemetry-plan-correlation.md)
 
 ## Local automation and community handoff
