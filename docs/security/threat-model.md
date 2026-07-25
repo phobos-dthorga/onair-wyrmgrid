@@ -397,9 +397,15 @@
   deterministic squash message containing the input, output, metrics, bot-
   commit, PR, review, and authority trailers, and verifies that GitHub retained
   that message on the resulting merge commit before reporting success;
-- platform build jobs are read-only and stage packages internally; one final job
-  with narrowly scoped write and identity-token permissions generates SHA-256
-  checksums and GitHub build-provenance attestations before creating a draft;
+- the credential-free Jenkins Organization Folder validates branch and
+  pull-request content but cannot publish. A separate locked release job
+  accepts only an existing supported tag and meaningful reason, verifies the
+  exact commit is on `main`, repeats Linux and Windows gates, refuses published
+  release replacement, and pauses for human approval. Its repository-specific
+  GitHub App token is scoped outside the Organization Folder and bound only
+  around trusted GitHub CLI commands. Jenkins generates SHA-256 checksums and
+  explicitly non-attested build metadata; the manual GitHub fallback retains
+  native GitHub attestations for an authorized emergency rebuild;
 - the Windows release runner silently installs the NSIS output and verifies that
   the desktop application and expected SimConnect sidecar were packaged;
 - the Windows installer identity and per-user scope are regression-tested,

@@ -5,10 +5,15 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const releaseWorkflow = await readFile(
-  resolve(repositoryRoot, ".github/workflows/release.yml"),
-  "utf8",
-);
+const [releaseWorkflow, ciWorkflow, securityWorkflow] = await Promise.all([
+  readFile(resolve(repositoryRoot, ".github/workflows/release.yml"), "utf8"),
+  readFile(resolve(repositoryRoot, ".github/workflows/ci.yml"), "utf8"),
+  readFile(resolve(repositoryRoot, ".github/workflows/security.yml"), "utf8"),
+]);
+
+function workflowTriggers(workflow) {
+  return /^on:\n([\s\S]*?)\npermissions:/m.exec(workflow)?.[1] ?? "";
+}
 
 test("publishes against the explicit GitHub repository identity", () => {
   assert.match(releaseWorkflow, /GH_REPO: \$\{\{ github\.repository \}\}/);
@@ -52,4 +57,39 @@ test("uses curated release notes for new and rebuilt GitHub releases", () => {
     releaseWorkflow,
     /hoardmind|ollama|openai-compatible|optional-ai|api\/chat|chat\/completions|model api/i,
   );
+  assert.match(
+    releaseWorkflow,
+    /Published release \$RELEASE_TAG cannot be replaced/,
+  );
+  assert.match(releaseWorkflow, /release-query-publish\.err/);
+  assert.match(releaseWorkflow, /elif grep -q 'HTTP 404'/);
+});
+
+test("hosted workflows cannot race Jenkins automation", () => {
+  const releaseTriggers = workflowTriggers(releaseWorkflow);
+  const ciTriggers = workflowTriggers(ciWorkflow);
+  const securityTriggers = workflowTriggers(securityWorkflow);
+
+  assert.match(releaseTriggers, /workflow_dispatch:/);
+  assert.doesNotMatch(releaseTriggers, /\bpush:|\bpull_request:|\bschedule:/);
+  assert.match(ciTriggers, /workflow_call:/);
+  assert.doesNotMatch(
+    ciTriggers,
+    /\bworkflow_dispatch:|\bpull_request:|\bschedule:/,
+  );
+  assert.match(securityTriggers, /workflow_call:/);
+  assert.doesNotMatch(
+    securityTriggers,
+    /\bworkflow_dispatch:|\bpull_request:|\bschedule:/,
+  );
+});
+
+test("manual fallback builds only Windows and Linux packages", () => {
+  assert.match(releaseWorkflow, /platform: windows-latest/);
+  assert.match(releaseWorkflow, /platform: ubuntu-22\.04/);
+  assert.doesNotMatch(releaseWorkflow, /macos|--bundles app,dmg|macos-dmg/i);
+  assert.match(releaseWorkflow, /EXCEPTION_REASON/);
+  assert.match(releaseWorkflow, /\$\{#EXCEPTION_REASON\} < 20/);
+  assert.match(releaseWorkflow, /asset\.name\.endsWith\('-setup\.exe'\)/);
+  assert.match(releaseWorkflow, /--tag-lines/);
 });

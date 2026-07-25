@@ -41,10 +41,13 @@ the command or Node.js. **Documentation** currently opens
 `https://wyrmgr.id/`; that fixed destination can move to the published author
 guide later without changing the EDK format.
 
-The JavaScript EDK is platform-neutral and ships identically on Windows, Linux,
-and macOS. Native extensions still declare and provide their own platform
-entry points. A runtime conformance check can launch only a compatible build
-for its current host; use `--skip-runtime` only for the explicitly incomplete
+The JavaScript EDK is platform-neutral and ships identically in supported
+Windows and Linux releases. Its macOS protocol values and portable source
+remain available for external compatibility, but WyrmGrid does not package or
+certify a macOS desktop release. Native extensions still declare and provide
+their own platform entry points. A runtime conformance check can launch only a
+compatible build for its current host; use `--skip-runtime` only for the
+explicitly incomplete
 cross-compilation case described below.
 
 An ordinary-plugin scaffold includes the compatible zero-dependency Python SDK

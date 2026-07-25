@@ -160,8 +160,9 @@ provider, codec-selection interface, and first-party Opus codec provider are
 implemented. Packaging and live support are not.
 
 MSFS 2024 capture is Windows-specific. X-Plane 12 provides the cross-platform
-Windows, macOS, and supported Linux target, while its named COM audio groups
-remain a feasibility candidate until a thin non-blocking tap is proven. See
+Windows and supported Linux target, while its named COM audio groups remain a
+feasibility candidate until a thin non-blocking tap is proven. Portable macOS
+protocol values remain reserved without constituting release support. See
 [ADR-0017](decisions/0017-simulator-synchronised-audio-recording.md),
 [ADR-0020](decisions/0020-out-of-process-audio-codec-providers.md), and the
 [audio-recording plan](../integrations/simulator-audio-recording.md), plus the
@@ -211,9 +212,11 @@ while domain-specific field meaning remains local. See the
 [presentation and exploration audit](reusable-presentation-and-exploration.md).
 
 The presentation runs in Tauri's platform webview: Chromium-based WebView2 on
-Windows and WebKit-backed views on macOS and Linux. WRY is the application
-boundary, while cross-engine behaviour is verified rather than replaced by a
-bundled browser runtime. See [ADR-0005](decisions/0005-system-webviews.md).
+Windows and WebKitGTK on Linux. WRY is the application boundary, while
+cross-engine behaviour is verified rather than replaced by a bundled browser
+runtime. The portable macOS webview path is retained but is not a packaged or
+tested release target. See
+[ADR-0005](decisions/0005-system-webviews.md).
 
 ## Observability boundary
 

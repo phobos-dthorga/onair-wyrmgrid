@@ -25,19 +25,24 @@
 6. Create and push an annotated `vX.Y.Z` tag from a commit on `main`. Supported
    prerelease suffixes such as `v0.2.0-rc.1` are also accepted; build metadata is
    deliberately excluded from installer versions.
-7. The release workflow reuses the complete CI and security workflows against
-   that exact tag. Packaging cannot begin until every required job passes.
-8. GitHub-hosted runners build the Windows NSIS setup executable, Linux AppImage
-   and Debian package, and macOS DMG. The Windows runner silently installs the
+7. Start the separately protected Jenkins release job with that existing tag
+   and a meaningful reason. The job validates the exact commit, versions,
+   installer contract, changelog, and ancestry from `origin/main`; it never
+   creates or moves the tag.
+8. Jenkins repeats the complete Linux and Windows CI and security gates, then
+   builds the Windows NSIS setup executable, Linux AppImage, and Debian package.
+   The Windows agent silently installs the
    NSIS output and verifies that both the desktop executable and SimConnect
    provider sidecar are present, together with the complete platform-neutral
    EDK resource directory. After the first release, it installs the closest
    older published setup first, installs the new setup over it, and verifies
    that existing application data survives.
-9. A single least-privilege publication job downloads the platform outputs,
-   produces `SHA256SUMS.txt`, records GitHub artifact provenance, extracts the
-   matching reviewed changelog entry, and attaches the files and notes to a
-   draft prerelease.
+9. Jenkins combines the platform outputs, produces `SHA256SUMS.txt` and
+   privacy-safe `BUILD-INFO.json`, extracts the matching reviewed changelog
+   entry, and pauses for explicit human approval. The earlier release-state
+   query and previous-installer download bind the repository-specific GitHub
+   App token only around those commands. After approval, a fresh bounded
+   binding attaches the files and notes to a draft prerelease.
 10. Verify artifact installation, startup, licence notices, checksums, release
     notes, and basic
     offline behaviour on every supported platform. Publish the GitHub release
@@ -180,30 +185,26 @@ break that continuity and therefore requires a separately designed data and
 installer migration. The installer-contract tooling intentionally rejects such
 drift. A portable backup is still recommended before prerelease upgrades.
 
-## Installer and hosted-runner policy
+## Jenkins and hosted-fallback policy
 
-Routine commits and pull requests compile-check and test the desktop locally;
-hosted CI/CD is reserved for releases unless the maintainer explicitly approves
-an exception. Every intentional semantic-version release tag repeats the full
-validation suite on clean hosted runners and produces packages, including patch
-releases. This makes the tag both an unambiguous request for a complete release
-candidate and the point where independent hosted verification has material
-value.
-
-Release pull requests named `codex/release-*` run the branch-protection checks
-needed before the approved version can reach `main`. Other pull requests report
-those jobs as skipped and do not allocate hosted runners. The complete CI and
-security workflows run again against the immutable release tag, while the
-security workflow additionally retains its scheduled dependency review. Avoid
-unnecessary manual dispatches and reruns; local gates remain authoritative for
-ordinary development.
+Routine commits and pull requests are validated locally and by the
+credential-free Jenkins multibranch pipeline on Linux and Windows. `main` and
+`codex/release-*` retain unsigned snapshots after every required gate passes.
+The release job is separate from the Organization Folder and receives its
+release credential only inside narrowly bounded GitHub CLI commands.
 
 The release policy rejects malformed versions, tags outside `main`, and any tag
-whose version differs from the four checked-in application version sources. A
-manual dispatch is a rebuild of an existing tag, never a way to package mutable
-branch contents under a release name, and requires a meaningful recorded reason.
-The resulting packages remain CI outputs; local builds are verification only and
-are never hand-published.
+whose version differs from the four checked-in application version sources.
+Every Jenkins release run targets an existing tag, records a meaningful reason,
+repeats the complete gates from its exact commit, and refuses to replace a
+published release. The resulting packages remain CI outputs; local builds are
+verification only and are never hand-published.
+
+GitHub-hosted CI remains an explicitly authorized emergency fallback. The CI
+and security workflows are callable only from the manual release workflow. That
+workflow accepts an existing tag and exception reason, builds Windows and Linux,
+and retains GitHub's native attestation path. Pushes, pull requests, schedules,
+and tags cannot start it automatically, so it cannot race Jenkins.
 
 ## Key and secret boundaries
 
@@ -220,9 +221,10 @@ artifact rather than decrypt user data:
 - the Tauri updater private signing key and its password; and
 - platform notarisation credentials.
 
-Those credentials must live in a protected GitHub release environment, be
-available only to the exact signing job, and have a separately protected recovery
-copy where loss would prevent future updates. Public verification keys may be
+Those credentials must live in a protected Jenkins release folder or an
+explicitly authorized GitHub fallback environment, be available only to the
+exact signing or publication job, and have a separately protected recovery copy
+where loss would prevent future updates. Public verification keys may be
 compiled into WyrmGrid. Pull-request jobs, community code, application runtime,
 plugins, installers, logs, and support bundles never receive private release
 credentials.
@@ -233,21 +235,21 @@ runner and are never valid for an end-user installation.
 
 ## Supply-chain controls
 
-- Workflow dependencies are pinned to immutable commit hashes. Dependabot keeps
-  GitHub Actions updates visible for review.
-- Build jobs have read-only repository access and cannot create or alter a
-  release. Only the final attestation/publication job receives `contents: write`.
-- Release tags identify commits on `main`, and every platform builds the same
-  checked-in tag.
-- SHA-256 checksums detect accidental corruption; GitHub artifact attestations
-  associate packages with the repository, workflow, commit, and triggering tag.
+- GitHub fallback dependencies are pinned to immutable commit hashes.
+  Dependabot keeps Actions updates visible for review.
+- Multibranch and platform build jobs receive no release credential. Only the
+  separately protected release job can create or alter a draft.
+- Release tags identify commits on `main`, and Linux and Windows build the same
+  checked-in commit.
+- SHA-256 checksums detect accidental corruption. `BUILD-INFO.json` records
+  non-cryptographic Jenkins evidence and must not be described as an
+  attestation. The manual GitHub fallback retains native GitHub attestations.
 - The draft release remains a human promotion boundary while releases are
   unsigned prereleases.
 
 Branch protection should restrict `main` updates to the maintainer and keep
-force pushes and branch deletion disabled. The immutable release tag then runs
-Rust core, Frontend, Windows desktop, `rust-audit`, and `npm-audit` checks before
-packaging begins.
+force pushes and branch deletion disabled. The trusted release job then runs
+the complete Linux and Windows checks before packaging begins.
 
 ## Diagnostic artifacts
 
@@ -255,14 +257,17 @@ When Sentry integration is enabled for a release:
 
 - Rust and SvelteKit events use the same canonical release identifier,
   `onair-wyrmgrid@<semver>`, with platform or channel represented separately.
-- Browser source maps and native debug information are generated and uploaded by
-  the release workflow before packaging or stripping. Source maps are not shipped
-  in the public application bundle solely for Sentry's benefit.
+- Browser source maps and native debug information remain disabled in the
+  initial Jenkins release job. Enabling upload requires a separately scoped
+  Jenkins credential and a successful exact-artifact symbolication test. Source
+  maps must not be shipped in the public application bundle solely for Sentry's
+  benefit.
 - `SENTRY_AUTH_TOKEN` and equivalent organisation or project credentials exist
   only as protected CI secrets. Routine pull-request builds do not receive them
   and do not create Sentry releases.
-- A failed diagnostic-artifact upload blocks the platform build and therefore
-  prevents draft publication. It does not justify rebuilding binaries by hand.
+- After upload is deliberately enabled, a failed diagnostic-artifact upload
+  blocks the platform build and therefore prevents draft publication. It does
+  not justify rebuilding binaries by hand.
 - Before the first stable release on a supported platform, a sanitised synthetic
   failure must demonstrate symbolicated Rust and Svelte stack traces against the
   exact CI-built artifacts.

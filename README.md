@@ -123,7 +123,8 @@ an explicit author prerequisite rather than an application runtime.
 - Rust 1.97 with the MSVC toolchain on Windows;
 - Node.js 22 and npm 10 or newer;
 - Tauri's platform prerequisites;
-- Microsoft Edge WebView2 on Windows.
+- Microsoft Edge WebView2 on Windows;
+- Python 3 for the bundled SDK and provider contract tests.
 
 The MSFS 2024 SDK is optional for ordinary builds. It is needed for local
 SimConnect development and live provider validation; Microsoft SDK binaries are
@@ -163,11 +164,14 @@ and [Contributing](CONTRIBUTING.md) before making structural changes.
 
 ## Releases
 
-Routine commits and pull requests compile-check the desktop without packaging
-installers. Every intentional semantic-version tag (`vX.Y.Z`, including
-supported prereleases) runs the complete CI and security gates before GitHub
-builds platform packages and an NSIS setup executable. CI publishes checksums
-and build provenance into a draft prerelease for manual installation review.
+Jenkins repeats the complete Linux and Windows validation suite for routine
+branches and pull requests. `main` and `codex/release-*` additionally retain
+unsigned AppImage, Debian, and NSIS snapshots. Every intentional
+semantic-version tag (`vX.Y.Z`, including supported prereleases) is built only
+through the separately protected release job after it validates the exact tag,
+commit, versions, installer identity, and changelog. Jenkins publishes SHA-256
+checksums and non-cryptographic build metadata into a draft prerelease for
+manual installation review.
 The matching reviewed [changelog](CHANGELOG.md) entry supplies the GitHub
 release notes, including explicit new-feature, change, removal, and breaking-
 change lists.
@@ -183,14 +187,17 @@ and release curation without entering the application. A maintainer may
 separately publish a wholly generated patch as a bot-attributed commit and
 branch through a least-privileged GitHub App, then open its draft PR under the
 human maintainer identity. The assistant never receives GitHub credentials or
-merge authority. GitHub CI reads only reviewed, checked-in content and never
-calls an AI service.
+merge authority. Jenkins and the manual GitHub fallback read only reviewed,
+checked-in content and never call an AI service.
 
 Newer NSIS setups install over the existing per-user application and preserve
 its encrypted data; release CI verifies that path against the closest older
 published setup.
 Early releases remain drafts and prereleases until signing, updating, and live
 OnAir integration are deliberately enabled.
+Official release packaging currently supports Windows x86-64 and Linux x86-64.
+macOS protocol identifiers remain available for external compatibility, but
+WyrmGrid does not build, test, or claim a supported macOS desktop release.
 
 ## Licensing and trademarks
 

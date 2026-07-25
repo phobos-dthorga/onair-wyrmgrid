@@ -27,7 +27,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis", "app", "dmg", "appimage", "deb"],
+    "targets": ["nsis", "appimage", "deb"],
     "resources": {
       "../../../assets/plugin-packages/*.wyrmplugin": "plugin-packages/",
       "extension-developer-kit/": "extension-developer-kit/"
