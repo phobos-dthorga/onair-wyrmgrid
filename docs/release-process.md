@@ -203,8 +203,14 @@ verification only and are never hand-published.
 GitHub-hosted CI remains an explicitly authorized emergency fallback. The CI
 and security workflows are callable only from the manual release workflow. That
 workflow accepts an existing tag and exception reason, builds Windows and Linux,
-and retains GitHub's native attestation path. Pushes, pull requests, schedules,
-and tags cannot start it automatically, so it cannot race Jenkins.
+and retains GitHub's native attestation path. After release policy succeeds, it
+uses GitHub's delegated OIDC identity to obtain a 15-minute Teleport certificate
+for `jenkins@web.tauryk.gekkofyre.io`; no long-lived Teleport credential is
+stored in GitHub. The Teleport join rule accepts only the
+`phobos-dthorga/onair-wyrmgrid` repository's exact `Release` workflow on
+`refs/heads/main`, and the role can reach only nodes labelled
+`jenkins-access=wyrmgrid`. Pushes, pull requests, schedules, and tags cannot
+start the workflow automatically, so it cannot race Jenkins.
 
 ## Key and secret boundaries
 

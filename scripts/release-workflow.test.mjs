@@ -84,6 +84,30 @@ test("hosted workflows cannot race Jenkins automation", () => {
   );
 });
 
+test("manual fallback uses a repository-scoped Teleport Machine ID", () => {
+  assert.match(releaseWorkflow, /teleport:\n[\s\S]*needs: policy/);
+  assert.match(
+    releaseWorkflow,
+    /permissions:\n\s+contents: read\n\s+id-token: write/,
+  );
+  assert.match(
+    releaseWorkflow,
+    /teleport-actions\/setup@b638ff596557cc3959eb6b5287d5e58e0c8ac6a6 # v1/,
+  );
+  assert.match(
+    releaseWorkflow,
+    /teleport-actions\/auth@3b365df2b4f64891358392a444ff34929ba0d0b1 # v2/,
+  );
+  assert.match(releaseWorkflow, /token: github-actions-onair-wyrmgrid/);
+  assert.match(releaseWorkflow, /certificate-ttl: 15m/);
+  assert.match(releaseWorkflow, /tsh ssh jenkins@web\.tauryk\.gekkofyre\.io/);
+  assert.match(releaseWorkflow, /needs: \[policy, teleport\]/);
+  assert.doesNotMatch(
+    releaseWorkflow,
+    /TELEPORT_(?:SECRET|IDENTITY)|secrets\.[A-Z_]*TELEPORT|jenkins@[^ \n]*:22|root@web\.tauryk/i,
+  );
+});
+
 test("manual fallback builds only Windows and Linux packages", () => {
   assert.match(releaseWorkflow, /platform: windows-latest/);
   assert.match(releaseWorkflow, /platform: ubuntu-22\.04/);

@@ -97,16 +97,43 @@ jobs:
             echo "previous_version=$PREVIOUS_VERSION"
           } >> "$GITHUB_OUTPUT"
 
+  teleport:
+    name: Teleport Machine ID
+    needs: policy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Install Teleport
+        uses: teleport-actions/setup@b638ff596557cc3959eb6b5287d5e58e0c8ac6a6 # v1
+        with:
+          version: "18.10.1"
+          proxy: ssh.tauryk.gekkofyre.io:443
+      - name: Authenticate with Teleport Machine ID
+        uses: teleport-actions/auth@3b365df2b4f64891358392a444ff34929ba0d0b1 # v2
+        with:
+          proxy: ssh.tauryk.gekkofyre.io:443
+          token: github-actions-onair-wyrmgrid
+          certificate-ttl: 15m
+      - name: Verify least-privileged Teleport access
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote_identity="$(tsh ssh jenkins@web.tauryk.gekkofyre.io \
+            'printf "%s@%s\n" "$(whoami)" "$(hostname)"')"
+          test "$remote_identity" = "jenkins@web.tauryk.gekkofyre.io"
+
   verify:
     name: Required tests
-    needs: policy
+    needs: [policy, teleport]
     uses: ./.github/workflows/ci.yml
     with:
       checkout_ref: ${{ needs.policy.outputs.release_tag }}
 
   security:
     name: Required security checks
-    needs: policy
+    needs: [policy, teleport]
     uses: ./.github/workflows/security.yml
     with:
       checkout_ref: ${{ needs.policy.outputs.release_tag }}

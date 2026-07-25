@@ -64,6 +64,10 @@ major application version.
   pipelines. GitHub Actions now provide only a manual emergency release
   fallback; macOS is no longer built, tested, or claimed as a supported desktop
   release, while protocol platform values remain compatible.
+- Restricted the manual GitHub fallback's Teleport access to delegated OIDC
+  claims from the exact repository, `Release` workflow, and `main` branch. Its
+  short-lived identity can log in only as `jenkins` on the labelled WyrmGrid
+  Jenkins host, with no long-lived Teleport secret stored by GitHub.
 - Established external, independently installable artifacts as the required
   delivery boundary for every plugin and provider. First-party packages may be
   included by an installer, but users must also be able to install, replace,

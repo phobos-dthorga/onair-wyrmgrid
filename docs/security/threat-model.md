@@ -315,6 +315,12 @@
   gates run against the exact release tag before packaging, release tags must
   identify a commit on `main`, and every checked-in application version must
   equal the tag version;
+- the manual GitHub fallback exchanges delegated GitHub OIDC claims for a
+  15-minute Teleport certificate only after release policy succeeds. The join
+  token accepts the exact `phobos-dthorga/onair-wyrmgrid` repository, `Release`
+  workflow, and `refs/heads/main`; its role permits only the `jenkins` login on
+  nodes labelled `jenkins-access=wyrmgrid`, and GitHub stores no Teleport
+  credential;
 - the checked-in changelog is the sole GitHub release-note source; tooling
   requires explicit feature, change, removal, and breaking-change lists and
   rejects declared breaking changes outside a new major-version line. Rebuilds
