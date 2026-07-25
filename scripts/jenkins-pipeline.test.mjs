@@ -177,6 +177,10 @@ test("package scripts are the shared CI command contract", () => {
     packageMetadata.scripts["ci:prepare"],
     "npm run provider:prepare && npm run audio-codec:prepare",
   );
+  assert.equal(
+    packageMetadata.scripts["audio-codec:prepare"],
+    "node scripts/prepare-audio-codec.mjs --release",
+  );
   assert.match(packageMetadata.scripts["ci:rust"], /--locked/);
   assert.match(packageMetadata.scripts["ci:rust"], /-D warnings/);
   assert.match(packageMetadata.scripts["ci:dependencies"], /cargo deny check/);

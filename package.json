@@ -55,7 +55,7 @@
     "provider:prepare": "node scripts/prepare-simulator-provider.mjs",
     "provider:distribution": "node scripts/prepare-simulator-provider.mjs --distribution",
     "audio-provider:distribution": "node scripts/prepare-audio-provider.mjs --distribution",
-    "audio-codec:prepare": "node scripts/prepare-audio-codec.mjs",
+    "audio-codec:prepare": "node scripts/prepare-audio-codec.mjs --release",
     "audio-codec:distribution": "node scripts/prepare-audio-codec.mjs --distribution",
     "test:tooling": "npm run edk:prepare && node --test scripts/*.test.mjs packages/extension-developer-kit/test/*.test.mjs",
     "tauri": "npm run tauri --workspace @wyrmgrid/desktop --"
