@@ -40,10 +40,6 @@ test("multibranch pipeline runs the complete credential-free Linux and Windows g
     multibranchPipeline,
     /withCredentials|credentialsId|GH_TOKEN|gh release|SENTRY_AUTH_TOKEN/,
   );
-  assert.doesNotMatch(
-    multibranchPipeline,
-    /hoardmind|ollama|openai-compatible|optional-ai|api\/chat|chat\/completions|model api/i,
-  );
 });
 
 test("snapshot packages are limited to main and release branches", () => {
@@ -59,6 +55,56 @@ test("snapshot packages are limited to main and release branches", () => {
   assert.match(multibranchPipeline, /BUILD-INFO\.json/);
   assert.match(multibranchPipeline, /SHA256SUMS\.txt/);
   assert.doesNotMatch(multibranchPipeline, /--bundles [^\n]*(?:dmg|app,)/i);
+});
+
+test("ForgeAI is a feature-first advisory review for PR merges and main", () => {
+  const snapshots = multibranchPipeline.indexOf("stage('Unsigned snapshots')");
+  const forgeAi = multibranchPipeline.indexOf(
+    "stage('ForgeAI advisory review')",
+  );
+  const forgeAiStage = multibranchPipeline.slice(forgeAi);
+
+  assert.notEqual(forgeAi, -1);
+  assert.ok(snapshots < forgeAi);
+  assert.match(
+    multibranchPipeline,
+    /def isForgeAIReviewBranch\(\)[\s\S]*env\.BRANCH_NAME == 'main'/,
+  );
+  assert.match(multibranchPipeline, /env\.CHANGE_ID/);
+  assert.match(multibranchPipeline, /!env\.CHANGE_FORK/);
+  assert.match(multibranchPipeline, /env\.BRANCH_NAME\.endsWith\('-merge'\)/);
+  assert.match(forgeAiStage, /node\('linux'\)/);
+  assert.match(forgeAiStage, /timeout\(time: 45, unit: 'MINUTES'\)/);
+  assert.match(
+    forgeAiStage,
+    /buildResult: 'SUCCESS',[\s\S]*stageResult: 'UNSTABLE'/,
+  );
+  assert.match(forgeAiStage, /prepare-forgeai-review\.mjs/);
+  assert.match(
+    forgeAiStage,
+    /sourceGlob: '\.jenkins\/forgeai-input\/change-review\.txt'/,
+  );
+  assert.match(forgeAiStage, /failOnCritical: false/);
+  assert.match(forgeAiStage, /def expectedAnalyzerCount = 7/);
+  assert.match(forgeAiStage, /report\.analyzerCount != expectedAnalyzerCount/);
+
+  const analyzerOrder = [
+    "'code-review'",
+    "'architecture-drift'",
+    "'test-gaps'",
+    "'commit-intel'",
+    "'pipeline-advisor'",
+    "'vulnerability'",
+    "'dependency-risk'",
+  ].map((analyzer) => forgeAiStage.indexOf(analyzer));
+  assert.ok(analyzerOrder.every((index) => index >= 0));
+  assert.deepEqual(
+    analyzerOrder,
+    [...analyzerOrder].sort((a, b) => a - b),
+  );
+  assert.doesNotMatch(forgeAiStage, /'release-readiness'/);
+  assert.match(forgeAiStage, /archiveArtifacts\(/);
+  assert.match(forgeAiStage, /artifacts: 'forgeai-reports\/\*\*'/);
 });
 
 test("trusted release pipeline validates exact tags before credential use", () => {

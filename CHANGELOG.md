@@ -59,6 +59,11 @@ major application version.
 
 ### Changes
 
+- Added a feature-first ForgeAI advisory review to Jenkins for `main` and
+  origin pull-request merge builds. It archives a seven-analyzer HTML report
+  from a bounded, credential-screened change packet after deterministic work;
+  model failures and findings cannot block validation, snapshots, or the
+  separate exact-tag release pipeline.
 - Moved routine Linux and Windows validation, unsigned branch snapshots, and
   exact-tag draft prerelease assembly to credential-separated Jenkins
   pipelines. GitHub Actions now provide only a manual emergency release

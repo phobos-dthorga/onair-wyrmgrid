@@ -188,10 +188,13 @@ drift. A portable backup is still recommended before prerelease upgrades.
 ## Jenkins and hosted-fallback policy
 
 Routine commits and pull requests are validated locally and by the
-credential-free Jenkins multibranch pipeline on Linux and Windows. `main` and
+publication-credential-free Jenkins multibranch pipeline on Linux and Windows.
+Origin pull-request merge revisions and `main` may additionally receive a
+non-blocking ForgeAI report after deterministic work completes. `main` and
 `codex/release-*` retain unsigned snapshots after every required gate passes.
-The release job is separate from the Organization Folder and receives its
-release credential only inside narrowly bounded GitHub CLI commands.
+The release job is separate from the Organization Folder, performs no model
+call, and receives its release credential only inside narrowly bounded GitHub
+CLI commands.
 
 The release policy rejects malformed versions, tags outside `main`, and any tag
 whose version differs from the four checked-in application version sources.

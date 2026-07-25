@@ -1,20 +1,30 @@
 # Jenkins operations
 
 Jenkins is WyrmGrid's routine CI, snapshot, and release-candidate build system.
-The root `Jenkinsfile` is deliberately credential-free. A separate trusted
-Pipeline reads `Jenkinsfile.release` and is the only Jenkins job allowed to
-receive GitHub release authority.
+The root `Jenkinsfile` contains no credential binding and has no publication
+authority. It may invoke the controller-configured ForgeAI service for bounded
+advisory review. A separate trusted Pipeline reads `Jenkinsfile.release` and is
+the only Jenkins job allowed to receive GitHub release authority.
 
-Neither pipeline invokes Hoardmind, an AI model, or an optional-AI task. Jenkins
-receives no OnAir credential, raw provider payload, personal flight data,
-database content, signing key, or end-user device key.
+The ForgeAI integration is an explicit exception to the general rule that
+optional local-AI development tasks stay outside CI. It does not invoke
+Hoardmind or `scripts/run-optional-ai-task.mjs`, and the exact-tag release
+pipeline performs no model call. Jenkins sends no OnAir credential, raw
+provider payload, personal flight data, database content, signing key, or
+end-user device key to ForgeAI.
 
 ## Required Jenkins capabilities
 
-The controller requires Declarative Pipeline, Git, GitHub Branch Source, and
-Credentials Binding. The pipelines use built-in checkout, stash, archive,
-fingerprinting, timeout, and approval steps; they do not require Copy Artifact,
-an AI plugin, or a build-cache plugin.
+The controller requires Declarative Pipeline, Git, GitHub Branch Source,
+Credentials Binding, and
+[ForgeAI Pipeline Intelligence](https://plugins.jenkins.io/forgeai-pipeline-intelligence/).
+The pipelines use built-in checkout, stash, archive, fingerprinting, timeout,
+and approval steps; they do not require Copy Artifact, HTML Publisher, or a
+build-cache plugin. Keep ForgeAI on a reviewed version compatible with the
+controller. Configure its OpenAI-compatible endpoint and model centrally, store
+any endpoint token as a Jenkins Secret Text credential, keep score-based
+failure disabled, and never place the endpoint token or resolved secret in this
+repository or a build log.
 
 Configure two agents:
 
@@ -61,12 +71,61 @@ source ref, exact commit, Jenkins build number, supported platform identifiers,
 and explicit unsigned/checksums-only declarations. It excludes usernames,
 hostnames, absolute paths, credentials, and raw application data.
 
+After deterministic validation and any eligible snapshots finish, ForgeAI runs
+once for `main` and once for an origin pull request's merged-with-target
+revision. Ordinary branches, duplicate pull-request head jobs, forked pull
+requests, and the release pipeline skip it.
+
+`scripts/prepare-forgeai-review.mjs` compares the built commit with its first
+parent and writes one generated packet beneath ignored
+`.jenkins/forgeai-input/`. The packet:
+
+- includes commit subjects and patches for at most 40 changed implementation,
+  pipeline, and dependency-manifest files;
+- is limited to 60 KiB, apportions the patch budget across files, and records
+  omitted scope;
+- excludes fixture, snapshot, capture, recording, payload, dependency-cache,
+  and build-output paths;
+- contains only repository-relative paths and refuses common credential or
+  private-key signatures, invalid UTF-8, unsafe control characters, and
+  bidirectional overrides; and
+- labels source, comments, commit text, and patches as untrusted advisory
+  evidence.
+
+The code, architecture, test-gap, commit, and vulnerability analyzers receive
+that packet. ForgeAI's pipeline advisor independently reads the current root
+`Jenkinsfile`, and its dependency analyzer independently reads the checked-out
+dependency manifests supported by the plugin. Before invocation, the generator
+enumerates those tracked special inputs, requires valid UTF-8, rejects the same
+credential and control-text signatures, and caps their combined size at 100
+KiB. The clean checkout occurs before dependency installation, so generated
+`node_modules` or build manifests are absent.
+
+The analyzers run in feature-first order: code review, architecture drift, test
+gaps, commit intelligence, and pipeline advice, followed by vulnerability and
+dependency risk. Release readiness is deliberately omitted. The self-contained
+HTML report is archived as an ordinary build artifact. The reported score,
+severity, suggestions, and vulnerability labels are untrusted model output;
+they neither prove a gate passed nor establish release, compatibility, or
+security readiness.
+
+ForgeAI's current full-analysis step catches individual analyzer failures.
+WyrmGrid therefore checks that all seven requested analyzers returned. A
+timeout, packet refusal, plugin error, missing analyzer, or report-archive
+failure marks only the ForgeAI stage unstable while preserving a successful
+overall result. Because this advisory stage is last, it cannot prevent
+deterministic validation or snapshot creation.
+
 ## Trusted release job
 
 Create a separate locked Jenkins folder containing one Pipeline job sourced
 from `main` at `Jenkinsfile.release`. Do not create this job beneath the GitHub
 Organization Folder. Disable ad-hoc Pipeline reconfiguration for users who are
 not release maintainers.
+
+Do not add ForgeAI, another model, or an optional-AI task to this release job.
+Release notes, semantic-version decisions, exact-tag acceptance, approval, and
+publication remain deterministic or human-controlled.
 
 Create a dedicated GitHub App installed only on
 `phobos-dthorga/onair-wyrmgrid` with repository Contents read/write. Store it as
@@ -116,6 +175,9 @@ the same draft release.
 - A missing or offline agent leaves the associated stage queued until its
   timeout; it does not silently downgrade platform coverage.
 - A failed validation prevents snapshot and release packaging.
+- A failed or incomplete ForgeAI review leaves deterministic results and
+  snapshots intact, marks the advisory stage unstable, and may be rerun after
+  the model service recovers.
 - A missing package, duplicate normalized filename, failed NSIS smoke test, or
   published release blocks publication.
 - A failed draft upload leaves the Jenkins artifacts available for diagnosis.

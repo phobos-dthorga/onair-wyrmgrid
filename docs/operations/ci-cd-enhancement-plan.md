@@ -9,8 +9,9 @@ release rebuild, publication, signing operation, or optional-AI contribution.
 
 ## Purpose
 
-WyrmGrid has a local-first development process, credential-free Jenkins
-validation, and a separately protected exact-tag release pipeline. This plan
+WyrmGrid has a local-first development process, publication-credential-free
+Jenkins validation with bounded ForgeAI advice, and a separately protected
+exact-tag release pipeline. This plan
 records remaining improvements identified by audit so they can be discussed,
 implemented in small stages, and verified without quietly expanding Jenkins,
 GitHub, or optional-AI authority.
@@ -25,8 +26,10 @@ until an approved change updates them together.
 ## Existing strengths to preserve
 
 - Routine compilation, testing, formatting, linting, and dependency checks run
-  locally and in the credential-free Jenkins Organization Folder on Linux and
-  Windows.
+  locally and in the publication-credential-free Jenkins Organization Folder
+  on Linux and Windows. ForgeAI receives only a bounded change packet and
+  screened pipeline/dependency inputs after those deterministic stages and has
+  no gate or release authority.
 - Jenkins snapshots are limited to `main` and `codex/release-*`; ordinary
   branches receive no distributable package.
 - Hosted GitHub Actions run only as a manually authorized Windows/Linux release
@@ -87,8 +90,10 @@ The intended end state is:
    Linux and Windows gates for every discovered revision.
 2. Optional Hoardmind review receives only a selected, sanitized, bounded
    packet and never determines whether a gate passed.
-3. Pull requests receive credential-free Jenkins checks; branch protection
-   requires their stable Linux and Windows results.
+3. Pull requests receive publication-credential-free deterministic Jenkins
+   checks; branch protection requires their stable Linux and Windows results.
+   Origin pull-request merge builds and `main` additionally receive
+   non-blocking ForgeAI advice after deterministic work completes.
 4. `main` and `codex/release-*` additionally retain unsigned snapshots.
 5. An authorized release change prepares the versions and curated changelog.
 6. A maintainer creates an immutable version tag on `main`.
@@ -146,8 +151,8 @@ Stage 1 should be completed locally and reviewed before any push or hosted run.
 
 ### Stage 2 — truthful pull-request validation
 
-**Status:** Superseded by credential-free complete Jenkins validation for every
-discovered pull request.
+**Status:** Superseded by publication-credential-free complete deterministic
+Jenkins validation for every discovered pull request.
 
 Proposed policy change:
 
@@ -241,6 +246,12 @@ The detailed candidate architecture, safety boundaries, implementation stages,
 and validation plan are recorded in the
 [local review automation and bounded Hoardmind delegation plan](local-review-automation.md).
 This section remains the CI/CD programme boundary for those proposed helpers.
+
+ForgeAI is a separate implemented Jenkins exception, not a Hoardmind
+convenience. It uses a controller-configured authenticated endpoint and a
+bounded repository-generated packet with screened pipeline/dependency inputs,
+runs only after deterministic work, and cannot gate or enter the protected
+release job.
 
 The deterministic Stage 1 inventory is now implemented as
 `npm run review:inventory`. It records a versioned local source-evidence bundle
