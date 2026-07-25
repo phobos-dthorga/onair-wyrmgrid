@@ -10,7 +10,7 @@ pipeline {
         skipDefaultCheckout(true)
         disableConcurrentBuilds(abortPrevious: true)
         parallelsAlwaysFailFast()
-        timeout(time: 4, unit: 'HOURS')
+        timeout(time: 7, unit: 'HOURS')
         buildDiscarder(logRotator(
             daysToKeepStr: '30',
             numToKeepStr: '30',
@@ -25,7 +25,7 @@ pipeline {
                 stage('Linux validation') {
                     agent { label 'linux' }
                     options {
-                        timeout(time: 2, unit: 'HOURS')
+                        timeout(time: 3, unit: 'HOURS')
                     }
                     steps {
                         deleteDir()
@@ -42,6 +42,7 @@ pipeline {
                             npm ci
                             npm run ci:frontend
                             npm run ci:python
+                            npm run ci:prepare
                             npm run ci:rust
                             npm run ci:dependencies
                         '''
@@ -51,7 +52,7 @@ pipeline {
                 stage('Windows validation') {
                     agent { label 'windows' }
                     options {
-                        timeout(time: 2, unit: 'HOURS')
+                        timeout(time: 3, unit: 'HOURS')
                     }
                     steps {
                         deleteDir()
@@ -83,8 +84,8 @@ pipeline {
 
                             & npm ci
                             if ($LASTEXITCODE -ne 0) { throw 'npm ci failed.' }
-                            & npm run provider:prepare
-                            if ($LASTEXITCODE -ne 0) { throw 'Simulator provider preparation failed.' }
+                            & npm run ci:prepare
+                            if ($LASTEXITCODE -ne 0) { throw 'Provider package preparation failed.' }
                             & npm run ci:rust
                             if ($LASTEXITCODE -ne 0) { throw 'Windows Rust validation failed.' }
                         '''
@@ -102,7 +103,7 @@ pipeline {
                 stage('Linux snapshot') {
                     agent { label 'linux' }
                     options {
-                        timeout(time: 2, unit: 'HOURS')
+                        timeout(time: 3, unit: 'HOURS')
                     }
                     environment {
                         SENTRY_UPLOAD_SOURCEMAPS = 'false'
@@ -160,7 +161,7 @@ pipeline {
                 stage('Windows snapshot') {
                     agent { label 'windows' }
                     options {
-                        timeout(time: 2, unit: 'HOURS')
+                        timeout(time: 3, unit: 'HOURS')
                     }
                     environment {
                         SENTRY_UPLOAD_SOURCEMAPS = 'false'

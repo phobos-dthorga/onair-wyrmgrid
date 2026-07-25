@@ -169,6 +169,7 @@ pipeline {
                                 npm ci
                                 npm run ci:frontend
                                 npm run ci:python
+                                npm run ci:prepare
                                 npm run ci:rust
                                 npm run ci:dependencies
                                 npm run tauri --workspace @wyrmgrid/desktop -- build --bundles appimage,deb
@@ -229,8 +230,8 @@ pipeline {
 
                                 & npm ci
                                 if ($LASTEXITCODE -ne 0) { throw 'npm ci failed.' }
-                                & npm run provider:prepare
-                                if ($LASTEXITCODE -ne 0) { throw 'Simulator provider preparation failed.' }
+                                & npm run ci:prepare
+                                if ($LASTEXITCODE -ne 0) { throw 'Provider package preparation failed.' }
                                 & npm run ci:rust
                                 if ($LASTEXITCODE -ne 0) { throw 'Windows Rust validation failed.' }
                                 & npm run tauri --workspace '@wyrmgrid/desktop' -- build --bundles nsis

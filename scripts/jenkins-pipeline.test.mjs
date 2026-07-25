@@ -23,7 +23,14 @@ test("multibranch pipeline runs the complete credential-free Linux and Windows g
   assert.match(multibranchPipeline, /npm run ci:python/);
   assert.match(multibranchPipeline, /npm run ci:rust/);
   assert.match(multibranchPipeline, /npm run ci:dependencies/);
-  assert.match(multibranchPipeline, /npm run provider:prepare/);
+  assert.match(multibranchPipeline, /npm run ci:prepare/);
+  assert.doesNotMatch(multibranchPipeline, /timeout\(time: 2,/);
+  assert.equal(
+    [...multibranchPipeline.matchAll(/timeout\(time: 3, unit: 'HOURS'\)/g)]
+      .length,
+    4,
+  );
+  assert.match(multibranchPipeline, /timeout\(time: 7, unit: 'HOURS'\)/);
   assert.match(
     multibranchPipeline,
     /disableConcurrentBuilds\(abortPrevious: true\)/,
@@ -84,6 +91,7 @@ test("trusted release pipeline validates exact tags before credential use", () =
 });
 
 test("release publication remains an approved draft prerelease", () => {
+  assert.equal([...releasePipeline.matchAll(/npm run ci:prepare/g)].length, 2);
   assert.match(releasePipeline, /stage\('Approve draft publication'\)/);
   assert.match(releasePipeline, /input\(/);
   assert.match(releasePipeline, /gh release create/);
@@ -119,6 +127,10 @@ test("package scripts are the shared CI command contract", () => {
   );
   assert.match(packageMetadata.scripts["ci:frontend"], /test:tooling/);
   assert.match(packageMetadata.scripts["ci:frontend"], /audit:boundaries/);
+  assert.equal(
+    packageMetadata.scripts["ci:prepare"],
+    "npm run provider:prepare && npm run audio-codec:prepare",
+  );
   assert.match(packageMetadata.scripts["ci:rust"], /--locked/);
   assert.match(packageMetadata.scripts["ci:rust"], /-D warnings/);
   assert.match(packageMetadata.scripts["ci:dependencies"], /cargo deny check/);
