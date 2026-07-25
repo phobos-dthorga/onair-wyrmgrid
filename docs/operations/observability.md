@@ -127,8 +127,10 @@ plugin, or sidecar expansion.
 - Use `onair-wyrmgrid@<semver>` in both Sentry projects.
 - Upload Svelte/Vite source maps during CI installer builds and delete them from
   distributable assets after upload.
-- Keep `SENTRY_AUTH_TOKEN` and equivalent upload credentials in GitHub Actions
-  secrets, never in source, local examples, application bundles, or logs.
+- Keep `SENTRY_AUTH_TOKEN` and equivalent upload credentials in protected
+  release-job secrets, never in source, local examples, application bundles, or
+  logs. The initial Jenkins release job leaves source-map upload disabled until
+  that separate credential and exact-artifact validation are authorized.
 - Produce and upload the appropriate PDB, dSYM, or ELF debug information before
   stripping published binaries.
 - Associate releases with the Git commit and verify one deliberately generated

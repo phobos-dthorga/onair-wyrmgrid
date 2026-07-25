@@ -1,8 +1,6 @@
 name: CI
 
 on:
-  pull_request:
-  workflow_dispatch:
   workflow_call:
     inputs:
       checkout_ref:
@@ -21,7 +19,6 @@ concurrency:
 jobs:
   rust-core:
     name: Rust core
-    if: github.event_name != 'pull_request' || startsWith(github.head_ref, 'codex/release-')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -35,15 +32,14 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Check core crates
-        run: cargo check --workspace --exclude wyrmgrid-desktop --all-targets
+        run: cargo check --locked --workspace --exclude wyrmgrid-desktop --all-targets
       - name: Lint core crates
-        run: cargo clippy --workspace --exclude wyrmgrid-desktop --all-targets -- -D warnings
+        run: cargo clippy --locked --workspace --exclude wyrmgrid-desktop --all-targets -- -D warnings
       - name: Test core crates
-        run: cargo test --workspace --exclude wyrmgrid-desktop
+        run: cargo test --locked --workspace --exclude wyrmgrid-desktop
 
   frontend:
     name: Frontend
-    if: github.event_name != 'pull_request' || startsWith(github.head_ref, 'codex/release-')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -58,6 +54,10 @@ jobs:
         run: npm run test:tooling
       - name: Check formatting
         run: npm run format:check
+      - name: Audit application boundaries
+        run: npm run audit:boundaries
+      - name: Test Python SDK and providers
+        run: npm run ci:python
       - name: Type-check Svelte
         run: npm run check
       - name: Test frontend
@@ -67,7 +67,6 @@ jobs:
 
   desktop-windows:
     name: Windows desktop
-    if: github.event_name != 'pull_request' || startsWith(github.head_ref, 'codex/release-')
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -90,10 +89,11 @@ jobs:
         run: cargo check -p wyrmgrid-simconnect-provider --all-targets
       - name: Test the Windows SimConnect provider
         run: cargo test -p wyrmgrid-simconnect-provider
+      - name: Lint the Windows desktop and SimConnect provider
+        run: cargo clippy --locked -p wyrmgrid-desktop -p wyrmgrid-simconnect-provider --all-targets -- -D warnings
 
   rust-coverage:
     name: Rust coverage
-    if: github.event_name == 'workflow_call'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7

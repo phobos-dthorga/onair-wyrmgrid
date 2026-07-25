@@ -59,6 +59,11 @@ major application version.
 
 ### Changes
 
+- Moved routine Linux and Windows validation, unsigned branch snapshots, and
+  exact-tag draft prerelease assembly to credential-separated Jenkins
+  pipelines. GitHub Actions now provide only a manual emergency release
+  fallback; macOS is no longer built, tested, or claimed as a supported desktop
+  release, while protocol platform values remain compatible.
 - Established external, independently installable artifacts as the required
   delivery boundary for every plugin and provider. First-party packages may be
   included by an installer, but users must also be able to install, replace,

@@ -81,12 +81,13 @@ though MSFS 2024 is Windows-specific.
 | Simulator  | Desktop systems relevant to WyrmGrid | Telemetry path                        | Audio position                                                                                                                           |
 | ---------- | ------------------------------------ | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | MSFS 2024  | Windows                              | SimConnect Bridge provider            | Microphone and explicitly selected Windows application, endpoint, or simulator mix; documented COM state is metadata, not isolated audio |
-| X-Plane 12 | Windows, macOS, Ubuntu LTS           | Planned local Web API Bridge provider | Platform capture plus a feasibility spike for named X-Plane audio groups                                                                 |
+| X-Plane 12 | Windows, Ubuntu LTS                  | Planned local Web API Bridge provider | Platform capture plus a feasibility spike for named X-Plane audio groups                                                                 |
 
 X-Plane officially supports Windows 10 or 11 64-bit, macOS 12 or later, and
 Ubuntu LTS, with Ubuntu the Linux family it tests. Its plugin SDK publishes
 Windows, Linux, Intel Mac, and Apple Silicon support. Other Linux distributions
-must not be advertised merely because a build happens to work.
+must not be advertised merely because a build happens to work. Upstream macOS
+support remains a portability fact, not WyrmGrid desktop release support.
 
 ### MSFS 2024
 
@@ -352,8 +353,8 @@ software. Before implementation ships:
   intended distribution jurisdictions;
 - VATSIM, IVAO, SayIntentions, and any other captured service's current rules
   must be reviewed rather than assuming local recording is permitted;
-- Windows, macOS, and Linux permission prompts and indicators must be tested on
-  every packaged target;
+- Windows and Linux permission prompts and indicators must be tested on every
+  packaged target;
 - source identifiers, labels, and failures must be redacted from diagnostics;
 - general plugins receive no audio capability; an explicitly selected codec
   provider necessarily receives only that selected source's transient PCM and
@@ -413,9 +414,9 @@ Required automated coverage includes:
 Outside-repository live certification must cover representative microphones,
 headsets, output routing, simulator versions, default and third-party aircraft,
 long flights, pause, device changes, simulator restart, and application crash.
-X-Plane certification repeats on Windows, Intel and Apple Silicon macOS where
-supported, and supported Ubuntu LTS. Passing one operating system or aircraft
-does not establish another.
+X-Plane certification repeats on Windows and supported Ubuntu LTS. Passing one
+operating system or aircraft does not establish another. A future macOS
+release would require its own packaging and real-device certification decision.
 
 ## Delivery sequence
 
@@ -440,7 +441,7 @@ does not establish another.
 6. Extend the Windows provider to explicitly selected MSFS, application, or
    endpoint output, with SimConnect COM facts presented as metadata only.
 7. Complete the X-Plane local Web API telemetry provider across WyrmGrid's
-   supported Windows, macOS, and Linux targets.
+   supported Windows and Linux targets.
 8. Deliver approved microphone and mixed-output capture for those X-Plane
    targets where platform certification passes.
 9. Run the X-Plane named-audio-group feasibility spike. Add isolated COM1,
