@@ -8,6 +8,24 @@ major application version.
 
 ### New features
 
+- None.
+
+### Changes
+
+- None.
+
+### Removed
+
+- None.
+
+### 🚨 Breaking changes
+
+- None.
+
+## [0.4.0] - 2026-07-26
+
+### New features
+
 - Added the first external ordinary-plugin package slice: bounded
   `.wyrmplugin` archives with an exact SHA-256 inventory, offline inspection
   and confirmation in Forge, versioned managed storage, immutable version
@@ -59,6 +77,9 @@ major application version.
 
 ### Changes
 
+- Extended release-version validation to keep the bundled deterministic audio,
+  Windows audio, and Opus codec manifests synchronized with their
+  workspace-versioned binaries.
 - Updated the locked build-time glob dependency to `brace-expansion` 5.0.8,
   removing its high-severity unbounded-expansion denial-of-service advisory
   while retaining the fail-closed high-severity npm audit gate.
@@ -499,7 +520,8 @@ major application version.
 
 - None.
 
-[Unreleased]: https://github.com/phobos-dthorga/onair-wyrmgrid/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/phobos-dthorga/onair-wyrmgrid/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/phobos-dthorga/onair-wyrmgrid/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/phobos-dthorga/onair-wyrmgrid/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/phobos-dthorga/onair-wyrmgrid/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/phobos-dthorga/onair-wyrmgrid/compare/v0.1.0...v0.2.0
