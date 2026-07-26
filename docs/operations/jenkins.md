@@ -93,11 +93,14 @@ discovery without also revising this eligibility contract.
 
 Configure GitHub webhook delivery so pushes and pull-request updates re-index
 the folder. Keep a periodic organization scan as recovery for missed webhook
-events, not as the primary trigger. After the first successful exact-head
-build, require its stable Jenkins status context in the `main` branch
-protection rules instead of the former automatically triggered GitHub Actions
-jobs. The single pipeline status represents both deterministic platform lanes;
-it succeeds only when both do.
+events, not as the primary trigger. Prefer the dedicated GitHub App's
+registration webhook. If GitHub cannot persist that registration-level hook,
+configure the same endpoint as a repository webhook limited to `push` and
+`pull_request` events, use JSON payloads, and keep SSL verification enabled.
+After the first successful exact-head build, require its stable Jenkins status
+context in the `main` branch protection rules instead of the former
+automatically triggered GitHub Actions jobs. The single pipeline status
+represents both deterministic platform lanes; it succeeds only when both do.
 
 Every discovered revision runs Linux and Windows validation. A newer build of
 the same branch cancels the older one. Only `main` and `codex/release-*` build
