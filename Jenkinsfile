@@ -5,7 +5,7 @@ def isSnapshotBranch() {
 
 def isForgeAIReviewBranch() {
     return env.BRANCH_NAME == 'main' ||
-        (env.CHANGE_ID && !env.CHANGE_FORK && env.BRANCH_NAME.endsWith('-merge'))
+        (env.CHANGE_ID && !env.CHANGE_FORK)
 }
 
 pipeline {

@@ -72,7 +72,10 @@ test("ForgeAI is a feature-first advisory review for PR merges and main", () => 
   );
   assert.match(multibranchPipeline, /env\.CHANGE_ID/);
   assert.match(multibranchPipeline, /!env\.CHANGE_FORK/);
-  assert.match(multibranchPipeline, /env\.BRANCH_NAME\.endsWith\('-merge'\)/);
+  assert.doesNotMatch(
+    multibranchPipeline,
+    /env\.BRANCH_NAME\.endsWith\('-merge'\)/,
+  );
   assert.match(forgeAiStage, /node\('linux'\)/);
   assert.match(forgeAiStage, /timeout\(time: 45, unit: 'MINUTES'\)/);
   assert.match(

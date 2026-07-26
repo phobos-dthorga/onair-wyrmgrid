@@ -85,6 +85,12 @@ one authoritative synthetic-merge build for an origin pull request instead of
 competing branch, head, and merge builds. Keep fork pull requests on their
 restricted trust policy and outside ForgeAI.
 
+The organization-folder merge-only discovery setting is part of the ForgeAI
+trust boundary. Jenkins exposes an eligible origin merge build as `PR-<number>`
+rather than appending `-merge`, so the pipeline recognizes it through
+`CHANGE_ID` with no `CHANGE_FORK`. Do not enable origin pull-request head
+discovery without also revising this eligibility contract.
+
 Configure GitHub webhook delivery so pushes and pull-request updates re-index
 the folder. Keep a periodic organization scan as recovery for missed webhook
 events, not as the primary trigger. After the first successful exact-head
