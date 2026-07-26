@@ -77,6 +77,11 @@ major application version.
 
 ### Changes
 
+- Corrected Linux snapshot and exact-tag release metadata generation so their
+  embedded Node scripts terminate before checksum assembly.
+- Treat ForgeAI reports containing malformed JSON fallbacks as incomplete
+  advisory evidence instead of accepting their neutral scores as analyzer
+  results.
 - Made Jenkins validation, snapshot, and exact-tag packaging stages restartable
   individually, preserving bounded cross-stage inputs so completed platform
   gates do not need to be repeated after a later-stage failure.
