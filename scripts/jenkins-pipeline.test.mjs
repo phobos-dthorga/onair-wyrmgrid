@@ -87,6 +87,12 @@ test("ForgeAI is a feature-first advisory review for PR merges and main", () => 
   assert.match(forgeAiStage, /failOnCritical: false/);
   assert.match(forgeAiStage, /def expectedAnalyzerCount = 7/);
   assert.match(forgeAiStage, /report\.analyzerCount != expectedAnalyzerCount/);
+  assert.match(forgeAiStage, /find forgeai-reports -type f -print -quit/);
+  assert.match(
+    forgeAiStage,
+    /ForgeAI completed every analyzer but produced no report artifact\./,
+  );
+  assert.match(forgeAiStage, /allowEmptyArchive: !completeForgeAIReport/);
 
   const analyzerOrder = [
     "'code-review'",

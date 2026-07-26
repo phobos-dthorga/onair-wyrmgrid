@@ -414,15 +414,21 @@
   deterministic squash message containing the input, output, metrics, bot-
   commit, PR, review, and authority trailers, and verifies that GitHub retained
   that message on the resulting merge commit before reporting success;
-- the publication-credential-free Jenkins Organization Folder validates branch
-  and pull-request content but cannot publish. A separate locked release job
-  accepts only an existing supported tag and meaningful reason, verifies the
-  exact commit is on `main`, repeats Linux and Windows gates, refuses published
-  release replacement, and pauses for human approval. Its repository-specific
-  GitHub App token is scoped outside the Organization Folder and bound only
-  around trusted GitHub CLI commands. Jenkins generates SHA-256 checksums and
-  explicitly non-attested build metadata; the manual GitHub fallback retains
-  native GitHub attestations for an authorized emergency rebuild;
+- the Jenkins Organization Folder has no repository-content, merge, release, or
+  publication authority. Its dedicated repository-specific GitHub App may read
+  source and pull-request metadata and write commit statuses only; untrusted
+  build use is reduced to read-only repository contents. It is distinct from
+  the Contents-only Hoardmind contribution App and the separately scoped
+  release App. The Linux executor is an unprivileged, non-nesting LXC worker on
+  a dedicated VLAN with no host mounts or device passthrough. It receives its
+  own continuously renewed, narrowly scoped Teleport Machine ID; static SSH
+  keys, copied workload identities, direct port 22, and controller execution
+  are not fallback paths. The locked release job accepts only an existing
+  supported tag and meaningful reason, verifies the exact commit is on `main`,
+  repeats Linux and Windows gates, refuses published release replacement, and
+  pauses for human approval. Jenkins generates SHA-256 checksums and explicitly
+  non-attested build metadata; the manual GitHub fallback retains native GitHub
+  attestations for an authorized emergency rebuild;
 - the explicit Jenkins ForgeAI exception runs after deterministic validation
   and snapshots, only for `main` and origin pull-request merge revisions. A
   fixed local generator compares the built commit with its first parent,
@@ -434,10 +440,12 @@
   also inventories the current Jenkinsfile and tracked dependency manifests
   that ForgeAI reads specially, applies the same screens, and caps those files
   at 100 KiB combined. Seven analyzers run with features before vulnerability
-  and dependency advice; release readiness is omitted. Missing analyzers,
-  timeouts, endpoint failures, packet refusal, and report errors can make only
-  the advisory stage unstable while the overall deterministic result remains
-  successful. The protected exact-tag release job makes no model call;
+  and dependency advice; release readiness is omitted. A seven-analyzer result
+  is incomplete unless ForgeAI also produces a regular archived report file.
+  Missing analyzers, missing reports, timeouts, endpoint failures, packet
+  refusal, and report errors can make only the advisory stage unstable while
+  the overall deterministic result remains successful. The protected exact-tag
+  release job makes no model call;
 - the Windows release runner silently installs the NSIS output and verifies that
   the desktop application and expected SimConnect sidecar were packaged;
 - the Windows installer identity and per-user scope are regression-tested,

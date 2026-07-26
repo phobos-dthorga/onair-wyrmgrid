@@ -37,6 +37,29 @@ Configure two agents:
   WebView2, and Strawberry Perl. Run the agent as an identity that can access
   that toolchain.
 
+Set the controller executor count to zero and do not give the controller the
+`linux` label. Start with one executor on each dedicated agent. This preserves
+Linux/Windows parallelism while preventing multiple cold Rust suites from
+starving the controller or each other. Increase agent capacity rather than
+weakening application deadlines when a single cold revision cannot finish
+within 60 minutes.
+
+The preferred Proxmox worker is a dedicated unprivileged LXC container on VLAN
+20 with the `linux` label, one executor, four CPU cores, and 8192 MiB of memory.
+Keep its filesystem, service account, and Jenkins remote root separate from the
+`ubuntu-agent` VM template used by Hoardmind and other AI work. Do not enable
+nesting, device passthrough, privileged mode, or host filesystem mounts merely
+to make a build pass. Rebuild the container from a reviewed base and toolchain
+manifest when it drifts; do not make the Jenkins controller an eligible build
+node as a fallback.
+
+Give the Linux worker its own continuously renewed Teleport Machine ID and a
+narrow role limited to the worker's required WyrmGrid-labelled resources. Do
+not copy the TaurykDesktop, Codex, GitHub Actions, or another agent's identity
+into the container. Jenkins administration and build-time remote access must
+use Teleport; never add a static SSH key, an `authorized_keys` fallback, or
+direct port-22 access.
+
 The Windows helper uses `WYRMGRID_CARGO_TARGET_ROOT` when the node defines it,
 then creates a bounded hash directory for each complete Jenkins job identity.
 If the variable is absent, it uses the agent identity's local application-data
@@ -45,17 +68,30 @@ directory. A short dedicated value such as
 
 ## Multibranch organization job
 
-Configure the GitHub Organization Folder to discover trusted branches and the
-project's intended pull-request heads, with `Jenkinsfile` at the repository
-root. Keep the source credential read-only for repository contents and webhook
-or checks access. Do not make any publication credential available to the
-Organization Folder or its children.
+Create a dedicated GitHub App named `WyrmGrid Jenkins CI`, install it only on
+`phobos-dthorga/onair-wyrmgrid`, and store it as the Jenkins GitHub App
+credential `wyrmgrid-github-ci`. Grant repository Contents read-only, Metadata
+read-only, Pull requests read-only, and Commit statuses read/write. Configure
+the credential to infer the accessible repository and restrict untrusted build
+use to read-only repository contents. This status-only authority is not release
+or repository-content publication authority. Never reuse or broaden the
+Hoardmind generated-contribution App for Jenkins.
+
+Configure the GitHub Organization Folder with that credential and
+`Jenkinsfile` at the repository root. Discover branches with **Exclude branches
+that are also filed as PRs** and discover origin pull requests with **Merging
+the pull request with the current target branch revision** only. This produces
+one authoritative synthetic-merge build for an origin pull request instead of
+competing branch, head, and merge builds. Keep fork pull requests on their
+restricted trust policy and outside ForgeAI.
 
 Configure GitHub webhook delivery so pushes and pull-request updates re-index
 the folder. Keep a periodic organization scan as recovery for missed webhook
-events, not as the primary trigger. After the first successful builds, require
-the Linux and Windows Jenkins results in the `main` branch protection rules
-instead of the former automatically triggered GitHub Actions jobs.
+events, not as the primary trigger. After the first successful exact-head
+build, require its stable Jenkins status context in the `main` branch
+protection rules instead of the former automatically triggered GitHub Actions
+jobs. The single pipeline status represents both deterministic platform lanes;
+it succeeds only when both do.
 
 Every discovered revision runs Linux and Windows validation. A newer build of
 the same branch cancels the older one. Only `main` and `codex/release-*` build
@@ -118,8 +154,10 @@ ForgeAI's current full-analysis step catches individual analyzer failures.
 WyrmGrid therefore checks that all seven requested analyzers returned. A
 timeout, packet refusal, plugin error, missing analyzer, or report-archive
 failure marks only the ForgeAI stage unstable while preserving a successful
-overall result. Because this advisory stage is last, it cannot prevent
-deterministic validation or snapshot creation.
+overall result. A reported seven-analyzer success must also produce at least one
+regular file under `forgeai-reports/`; otherwise the advisory stage is
+incomplete. Partial reports are archived when available. Because this advisory
+stage is last, it cannot prevent deterministic validation or snapshot creation.
 
 ## Trusted release job
 

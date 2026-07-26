@@ -278,6 +278,7 @@ pipeline {
                                       --output .jenkins/forgeai-input/change-review.txt
                                 '''
 
+                                def completeForgeAIReport = false
                                 try {
                                     def expectedAnalyzerCount = 7
                                     def report = forgeAI(
@@ -309,6 +310,20 @@ pipeline {
                                             "${expectedAnalyzerCount} requested analyzers."
                                         )
                                     }
+                                    def reportStatus = sh(
+                                        script: '''
+                                            set -eu
+                                            find forgeai-reports -type f -print -quit 2>/dev/null |
+                                                grep -q .
+                                        ''',
+                                        returnStatus: true
+                                    )
+                                    if (reportStatus != 0) {
+                                        error(
+                                            'ForgeAI completed every analyzer but produced no report artifact.'
+                                        )
+                                    }
+                                    completeForgeAIReport = true
                                     echo(
                                         "ForgeAI advisory score: ${report.compositeScore}/10; " +
                                         "findings: ${report.totalFindings}."
@@ -316,7 +331,7 @@ pipeline {
                                 } finally {
                                     archiveArtifacts(
                                         artifacts: 'forgeai-reports/**',
-                                        allowEmptyArchive: true,
+                                        allowEmptyArchive: !completeForgeAIReport,
                                         fingerprint: false
                                     )
                                 }
