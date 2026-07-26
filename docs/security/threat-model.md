@@ -317,6 +317,11 @@
   terminated after the deadline or when the host exits;
 - content security policy for the desktop webview;
 - locked dependencies, dependency updates, audit jobs, and CI-built releases;
+- the locked build toolchain resolves `brace-expansion` 5.0.8 or newer within
+  its current major line so untrusted glob input cannot reach the reported
+  unbounded-expansion denial of service. The high-severity npm audit gate
+  remains fail-closed; only the separately documented low-severity static
+  SvelteKit cookie exception is tolerated;
 - immutable commit pins for workflow dependencies; reusable CI and security
   gates run against the exact release tag before packaging, release tags must
   identify a commit on `main`, and every checked-in application version must
