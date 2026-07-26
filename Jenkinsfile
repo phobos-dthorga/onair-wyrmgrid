@@ -14,7 +14,7 @@ pipeline {
     options {
         skipDefaultCheckout(true)
         disableConcurrentBuilds(abortPrevious: true)
-        parallelsAlwaysFailFast()
+        preserveStashes(buildCount: 5)
         timeout(time: 7, unit: 'HOURS')
         buildDiscarder(logRotator(
             daysToKeepStr: '30',
@@ -25,9 +25,7 @@ pipeline {
     }
 
     stages {
-        stage('Validate') {
-            parallel {
-                stage('Linux validation') {
+        stage('Linux validation') {
                     agent { label 'linux' }
                     options {
                         timeout(time: 3, unit: 'HOURS')
@@ -54,7 +52,7 @@ pipeline {
                     }
                 }
 
-                stage('Windows validation') {
+        stage('Windows validation') {
                     agent { label 'windows' }
                     options {
                         timeout(time: 3, unit: 'HOURS')
@@ -95,17 +93,13 @@ pipeline {
                             if ($LASTEXITCODE -ne 0) { throw 'Windows Rust validation failed.' }
                         '''
                     }
-                }
-            }
         }
 
-        stage('Unsigned snapshots') {
+        stage('Linux snapshot') {
             when {
                 beforeAgent true
                 expression { isSnapshotBranch() }
             }
-            parallel {
-                stage('Linux snapshot') {
                     agent { label 'linux' }
                     options {
                         timeout(time: 3, unit: 'HOURS')
@@ -116,7 +110,7 @@ pipeline {
                     steps {
                         deleteDir()
                         checkout scm
-                        sh '''
+                        sh '''#!/usr/bin/env bash
                             set -euo pipefail
                             npm ci
                             npm run tauri --workspace @wyrmgrid/desktop -- build --bundles appimage,deb
@@ -163,7 +157,11 @@ pipeline {
                     }
                 }
 
-                stage('Windows snapshot') {
+        stage('Windows snapshot') {
+            when {
+                beforeAgent true
+                expression { isSnapshotBranch() }
+            }
                     agent { label 'windows' }
                     options {
                         timeout(time: 3, unit: 'HOURS')
@@ -250,8 +248,6 @@ pipeline {
                             onlyIfSuccessful: true
                         )
                     }
-                }
-            }
         }
 
         stage('ForgeAI advisory review') {

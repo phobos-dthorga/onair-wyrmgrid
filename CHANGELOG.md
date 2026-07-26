@@ -77,6 +77,9 @@ major application version.
 
 ### Changes
 
+- Made Jenkins validation, snapshot, and exact-tag packaging stages restartable
+  individually, preserving bounded cross-stage inputs so completed platform
+  gates do not need to be repeated after a later-stage failure.
 - Extended release-version validation to keep the bundled deterministic audio,
   Windows audio, and Opus codec manifests synchronized with their
   workspace-versioned binaries.

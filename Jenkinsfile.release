@@ -17,7 +17,7 @@ pipeline {
     options {
         skipDefaultCheckout(true)
         disableConcurrentBuilds()
-        parallelsAlwaysFailFast()
+        preserveStashes(buildCount: 5)
         timeout(time: 6, unit: 'HOURS')
         buildDiscarder(logRotator(
             daysToKeepStr: '30',
@@ -46,7 +46,7 @@ pipeline {
                 deleteDir()
                 checkout scm
                 withEnv(["RELEASE_TAG=${params.RELEASE_TAG}"]) {
-                    sh '''
+                    sh '''#!/usr/bin/env bash
                         set -euo pipefail
                         git fetch --force --tags origin
                         git fetch --no-tags origin main
@@ -87,7 +87,7 @@ pipeline {
                     passwordVariable: 'GH_TOKEN'
                 )]) {
                     withEnv(["RELEASE_TAG=${params.RELEASE_TAG}"]) {
-                        sh '''
+                        sh '''#!/usr/bin/env bash
                             set +x
                             set -euo pipefail
                             gh auth status
@@ -128,10 +128,6 @@ pipeline {
                     }
                 }
 
-                script {
-                    env.RELEASE_COMMIT = readFile('.jenkins/release-policy/commit').trim()
-                    env.RELEASE_VERSION = readFile('.jenkins/release-policy/version').trim()
-                }
                 stash(
                     name: 'release-policy',
                     includes: '.jenkins/release-policy/**',
@@ -140,9 +136,7 @@ pipeline {
             }
         }
 
-        stage('Validate and package exact tag') {
-            parallel {
-                stage('Linux release package') {
+        stage('Linux release package') {
                     agent { label 'linux' }
                     options {
                         timeout(time: 3, unit: 'HOURS')
@@ -153,9 +147,10 @@ pipeline {
                     steps {
                         deleteDir()
                         checkout scm
-                        withEnv(["RELEASE_COMMIT=${env.RELEASE_COMMIT}"]) {
-                            sh '''
+                        unstash 'release-policy'
+                        sh '''#!/usr/bin/env bash
                                 set -euo pipefail
+                                RELEASE_COMMIT="$(cat .jenkins/release-policy/commit)"
                                 git fetch --force --tags origin
                                 git checkout --detach "$RELEASE_COMMIT"
                                 test "$(git rev-parse HEAD)" = "$RELEASE_COMMIT"
@@ -179,12 +174,11 @@ pipeline {
                                 test "$(find .jenkins/linux-packages -maxdepth 1 -type f -name '*.AppImage' | wc -l)" -eq 1
                                 test "$(find .jenkins/linux-packages -maxdepth 1 -type f -name '*.deb' | wc -l)" -eq 1
                             '''
-                        }
                         stash(name: 'linux-release-packages', includes: '.jenkins/linux-packages/*')
                     }
                 }
 
-                stage('Windows release package') {
+        stage('Windows release package') {
                     agent { label 'windows' }
                     options {
                         timeout(time: 3, unit: 'HOURS')
@@ -196,16 +190,18 @@ pipeline {
                         deleteDir()
                         checkout scm
                         unstash 'release-policy'
-                        withEnv(["RELEASE_COMMIT=${env.RELEASE_COMMIT}"]) {
-                            pwsh '''
+                        pwsh '''
                                 $ErrorActionPreference = 'Stop'
                                 Set-StrictMode -Version Latest
 
+                                $releaseCommit = (
+                                    Get-Content -Raw '.jenkins\release-policy\commit'
+                                ).Trim()
                                 & git fetch --force --tags origin
                                 if ($LASTEXITCODE -ne 0) { throw 'Unable to fetch release tags.' }
-                                & git checkout --detach $env:RELEASE_COMMIT
+                                & git checkout --detach $releaseCommit
                                 if ($LASTEXITCODE -ne 0) { throw 'Unable to check out the release commit.' }
-                                if ((& git rev-parse HEAD).Trim() -ne $env:RELEASE_COMMIT) {
+                                if ((& git rev-parse HEAD).Trim() -ne $releaseCommit) {
                                     throw 'Windows checkout does not match the approved release commit.'
                                 }
 
@@ -265,11 +261,8 @@ pipeline {
                                 New-Item -ItemType Directory -Path '.jenkins\\windows-packages' -Force | Out-Null
                                 Copy-Item -LiteralPath $installers[0].FullName -Destination '.jenkins\\windows-packages'
                             '''
-                        }
                         stash(name: 'windows-release-packages', includes: '.jenkins/windows-packages/*')
                     }
-                }
-            }
         }
 
         stage('Assemble release') {
@@ -282,13 +275,11 @@ pipeline {
                 unstash 'release-policy'
                 unstash 'linux-release-packages'
                 unstash 'windows-release-packages'
-                withEnv([
-                    "RELEASE_TAG=${params.RELEASE_TAG}",
-                    "RELEASE_VERSION=${env.RELEASE_VERSION}",
-                    "RELEASE_COMMIT=${env.RELEASE_COMMIT}"
-                ]) {
-                    sh '''
+                withEnv(["RELEASE_TAG=${params.RELEASE_TAG}"]) {
+                    sh '''#!/usr/bin/env bash
                         set -euo pipefail
+                        export RELEASE_VERSION="$(cat .jenkins/release-policy/version)"
+                        export RELEASE_COMMIT="$(cat .jenkins/release-policy/commit)"
                         mkdir release-assets
                         while IFS= read -r -d '' package; do
                           name="$(basename "$package")"
@@ -371,7 +362,7 @@ pipeline {
                     passwordVariable: 'GH_TOKEN'
                 )]) {
                     withEnv(["RELEASE_TAG=${params.RELEASE_TAG}"]) {
-                        sh '''
+                        sh '''#!/usr/bin/env bash
                             set +x
                             set -euo pipefail
                             gh auth status

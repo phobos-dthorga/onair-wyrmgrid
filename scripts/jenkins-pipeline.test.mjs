@@ -35,6 +35,19 @@ test("multibranch pipeline runs the complete credential-free Linux and Windows g
     multibranchPipeline,
     /disableConcurrentBuilds\(abortPrevious: true\)/,
   );
+  assert.match(multibranchPipeline, /preserveStashes\(buildCount: 5\)/);
+  assert.doesNotMatch(multibranchPipeline, /\bparallel\s*\{/);
+  for (const stage of [
+    "Linux validation",
+    "Windows validation",
+    "Linux snapshot",
+    "Windows snapshot",
+  ]) {
+    assert.match(
+      multibranchPipeline,
+      new RegExp(`^ {8}stage\\('${stage}'\\)`, "m"),
+    );
+  }
 
   assert.doesNotMatch(
     multibranchPipeline,
@@ -55,6 +68,35 @@ test("snapshot packages are limited to main and release branches", () => {
   assert.match(multibranchPipeline, /BUILD-INFO\.json/);
   assert.match(multibranchPipeline, /SHA256SUMS\.txt/);
   assert.doesNotMatch(multibranchPipeline, /--bundles [^\n]*(?:dmg|app,)/i);
+  assert.match(
+    multibranchPipeline,
+    /stage\('Linux snapshot'\)[\s\S]*sh '''#!\/usr\/bin\/env bash\s+set -euo pipefail/,
+  );
+  assert.doesNotMatch(
+    multibranchPipeline,
+    /stage\('Linux snapshot'\)[\s\S]*sh '''\s+set -euo pipefail/,
+  );
+});
+
+test("release pipelines preserve restart inputs and expose each platform as a restart stage", () => {
+  assert.match(releasePipeline, /preserveStashes\(buildCount: 5\)/);
+  assert.doesNotMatch(releasePipeline, /\bparallel\s*\{/);
+  assert.match(releasePipeline, /^ {8}stage\('Linux release package'\)/m);
+  assert.match(releasePipeline, /^ {8}stage\('Windows release package'\)/m);
+  assert.match(
+    releasePipeline,
+    /stage\('Linux release package'\)[\s\S]*unstash 'release-policy'[\s\S]*RELEASE_COMMIT="\$\(cat \.jenkins\/release-policy\/commit\)"/,
+  );
+  assert.match(
+    releasePipeline,
+    /stage\('Windows release package'\)[\s\S]*unstash 'release-policy'[\s\S]*Get-Content -Raw '\.jenkins\\release-policy\\commit'/,
+  );
+  assert.match(
+    releasePipeline,
+    /stage\('Assemble release'\)[\s\S]*export RELEASE_VERSION="\$\(cat \.jenkins\/release-policy\/version\)"[\s\S]*export RELEASE_COMMIT="\$\(cat \.jenkins\/release-policy\/commit\)"/,
+  );
+  assert.doesNotMatch(releasePipeline, /\$\{env\.RELEASE_(?:COMMIT|VERSION)\}/);
+  assert.doesNotMatch(releasePipeline, /sh '''\s+set -euo pipefail/);
 });
 
 test("ForgeAI is a feature-first advisory review for PR merges and main", () => {

@@ -18,13 +18,13 @@ end-user device key to ForgeAI.
 The controller requires Declarative Pipeline, Git, GitHub Branch Source,
 Credentials Binding, and
 [ForgeAI Pipeline Intelligence](https://plugins.jenkins.io/forgeai-pipeline-intelligence/).
-The pipelines use built-in checkout, stash, archive, fingerprinting, timeout,
-and approval steps; they do not require Copy Artifact, HTML Publisher, or a
-build-cache plugin. Keep ForgeAI on a reviewed version compatible with the
-controller. Configure its OpenAI-compatible endpoint and model centrally, store
-any endpoint token as a Jenkins Secret Text credential, keep score-based
-failure disabled, and never place the endpoint token or resolved secret in this
-repository or a build log.
+The pipelines use built-in checkout, preserved stash, archive, fingerprinting,
+timeout, restart, and approval steps; they do not require Copy Artifact, HTML
+Publisher, or a build-cache plugin. Keep ForgeAI on a reviewed version
+compatible with the controller. Configure its OpenAI-compatible endpoint and
+model centrally, store any endpoint token as a Jenkins Secret Text credential,
+keep score-based failure disabled, and never place the endpoint token or
+resolved secret in this repository or a build log.
 
 Configure two agents:
 
@@ -38,11 +38,11 @@ Configure two agents:
   that toolchain.
 
 Set the controller executor count to zero and do not give the controller the
-`linux` label. Start with one executor on each dedicated agent. This preserves
-Linux/Windows parallelism while preventing multiple cold Rust suites from
-starving the controller or each other. Increase agent capacity rather than
-weakening application deadlines when a single cold revision cannot finish
-within 60 minutes.
+`linux` label. Start with one executor on each dedicated agent. Platform gates
+are intentionally separate, sequential top-level stages so Jenkins can restart
+at an individual failed stage without repeating completed gates. Increase agent
+capacity rather than weakening application deadlines when a single cold
+revision cannot finish within 60 minutes.
 
 The preferred Proxmox worker is a dedicated unprivileged LXC container on VLAN
 20 with the `linux` label, one executor, four CPU cores, and 8192 MiB of memory.
@@ -224,6 +224,12 @@ the same draft release.
 
 ## Failure handling
 
+- Jenkins preserves stashes for the five most recent builds. After correcting a
+  transient agent or pipeline failure, use **Restart from Stage** on the failed
+  top-level platform or assembly stage. Jenkins skips earlier completed stages
+  and restores the policy/package inputs needed downstream. A new build caused
+  by a new commit still runs every gate, and release publication still requires
+  the explicit approval stage.
 - A missing or offline agent leaves the associated stage queued until its
   timeout; it does not silently downgrade platform coverage.
 - A failed validation prevents snapshot and release packaging.
