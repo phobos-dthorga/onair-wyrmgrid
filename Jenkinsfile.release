@@ -317,7 +317,7 @@ pipeline {
                           'release-assets/BUILD-INFO.json',
                           `${JSON.stringify(metadata, null, 2)}\n`
                         );
-                        NODE
+NODE
 
                         (
                           cd release-assets

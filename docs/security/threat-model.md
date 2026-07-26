@@ -441,11 +441,12 @@
   that ForgeAI reads specially, applies the same screens, and caps those files
   at 100 KiB combined. Seven analyzers run with features before vulnerability
   and dependency advice; release readiness is omitted. A seven-analyzer result
-  is incomplete unless ForgeAI also produces a regular archived report file.
-  Missing analyzers, missing reports, timeouts, endpoint failures, packet
-  refusal, and report errors can make only the advisory stage unstable while
-  the overall deterministic result remains successful. The protected exact-tag
-  release job makes no model call;
+  is incomplete unless ForgeAI also produces a regular archived report file
+  without its malformed-JSON fallback marker. Missing analyzers, missing
+  reports, malformed responses, timeouts, endpoint failures, packet refusal,
+  and report errors can make only the advisory stage unstable while the overall
+  deterministic result remains successful. The protected exact-tag release job
+  makes no model call;
 - the Windows release runner silently installs the NSIS output and verifies that
   the desktop application and expected SimConnect sidecar were packaged;
 - the Windows installer identity and per-user scope are regression-tested,
@@ -822,12 +823,13 @@ issues, or releases without a separate bounded review.
 ## Residual Jenkins ForgeAI risks
 
 ForgeAI reads an intentionally bounded sample, not the complete change, and its
-plugin may truncate, misparse, omit, or hallucinate findings. A successful
-seven-analyzer count does not prove that every response was semantically valid,
-that every changed file was reviewed, or that the model resisted instructions
-embedded in repository content. The HTML report and composite score remain
-untrusted advice and must not become branch protection, security proof,
-semantic-version evidence, or release authority.
+plugin may truncate, misparse, omit, or hallucinate findings. WyrmGrid detects
+the plugin's explicit malformed-JSON fallback, but a clean seven-analyzer count
+still does not prove that every response was semantically valid, that every
+changed file was reviewed, or that the model resisted instructions embedded in
+repository content. The HTML report and composite score remain untrusted advice
+and must not become branch protection, security proof, semantic-version
+evidence, or release authority.
 
 The plugin resolves its model-service credential through Jenkins controller
 configuration. Origin pull-request authors already trusted to propose pipeline

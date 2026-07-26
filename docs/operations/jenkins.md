@@ -165,8 +165,11 @@ timeout, packet refusal, plugin error, missing analyzer, or report-archive
 failure marks only the ForgeAI stage unstable while preserving a successful
 overall result. A reported seven-analyzer success must also produce at least one
 regular file under `forgeai-reports/`; otherwise the advisory stage is
-incomplete. Partial reports are archived when available. Because this advisory
-stage is last, it cannot prevent deterministic validation or snapshot creation.
+incomplete. Reports containing the plugin's `JSON parsing failed` fallback are
+also incomplete: the fallback score and empty findings are not accepted as
+valid analyzer evidence. Partial and malformed reports are still archived for
+diagnosis. Because this advisory stage is last, it cannot prevent deterministic
+validation or snapshot creation.
 
 ## Trusted release job
 

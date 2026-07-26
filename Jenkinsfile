@@ -139,7 +139,7 @@ pipeline {
                               'ci-artifacts/linux/BUILD-INFO.json',
                               `${JSON.stringify(metadata, null, 2)}\n`
                             );
-                            NODE
+NODE
 
                             (
                               cd ci-artifacts/linux
@@ -317,6 +317,23 @@ pipeline {
                                     if (reportStatus != 0) {
                                         error(
                                             'ForgeAI completed every analyzer but produced no report artifact.'
+                                        )
+                                    }
+                                    def malformedReportStatus = sh(
+                                        script: '''
+                                            set -eu
+                                            if grep -R -F -q \
+                                              'JSON parsing failed' \
+                                              forgeai-reports; then
+                                                exit 0
+                                            fi
+                                            exit 1
+                                        ''',
+                                        returnStatus: true
+                                    )
+                                    if (malformedReportStatus == 0) {
+                                        error(
+                                            'ForgeAI returned malformed structured output for one or more analyzers.'
                                         )
                                     }
                                     completeForgeAIReport = true

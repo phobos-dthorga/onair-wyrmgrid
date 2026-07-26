@@ -76,6 +76,11 @@ test("snapshot packages are limited to main and release branches", () => {
     multibranchPipeline,
     /stage\('Linux snapshot'\)[\s\S]*sh '''\s+set -euo pipefail/,
   );
+  assert.equal(
+    [...multibranchPipeline.matchAll(/^NODE$/gm)].length,
+    1,
+    "the Linux metadata heredoc must close at the shell's first column",
+  );
 });
 
 test("release pipelines preserve restart inputs and expose each platform as a restart stage", () => {
@@ -97,6 +102,11 @@ test("release pipelines preserve restart inputs and expose each platform as a re
   );
   assert.doesNotMatch(releasePipeline, /\$\{env\.RELEASE_(?:COMMIT|VERSION)\}/);
   assert.doesNotMatch(releasePipeline, /sh '''\s+set -euo pipefail/);
+  assert.equal(
+    [...releasePipeline.matchAll(/^NODE$/gm)].length,
+    1,
+    "the release metadata heredoc must close at the shell's first column",
+  );
 });
 
 test("ForgeAI is a feature-first advisory review for PR merges and main", () => {
@@ -136,6 +146,12 @@ test("ForgeAI is a feature-first advisory review for PR merges and main", () => 
   assert.match(
     forgeAiStage,
     /ForgeAI completed every analyzer but produced no report artifact\./,
+  );
+  assert.match(forgeAiStage, /grep -R -F -q/);
+  assert.match(forgeAiStage, /'JSON parsing failed'/);
+  assert.match(
+    forgeAiStage,
+    /ForgeAI returned malformed structured output for one or more analyzers\./,
   );
   assert.match(forgeAiStage, /allowEmptyArchive: !completeForgeAIReport/);
 
