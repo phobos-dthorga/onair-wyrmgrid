@@ -6,11 +6,19 @@ release authority. Hoardmind is the maintainer's private profile; another user
 may select their own loopback Ollama or unauthenticated OpenAI-compatible local
 server. Manual work remains equally supported.
 
+Jenkins has one separately governed exception: the multibranch pipeline may
+send a bounded, sanitized change packet plus screened pipeline and dependency
+manifest inputs to its controller-configured ForgeAI service after deterministic
+work completes. That advisory path does not use these task contracts, cannot
+publish or decide release readiness, and is documented in
+[Jenkins operations](../operations/jenkins.md).
+
 The generic runner is `scripts/run-optional-ai-task.mjs`. Every invocation
 selects one built-in, versioned task contract, one explicit packet, and one
 private local profile. It refuses CI, non-loopback endpoints, missing approval,
-secret-like packet content, oversized packets, missing packet headings, model
-substitution, missing exact token usage, and malformed output headings.
+secret-like or unsafe control-text packet content, oversized packets, missing
+packet headings, model substitution, missing exact token usage, and malformed
+output headings.
 
 ## Supported tasks
 

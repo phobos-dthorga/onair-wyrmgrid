@@ -375,7 +375,8 @@ npm run dev
 
 Close that terminal to discard the variables. Never place
 `SENTRY_AUTH_TOKEN` in the desktop runtime environment; it belongs only in
-protected GitHub Actions secret storage for release and source-map operations.
+protected release-job secret storage for separately authorized source-map
+operations.
 Ordinary development, preview, CI, and public builds keep transmission off.
 The test-event flags emit one bounded synthetic event per runtime at startup;
 remove them after verifying project routing, redaction, and stack traces.

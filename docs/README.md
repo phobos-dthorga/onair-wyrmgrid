@@ -41,6 +41,7 @@
   - [Audio Codec Provider protocol version 1](integrations/audio-codec-provider-protocol.md)
   - [Extension Developer Kit and external extension authoring](integrations/extension-authoring.md)
 - [Observability and Sentry plan](operations/observability.md)
+- [Jenkins operations](operations/jenkins.md)
 - [CI/CD hardening and enrichment plan](operations/ci-cd-enhancement-plan.md)
 - [Local review automation and bounded Hoardmind delegation plan](operations/local-review-automation.md)
 - [Hosted website, Aerie, and private-vault implementation plan](operations/hosted-platform.md)

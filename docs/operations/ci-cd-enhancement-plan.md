@@ -1,18 +1,20 @@
 # CI/CD hardening and enrichment plan
 
-**Status:** Proposal only
+**Status:** Active follow-up plan; Jenkins foundation implemented
 
-**Reviewed baseline:** 19 July 2026
+**Reviewed baseline:** 25 July 2026
 **Authority:** This document records candidate work. It does not authorize a
 workflow run, GitHub setting change, cache deletion, version change, tag,
 release rebuild, publication, signing operation, or optional-AI contribution.
 
 ## Purpose
 
-WyrmGrid already has a deliberately local-first development process and a
-careful tagged-release pipeline. This plan records the improvements identified
-by a read-only audit so they can be discussed, implemented in small stages, and
-verified without quietly expanding GitHub or optional-AI authority.
+WyrmGrid has a local-first development process, publication-credential-free
+Jenkins validation with bounded ForgeAI advice, and a separately protected
+exact-tag release pipeline. This plan
+records remaining improvements identified by audit so they can be discussed,
+implemented in small stages, and verified without quietly expanding Jenkins,
+GitHub, or optional-AI authority.
 
 In this document, CI/CD means automated checking, packaging, and release
 delivery. The currently implemented process remains defined by the
@@ -24,16 +26,23 @@ until an approved change updates them together.
 ## Existing strengths to preserve
 
 - Routine compilation, testing, formatting, linting, and dependency checks run
-  on the maintainer's local development machine.
-- Hosted GitHub Actions are reserved for release pull requests, release tags,
-  scheduled security checks, and explicitly authorized exceptions.
-- Workflow jobs start with read-only repository permissions. Only the final
-  release-publication job receives release-writing authority.
+  locally and in the publication-credential-free Jenkins Organization Folder
+  on Linux and Windows. ForgeAI receives only a bounded change packet and
+  screened pipeline/dependency inputs after those deterministic stages and has
+  no gate or release authority.
+- Jenkins snapshots are limited to `main` and `codex/release-*`; ordinary
+  branches receive no distributable package.
+- Hosted GitHub Actions run only as a manually authorized Windows/Linux release
+  fallback for an existing tag and documented reason.
+- The trusted Jenkins release job is outside the Organization Folder. Only its
+  bounded GitHub CLI commands receive the repository-specific release App token.
 - Workflow actions are already referenced by full commit hashes and Dependabot
   proposes updates to them.
 - Release tags must identify a commit on `main`, and application version files
   and curated changelog sections must agree with the tag.
-- Release packages receive SHA-256 checksums and GitHub build attestations.
+- Jenkins release packages receive SHA-256 checksums and explicitly
+  non-attested build metadata. The manual GitHub fallback retains native GitHub
+  attestations.
 - Releases begin as draft prereleases and require manual verification before
   publication.
 - Windows release validation covers a clean NSIS install, bundled SimConnect
@@ -48,25 +57,25 @@ These controls should not be weakened merely to simplify implementation.
 
 ## Confirmed gaps and proposed responses
 
-| Area                     | Confirmed present state                                                                                                                                   | Proposed response                                                                                                                                                      |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Release identity         | Release policy resolves an exact commit SHA, but reusable checks and platform builds receive the version tag again.                                       | Pass the resolved commit SHA to every checkout, test, security, build, and publication step.                                                                           |
-| Tag protection           | Version tags are not covered by a tag ruleset before publication.                                                                                         | Add a `v*` tag ruleset that prevents updates and deletion after creation.                                                                                              |
-| Published assets         | A manual rebuild may replace assets for any existing release with the selected tag.                                                                       | Permit replacement only while the release is a draft. A defective published release requires a new version.                                                            |
-| Pull-request checks      | Ordinary pull-request jobs are skipped. GitHub records skipped required jobs as successful, so green checks do not prove hosted tests ran.                | Add one small pull-request policy check and one required validation summary that clearly distinguishes approved local-only validation from required hosted validation. |
-| Release coverage         | The v0.2.0 release run skipped the promised Rust LCOV coverage job.                                                                                       | Use an explicit reusable-workflow input to request coverage and keep the coverage report separate from installer assets.                                               |
-| Boundary audits          | Deterministic localization and desktop-command audits exist but are not part of hosted release validation.                                                | Add `npm run audit:boundaries` to the complete release gate.                                                                                                           |
-| Rust release gates       | Core Rust receives strict Clippy checks, but the Windows desktop and Windows-specific provider do not receive an equivalent hosted lint gate.             | Add Windows Clippy with warnings denied and require locked Cargo dependency resolution.                                                                                |
-| Database evolution       | Migration behaviour is tested, but CI does not mechanically prove that previously released migration files were not edited, deleted, or renumbered.       | Compare with the prior release and permit only new, contiguous, append-only migrations.                                                                                |
-| Package completeness     | Publication gathers produced files without an authoritative expected package and architecture manifest.                                                   | Validate exact package counts, names, architectures, and required bundled sidecars before publication.                                                                 |
-| Workflow policy          | Workflow source uses pinned actions, but repository settings allow all actions and do not require full-SHA pinning.                                       | Allow only reviewed action repositories and enable GitHub's SHA-pinning requirement.                                                                                   |
-| Protection rules         | Classic branch protection and a repository ruleset overlap and disagree on some settings; the ruleset's release pattern does not match `codex/release-*`. | Consolidate on one reviewed protection design with no unintended bypass actor.                                                                                         |
-| Build caches             | Actions caches total approximately 11.2 GB across 28 entries, above GitHub's default 10 GB allowance.                                                     | Prefer dependency-download caches over compiled `target` caches, stop producing low-value ref-scoped caches, and review exact stale entries before any deletion.       |
-| Release secrets          | There are no GitHub deployment environments; the Sentry upload credential is repository-scoped.                                                           | Isolate observability upload and publication authority in narrowly scoped protected environments.                                                                      |
-| Publication              | Draft publication is automated, but final promotion is an informal manual action.                                                                         | Add a separately approved promotion workflow that verifies the reviewed draft before publishing it immutably.                                                          |
-| Supply-chain inventory   | Packages are attested, but an exact-release software bill of materials is not attached and attested.                                                      | Generate an SPDX software bill of materials from the exact release commit and attest it with the packages.                                                             |
-| Source security analysis | Dependency audits run, but repository code scanning has no completed analysis.                                                                            | Add scheduled and release-only CodeQL analysis for supported Rust and JavaScript/TypeScript source.                                                                    |
-| Platform scope           | The published macOS package is Apple Silicon-only while general documentation says macOS.                                                                 | Make a separate supported-architecture decision: Apple Silicon-only, separate Intel and Apple Silicon packages, or a universal package.                                |
+| Area                     | Confirmed present state                                                                                                                                   | Proposed response                                                                                                                                                |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Release identity         | Jenkins passes one exact tag commit to Linux and Windows validation, packaging, assembly, and publication.                                                | Keep regression coverage for exact-commit propagation and refuse mutable branch release inputs.                                                                  |
+| Tag protection           | Version tags are not covered by a tag ruleset before publication.                                                                                         | Add a `v*` tag ruleset that prevents updates and deletion after creation.                                                                                        |
+| Published assets         | Jenkins refuses to replace a published release and can update only a draft after a fresh exact-tag build.                                                 | Keep the publication-stage recheck so state changes during a build fail closed.                                                                                  |
+| Pull-request checks      | Jenkins runs complete Linux and Windows validation for every discovered revision without relying on skipped GitHub checks.                                | Update repository branch protection after both Jenkins check names are observed and stable.                                                                      |
+| Release coverage         | The manual GitHub fallback retains LCOV; the initial Jenkins release pipeline does not publish coverage.                                                  | Add Jenkins-native coverage only after retention, presentation, and runtime cost are reviewed.                                                                   |
+| Boundary audits          | `npm run audit:boundaries` is part of the Linux Jenkins and manual GitHub fallback gates.                                                                 | Extend deterministic path policy when new identifier boundaries are introduced.                                                                                  |
+| Rust release gates       | Jenkins runs locked full-workspace Clippy with warnings denied on Linux and Windows; the fallback adds strict Windows desktop/provider Clippy.            | Keep platform-specific regression coverage as new native crates are added.                                                                                       |
+| Database evolution       | Migration behaviour is tested, but CI does not mechanically prove that previously released migration files were not edited, deleted, or renumbered.       | Compare with the prior release and permit only new, contiguous, append-only migrations.                                                                          |
+| Package completeness     | Jenkins validates one AppImage, one Debian package, and one NSIS setup before assembly.                                                                   | Add deeper architecture and bundled-sidecar inspection without weakening current exact-count checks.                                                             |
+| Workflow policy          | Workflow source uses pinned actions, but repository settings allow all actions and do not require full-SHA pinning.                                       | Allow only reviewed action repositories and enable GitHub's SHA-pinning requirement.                                                                             |
+| Protection rules         | Classic branch protection and a repository ruleset overlap and disagree on some settings; the ruleset's release pattern does not match `codex/release-*`. | Consolidate on one reviewed protection design with no unintended bypass actor.                                                                                   |
+| Build caches             | Actions caches total approximately 11.2 GB across 28 entries, above GitHub's default 10 GB allowance.                                                     | Prefer dependency-download caches over compiled `target` caches, stop producing low-value ref-scoped caches, and review exact stale entries before any deletion. |
+| Release secrets          | Publication uses a release-folder-scoped GitHub App; source-map upload remains disabled in the initial Jenkins release path.                              | Design a separately scoped observability credential before enabling exact-artifact source-map upload.                                                            |
+| Publication              | Draft publication is automated, but final promotion is an informal manual action.                                                                         | Add a separately approved promotion workflow that verifies the reviewed draft before publishing it immutably.                                                    |
+| Supply-chain inventory   | Jenkins packages have checksums and build metadata but no cryptographic provenance or exact-release software bill of materials.                           | Design Sigstore or equivalent Jenkins identity, generate SPDX, and document consumer verification before claiming attestation.                                   |
+| Source security analysis | Dependency audits run, but repository code scanning has no completed analysis.                                                                            | Add scheduled and release-only CodeQL analysis for supported Rust and JavaScript/TypeScript source.                                                              |
+| Platform scope           | Official desktop release support is Windows x86-64 and Linux x86-64; macOS protocol values remain for compatibility.                                      | Treat any future macOS desktop release as a new support, signing, packaging, and real-device validation decision.                                                |
 
 An attestation is signed provenance evidence connecting an artifact to its
 source commit and workflow. It does not prove that the software is free of bugs
@@ -77,26 +86,27 @@ security verdict.
 
 The intended end state is:
 
-1. Development and complete routine validation happen locally.
+1. Development validation happens locally and Jenkins repeats the complete
+   Linux and Windows gates for every discovered revision.
 2. Optional Hoardmind review receives only a selected, sanitized, bounded
    packet and never determines whether a gate passed.
-3. A pull request runs a small policy check.
-4. The policy check classifies the change using deterministic paths, trusted
-   maintainer labels, and event facts.
-5. Ordinary work records that local validation is the approved requirement.
-6. Release, dependency, migration, protocol, schema, security, installer,
-   workflow, optional-AI governance, or explicitly approved exception work
-   receives the relevant hosted checks.
-7. One required validation-summary job succeeds only when every check required
-   by that classification succeeded.
-8. An authorized release pull request prepares the version and curated
-   changelog, then receives the complete hosted gates.
-9. A protected version tag starts the release and resolves once to an exact
-   commit SHA.
-10. Every check and platform package uses that exact commit.
-11. CI validates package contents, generates checksums, build metadata, a
-    software bill of materials, and attestations, then creates or updates only
-    a draft prerelease.
+3. Pull requests receive publication-credential-free deterministic Jenkins
+   checks; branch protection requires their stable Linux and Windows results.
+   Origin pull-request merge builds and `main` additionally receive
+   non-blocking ForgeAI advice after deterministic work completes.
+4. `main` and `codex/release-*` additionally retain unsigned snapshots.
+5. An authorized release change prepares the versions and curated changelog.
+6. A maintainer creates an immutable version tag on `main`.
+7. The separately protected Jenkins release job accepts the existing tag and a
+   meaningful reason, resolves one exact commit, and repeats every gate.
+8. Linux and Windows packages use that exact commit.
+9. Jenkins validates package counts, generates checksums and privacy-safe build
+   metadata, and archives the result.
+10. A human approves draft creation before the release credential is rebound
+    for final publication; earlier release-state and previous-installer reads
+    use separate bounded bindings.
+11. Jenkins creates or updates only a draft prerelease and refuses published
+    release replacement.
 12. The maintainer performs the documented real-platform checks.
 13. A protected promotion workflow verifies the reviewed evidence and
     publishes an immutable prerelease.
@@ -106,6 +116,13 @@ The intended end state is:
 Each stage requires a fresh worktree, branch, open-pull-request, and task
 inventory before edits begin. Each stage should remain independently
 reviewable and revertible.
+
+The Jenkins foundation implements exact-commit validation, credential
+separation, complete routine checks, Windows/Linux snapshots, draft-only
+publication, deterministic package counts, checksums, and build metadata.
+Remaining stage text describes follow-up work and historical rationale; where
+it conflicts with [Jenkins operations](jenkins.md), the implemented operations
+document is authoritative.
 
 ### Stage 1 — release integrity and coverage correctness
 
@@ -133,6 +150,9 @@ Acceptance evidence:
 Stage 1 should be completed locally and reviewed before any push or hosted run.
 
 ### Stage 2 — truthful pull-request validation
+
+**Status:** Superseded by publication-credential-free complete deterministic
+Jenkins validation for every discovered pull request.
 
 Proposed policy change:
 
@@ -162,6 +182,10 @@ Acceptance evidence:
   hosted tests ran.
 
 ### Stage 3 — complete deterministic release gates
+
+**Status:** Partially implemented. Boundary audits, Windows Clippy, locked Rust
+resolution, package counts, and privacy-safe build metadata are active.
+Append-only migration comparison remains proposed.
 
 Proposed repository work:
 
@@ -209,12 +233,12 @@ Proposed work:
 - create and attest an exact-release SPDX software bill of materials;
 - document how users verify checksums, build attestations, and immutable
   releases;
-- choose and document the macOS architecture matrix;
 - use deliberately selected runner-image versions and record their identities;
   and
-- add safe Linux and macOS package-structure checks while retaining real
+- add stronger Linux package-structure checks while retaining real
   operating-system startup checks as a manual prerelease boundary where
-  automation is not trustworthy.
+  automation is not trustworthy. A future macOS release requires a separate
+  support decision.
 
 ### Stage 6 — optional Hoardmind conveniences
 
@@ -222,6 +246,12 @@ The detailed candidate architecture, safety boundaries, implementation stages,
 and validation plan are recorded in the
 [local review automation and bounded Hoardmind delegation plan](local-review-automation.md).
 This section remains the CI/CD programme boundary for those proposed helpers.
+
+ForgeAI is a separate implemented Jenkins exception, not a Hoardmind
+convenience. It uses a controller-configured authenticated endpoint and a
+bounded repository-generated packet with screened pipeline/dependency inputs,
+runs only after deterministic work, and cannot gate or enter the protected
+release job.
 
 The deterministic Stage 1 inventory is now implemented as
 `npm run review:inventory`. It records a versioned local source-evidence bundle
@@ -296,14 +326,13 @@ Likely overlap areas by stage include:
 This plan does not implement or declare readiness for:
 
 - Windows code signing;
-- macOS signing or notarization;
+- any future macOS release, signing, or notarization;
 - Tauri updater signing or automatic updates;
 - stable releases;
 - native Sentry PDB, dSYM, or ELF debug-information upload;
 - public telemetry activation or embedded runtime DSNs;
 - live OnAir behaviour or authenticated integration tests;
 - live simulator certification;
-- final Intel, Apple Silicon, or universal macOS support;
 - redistribution approval for every native simulator dependency;
 - an authenticated, LAN, or hosted optional-AI adapter; or
 - a self-hosted GitHub runner on the maintainer's development workstation.

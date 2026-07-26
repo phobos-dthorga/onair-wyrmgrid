@@ -2,8 +2,9 @@
 
 Tests are part of a feature, not follow-up work. A change is complete only when
 the relevant automated checks describe its intended behaviour and pass on the
-maintainer's local development machine. Release candidates repeat the complete
-suite in hosted CI against the exact approved release tag.
+maintainer's local development machine. Jenkins repeats the complete suite on
+Linux and Windows for every discovered revision and again against an exact
+approved release tag.
 
 ## Physical separation
 
@@ -63,30 +64,35 @@ policy, high-severity npm auditing, the Tauri backend, and the Windows
 SimConnect provider. Local compilation and test volume are not constrained by
 the project's hosted-runner budget.
 
-Hosted GitHub Actions are reserved for intentional releases and for an
-exception explicitly authorised by the maintainer. An approved semantic-version
-release tag repeats the complete local suite on clean hosted runners before any
-installer is assembled. This gives release artifacts independent evidence while
-avoiding slow or redundant hosted work during ordinary commits and pull
-requests.
+The credential-free multibranch Jenkins pipeline repeats formatting, tooling,
+boundary, Python, Rust, frontend, dependency, desktop, and Windows-provider
+checks on the `linux` and `windows` agents for every discovered revision.
+`main` and `codex/release-*` additionally build unsigned AppImage, Debian, and
+NSIS snapshots. An unavailable agent fails or times out its platform rather
+than silently downgrading coverage.
 
-Release pull requests named `codex/release-*` launch the required hosted checks
-once so branch protection can admit the approved version to `main`. Jobs on
-other pull requests are reported as skipped without allocating hosted runners.
-A manual workflow dispatch requires a specific maintainer-approved exception;
-ordinary work uses the local gates above. Prefer one well-validated push and
-reserve the complete hosted rerun and packaging work for the immutable release
-tag.
+An approved semantic-version tag is rebuilt through the separately protected
+Jenkins release job. The job validates the existing tag and its ancestry from
+`main`, repeats the complete gates from the exact commit, tests NSIS
+installation or upgrade, and pauses before creating or updating a draft
+prerelease. Its dedicated GitHub App credential is unavailable to multibranch
+jobs.
+
+GitHub Actions are a manual emergency fallback only. Their CI and security
+workflows are callable solely by the manually dispatched release workflow,
+which requires an existing tag and a documented exception reason. Routine
+pull requests, pushes, schedules, and tags do not allocate hosted runners.
 
 Launch-art presentation tests cover dark/light theme selection, malformed
 colour fallback, and bounded minimum display timing. Every production frontend
 build also verifies that both approved hero-image checksums were packaged.
 
-Release verification produces a downloadable Rust LCOV coverage report.
-Coverage is a map for finding untested decisions, not a score to game. A minimum
-threshold can be introduced once several releases establish a realistic
-baseline; until then, reviewers should reject meaningful coverage regressions
-in changed business logic during local review.
+The manual GitHub fallback produces a downloadable Rust LCOV coverage report;
+the initial Jenkins release job does not yet publish coverage. Coverage is a
+map for finding untested decisions, not a score to game. A minimum threshold
+can be introduced once several releases establish a realistic baseline; until
+then, reviewers should reject meaningful coverage regressions in changed
+business logic during local review.
 
 ## Priority expansion
 

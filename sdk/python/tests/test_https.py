@@ -49,6 +49,7 @@ class WindowsTrustTests(unittest.TestCase):
                 wyrmgrid_sdk.ssl,
                 "enum_certificates",
                 return_value=[(b"root", "x509_asn", True)],
+                create=True,
             ) as enum_certificates,
             mock.patch.object(
                 wyrmgrid_sdk.ssl,

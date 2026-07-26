@@ -59,6 +59,29 @@ major application version.
 
 ### Changes
 
+- Updated the locked build-time glob dependency to `brace-expansion` 5.0.8,
+  removing its high-severity unbounded-expansion denial-of-service advisory
+  while retaining the fail-closed high-severity npm audit gate.
+- Serialized Rust test cases within each CI job so concurrent Jenkins
+  revisions cannot starve the real three-second plugin startup handshake.
+- Restricted origin pull requests to one merged-revision Jenkins build,
+  moved Linux work from the controller to a dedicated bounded Proxmox template,
+  separated CI status authority from the Hoardmind contribution identity, and
+  required successful ForgeAI analysis to produce an archived report.
+- Added a feature-first ForgeAI advisory review to Jenkins for `main` and
+  origin pull-request merge builds. It archives a seven-analyzer HTML report
+  from a bounded, credential-screened change packet after deterministic work;
+  model failures and findings cannot block validation, snapshots, or the
+  separate exact-tag release pipeline.
+- Moved routine Linux and Windows validation, unsigned branch snapshots, and
+  exact-tag draft prerelease assembly to credential-separated Jenkins
+  pipelines. GitHub Actions now provide only a manual emergency release
+  fallback; macOS is no longer built, tested, or claimed as a supported desktop
+  release, while protocol platform values remain compatible.
+- Restricted the manual GitHub fallback's Teleport access to delegated OIDC
+  claims from the exact repository, `Release` workflow, and `main` branch. Its
+  short-lived identity can log in only as `jenkins` on the labelled WyrmGrid
+  Jenkins host, with no long-lived Teleport secret stored by GitHub.
 - Established external, independently installable artifacts as the required
   delivery boundary for every plugin and provider. First-party packages may be
   included by an installer, but users must also be able to install, replace,

@@ -28,6 +28,8 @@
 - release source maps, native debug information, and telemetry upload credentials;
 - maintainer GitHub App private keys, short-lived installation tokens, generated-
   contribution manifests, patch hashes, bot identity, and attribution records;
+- the Jenkins ForgeAI endpoint credential, bounded review packets, inference
+  capacity, and archived advisory reports;
 - live debugger state, watch expressions, memory views, and debug screenshots;
 - legal-document versions, acknowledgement records, and privacy preferences;
 - the SQLCipher device key, portable-backup passwords and files, pending
@@ -119,6 +121,10 @@
   exposure, local `flight.json` parsing, support bundles, or automatic retries;
 - external writes or simulator commands occurring without explicit user intent;
 - dependency or release-pipeline compromise;
+- a pull request, commit message, source comment, malicious patch, or model
+  response using prompt injection to distort ForgeAI findings, consume
+  inference capacity, expose excluded repository content, or be mistaken for a
+  deterministic Jenkins or security result;
 - a release tag packaging untested code, a commit outside `main`, or application
   metadata whose version does not match the advertised release;
 - incomplete or misleading release notes hiding a removed capability or
@@ -311,10 +317,21 @@
   terminated after the deadline or when the host exits;
 - content security policy for the desktop webview;
 - locked dependencies, dependency updates, audit jobs, and CI-built releases;
+- the locked build toolchain resolves `brace-expansion` 5.0.8 or newer within
+  its current major line so untrusted glob input cannot reach the reported
+  unbounded-expansion denial of service. The high-severity npm audit gate
+  remains fail-closed; only the separately documented low-severity static
+  SvelteKit cookie exception is tolerated;
 - immutable commit pins for workflow dependencies; reusable CI and security
   gates run against the exact release tag before packaging, release tags must
   identify a commit on `main`, and every checked-in application version must
   equal the tag version;
+- the manual GitHub fallback exchanges delegated GitHub OIDC claims for a
+  15-minute Teleport certificate only after release policy succeeds. The join
+  token accepts the exact `phobos-dthorga/onair-wyrmgrid` repository, `Release`
+  workflow, and `refs/heads/main`; its role permits only the `jenkins` login on
+  nodes labelled `jenkins-access=wyrmgrid`, and GitHub stores no Teleport
+  credential;
 - the checked-in changelog is the sole GitHub release-note source; tooling
   requires explicit feature, change, removal, and breaking-change lists and
   rejects declared breaking changes outside a new major-version line. Rebuilds
@@ -397,9 +414,38 @@
   deterministic squash message containing the input, output, metrics, bot-
   commit, PR, review, and authority trailers, and verifies that GitHub retained
   that message on the resulting merge commit before reporting success;
-- platform build jobs are read-only and stage packages internally; one final job
-  with narrowly scoped write and identity-token permissions generates SHA-256
-  checksums and GitHub build-provenance attestations before creating a draft;
+- the Jenkins Organization Folder has no repository-content, merge, release, or
+  publication authority. Its dedicated repository-specific GitHub App may read
+  source and pull-request metadata and write commit statuses only; untrusted
+  build use is reduced to read-only repository contents. It is distinct from
+  the Contents-only Hoardmind contribution App and the separately scoped
+  release App. The Linux executor is an unprivileged, non-nesting LXC worker on
+  a dedicated VLAN with no host mounts or device passthrough. It receives its
+  own continuously renewed, narrowly scoped Teleport Machine ID; static SSH
+  keys, copied workload identities, direct port 22, and controller execution
+  are not fallback paths. The locked release job accepts only an existing
+  supported tag and meaningful reason, verifies the exact commit is on `main`,
+  repeats Linux and Windows gates, refuses published release replacement, and
+  pauses for human approval. Jenkins generates SHA-256 checksums and explicitly
+  non-attested build metadata; the manual GitHub fallback retains native GitHub
+  attestations for an authorized emergency rebuild;
+- the explicit Jenkins ForgeAI exception runs after deterministic validation
+  and snapshots, only for `main` and origin pull-request merge revisions. A
+  fixed local generator compares the built commit with its first parent,
+  selects at most 40 reviewable implementation and manifest paths, excludes
+  fixture, snapshot, capture, recording, payload, cache, and build-output
+  paths, limits the packet to 60 KiB, reports truncation, keeps paths
+  repository-relative, and rejects common private-key and credential
+  signatures, invalid UTF-8, unsafe controls, and bidirectional overrides. It
+  also inventories the current Jenkinsfile and tracked dependency manifests
+  that ForgeAI reads specially, applies the same screens, and caps those files
+  at 100 KiB combined. Seven analyzers run with features before vulnerability
+  and dependency advice; release readiness is omitted. A seven-analyzer result
+  is incomplete unless ForgeAI also produces a regular archived report file.
+  Missing analyzers, missing reports, timeouts, endpoint failures, packet
+  refusal, and report errors can make only the advisory stage unstable while
+  the overall deterministic result remains successful. The protected exact-tag
+  release job makes no model call;
 - the Windows release runner silently installs the NSIS output and verifies that
   the desktop application and expected SimConnect sidecar were packaged;
 - the Windows installer identity and per-user scope are regression-tested,
@@ -772,6 +818,27 @@ Repository-relative filenames and content hashes can themselves disclose
 project structure or confirm known content, so ignored evidence remains private
 maintainer material and must not be copied into AI packets, diagnostics,
 issues, or releases without a separate bounded review.
+
+## Residual Jenkins ForgeAI risks
+
+ForgeAI reads an intentionally bounded sample, not the complete change, and its
+plugin may truncate, misparse, omit, or hallucinate findings. A successful
+seven-analyzer count does not prove that every response was semantically valid,
+that every changed file was reviewed, or that the model resisted instructions
+embedded in repository content. The HTML report and composite score remain
+untrusted advice and must not become branch protection, security proof,
+semantic-version evidence, or release authority.
+
+The plugin resolves its model-service credential through Jenkins controller
+configuration. Origin pull-request authors already trusted to propose pipeline
+changes can consume that service indirectly, and controller administrators can
+alter the endpoint, model, prompt, or feature toggles outside repository
+history. Keep fork pull requests outside the ForgeAI stage, retain the existing
+GitHub Branch Source trust policy, restrict Jenkins administration, review
+plugin and controller upgrades, monitor inference capacity and endpoint logs,
+and revalidate the live configuration before claiming the advisory path is
+private. The packet's signature scan is deliberately narrow and cannot prove
+that arbitrary source contains no confidential value.
 
 ## Residual localization risks
 

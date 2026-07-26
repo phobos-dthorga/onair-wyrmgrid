@@ -4,10 +4,12 @@ Status: Accepted
 
 ## Context
 
-WyrmGrid needs a GPU-capable map and chart interface on Windows, macOS, and
-Linux. Tauri uses Microsoft Edge WebView2 on Windows, WKWebView on macOS, and
-WebKitGTK on Linux. WebView2 is Chromium-based; it is not Microsoft's legacy
-EdgeHTML engine.
+WyrmGrid needs a GPU-capable map and chart interface on its supported Windows
+and Linux desktop releases. Tauri uses Microsoft Edge WebView2 on Windows and
+WebKitGTK on Linux. Its portable implementation retains a WKWebView path on
+macOS, but WyrmGrid does not package, test, or claim desktop release support
+there. WebView2 is Chromium-based; it is not Microsoft's legacy EdgeHTML
+engine.
 
 Bundling Chromium through Chromium Embedded Framework or an Electron-style
 runtime would make the renderer more consistent across platforms, but would
@@ -23,7 +25,7 @@ the single-maintainer complexity budget.
 - Treat Chromium/WebKit portability as a tested compatibility requirement.
 - Use standards-based HTML, CSS, and TypeScript; avoid engine-specific APIs
   unless guarded by feature detection and a tested fallback.
-- Exercise supported Windows, macOS, and Linux webviews in release CI before a
+- Exercise the supported Windows and Linux webviews in release CI before a
   stable release.
 - Reconsider a bundled Chromium runtime only after a demonstrated, material
   incompatibility that cannot be solved reasonably within the interface layer.
@@ -31,7 +33,8 @@ the single-maintainer complexity budget.
 ## Consequences
 
 Windows uses a recent Chromium engine without WyrmGrid shipping and servicing a
-private browser runtime. macOS and Linux retain their native Tauri backends, so
-pixel-perfect engine identity is not guaranteed. The application remains
-smaller and its renderer lifecycle follows platform security updates, while UI
-testing must cover both Chromium and WebKit behaviour.
+private browser runtime. Linux uses its native Tauri backend, and the retained
+portable macOS path would do the same, so pixel-perfect engine identity is not
+guaranteed. The application remains smaller and its renderer lifecycle follows
+platform security updates. Release UI testing must cover both Chromium and
+WebKit behaviour.

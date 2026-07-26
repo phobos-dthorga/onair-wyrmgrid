@@ -7,7 +7,11 @@ import test from "node:test";
 
 import { readZipEntries } from "../src/archive.mjs";
 import { runCli } from "../src/cli.mjs";
-import { currentPlatform, extensionDefinition } from "../src/catalog.mjs";
+import {
+  currentPlatform,
+  declaredEntryPoints,
+  extensionDefinition,
+} from "../src/catalog.mjs";
 import { buildPackage, PACKAGE_MANIFEST_NAME } from "../src/package.mjs";
 import { scaffoldExtension } from "../src/scaffold.mjs";
 import { copySchemaBundle } from "../src/schemas.mjs";
@@ -242,10 +246,11 @@ test("runtime handshake conformance covers all four extension kinds", async () =
     if (kind !== "plugin") {
       manifest.platforms = [platform];
       await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
-      const entryPoint =
-        kind === "simulator-provider"
-          ? manifest.entry_point
-          : `${manifest.entry_point}.exe`;
+      const [entryPoint] = declaredEntryPoints(definition, manifest);
+      assert.ok(
+        entryPoint,
+        `${kind} must declare an entry point for ${platform}`,
+      );
       const placeholder = join(dirname(directory), `${kind}.bin`);
       await writeFile(placeholder, "test executable placeholder");
       includes.push({ source: placeholder, destination: entryPoint });

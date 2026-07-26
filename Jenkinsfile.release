@@ -1,0 +1,420 @@
+pipeline {
+    agent none
+
+    parameters {
+        string(
+            name: 'RELEASE_TAG',
+            defaultValue: '',
+            description: 'Existing release tag to rebuild, such as v0.3.1 or v0.3.1-rc.1'
+        )
+        text(
+            name: 'EXCEPTION_REASON',
+            defaultValue: '',
+            description: 'Why this exact tagged release should be built (at least 20 characters)'
+        )
+    }
+
+    options {
+        skipDefaultCheckout(true)
+        disableConcurrentBuilds()
+        parallelsAlwaysFailFast()
+        timeout(time: 6, unit: 'HOURS')
+        buildDiscarder(logRotator(
+            daysToKeepStr: '30',
+            numToKeepStr: '20',
+            artifactDaysToKeepStr: '14',
+            artifactNumToKeepStr: '10'
+        ))
+    }
+
+    stages {
+        stage('Release policy') {
+            agent { label 'linux' }
+            options {
+                timeout(time: 30, unit: 'MINUTES')
+            }
+            steps {
+                script {
+                    if (!(params.RELEASE_TAG ==~ /^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$/)) {
+                        error('RELEASE_TAG must be a supported vX.Y.Z or prerelease tag.')
+                    }
+                    if (params.EXCEPTION_REASON.trim().length() < 20) {
+                        error('EXCEPTION_REASON must contain at least 20 non-whitespace characters.')
+                    }
+                }
+
+                deleteDir()
+                checkout scm
+                withEnv(["RELEASE_TAG=${params.RELEASE_TAG}"]) {
+                    sh '''
+                        set -euo pipefail
+                        git fetch --force --tags origin
+                        git fetch --no-tags origin main
+                        git checkout --detach "$RELEASE_TAG"
+
+                        release_commit="$(git rev-parse "${RELEASE_TAG}^{commit}")"
+                        test "$(git rev-parse HEAD)" = "$release_commit"
+                        if ! git merge-base --is-ancestor "$release_commit" origin/main; then
+                          echo "Release tag $RELEASE_TAG does not identify a commit on origin/main." >&2
+                          exit 1
+                        fi
+
+                        release_version="${RELEASE_TAG#v}"
+                        node scripts/verify-release-version.mjs "$release_version"
+                        node scripts/verify-installer-contract.mjs
+
+                        previous_tag="$(
+                          git tag --list 'v*' --merged origin/main |
+                            node scripts/select-previous-release.mjs "$release_version" --tag-lines
+                        )"
+                        previous_version="${previous_tag#v}"
+                        mkdir -p .jenkins/release-policy
+                        release_notes_args=("$release_version" --output .jenkins/release-policy/release-notes.md)
+                        if [[ -n "$previous_version" ]]; then
+                          release_notes_args+=(--previous "$previous_version")
+                        fi
+                        node scripts/prepare-release-notes.mjs "${release_notes_args[@]}"
+
+                        printf '%s' "$release_commit" > .jenkins/release-policy/commit
+                        printf '%s' "$release_version" > .jenkins/release-policy/version
+                        printf '%s' "$previous_tag" > .jenkins/release-policy/previous-tag
+                    '''
+                }
+
+                withCredentials([usernamePassword(
+                    credentialsId: 'wyrmgrid-github-release',
+                    usernameVariable: 'GITHUB_APP',
+                    passwordVariable: 'GH_TOKEN'
+                )]) {
+                    withEnv(["RELEASE_TAG=${params.RELEASE_TAG}"]) {
+                        sh '''
+                            set +x
+                            set -euo pipefail
+                            gh auth status
+
+                            release_error=.jenkins/release-policy/release-query.err
+                            set +e
+                            release_json="$(gh api "repos/phobos-dthorga/onair-wyrmgrid/releases/tags/$RELEASE_TAG" 2>"$release_error")"
+                            release_status=$?
+                            set -e
+                            if [[ "$release_status" -eq 0 ]]; then
+                              is_draft="$(printf '%s' "$release_json" | node -e "let value=''; process.stdin.on('data', chunk => value += chunk); process.stdin.on('end', () => process.stdout.write(String(JSON.parse(value).draft)))")"
+                              if [[ "$is_draft" != "true" ]]; then
+                                echo "Published release $RELEASE_TAG cannot be replaced." >&2
+                                exit 1
+                              fi
+                            elif ! grep -q 'HTTP 404' "$release_error"; then
+                              cat "$release_error" >&2
+                              exit "$release_status"
+                            fi
+                            rm -f "$release_error"
+
+                            release_version="$(cat .jenkins/release-policy/version)"
+                            previous_installer_tag="$(
+                              gh api --paginate --slurp \
+                                'repos/phobos-dthorga/onair-wyrmgrid/releases?per_page=100' |
+                                node -e "let value=''; process.stdin.on('data', chunk => value += chunk); process.stdin.on('end', () => { const pages = JSON.parse(value); for (const release of pages.flat()) { if (!release.draft && release.assets.some(asset => asset.name.endsWith('-setup.exe'))) console.log(release.tag_name); } });" |
+                                node scripts/select-previous-release.mjs "$release_version" --tag-lines
+                            )"
+                            if [[ -n "$previous_installer_tag" ]]; then
+                              mkdir -p .jenkins/release-policy/previous-installer
+                              gh release download "$previous_installer_tag" \
+                                --repo phobos-dthorga/onair-wyrmgrid \
+                                --pattern '*-setup.exe' \
+                                --dir .jenkins/release-policy/previous-installer
+                              test "$(find .jenkins/release-policy/previous-installer -maxdepth 1 -type f -name '*-setup.exe' | wc -l)" -eq 1
+                            fi
+                        '''
+                    }
+                }
+
+                script {
+                    env.RELEASE_COMMIT = readFile('.jenkins/release-policy/commit').trim()
+                    env.RELEASE_VERSION = readFile('.jenkins/release-policy/version').trim()
+                }
+                stash(
+                    name: 'release-policy',
+                    includes: '.jenkins/release-policy/**',
+                    useDefaultExcludes: false
+                )
+            }
+        }
+
+        stage('Validate and package exact tag') {
+            parallel {
+                stage('Linux release package') {
+                    agent { label 'linux' }
+                    options {
+                        timeout(time: 3, unit: 'HOURS')
+                    }
+                    environment {
+                        SENTRY_UPLOAD_SOURCEMAPS = 'false'
+                    }
+                    steps {
+                        deleteDir()
+                        checkout scm
+                        withEnv(["RELEASE_COMMIT=${env.RELEASE_COMMIT}"]) {
+                            sh '''
+                                set -euo pipefail
+                                git fetch --force --tags origin
+                                git checkout --detach "$RELEASE_COMMIT"
+                                test "$(git rev-parse HEAD)" = "$RELEASE_COMMIT"
+
+                                node -e "if (Number(process.versions.node.split('.')[0]) !== 22) process.exit(1)"
+                                rustc --version | grep -Eq '^rustc 1\\.97\\.0 '
+                                cargo-deny --version
+                                python --version
+                                pkg-config --exists webkit2gtk-4.1
+
+                                npm ci
+                                npm run ci:frontend
+                                npm run ci:python
+                                npm run ci:prepare
+                                npm run ci:rust
+                                npm run ci:dependencies
+                                npm run tauri --workspace @wyrmgrid/desktop -- build --bundles appimage,deb
+
+                                mkdir -p .jenkins/linux-packages
+                                find target/release/bundle -type f \\( -name '*.AppImage' -o -name '*.deb' \\) -exec cp {} .jenkins/linux-packages/ \\;
+                                test "$(find .jenkins/linux-packages -maxdepth 1 -type f -name '*.AppImage' | wc -l)" -eq 1
+                                test "$(find .jenkins/linux-packages -maxdepth 1 -type f -name '*.deb' | wc -l)" -eq 1
+                            '''
+                        }
+                        stash(name: 'linux-release-packages', includes: '.jenkins/linux-packages/*')
+                    }
+                }
+
+                stage('Windows release package') {
+                    agent { label 'windows' }
+                    options {
+                        timeout(time: 3, unit: 'HOURS')
+                    }
+                    environment {
+                        SENTRY_UPLOAD_SOURCEMAPS = 'false'
+                    }
+                    steps {
+                        deleteDir()
+                        checkout scm
+                        unstash 'release-policy'
+                        withEnv(["RELEASE_COMMIT=${env.RELEASE_COMMIT}"]) {
+                            pwsh '''
+                                $ErrorActionPreference = 'Stop'
+                                Set-StrictMode -Version Latest
+
+                                & git fetch --force --tags origin
+                                if ($LASTEXITCODE -ne 0) { throw 'Unable to fetch release tags.' }
+                                & git checkout --detach $env:RELEASE_COMMIT
+                                if ($LASTEXITCODE -ne 0) { throw 'Unable to check out the release commit.' }
+                                if ((& git rev-parse HEAD).Trim() -ne $env:RELEASE_COMMIT) {
+                                    throw 'Windows checkout does not match the approved release commit.'
+                                }
+
+                                $repositoryRoot = (Get-Location).Path
+                                . (Join-Path $repositoryRoot 'scripts\\windows-build-environment.ps1')
+                                $cargoTarget = Get-WyrmGridJenkinsCargoTargetDirectory `
+                                    -JobName $env:JOB_NAME `
+                                    -CacheRoot $env:WYRMGRID_CARGO_TARGET_ROOT
+                                Enter-WyrmGridWindowsBuildEnvironment `
+                                    -RepositoryRoot $repositoryRoot `
+                                    -CargoTargetDir $cargoTarget
+                                Set-Location -LiteralPath $repositoryRoot
+
+                                $nodeMajor = [int]((& node -p "process.versions.node.split('.')[0]").Trim())
+                                if ($nodeMajor -ne 22) { throw 'Node.js 22 is required.' }
+                                if ((& rustc --version) -notmatch '^rustc 1\\.97\\.0 ') {
+                                    throw 'Rust 1.97.0 is required.'
+                                }
+                                if (-not (Get-Command cargo-deny -ErrorAction SilentlyContinue)) {
+                                    throw 'cargo-deny is required on the Windows Jenkins agent.'
+                                }
+
+                                & npm ci
+                                if ($LASTEXITCODE -ne 0) { throw 'npm ci failed.' }
+                                & npm run ci:prepare
+                                if ($LASTEXITCODE -ne 0) { throw 'Provider package preparation failed.' }
+                                & npm run ci:rust
+                                if ($LASTEXITCODE -ne 0) { throw 'Windows Rust validation failed.' }
+                                & npm run tauri --workspace '@wyrmgrid/desktop' -- build --bundles nsis
+                                if ($LASTEXITCODE -ne 0) { throw 'Windows NSIS build failed.' }
+
+                                $installers = @(
+                                    Get-ChildItem -LiteralPath (Join-Path $env:CARGO_TARGET_DIR 'release\\bundle\\nsis') `
+                                        -Filter '*-setup.exe' -File
+                                )
+                                if ($installers.Count -ne 1) {
+                                    throw "Expected one NSIS setup executable; found $($installers.Count)."
+                                }
+
+                                $smokeArguments = @{
+                                    InstallerPath = $installers[0].FullName
+                                    InstallDirectory = Join-Path $env:TEMP "WyrmGridNsisSmoke-$env:BUILD_TAG"
+                                }
+                                $previousInstallers = @(
+                                    Get-ChildItem -LiteralPath '.jenkins\\release-policy\\previous-installer' `
+                                        -Filter '*-setup.exe' -File -ErrorAction SilentlyContinue
+                                )
+                                if ($previousInstallers.Count -gt 1) {
+                                    throw "Expected at most one previous installer; found $($previousInstallers.Count)."
+                                }
+                                if ($previousInstallers.Count -eq 1) {
+                                    $smokeArguments.PreviousInstallerPath = $previousInstallers[0].FullName
+                                }
+                                & (Join-Path $repositoryRoot 'scripts\\test-nsis-installer.ps1') @smokeArguments
+                                if ($LASTEXITCODE -ne 0) { throw 'NSIS install or upgrade smoke test failed.' }
+
+                                New-Item -ItemType Directory -Path '.jenkins\\windows-packages' -Force | Out-Null
+                                Copy-Item -LiteralPath $installers[0].FullName -Destination '.jenkins\\windows-packages'
+                            '''
+                        }
+                        stash(name: 'windows-release-packages', includes: '.jenkins/windows-packages/*')
+                    }
+                }
+            }
+        }
+
+        stage('Assemble release') {
+            agent { label 'linux' }
+            options {
+                timeout(time: 30, unit: 'MINUTES')
+            }
+            steps {
+                deleteDir()
+                unstash 'release-policy'
+                unstash 'linux-release-packages'
+                unstash 'windows-release-packages'
+                withEnv([
+                    "RELEASE_TAG=${params.RELEASE_TAG}",
+                    "RELEASE_VERSION=${env.RELEASE_VERSION}",
+                    "RELEASE_COMMIT=${env.RELEASE_COMMIT}"
+                ]) {
+                    sh '''
+                        set -euo pipefail
+                        mkdir release-assets
+                        while IFS= read -r -d '' package; do
+                          name="$(basename "$package")"
+                          name="${name// /.}"
+                          if [[ -e "release-assets/$name" ]]; then
+                            echo "Duplicate release asset name: $name" >&2
+                            exit 1
+                          fi
+                          cp "$package" "release-assets/$name"
+                        done < <(
+                          find .jenkins/linux-packages .jenkins/windows-packages \
+                            -maxdepth 1 -type f \
+                            \\( -name '*.AppImage' -o -name '*.deb' -o -name '*-setup.exe' \\) \
+                            -print0
+                        )
+
+                        test "$(find release-assets -maxdepth 1 -type f -name '*.AppImage' | wc -l)" -eq 1
+                        test "$(find release-assets -maxdepth 1 -type f -name '*.deb' | wc -l)" -eq 1
+                        test "$(find release-assets -maxdepth 1 -type f -name '*-setup.exe' | wc -l)" -eq 1
+
+                        node <<'NODE'
+                        const fs = require('node:fs');
+                        const metadata = {
+                          schema_version: 1,
+                          application: 'OnAir WyrmGrid',
+                          version: process.env.RELEASE_VERSION,
+                          source_ref: process.env.RELEASE_TAG,
+                          commit: process.env.RELEASE_COMMIT,
+                          jenkins_build_number: process.env.BUILD_NUMBER,
+                          platforms: ['linux_x86_64', 'windows_x86_64'],
+                          signed: false,
+                          provenance: 'checksums-only'
+                        };
+                        fs.writeFileSync(
+                          'release-assets/BUILD-INFO.json',
+                          `${JSON.stringify(metadata, null, 2)}\n`
+                        );
+                        NODE
+
+                        (
+                          cd release-assets
+                          find . -maxdepth 1 -type f ! -name SHA256SUMS.txt -print0 |
+                            sort -z |
+                            xargs -0 sha256sum |
+                            sed 's#  \\./#  #' > SHA256SUMS.txt
+                        )
+                    '''
+                }
+                archiveArtifacts(
+                    artifacts: 'release-assets/*',
+                    fingerprint: true,
+                    onlyIfSuccessful: true
+                )
+                stash(name: 'assembled-release', includes: 'release-assets/*')
+            }
+        }
+
+        stage('Approve draft publication') {
+            agent none
+            steps {
+                input(
+                    message: "Create or update the draft prerelease for ${params.RELEASE_TAG}?",
+                    ok: 'Create draft prerelease'
+                )
+            }
+        }
+
+        stage('Publish draft prerelease') {
+            agent { label 'linux' }
+            options {
+                timeout(time: 30, unit: 'MINUTES')
+            }
+            steps {
+                deleteDir()
+                unstash 'release-policy'
+                unstash 'assembled-release'
+                withCredentials([usernamePassword(
+                    credentialsId: 'wyrmgrid-github-release',
+                    usernameVariable: 'GITHUB_APP',
+                    passwordVariable: 'GH_TOKEN'
+                )]) {
+                    withEnv(["RELEASE_TAG=${params.RELEASE_TAG}"]) {
+                        sh '''
+                            set +x
+                            set -euo pipefail
+                            gh auth status
+                            mapfile -d '' assets < <(find release-assets -maxdepth 1 -type f -print0)
+                            test "${#assets[@]}" -ge 5
+
+                            release_error=.jenkins/release-policy/release-query-publish.err
+                            set +e
+                            release_json="$(gh api "repos/phobos-dthorga/onair-wyrmgrid/releases/tags/$RELEASE_TAG" 2>"$release_error")"
+                            release_status=$?
+                            set -e
+                            if [[ "$release_status" -eq 0 ]]; then
+                              is_draft="$(printf '%s' "$release_json" | node -e "let value=''; process.stdin.on('data', chunk => value += chunk); process.stdin.on('end', () => process.stdout.write(String(JSON.parse(value).draft)))")"
+                              if [[ "$is_draft" != "true" ]]; then
+                                echo "Published release $RELEASE_TAG cannot be replaced." >&2
+                                exit 1
+                              fi
+                              rm -f "$release_error"
+                              gh release edit "$RELEASE_TAG" \
+                                --repo phobos-dthorga/onair-wyrmgrid \
+                                --draft \
+                                --prerelease \
+                                --title "OnAir WyrmGrid $RELEASE_TAG" \
+                                --notes-file .jenkins/release-policy/release-notes.md
+                              gh release upload "$RELEASE_TAG" "${assets[@]}" \
+                                --repo phobos-dthorga/onair-wyrmgrid \
+                                --clobber
+                            elif grep -q 'HTTP 404' "$release_error"; then
+                              rm -f "$release_error"
+                              gh release create "$RELEASE_TAG" "${assets[@]}" \
+                                --repo phobos-dthorga/onair-wyrmgrid \
+                                --draft \
+                                --prerelease \
+                                --title "OnAir WyrmGrid $RELEASE_TAG" \
+                                --notes-file .jenkins/release-policy/release-notes.md
+                            else
+                              cat "$release_error" >&2
+                              exit "$release_status"
+                            fi
+                        '''
+                    }
+                }
+            }
+        }
+    }
+}

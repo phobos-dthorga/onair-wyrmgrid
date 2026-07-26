@@ -25,6 +25,7 @@
 .agents/
 .codex/
 .wyrmgrid-local/
+/.jenkins/forgeai-input/
 .vscode/settings.json
 .DS_Store
 Thumbs.db

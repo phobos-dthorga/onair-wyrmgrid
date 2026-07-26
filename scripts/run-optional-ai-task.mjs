@@ -2,6 +2,11 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import {
+  containsSensitiveContent,
+  containsUnsafeControlContent,
+} from "./ai-content-safety.mjs";
+
 export const PROFILE_SCHEMA_VERSION = 1;
 export const METRICS_SCHEMA_VERSION = 1;
 export const SUPPORTED_PROVIDERS = new Set([
@@ -239,14 +244,6 @@ const REQUIRED_SYSTEM_PROMPT_PATTERNS = [
   /(?:does not|do not|never)[^\n]{0,80}authori[sz]e/i,
   /(?:not|never)[^\n]{0,40}proof/i,
 ];
-const SENSITIVE_PATTERNS = [
-  /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
-  /\bgh[pousr]_[A-Za-z0-9]{20,}\b/,
-  /\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}\b/,
-  /\bBearer\s+[A-Za-z0-9._~+/=-]{16,}\b/i,
-  /\b(?:api[_-]?key|password|secret|token)\s*[:=]\s*["']?[^\s"']{12,}/i,
-];
-
 export function getOptionalAiTask(taskId) {
   const task = OPTIONAL_AI_TASKS[taskId];
   if (!task) {
@@ -493,9 +490,14 @@ export function assertSafeHandoff({
       `The approved handoff packet must contain 1-${MAX_HANDOFF_BYTES} UTF-8 bytes`,
     );
   }
-  if (SENSITIVE_PATTERNS.some((pattern) => pattern.test(packet))) {
+  if (containsSensitiveContent(packet)) {
     throw new Error(
       "The approved handoff packet resembles credential or private-key material",
+    );
+  }
+  if (containsUnsafeControlContent(packet)) {
+    throw new Error(
+      "The approved handoff packet contains unsafe control or bidirectional text",
     );
   }
 

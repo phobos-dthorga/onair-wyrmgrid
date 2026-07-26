@@ -91,8 +91,8 @@ relevant release issue or architecture decision.
   recording, automatic telemetry recording, and plugin grants cannot enable
   audio.
 - Verify persistent, accessible recording indication and permission recovery on
-  every packaged Windows, macOS, and Linux target. Full desktop audio must not
-  be selected implicitly.
+  every packaged Windows and Linux target. Full desktop audio must not be
+  selected implicitly.
 - Complete the packaged Audio Capture Provider, Audio Codec Provider, X-Plane
   in-process tap, Opus and FMOD licence, dependency-notice, signing,
   installation/removal, and third-party-aircraft reviews applicable to the

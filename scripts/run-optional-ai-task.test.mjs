@@ -286,6 +286,16 @@ test("requires one-time approval and rejects credential-like packet content", ()
   assert.throws(
     () =>
       assertSafeHandoff({
+        packet: "Review this \u202erelease.",
+        systemPrompt,
+        approveOnce: true,
+        environment: {},
+      }),
+    /unsafe control or bidirectional text/,
+  );
+  assert.throws(
+    () =>
+      assertSafeHandoff({
         packet: "Review this release.",
         systemPrompt,
         approveOnce: true,

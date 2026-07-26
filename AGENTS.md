@@ -131,14 +131,17 @@
   must fail release policy.
 - CI produces release artifacts. Do not hand-assemble published binaries.
 - Run routine compilation, tests, formatting, linting, and dependency checks on
-  the maintainer's local development machine. Reserve hosted CI/CD for an
-  explicitly authorised release or exception. Every intentional semantic-version
-  release tag (`vX.Y.Z` or a supported prerelease) repeats the complete gates on
-  clean hosted runners and builds installers. A manual rebuild must target an
-  existing tag and record a concrete reason.
-- Existing pull-request workflow triggers may still run until they are changed
-  separately. Do not treat those transitional triggers as authority to request
-  reruns, wait for hosted results, or spend hosted minutes during routine work.
+  the maintainer's local development machine. Jenkins repeats the complete
+  Linux and Windows gates for every discovered revision; only `main` and
+  `codex/release-*` retain unsigned snapshots. Every intentional
+  semantic-version release tag (`vX.Y.Z` or a supported prerelease) is rebuilt
+  by the separately protected Jenkins release job from its exact `main`
+  ancestor commit. The job must target an existing tag, record a concrete
+  reason, repeat the complete gates, and pause before draft publication.
+- GitHub Actions are a manual Windows/Linux emergency fallback only. Their CI
+  and security workflows are callable solely by the manually dispatched
+  release workflow. Do not request a hosted rebuild without an explicit
+  exception and existing tag.
 - Keep early releases marked as prereleases until update signing and platform
   signing policies are complete.
 - Do not change the application semantic version or create or push a release

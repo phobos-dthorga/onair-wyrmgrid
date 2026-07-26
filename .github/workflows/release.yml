@@ -1,8 +1,6 @@
 name: Release
 
 on:
-  push:
-    tags: ["v*.*.*"]
   workflow_dispatch:
     inputs:
       release_tag:
@@ -39,22 +37,17 @@ jobs:
         name: Validate release tag, commit, and versions
         shell: bash
         env:
-          EVENT_NAME: ${{ github.event_name }}
-          PUSH_TAG: ${{ github.ref_name }}
           MANUAL_TAG: ${{ inputs.release_tag }}
           EXCEPTION_REASON: ${{ inputs.exception_reason }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 
-          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
-            if (( ${#EXCEPTION_REASON} < 20 )); then
-              echo "Document a meaningful rebuild reason of at least 20 characters." >&2
-              exit 1
-            fi
-            RELEASE_TAG="$MANUAL_TAG"
-          else
-            RELEASE_TAG="$PUSH_TAG"
+          if (( ${#EXCEPTION_REASON} < 20 )); then
+            echo "Document a meaningful rebuild reason of at least 20 characters." >&2
+            exit 1
           fi
+          RELEASE_TAG="$MANUAL_TAG"
 
           if [[ "$RELEASE_TAG" != v* ]]; then
             echo "Release tags must begin with v." >&2
@@ -72,6 +65,23 @@ jobs:
             exit 1
           fi
 
+          release_error="$RUNNER_TEMP/release-query.err"
+          set +e
+          release_json="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/$RELEASE_TAG" 2>"$release_error")"
+          release_status=$?
+          set -e
+          if [[ "$release_status" -eq 0 ]]; then
+            is_draft="$(printf '%s' "$release_json" | node -e "let value=''; process.stdin.on('data', chunk => value += chunk); process.stdin.on('end', () => process.stdout.write(String(JSON.parse(value).draft)))")"
+            if [[ "$is_draft" != "true" ]]; then
+              echo "Published release $RELEASE_TAG cannot be replaced." >&2
+              exit 1
+            fi
+          elif ! grep -q 'HTTP 404' "$release_error"; then
+            cat "$release_error" >&2
+            exit "$release_status"
+          fi
+          rm -f "$release_error"
+
           PREVIOUS_TAG="$(git tag --list 'v*' --merged origin/main | node scripts/select-previous-release.mjs "$RELEASE_VERSION" --tag-lines)"
           PREVIOUS_VERSION="${PREVIOUS_TAG#v}"
           release_notes_args=("$RELEASE_VERSION")
@@ -80,21 +90,50 @@ jobs:
           fi
           node scripts/prepare-release-notes.mjs "${release_notes_args[@]}"
 
-          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
-          echo "release_version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
-          echo "release_commit=$RELEASE_COMMIT" >> "$GITHUB_OUTPUT"
-          echo "previous_version=$PREVIOUS_VERSION" >> "$GITHUB_OUTPUT"
+          {
+            echo "release_tag=$RELEASE_TAG"
+            echo "release_version=$RELEASE_VERSION"
+            echo "release_commit=$RELEASE_COMMIT"
+            echo "previous_version=$PREVIOUS_VERSION"
+          } >> "$GITHUB_OUTPUT"
+
+  teleport:
+    name: Teleport Machine ID
+    needs: policy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Install Teleport
+        uses: teleport-actions/setup@b638ff596557cc3959eb6b5287d5e58e0c8ac6a6 # v1
+        with:
+          version: "18.10.1"
+          proxy: ssh.tauryk.gekkofyre.io:443
+      - name: Authenticate with Teleport Machine ID
+        uses: teleport-actions/auth@3b365df2b4f64891358392a444ff34929ba0d0b1 # v2
+        with:
+          proxy: ssh.tauryk.gekkofyre.io:443
+          token: github-actions-onair-wyrmgrid
+          certificate-ttl: 15m
+      - name: Verify least-privileged Teleport access
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote_identity="$(tsh ssh jenkins@web.tauryk.gekkofyre.io \
+            'printf "%s@%s\n" "$(whoami)" "$(hostname)"')"
+          test "$remote_identity" = "jenkins@web.tauryk.gekkofyre.io"
 
   verify:
     name: Required tests
-    needs: policy
+    needs: [policy, teleport]
     uses: ./.github/workflows/ci.yml
     with:
       checkout_ref: ${{ needs.policy.outputs.release_tag }}
 
   security:
     name: Required security checks
-    needs: policy
+    needs: [policy, teleport]
     uses: ./.github/workflows/security.yml
     with:
       checkout_ref: ${{ needs.policy.outputs.release_tag }}
@@ -117,11 +156,6 @@ jobs:
             artifact_paths: |
               target/release/bundle/appimage/*.AppImage
               target/release/bundle/deb/*.deb
-            upload_sentry_source_maps: false
-          - platform: macos-latest
-            args: --bundles app,dmg
-            artifact_name: macos-dmg
-            artifact_paths: target/release/bundle/dmg/*.dmg
             upload_sentry_source_maps: false
     runs-on: ${{ matrix.platform }}
     steps:
@@ -161,8 +195,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_VERSION: ${{ needs.policy.outputs.release_version }}
         run: |
-          $releaseJson = gh release list --exclude-drafts --limit 100 --json tagName
-          $selection = $releaseJson | node scripts/select-previous-release.mjs $env:RELEASE_VERSION
+          $publishedNsisTags = gh api --paginate --slurp 'repos/{owner}/{repo}/releases?per_page=100' |
+            node -e "let value=''; process.stdin.on('data', chunk => value += chunk); process.stdin.on('end', () => { const pages = JSON.parse(value); for (const release of pages.flat()) { if (!release.draft && release.assets.some(asset => asset.name.endsWith('-setup.exe'))) console.log(release.tag_name); } });"
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Unable to enumerate prior published NSIS releases.'
+          }
+          $selection = $publishedNsisTags |
+            node scripts/select-previous-release.mjs $env:RELEASE_VERSION --tag-lines
           $previousTag = "$selection".Trim()
 
           if (-not $previousTag) {
@@ -278,15 +317,32 @@ jobs:
           set -euo pipefail
           mapfile -d '' assets < <(find release-assets -type f -print0)
 
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+          release_error="$RUNNER_TEMP/release-query-publish.err"
+          set +e
+          release_json="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/$RELEASE_TAG" 2>"$release_error")"
+          release_status=$?
+          set -e
+          if [[ "$release_status" -eq 0 ]]; then
+            is_draft="$(printf '%s' "$release_json" | node -e "let value=''; process.stdin.on('data', chunk => value += chunk); process.stdin.on('end', () => process.stdout.write(String(JSON.parse(value).draft)))")"
+            if [[ "$is_draft" != "true" ]]; then
+              echo "Published release $RELEASE_TAG cannot be replaced." >&2
+              exit 1
+            fi
+            rm -f "$release_error"
             gh release edit "$RELEASE_TAG" \
+              --draft \
+              --prerelease \
               --title "OnAir WyrmGrid $RELEASE_TAG" \
               --notes-file "$RELEASE_NOTES"
             gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
-          else
+          elif grep -q 'HTTP 404' "$release_error"; then
+            rm -f "$release_error"
             gh release create "$RELEASE_TAG" "${assets[@]}" \
               --draft \
               --prerelease \
               --title "OnAir WyrmGrid $RELEASE_TAG" \
               --notes-file "$RELEASE_NOTES"
+          else
+            cat "$release_error" >&2
+            exit "$release_status"
           fi
