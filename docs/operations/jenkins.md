@@ -61,6 +61,11 @@ Every discovered revision runs Linux and Windows validation. A newer build of
 the same branch cancels the older one. Only `main` and `codex/release-*` build
 and retain unsigned snapshots:
 
+Rust test cases run serially within each job. Jenkins may validate several
+discovered revisions at once, and serial test execution prevents agent
+contention from consuming the real three-second plugin startup handshake
+without weakening that production deadline.
+
 - Linux AppImage and Debian package;
 - Windows per-user NSIS setup with a clean-install smoke test;
 - platform-specific `BUILD-INFO.json` and `SHA256SUMS.txt`.

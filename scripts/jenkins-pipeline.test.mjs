@@ -183,6 +183,10 @@ test("package scripts are the shared CI command contract", () => {
   );
   assert.match(packageMetadata.scripts["ci:rust"], /--locked/);
   assert.match(packageMetadata.scripts["ci:rust"], /-D warnings/);
+  assert.match(
+    packageMetadata.scripts["ci:rust"],
+    /cargo test --locked --workspace -- --test-threads=1$/,
+  );
   assert.match(packageMetadata.scripts["ci:dependencies"], /cargo deny check/);
   assert.match(
     packageMetadata.scripts["ci:dependencies"],

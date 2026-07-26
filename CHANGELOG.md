@@ -62,6 +62,8 @@ major application version.
 - Updated the locked build-time glob dependency to `brace-expansion` 5.0.8,
   removing its high-severity unbounded-expansion denial-of-service advisory
   while retaining the fail-closed high-severity npm audit gate.
+- Serialized Rust test cases within each CI job so concurrent Jenkins
+  revisions cannot starve the real three-second plugin startup handshake.
 - Added a feature-first ForgeAI advisory review to Jenkins for `main` and
   origin pull-request merge builds. It archives a seven-analyzer HTML report
   from a bounded, credential-screened change packet after deterministic work;
