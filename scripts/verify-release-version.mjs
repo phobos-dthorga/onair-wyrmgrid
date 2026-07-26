@@ -128,27 +128,45 @@ function workspaceVersion(cargoManifest) {
 export async function configuredReleaseVersions(
   repositoryRoot = defaultRepositoryRoot,
 ) {
-  const [cargoManifest, rootPackage, desktopPackage, tauriConfiguration] =
-    await Promise.all([
-      readFile(resolve(repositoryRoot, "Cargo.toml"), "utf8"),
-      readFile(resolve(repositoryRoot, "package.json"), "utf8").then(
-        JSON.parse,
-      ),
-      readFile(
-        resolve(repositoryRoot, "apps/desktop/package.json"),
-        "utf8",
-      ).then(JSON.parse),
-      readFile(
-        resolve(repositoryRoot, "apps/desktop/src-tauri/tauri.conf.json"),
-        "utf8",
-      ).then(JSON.parse),
-    ]);
+  const [
+    cargoManifest,
+    rootPackage,
+    desktopPackage,
+    tauriConfiguration,
+    fakeAudioProvider,
+    windowsAudioProvider,
+    opusCodec,
+  ] = await Promise.all([
+    readFile(resolve(repositoryRoot, "Cargo.toml"), "utf8"),
+    readFile(resolve(repositoryRoot, "package.json"), "utf8").then(JSON.parse),
+    readFile(resolve(repositoryRoot, "apps/desktop/package.json"), "utf8").then(
+      JSON.parse,
+    ),
+    readFile(
+      resolve(repositoryRoot, "apps/desktop/src-tauri/tauri.conf.json"),
+      "utf8",
+    ).then(JSON.parse),
+    readFile(
+      resolve(repositoryRoot, "providers/fake-audio/provider.json"),
+      "utf8",
+    ).then(JSON.parse),
+    readFile(
+      resolve(repositoryRoot, "providers/windows-audio/provider.json"),
+      "utf8",
+    ).then(JSON.parse),
+    readFile(resolve(repositoryRoot, "codecs/opus/codec.json"), "utf8").then(
+      JSON.parse,
+    ),
+  ]);
 
   return new Map([
     ["Cargo workspace", workspaceVersion(cargoManifest)],
     ["root npm package", rootPackage.version],
     ["desktop npm package", desktopPackage.version],
     ["Tauri application", tauriConfiguration.version],
+    ["deterministic audio provider", fakeAudioProvider.version],
+    ["Windows audio provider", windowsAudioProvider.version],
+    ["Opus audio codec", opusCodec.version],
   ]);
 }
 

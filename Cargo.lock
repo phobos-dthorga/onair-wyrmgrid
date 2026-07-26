@@ -6303,7 +6303,7 @@ dependencies = [
 
 [[package]]
 name = "wyrmgrid-application"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "chacha20poly1305",
  "chrono",
@@ -6332,7 +6332,7 @@ dependencies = [
 
 [[package]]
 name = "wyrmgrid-audio-codec-protocol"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -6342,7 +6342,7 @@ dependencies = [
 
 [[package]]
 name = "wyrmgrid-audio-provider-protocol"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -6352,7 +6352,7 @@ dependencies = [
 
 [[package]]
 name = "wyrmgrid-bridge-protocol"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -6362,7 +6362,7 @@ dependencies = [
 
 [[package]]
 name = "wyrmgrid-desktop"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "chrono",
  "getrandom 0.4.3",
@@ -6385,7 +6385,7 @@ dependencies = [
 
 [[package]]
 name = "wyrmgrid-domain"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -6397,7 +6397,7 @@ dependencies = [
 
 [[package]]
 name = "wyrmgrid-fake-audio-provider"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "tempfile",
  "wyrmgrid-application",
@@ -6409,7 +6409,7 @@ dependencies = [
 
 [[package]]
 name = "wyrmgrid-onair-api"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "chrono",
  "reqwest 0.12.28",
@@ -6424,7 +6424,7 @@ dependencies = [
 
 [[package]]
 name = "wyrmgrid-opus-codec"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "opus2",
  "tempfile",
@@ -6434,7 +6434,7 @@ dependencies = [
 
 [[package]]
 name = "wyrmgrid-plugin-protocol"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "chrono",
  "serde",
@@ -6446,7 +6446,7 @@ dependencies = [
 
 [[package]]
 name = "wyrmgrid-simbrief-api"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "chrono",
  "reqwest 0.12.28",
@@ -6472,7 +6472,7 @@ dependencies = [
 
 [[package]]
 name = "wyrmgrid-storage"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "chrono",
  "rusqlite",
@@ -6483,7 +6483,7 @@ dependencies = [
 
 [[package]]
 name = "wyrmgrid-windows-audio-provider"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "cpal",
  "sha2 0.11.0",

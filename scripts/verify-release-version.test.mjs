@@ -14,6 +14,9 @@ import {
 async function releaseFixture(versions) {
   const root = await mkdtemp(join(tmpdir(), "wyrmgrid-release-version-"));
   await mkdir(join(root, "apps/desktop/src-tauri"), { recursive: true });
+  await mkdir(join(root, "providers/fake-audio"), { recursive: true });
+  await mkdir(join(root, "providers/windows-audio"), { recursive: true });
+  await mkdir(join(root, "codecs/opus"), { recursive: true });
   await writeFile(
     join(root, "Cargo.toml"),
     `[workspace]\nmembers = []\n\n[workspace.package]\nversion = "${versions.cargo}"\n`,
@@ -29,6 +32,18 @@ async function releaseFixture(versions) {
   await writeFile(
     join(root, "apps/desktop/src-tauri/tauri.conf.json"),
     JSON.stringify({ version: versions.tauri }),
+  );
+  await writeFile(
+    join(root, "providers/fake-audio/provider.json"),
+    JSON.stringify({ version: versions.fakeAudio ?? versions.cargo }),
+  );
+  await writeFile(
+    join(root, "providers/windows-audio/provider.json"),
+    JSON.stringify({ version: versions.windowsAudio ?? versions.cargo }),
+  );
+  await writeFile(
+    join(root, "codecs/opus/codec.json"),
+    JSON.stringify({ version: versions.opusCodec ?? versions.cargo }),
   );
   return root;
 }
@@ -69,7 +84,7 @@ test("accepts a release only when every application version matches", async (con
   context.after(() => rm(root, { recursive: true, force: true }));
 
   const versions = await verifyReleaseVersion("0.2.1", root);
-  assert.equal(versions.size, 4);
+  assert.equal(versions.size, 7);
 });
 
 test("reports every checked-in version that disagrees with the tag", async (context) => {
@@ -78,11 +93,12 @@ test("reports every checked-in version that disagrees with the tag", async (cont
     root: "0.2.0",
     desktop: "0.2.1",
     tauri: "0.1.0",
+    windowsAudio: "0.2.0",
   });
   context.after(() => rm(root, { recursive: true, force: true }));
 
   await assert.rejects(
     verifyReleaseVersion("0.2.1", root),
-    /root npm package: 0\.2\.0[\s\S]*Tauri application: 0\.1\.0/,
+    /root npm package: 0\.2\.0[\s\S]*Tauri application: 0\.1\.0[\s\S]*Windows audio provider: 0\.2\.0/,
   );
 });

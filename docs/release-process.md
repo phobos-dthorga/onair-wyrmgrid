@@ -14,7 +14,9 @@
    used, is untrusted assistance rather than release authority.
 4. Update the application version in the root and desktop `package.json` files,
    `Cargo.toml`, and `apps/desktop/src-tauri/tauri.conf.json`. Update extended
-   compatibility, protocol, database, or migration documentation when needed;
+   compatibility, protocol, database, or migration documentation when needed.
+   Keep manifests for first-party providers and codecs that inherit the Cargo
+   workspace version synchronized with that application version;
    `CHANGELOG.md` remains the canonical GitHub release-note source.
 5. Run `npm run test:tooling`,
    `node scripts/verify-release-version.mjs <version>`, and
