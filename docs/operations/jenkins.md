@@ -217,10 +217,13 @@ specialist phases:
 
 Each invocation has a separate OpenCode state directory and appears as a
 separate Jenkins AI Agent conversation card. A compact, size-limited checkpoint
-carries the immutable revision, request hash, plan, current safe-diff hash and
-summary, latest bounded failure, and remaining work. Full earlier conversations
-and failures remain artifacts instead of being repeatedly returned to the
-model. OpenCode automatic compaction is only an emergency fallback.
+carries the immutable revision, request hash, original bounded operator request,
+advisory plan, current safe-diff hash and summary, latest bounded failure, and
+remaining work. The original request is authoritative in every implementation,
+repair, and review phase; an incomplete or generic planner response cannot
+replace, narrow, or redirect it. Full earlier conversations and failures remain
+artifacts instead of being repeatedly returned to the model. OpenCode automatic
+compaction is only an emergency fallback.
 OpenCode's normal repository guidance supplies `AGENTS.md`; Jenkins records its
 immutable hash but does not inject a second complete copy. Any cited range,
 including an `AGENTS.md` range, still requires a completed targeted read.

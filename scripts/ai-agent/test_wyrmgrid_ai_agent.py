@@ -341,7 +341,63 @@ class WyrmGridAiAgentTests(unittest.TestCase):
                 self.policy["job"]["phase_limits"]["maximum_checkpoint_bytes"],
             )
             self.assertEqual("LATEST_FAILURE\n", checkpoint["latest_failure"])
+            self.assertEqual(
+                "Update README.", checkpoint["operator_request"]
+            )
             self.assertNotIn("failure-history", json.dumps(checkpoint))
+
+    def test_build_21_generic_plan_cannot_hide_operator_request(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary) / "repository"
+            root.mkdir()
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(
+                ["git", "config", "user.email", "test@example.invalid"],
+                cwd=root,
+                check=True,
+            )
+            subprocess.run(
+                ["git", "config", "user.name", "Test"], cwd=root, check=True
+            )
+            (root / "README.md").write_text("base\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-qm", "base"], cwd=root, check=True)
+            revision = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=root, text=True
+            ).strip()
+            artifacts = pathlib.Path(temporary) / "artifacts"
+            artifacts.mkdir()
+            generic_plan = (
+                "Continue if you have next steps, or stop and ask for "
+                "clarification if you are unsure how to proceed."
+            )
+            (artifacts / "planner-response.md").write_text(
+                generic_plan + "\n", encoding="utf-8"
+            )
+            request = (
+                "Document xdg-utils, desktop-file-utils, and the generated "
+                "UTF-8 locale in docs/operations/jenkins.md."
+            )
+            parameters = {
+                "mode": "PATCH",
+                "source_revision": revision,
+                "request": request,
+                "allowed_paths": ["docs/operations/jenkins.md"],
+            }
+            checkpoint = agent.compact_checkpoint(
+                root, artifacts, parameters, self.policy
+            )
+            prompt = agent.render_phase_prompt(
+                "BUILDER", parameters, checkpoint
+            )
+            system_prompt = agent.render_phase_system_prompt(
+                "BUILDER", "PATCH"
+            )
+            self.assertEqual(request, checkpoint["operator_request"])
+            self.assertEqual(generic_plan + "\n", checkpoint["acceptance_plan"])
+            self.assertIn(request, prompt)
+            self.assertIn("authoritative operator_request", prompt)
+            self.assertIn("operator_request is the authoritative task", system_prompt)
 
     def test_prepare_phase_creates_fresh_specialist_packets(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -408,6 +464,14 @@ class WyrmGridAiAgentTests(unittest.TestCase):
                 (builder_dir / "model.txt").read_text(encoding="utf-8"),
             )
             self.assertTrue((builder_dir / "checkpoint.json").is_file())
+            checkpoint = json.loads(
+                (builder_dir / "checkpoint.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual("Update README.", checkpoint["operator_request"])
+            self.assertIn(
+                "Update README.",
+                (builder_dir / "prompt.md").read_text(encoding="utf-8"),
+            )
             self.assertNotEqual(planner_dir, builder_dir)
 
     def test_opencode_config_rejects_unregistered_reasoning_effort(self) -> None:

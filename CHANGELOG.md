@@ -52,6 +52,9 @@ major application version.
 - Bootstrap lockfile-pinned JavaScript tooling before AI Agent formatting and
   isolated tests, use a disposable workspace npm cache, and keep Prettier
   offline so missing dependencies cannot trigger an unpinned formatter fetch.
+- Preserve the exact bounded operator request as the authoritative input to
+  every change phase so a generic local-planner response cannot erase or
+  redirect the implementation task.
 
 ### Removed
 

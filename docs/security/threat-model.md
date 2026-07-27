@@ -470,10 +470,12 @@
 - Jenkins runs only checked-in formatters and test profiles outside the model
   and revalidates the complete diff after formatting and each of at most two
   fresh Qwen3-Coder test-repair passes. Qwen3.6 planning/review phases are
-  read-only, and Qwen3-Coder receives no unsupported reasoning option. A safe
-  diff may survive malformed narrative output, but an unsafe diff is removed
-  from patch artifacts before the run fails. A persistent test failure waits
-  without an executor and defaults to archive-only.
+  read-only, and Qwen3-Coder receives no unsupported reasoning option. Every
+  change-phase checkpoint retains the bounded operator request as authoritative;
+  planner output is advisory and cannot replace or redirect that request. A
+  safe diff may survive malformed narrative output, but an unsafe diff is
+  removed from patch artifacts before the run fails. A persistent test failure
+  waits without an executor and defaults to archive-only.
   Passing or explicitly accepted failing work can create only a labelled draft
   through the WyrmGrid-only contributor App. The App receives Contents and Pull
   requests write access but no merge, approval, release, Actions, workflow,
@@ -893,7 +895,9 @@ convergence. Human review and ordinary protected CI remain necessary.
 Fresh phase state limits accidental context accumulation but does not erase
 repository text already selected for that phase or make a compact checkpoint
 trustworthy. The planner can omit a dependency, the builder can misapply a
-plan, and the reviewer can miss both. Jenkins records phase model identity,
+plan, and the reviewer can miss both. Retaining the operator request prevents a
+generic planner response from erasing the task, but does not prove the request
+is complete or correctly implemented. Jenkins records phase model identity,
 reasoning mode, token high-water marks, and compaction events as diagnostic
 evidence, not correctness proof.
 
