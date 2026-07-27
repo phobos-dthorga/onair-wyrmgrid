@@ -31,7 +31,8 @@ Configure two agents:
 - `linux`: Ubuntu or Debian with Node.js 22, npm 10 or newer, Rust 1.97 with
   rustfmt and Clippy, Python 3 available as `python`, `cargo-deny`, GitHub CLI,
   and the Tauri WebKit/AppIndicator/RSVG/AppImage/Debian prerequisites already
-  installed. Builds do not run `sudo` or mutate system packages.
+  installed. Builds do not run `sudo` or mutate system packages. The worker must
+  have `xdg-utils`, `desktop-file-utils`, and a UTF-8 locale generated.
 - `windows`: Node.js 22, npm 10 or newer, Rust 1.97 with rustfmt and Clippy,
   PowerShell 7, `cargo-deny`, Visual Studio Desktop development with C++,
   WebView2, and Strawberry Perl. Run the agent as an identity that can access
