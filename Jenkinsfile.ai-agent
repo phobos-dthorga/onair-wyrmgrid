@@ -1,18 +1,48 @@
-def runLocalAgent(
-    String promptPath,
-    String eventLogPath = '.jenkins-ai-opencode/last-events.jsonl'
+def prepareLocalPhase(
+    String phase,
+    int sequence,
+    String failureLog = ''
 ) {
-    def selectedModel = readFile(
-        'ci-artifacts/ai-agent/selected-model.txt'
-    ).trim()
-    def promptText = readFile(promptPath)
+    def phaseSlug = "${sequence.toString().padLeft(2, '0')}-${phase.toLowerCase()}"
+    withEnv([
+        "AI_PHASE=${phase}",
+        "AI_PHASE_SEQUENCE=${sequence}",
+        "AI_PHASE_FAILURE_LOG=${failureLog}"
+    ]) {
+        sh '''#!/usr/bin/env bash
+            set -euo pipefail
+            failure=()
+            if [[ -n "${AI_PHASE_FAILURE_LOG:-}" ]]; then
+              failure=(--failure-log "$AI_PHASE_FAILURE_LOG")
+            fi
+            python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
+              prepare-phase \
+              --policy .jenkins-ai-runtime/ai-agent-policy.yml \
+              --artifact-dir ci-artifacts/ai-agent \
+              --agent-worktree .jenkins-ai-agent-worktree \
+              --phase "$AI_PHASE" \
+              --sequence "$AI_PHASE_SEQUENCE" \
+              "${failure[@]}"
+        '''
+    }
+    return "ci-artifacts/ai-agent/phases/${phaseSlug}"
+}
+
+def runLocalPhase(String phaseDir) {
+    def selectedModel = readFile("${phaseDir}/model.txt").trim()
+    def promptText = readFile("${phaseDir}/prompt.md")
+    def phaseSlug = phaseDir.tokenize('/').last()
+    def eventLogPath = "${phaseDir}/events.jsonl"
+    dir(".jenkins-ai-opencode/${phaseSlug}") {
+        deleteDir()
+    }
     dir('.jenkins-ai-agent-worktree') {
         withEnv([
-            "OPENCODE_CONFIG=${env.WORKSPACE}/ci-artifacts/ai-agent/opencode.json",
-            "XDG_CACHE_HOME=${env.WORKSPACE}/.jenkins-ai-opencode/cache",
-            "XDG_CONFIG_HOME=${env.WORKSPACE}/.jenkins-ai-opencode/config",
-            "XDG_DATA_HOME=${env.WORKSPACE}/.jenkins-ai-opencode/data",
-            "XDG_STATE_HOME=${env.WORKSPACE}/.jenkins-ai-opencode/state",
+            "OPENCODE_CONFIG=${env.WORKSPACE}/${phaseDir}/opencode.json",
+            "XDG_CACHE_HOME=${env.WORKSPACE}/.jenkins-ai-opencode/${phaseSlug}/cache",
+            "XDG_CONFIG_HOME=${env.WORKSPACE}/.jenkins-ai-opencode/${phaseSlug}/config",
+            "XDG_DATA_HOME=${env.WORKSPACE}/.jenkins-ai-opencode/${phaseSlug}/data",
+            "XDG_STATE_HOME=${env.WORKSPACE}/.jenkins-ai-opencode/${phaseSlug}/state",
             "AI_AGENT_EVENT_LOG=${eventLogPath}"
         ]) {
             sh '''
@@ -30,7 +60,7 @@ def runLocalAgent(
                     apiEnvVarName: 'HOARDMIND_GATE_API_KEY',
                     commandOverride: '''bash -o pipefail -c 'opencode run --format json --model "$AI_AGENT_MODEL" "$AI_AGENT_PROMPT" | tee "$WORKSPACE/$AI_AGENT_EVENT_LOG"' ''',
                     disableInteractive: true,
-                    failOnAgentError: true,
+                    failOnAgentError: false,
                     model: "hoardmind-gate/${selectedModel}",
                     prompt: promptText,
                     requireApprovals: false,
@@ -40,43 +70,45 @@ def runLocalAgent(
             }
         }
     }
+    withEnv([
+        "AI_AGENT_PHASE_DIR=${phaseDir}",
+        "AI_AGENT_EVENT_LOG=${eventLogPath}"
+    ]) {
+        sh '''
+            set -eu
+            python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
+              collect-phase-output \
+              --policy .jenkins-ai-runtime/ai-agent-policy.yml \
+              --artifact-dir ci-artifacts/ai-agent \
+              --phase-dir "$AI_AGENT_PHASE_DIR" \
+              --event-log "$AI_AGENT_EVENT_LOG"
+        '''
+    }
+    return eventLogPath
 }
 
-def collectAndValidateAgentResult(
-    String eventLogPath = '.jenkins-ai-opencode/last-events.jsonl',
-    String validationLogPath = 'ci-artifacts/ai-agent/validation-attempt-0.log'
-) {
-    int validationStatus = 1
-    withEnv([
-        "AI_AGENT_EVENT_LOG=${eventLogPath}",
-        "AI_AGENT_VALIDATION_LOG=${validationLogPath}"
-    ]) {
-        validationStatus = sh(
-            script: '''#!/usr/bin/env bash
-                set -euo pipefail
-                {
-                    python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
-                      collect-agent-output \
-                      --artifact-dir ci-artifacts/ai-agent \
-                      --agent-worktree .jenkins-ai-agent-worktree \
-                      --event-log "$AI_AGENT_EVENT_LOG" \
-                      --policy .jenkins-ai-runtime/ai-agent-policy.yml
-                    python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
-                      validate-output \
-                      --repository .jenkins-ai-agent-worktree \
-                      --artifact-dir ci-artifacts/ai-agent
-                    python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
-                      validate-diff \
-                      --repository .jenkins-ai-agent-worktree \
-                      --policy .jenkins-ai-runtime/ai-agent-policy.yml \
-                      --artifact-dir ci-artifacts/ai-agent \
-                      --base HEAD
-                } 2>&1 | tee "$AI_AGENT_VALIDATION_LOG"
-            ''',
-            returnStatus: true
-        )
+def collectAndValidateAgentResult(String eventLogPath) {
+    withEnv(["AI_AGENT_EVENT_LOG=${eventLogPath}"]) {
+        sh '''#!/usr/bin/env bash
+            set -euo pipefail
+            python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
+              collect-agent-output \
+              --artifact-dir ci-artifacts/ai-agent \
+              --agent-worktree .jenkins-ai-agent-worktree \
+              --event-log "$AI_AGENT_EVENT_LOG" \
+              --policy .jenkins-ai-runtime/ai-agent-policy.yml
+            python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
+              validate-output \
+              --repository .jenkins-ai-agent-worktree \
+              --artifact-dir ci-artifacts/ai-agent
+            python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
+              validate-diff \
+              --repository .jenkins-ai-agent-worktree \
+              --policy .jenkins-ai-runtime/ai-agent-policy.yml \
+              --artifact-dir ci-artifacts/ai-agent \
+              --base HEAD
+        '''
     }
-    return validationStatus
 }
 
 def runRegisteredTests() {
@@ -367,115 +399,92 @@ pipeline {
             }
         }
 
-        stage('Local repository agent') {
+        stage('Fresh local planning and implementation') {
             agent { label 'ai-agent' }
             steps {
                 script {
-                    runLocalAgent('ci-artifacts/ai-agent/prompt.md')
-                    int validationStatus = collectAndValidateAgentResult()
                     if (params.MODE in [
                         'ASK',
                         'DECISION_TRACE',
                         'CONSISTENCY_AUDIT',
                         'ROADMAP_STATUS'
                     ]) {
-                        int corrections = 0
-                        while (validationStatus != 0 && corrections < 2) {
-                            corrections += 1
-                            def validationLog =
-                                "ci-artifacts/ai-agent/validation-attempt-${corrections - 1}.log"
-                            def correctionPrompt =
-                                "ci-artifacts/ai-agent/read-only-repair-prompt-${corrections}.md"
-                            def correctionEvents =
-                                ".jenkins-ai-opencode/read-only-repair-${corrections}.jsonl"
-                            def correctionValidation =
-                                "ci-artifacts/ai-agent/validation-attempt-${corrections}.log"
-                            withEnv([
-                                "AI_READ_ONLY_REPAIR_ATTEMPT=${corrections}",
-                                "AI_READ_ONLY_FAILURE_LOG=${validationLog}"
-                            ]) {
-                                sh '''
-                                    set -eu
-                                    python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
-                                      read-only-repair-prompt \
-                                      --artifact-dir ci-artifacts/ai-agent \
-                                      --attempt "$AI_READ_ONLY_REPAIR_ATTEMPT" \
-                                      --failure-log "$AI_READ_ONLY_FAILURE_LOG"
-                                '''
-                            }
-                            runLocalAgent(correctionPrompt, correctionEvents)
-                            validationStatus = collectAndValidateAgentResult(
-                                correctionEvents,
-                                correctionValidation
-                            )
-                        }
-                    }
-                    if (params.MODE in ['PATCH', 'FEATURE']) {
-                        int corrections = 0
-                        while (validationStatus != 0 && corrections < 2) {
-                            corrections += 1
-                            def validationLog =
-                                "ci-artifacts/ai-agent/validation-attempt-${corrections - 1}.log"
-                            def correctionPrompt =
-                                "ci-artifacts/ai-agent/change-repair-prompt-${corrections}.md"
-                            def correctionEvents =
-                                ".jenkins-ai-opencode/change-repair-${corrections}.jsonl"
-                            def correctionValidation =
-                                "ci-artifacts/ai-agent/validation-attempt-${corrections}.log"
-                            withEnv([
-                                "AI_CHANGE_REPAIR_ATTEMPT=${corrections}",
-                                "AI_CHANGE_FAILURE_LOG=${validationLog}"
-                            ]) {
-                                sh '''
-                                    set -eu
-                                    python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
-                                      change-repair-prompt \
-                                      --artifact-dir ci-artifacts/ai-agent \
-                                      --attempt "$AI_CHANGE_REPAIR_ATTEMPT" \
-                                      --failure-log "$AI_CHANGE_FAILURE_LOG"
-                                '''
-                            }
-                            runLocalAgent(correctionPrompt, correctionEvents)
-                            validationStatus = collectAndValidateAgentResult(
-                                correctionEvents,
-                                correctionValidation
-                            )
-                        }
-                    }
-                    if (validationStatus != 0) {
-                        error(
-                            'The local agent did not satisfy the bounded output ' +
-                            'contract after the permitted correction passes.'
-                        )
+                        def readOnlyDir = prepareLocalPhase('READ_ONLY', 1)
+                        def readOnlyEvents = runLocalPhase(readOnlyDir)
+                        collectAndValidateAgentResult(readOnlyEvents)
+                    } else {
+                        def plannerDir = prepareLocalPhase('PLANNER', 1)
+                        runLocalPhase(plannerDir)
+                        def builderDir = prepareLocalPhase('BUILDER', 2)
+                        def builderEvents = runLocalPhase(builderDir)
+                        collectAndValidateAgentResult(builderEvents)
                     }
                 }
             }
         }
 
-        stage('Deterministic tests and local repair') {
+        stage('Deterministic formatting, tests, and fresh repair') {
             when {
                 expression { params.MODE in ['PATCH', 'FEATURE'] }
             }
             agent { label 'ai-agent' }
             steps {
                 script {
+                    sh '''
+                        set -eu
+                        python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
+                          expand-worktree \
+                          --agent-worktree .jenkins-ai-agent-worktree
+                        python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
+                          format-changes \
+                          --repository .jenkins-ai-agent-worktree \
+                          --policy .jenkins-ai-runtime/ai-agent-policy.yml \
+                          --artifact-dir ci-artifacts/ai-agent
+                        python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
+                          validate-diff \
+                          --repository .jenkins-ai-agent-worktree \
+                          --policy .jenkins-ai-runtime/ai-agent-policy.yml \
+                          --artifact-dir ci-artifacts/ai-agent \
+                          --base HEAD
+                    '''
                     int repairs = 0
+                    int repairLimit = readFile(
+                        'ci-artifacts/ai-agent/local-repair-limit.txt'
+                    ).trim().toInteger()
                     int testStatus = runRegisteredTests()
-                    while (testStatus != 0 && repairs < 2) {
+                    while (testStatus != 0 && repairs < repairLimit) {
                         repairs += 1
-                        withEnv(["AI_REPAIR_ATTEMPT=${repairs}"]) {
-                            sh '''
-                                set -eu
-                                python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
-                                  repair-prompt \
-                                  --artifact-dir ci-artifacts/ai-agent \
-                                  --attempt "$AI_REPAIR_ATTEMPT"
-                            '''
-                        }
-                        runLocalAgent(
-                            "ci-artifacts/ai-agent/repair-prompt-${repairs}.md"
+                        sh '''
+                            set -eu
+                            python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
+                              set-sparse-worktree \
+                              --artifact-dir ci-artifacts/ai-agent \
+                              --agent-worktree .jenkins-ai-agent-worktree
+                        '''
+                        def repairDir = prepareLocalPhase(
+                            'REPAIR',
+                            repairs + 2,
+                            'ci-artifacts/ai-agent/tests/output.txt'
                         )
-                        collectAndValidateAgentResult()
+                        def repairEvents = runLocalPhase(repairDir)
+                        collectAndValidateAgentResult(repairEvents)
+                        sh '''
+                            set -eu
+                            python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
+                              expand-worktree \
+                              --agent-worktree .jenkins-ai-agent-worktree
+                            python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
+                              format-changes \
+                              --repository .jenkins-ai-agent-worktree \
+                              --policy .jenkins-ai-runtime/ai-agent-policy.yml \
+                              --artifact-dir ci-artifacts/ai-agent
+                            python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
+                              validate-diff \
+                              --repository .jenkins-ai-agent-worktree \
+                              --policy .jenkins-ai-runtime/ai-agent-policy.yml \
+                              --artifact-dir ci-artifacts/ai-agent \
+                              --base HEAD
+                        '''
                         testStatus = runRegisteredTests()
                     }
                     env.AI_TEST_RESULT = testStatus == 0 ? 'passed' : 'failed'
@@ -486,6 +495,31 @@ pipeline {
                           --repository .jenkins-ai-agent-worktree \
                           --artifact-dir ci-artifacts/ai-agent
                     '''
+                }
+            }
+        }
+
+        stage('Fresh local advisory review') {
+            when {
+                expression {
+                    params.MODE in ['PATCH', 'FEATURE'] &&
+                    env.AI_TEST_RESULT == 'passed'
+                }
+            }
+            agent { label 'ai-agent' }
+            steps {
+                script {
+                    catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                        sh '''
+                            set -eu
+                            python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
+                              set-sparse-worktree \
+                              --artifact-dir ci-artifacts/ai-agent \
+                              --agent-worktree .jenkins-ai-agent-worktree
+                        '''
+                        def reviewDir = prepareLocalPhase('REVIEW', 5)
+                        runLocalPhase(reviewDir)
+                    }
                 }
             }
         }
@@ -503,7 +537,7 @@ pipeline {
                     try {
                         timeout(time: 24, unit: 'HOURS') {
                             env.AI_PUBLISH_DECISION = input(
-                                message: 'The scoped patch still fails after two repair passes.',
+                                message: 'The scoped patch still fails after its configured repair passes.',
                                 ok: 'Continue',
                                 parameters: [
                                     choice(
@@ -521,7 +555,7 @@ pipeline {
                         env.AI_PUBLISH_DECISION = 'ARCHIVE_ONLY'
                     }
                     unstable(
-                        'Registered tests still fail after two bounded local repair passes.'
+                        'Registered tests still fail after the configured bounded local repair passes.'
                     )
                 }
             }
@@ -638,10 +672,31 @@ diff, citations, test evidence, and conversation before promoting it.
                                   --artifact-dir ci-artifacts/ai-agent \
                                   --agent-worktree .jenkins-ai-agent-worktree
                             '''
-                            runLocalAgent(
+                            def hostedRepairDir = prepareLocalPhase(
+                                'REPAIR',
+                                6,
                                 'ci-artifacts/ai-agent/hosted-repair-prompt.md'
                             )
-                            collectAndValidateAgentResult()
+                            def hostedRepairEvents =
+                                runLocalPhase(hostedRepairDir)
+                            collectAndValidateAgentResult(hostedRepairEvents)
+                            sh '''
+                                set -eu
+                                python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
+                                  expand-worktree \
+                                  --agent-worktree .jenkins-ai-agent-worktree
+                                python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
+                                  format-changes \
+                                  --repository .jenkins-ai-agent-worktree \
+                                  --policy .jenkins-ai-runtime/ai-agent-policy.yml \
+                                  --artifact-dir ci-artifacts/ai-agent
+                                python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
+                                  validate-diff \
+                                  --repository .jenkins-ai-agent-worktree \
+                                  --policy .jenkins-ai-runtime/ai-agent-policy.yml \
+                                  --artifact-dir ci-artifacts/ai-agent \
+                                  --base HEAD
+                            '''
                             int repairStatus = runRegisteredTests()
                             if (repairStatus == 0) {
                                 sh '''

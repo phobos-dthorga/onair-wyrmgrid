@@ -84,3 +84,26 @@ decoder behavior with a sanitized fixture.
 `RUST_BACKTRACE=1` is enabled for the checked-in launch configurations. More
 verbose logging must be enabled only for a specific investigation and must
 continue to obey the same credential and raw-response restrictions.
+
+## Inspect a Jenkins AI Agent run
+
+Use the archived `ci-artifacts/ai-agent/phases/` records before adding a new
+probe. Every local invocation has its own prompt, system prompt, compact
+checkpoint where applicable, redacted response, event stream, model identity,
+reasoning mode, token high-water mark, and compaction count. Compare these with
+`diff-summary.json`, `formatter-summary.json`, and `tests/summary.json` to locate
+the first boundary that failed.
+
+The useful distinction is:
+
+- conversation failure: inspect the matching phase card and phase artifacts;
+- narrative-only failure: inspect `agent-output.json` and its Jenkins fallback;
+- scope or secret rejection: use sanitized console metadata only, because no
+  patch artifact is retained;
+- formatter failure: inspect `formatter-summary.json`;
+- test failure: inspect only the latest bounded `tests/output.txt`, with full
+  earlier output retained in prior build/phase artifacts.
+
+Do not enable arbitrary shell, web access, verbose provider bodies, or secret
+logging to diagnose a model run. Do not infer a Qwen3-Coder reasoning failure:
+the coding model intentionally receives no reasoning option.

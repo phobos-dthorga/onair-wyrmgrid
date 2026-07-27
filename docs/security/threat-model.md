@@ -467,9 +467,13 @@
   excess lines, and out-of-scope diffs fail deterministic validation. The model
   receives no shell, web, package-install, external-directory, GitHub, merge,
   release, or repository-administration authority;
-- Jenkins runs only checked-in test profiles outside the model and revalidates
-  the complete diff after each of at most two local test-repair passes. A
-  persistent failure waits without an executor and defaults to archive-only.
+- Jenkins runs only checked-in formatters and test profiles outside the model
+  and revalidates the complete diff after formatting and each of at most two
+  fresh Qwen3-Coder test-repair passes. Qwen3.6 planning/review phases are
+  read-only, and Qwen3-Coder receives no unsupported reasoning option. A safe
+  diff may survive malformed narrative output, but an unsafe diff is removed
+  from patch artifacts before the run fails. A persistent test failure waits
+  without an executor and defaults to archive-only.
   Passing or explicitly accepted failing work can create only a labelled draft
   through the WyrmGrid-only contributor App. The App receives Contents and Pull
   requests write access but no merge, approval, release, Actions, workflow,
@@ -885,6 +889,13 @@ misunderstand WyrmGrid architecture, omit an affected file, repeatedly make the
 same error, satisfy tests accidentally, or produce a plausible but incomplete
 answer. Two correction passes are a research opportunity, not proof of
 convergence. Human review and ordinary protected CI remain necessary.
+
+Fresh phase state limits accidental context accumulation but does not erase
+repository text already selected for that phase or make a compact checkpoint
+trustworthy. The planner can omit a dependency, the builder can misapply a
+plan, and the reviewer can miss both. Jenkins records phase model identity,
+reasoning mode, token high-water marks, and compaction events as diagnostic
+evidence, not correctness proof.
 
 The active context tier hides large files from the model. Inventory metadata
 can show that a file exists, but cannot substitute for its content. A change may

@@ -9,6 +9,7 @@
     "failure_decision_hours": 24,
     "local_test_repair_attempts": 2,
     "hosted_repair_attempts": 1,
+    "local_review_is_advisory": true,
     "local_reasoning_efforts": [
       "LOW",
       "MEDIUM",
@@ -22,13 +23,28 @@
       "PATCH": 250,
       "FEATURE": 400
     },
-    "agent_steps": {
-      "ASK": 8,
-      "DECISION_TRACE": 16,
-      "CONSISTENCY_AUDIT": 24,
-      "ROADMAP_STATUS": 16,
-      "PATCH": 48,
-      "FEATURE": 96
+    "phase_steps": {
+      "READ_ONLY": 16,
+      "PLANNER_PATCH": 6,
+      "PLANNER_FEATURE": 10,
+      "BUILDER_PATCH": 24,
+      "BUILDER_FEATURE": 48,
+      "REPAIR": 16,
+      "REVIEW": 8
+    },
+    "phase_limits": {
+      "maximum_checkpoint_bytes": 24576,
+      "maximum_prompt_bytes": 49152,
+      "maximum_failure_bytes": 8192,
+      "maximum_diff_bytes": 131072,
+      "resolved_regression_notes": 4
+    },
+    "opencode_compaction": {
+      "auto": true,
+      "prune": false,
+      "tail_turns": 1,
+      "preserve_recent_tokens": 2000,
+      "reserved": 4096
     }
   },
   "modes": {
@@ -104,7 +120,7 @@
       "role": "documentation analysis",
       "provider": "hoardmind-gate",
       "selected_model": "qwen3.6:35b",
-      "selection_status": "pending_wyrmgrid_canary",
+      "selection_status": "commissioned_for_reading_planning_and_review",
       "context_tokens": 12288,
       "maximum_output_tokens": 4096,
       "candidate_models": [
@@ -116,8 +132,8 @@
       "display_name": "WyrmGrid Scoped Builder — Local",
       "role": "bounded repository implementation",
       "provider": "hoardmind-gate",
-      "selected_model": "qwen3.6:35b",
-      "selection_status": "pending_thinking_enabled_patch_canary",
+      "selected_model": "qwen3-coder:30b",
+      "selection_status": "specialist_routing",
       "context_tokens": 12288,
       "maximum_output_tokens": 4096,
       "candidate_models": [
@@ -128,6 +144,7 @@
   },
   "local_model_inventory": {
     "qwen3.6:35b": {
+      "weight_quantization": "Q4_K_M",
       "capabilities": [
         "completion",
         "vision",
@@ -137,6 +154,7 @@
       "advertised_context_tokens": 262144
     },
     "qwen3-coder:30b": {
+      "weight_quantization": "Q4_K_M",
       "capabilities": [
         "completion",
         "tools"
@@ -208,6 +226,58 @@
         ]
       ]
     }
+  },
+  "phase_routing": {
+    "READ_ONLY": {
+      "model": "qwen3.6:35b",
+      "reasoning": "PARAMETER"
+    },
+    "PLANNER": {
+      "model": "qwen3.6:35b",
+      "reasoning": "PARAMETER"
+    },
+    "BUILDER": {
+      "model": "qwen3-coder:30b",
+      "reasoning": "NONE"
+    },
+    "REPAIR": {
+      "model": "qwen3-coder:30b",
+      "reasoning": "NONE"
+    },
+    "REVIEW": {
+      "model": "qwen3.6:35b",
+      "reasoning": "PARAMETER"
+    }
+  },
+  "formatters": {
+    "enabled": true,
+    "prettier_extensions": [
+      ".css",
+      ".html",
+      ".js",
+      ".json",
+      ".md",
+      ".mjs",
+      ".scss",
+      ".svelte",
+      ".ts",
+      ".yaml",
+      ".yml"
+    ],
+    "prettier_command": [
+      "npx",
+      "prettier",
+      "--write"
+    ],
+    "rust_extensions": [
+      ".rs"
+    ],
+    "rust_command": [
+      "cargo",
+      "fmt",
+      "--all",
+      "--"
+    ]
   },
   "scope": {
     "forbidden_roots": [

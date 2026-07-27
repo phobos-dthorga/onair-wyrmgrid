@@ -185,18 +185,24 @@ The manually launched Jenkins AI Agent has a different, checked-in test
 contract. A `PATCH` or `FEATURE` run selects `DOCUMENTATION`, `TOOLING`, or
 `REPOSITORY` from `ci/ai-agent-policy.yml`; it cannot supply an arbitrary
 command. Jenkins runs that profile outside the model after validating the
-complete diff. It may return bounded failures for two local repair passes, then
-revalidates the scope and reruns the same profile. A passing result opens only a
-draft PR and still requires ordinary protected pull-request CI and human
-review.
+complete diff. It first applies registered deterministic formatters, then may
+return only the latest bounded failure and compact safe-diff checkpoint to two
+fresh Qwen3-Coder repair invocations. It revalidates the scope after formatting
+and each repair. A passing result receives a fresh advisory Qwen3.6 review,
+opens only a draft PR, and still requires ordinary protected pull-request CI
+and human review.
 
 The AI Agent runtime tests cover immutable revisions, read-only citations,
-path normalization, root-wide and traversal refusal, sparse context ceilings,
-oversized exact targets, symlinks, binary changes, secret-like added lines,
-file and line budgets, registered test execution, repair limits, hosted packet
-contents, and draft-only publication. Commissioning adds attended canaries for
-all four read-only modes, a small repair, a multi-file feature, a test-failure
-repair, hosted review, and policy reuse in a second repository.
+specialist model/reasoning routing, fresh phase state, bounded checkpoints,
+build #13 citation canonicalization, safe-patch survival after narrative
+failure, deterministic formatting, path normalization, root-wide and traversal
+refusal, sparse context ceilings, oversized exact targets, symlinks, binary
+changes, secret-like added lines, file and line budgets, registered test
+execution, repair limits, hosted packet contents, unsafe-patch non-retention,
+and draft-only publication. Commissioning runs an attended `ASK`, one-file
+documentation `PATCH`, formatting-only code `PATCH`, one-repair code `PATCH`,
+and multi-file `FEATURE`, in that order. Hosted review and policy reuse in a
+second repository follow separately.
 
 Do not delegate interpretation of live provider behaviour, security or privacy
 boundaries, protocol compatibility decisions, or assertions that could

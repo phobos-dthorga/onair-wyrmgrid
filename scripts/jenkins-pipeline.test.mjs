@@ -60,11 +60,29 @@ test("manual AI Agent is bounded, repairable, and draft-only", () => {
   assert.match(aiAgentPipeline, /Codex-Jenkins-Tauryk-Gk-Io/);
   assert.match(aiAgentPipeline, /phobos-dthorga\/onair-wyrmgrid/);
   assert.match(aiAgentPipeline, /validate-toolchain/);
+  assert.match(aiAgentPipeline, /prepareLocalPhase\('PLANNER', 1\)/);
+  assert.match(aiAgentPipeline, /prepareLocalPhase\('BUILDER', 2\)/);
+  assert.match(aiAgentPipeline, /prepareLocalPhase\(\s*'REPAIR'/);
+  assert.match(aiAgentPipeline, /prepareLocalPhase\('REVIEW', 5\)/);
+  assert.match(aiAgentPipeline, /format-changes/);
+  assert.match(aiAgentPipeline, /\.jenkins-ai-opencode\/\$\{phaseSlug\}/);
   assert.match(
     aiAgentPipeline,
-    /while \(validationStatus != 0 && corrections < 2\)/,
+    /def runLocalPhase[\s\S]*failOnAgentError: false/,
   );
-  assert.match(aiAgentPipeline, /while \(testStatus != 0 && repairs < 2\)/);
+  assert.match(
+    aiAgentPipeline,
+    /while \(testStatus != 0 && repairs < repairLimit\)/,
+  );
+  assert.equal(
+    [
+      ...aiAgentPipeline.matchAll(
+        /while \(testStatus != 0 && repairs < repairLimit\)/g,
+      ),
+    ].length,
+    1,
+  );
+  assert.match(aiAgentPipeline, /local-repair-limit\.txt/);
   assert.match(aiAgentPipeline, /timeout\(time: 24, unit: 'HOURS'\)/);
   assert.match(aiAgentPipeline, /'ARCHIVE_ONLY'/);
   assert.match(aiAgentPipeline, /'OPEN_FAILING_DRAFT_PR'/);
@@ -81,6 +99,17 @@ test("manual AI Agent is bounded, repairable, and draft-only", () => {
   assert.equal(aiAgentPolicy.toolchain.codex_cli_version, "0.145.0");
   assert.equal(aiAgentPolicy.job.local_test_repair_attempts, 2);
   assert.equal(aiAgentPolicy.job.hosted_repair_attempts, 1);
+  assert.equal(aiAgentPolicy.phase_routing.BUILDER.model, "qwen3-coder:30b");
+  assert.equal(aiAgentPolicy.phase_routing.BUILDER.reasoning, "NONE");
+  assert.equal(aiAgentPolicy.phase_routing.REPAIR.reasoning, "NONE");
+  assert.equal(aiAgentPolicy.phase_routing.PLANNER.model, "qwen3.6:35b");
+  assert.equal(aiAgentPolicy.phase_routing.REVIEW.model, "qwen3.6:35b");
+  assert.equal(
+    aiAgentPolicy.model_profiles.REPOSITORY_SCHOLAR_LOCAL.context_tokens,
+    12288,
+  );
+  assert.equal(aiAgentPolicy.job.phase_limits.maximum_checkpoint_bytes, 24576);
+  assert.equal(aiAgentPolicy.job.opencode_compaction.tail_turns, 1);
   assert.deepEqual(aiAgentPolicy.job.local_reasoning_efforts, [
     "LOW",
     "MEDIUM",

@@ -49,6 +49,14 @@ ceilings, and may create, edit, rename, or delete textual files within that
 scope. Jenkins—not the model—runs registered tests and may return bounded,
 redacted failures for at most two local repair passes.
 
+Change-making work is not one long agent conversation. A fresh Qwen3.6
+invocation prepares a bounded plan, a fresh Qwen3-Coder invocation implements
+it without thinking, Jenkins formats and tests the diff, and up to two fresh
+Qwen3-Coder invocations repair the latest failure. A final fresh Qwen3.6 review
+is advisory. `REASONING_EFFORT` applies only to Qwen3.6. Each phase receives a
+compact checkpoint rather than prior conversation history, and each uses a
+separate OpenCode state directory.
+
 The model receives a sparse worktree containing only eligible files. The
 authoritative limits live in [`ci/ai-agent-policy.yml`](../../../ci/ai-agent-policy.yml)
 under `context_limits`. Initial commissioning uses `SMALL_FILES`: no visible
@@ -62,9 +70,12 @@ by the active context profile.
 
 OpenCode uses Hoardmind Gate through a dedicated WyrmGrid client with
 concurrency one. Friendly profiles identify a local repository scholar and a
-local scoped builder while retaining exact model IDs in the policy. Initial
-selection is provisional until WyrmGrid-specific documentation and small-file
-change canaries compare the installed candidates by answer quality.
+local scoped builder while retaining exact model IDs in the policy. Read-only,
+planning, and review work routes to `qwen3.6:35b`; implementation and repair
+route to `qwen3-coder:30b`. The coding model never receives a thinking option
+because the live Gateway contract does not support one. WyrmGrid canaries judge
+usefulness by reviewed answer and patch quality rather than speed or
+frontier-model perfection.
 
 A passing change is committed by Jenkins on a namespaced branch and opened as
 one clearly labelled draft pull request. The model never receives GitHub
@@ -96,6 +107,13 @@ decision tracing, consistency work, roadmap reconciliation, small repairs, and
 bounded features. Concrete validation failures can improve a merely workable
 local model through repeated passes without turning the model into a release or
 merge authority.
+
+Each phase appears as its own Jenkins conversation card. This trades
+cross-phase conversational memory for explicit, inspectable checkpoints, lower
+repeated prompt cost, specialist routing, and a clean token budget. Safe diffs
+survive malformed change summaries and ordinary test failure; unsafe diffs
+never become patch artifacts. Read-only citation failures still reject the
+answer.
 
 The conservative file limits deliberately exclude some high-value large files.
 That is a feature of the first research tier, not a claim that those files can

@@ -44,7 +44,7 @@ test("WyrmGrid AI Agent policy starts with a bounded visible context", async () 
   assert.equal(policy.toolchain.codex_cli_version, "0.145.0");
   assert.equal(
     policy.model_profiles.SCOPED_BUILDER_LOCAL.selected_model,
-    "qwen3.6:35b",
+    "qwen3-coder:30b",
   );
   assert.ok(
     policy.local_model_inventory["qwen3.6:35b"].capabilities.includes(
@@ -69,4 +69,11 @@ test("WyrmGrid AI Agent policy starts with a bounded visible context", async () 
     PATCH: 250,
     FEATURE: 400,
   });
+  assert.equal(policy.phase_routing.PLANNER.model, "qwen3.6:35b");
+  assert.equal(policy.phase_routing.BUILDER.model, "qwen3-coder:30b");
+  assert.equal(policy.phase_routing.REPAIR.reasoning, "NONE");
+  assert.equal(policy.phase_routing.REVIEW.reasoning, "PARAMETER");
+  assert.equal(policy.job.opencode_compaction.tail_turns, 1);
+  assert.equal(policy.job.opencode_compaction.preserve_recent_tokens, 2000);
+  assert.equal(policy.job.opencode_compaction.reserved, 4096);
 });

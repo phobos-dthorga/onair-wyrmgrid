@@ -4,8 +4,10 @@
 
 - Repository, governance, security, CI, and release automation
 - Manually launched Jenkins AI Agent for immutable cited research and bounded
-  draft-only `PATCH`/`FEATURE` work (implementation complete; WyrmGrid model
-  benchmark, small-file canaries, and context-tier promotion remain)
+  draft-only `PATCH`/`FEATURE` work (fresh Qwen3.6 planning/review,
+  Qwen3-Coder implementation/repair, deterministic formatting, compact
+  checkpoints, and partial-safe-patch retention implemented; ordered attended
+  canaries and later context-tier promotion remain)
 - Tauri/Svelte/MapLibre application shell with lazy Three.js weather rendering
 - Stable domain provenance and plugin manifest v1 groundwork
 - Read-only credential-safe OnAir adapter and SQLite migration ownership

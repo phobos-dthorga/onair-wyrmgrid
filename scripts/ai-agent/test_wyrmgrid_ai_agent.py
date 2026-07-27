@@ -69,8 +69,20 @@ class WyrmGridAiAgentTests(unittest.TestCase):
             profiles["REPOSITORY_SCHOLAR_LOCAL"]["selected_model"],
         )
         self.assertEqual(
-            "qwen3.6:35b",
+            "qwen3-coder:30b",
             profiles["SCOPED_BUILDER_LOCAL"]["selected_model"],
+        )
+        self.assertEqual(
+            "Q4_K_M",
+            self.policy["local_model_inventory"]["qwen3.6:35b"][
+                "weight_quantization"
+            ],
+        )
+        self.assertEqual(
+            "Q4_K_M",
+            self.policy["local_model_inventory"]["qwen3-coder:30b"][
+                "weight_quantization"
+            ],
         )
         self.assertIn(
             "thinking",
@@ -183,151 +195,6 @@ class WyrmGridAiAgentTests(unittest.TestCase):
         self.assertEqual(1200, body["max_tokens"])
         self.assertFalse(body["stream"])
 
-    def test_repair_prompt_retains_prior_failures_as_regression_constraints(
-        self,
-    ) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            artifacts = pathlib.Path(temporary)
-            tests = artifacts / "tests"
-            tests.mkdir()
-            (artifacts / "parameters.json").write_text(
-                json.dumps({"request": "Repair the scoped path guard."}),
-                encoding="utf-8",
-            )
-            (tests / "output.txt").write_text(
-                "FAIL: wildcard-all was accepted\n",
-                encoding="utf-8",
-            )
-
-            agent.repair_prompt(
-                argparse.Namespace(artifact_dir=str(artifacts), attempt=1)
-            )
-            (tests / "output.txt").write_text(
-                "FAIL: mixed separators evaded traversal detection\n",
-                encoding="utf-8",
-            )
-            agent.repair_prompt(
-                argparse.Namespace(artifact_dir=str(artifacts), attempt=2)
-            )
-
-            prompt = (artifacts / "repair-prompt-2.md").read_text(
-                encoding="utf-8"
-            )
-            history = json.loads(
-                (artifacts / "repair-failure-history.json").read_text(
-                    encoding="utf-8"
-                )
-            )
-            self.assertIn("Earlier failures", prompt)
-            self.assertIn("regression constraints", prompt)
-            self.assertIn("wildcard-all was accepted", prompt)
-            self.assertIn("mixed separators evaded traversal detection", prompt)
-            self.assertEqual([1, 2], [item["attempt"] for item in history])
-
-    def test_read_only_repair_prompt_retains_citation_failures(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            artifacts = pathlib.Path(temporary)
-            (artifacts / "parameters.json").write_text(
-                json.dumps(
-                    {
-                        "mode": "ASK",
-                        "request": "Explain the source and embedding boundary.",
-                    }
-                ),
-                encoding="utf-8",
-            )
-            first_failure = artifacts / "validation-attempt-0.log"
-            first_failure.write_text(
-                "Citation was not covered by a completed read: docs/roadmap.md:24-26\n",
-                encoding="utf-8",
-            )
-            agent.read_only_repair_prompt(
-                argparse.Namespace(
-                    artifact_dir=str(artifacts),
-                    attempt=1,
-                    failure_log=str(first_failure),
-                )
-            )
-            second_failure = artifacts / "validation-attempt-1.log"
-            second_failure.write_text(
-                "Cited source lines do not contain distinctive answer terms.\n",
-                encoding="utf-8",
-            )
-            agent.read_only_repair_prompt(
-                argparse.Namespace(
-                    artifact_dir=str(artifacts),
-                    attempt=2,
-                    failure_log=str(second_failure),
-                )
-            )
-
-            prompt = (
-                artifacts / "read-only-repair-prompt-2.md"
-            ).read_text(encoding="utf-8")
-            history = json.loads(
-                (
-                    artifacts / "read-only-failure-history.json"
-                ).read_text(encoding="utf-8")
-            )
-            self.assertIn("Re-read every exact source range", prompt)
-            self.assertIn("Earlier failures", prompt)
-            self.assertIn("constraints and must remain corrected", prompt)
-            self.assertIn("docs/roadmap.md:24-26", prompt)
-            self.assertIn("distinctive answer terms", prompt)
-            self.assertEqual([1, 2], [item["attempt"] for item in history])
-
-    def test_change_repair_prompt_retains_pretest_failures(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            artifacts = pathlib.Path(temporary)
-            (artifacts / "parameters.json").write_text(
-                json.dumps(
-                    {
-                        "mode": "PATCH",
-                        "request": "Clarify the README index.",
-                    }
-                ),
-                encoding="utf-8",
-            )
-            first_failure = artifacts / "validation-attempt-0.log"
-            first_failure.write_text(
-                "Agent response did not end with a Citations section.\n",
-                encoding="utf-8",
-            )
-            agent.change_repair_prompt(
-                argparse.Namespace(
-                    artifact_dir=str(artifacts),
-                    attempt=1,
-                    failure_log=str(first_failure),
-                )
-            )
-            second_failure = artifacts / "validation-attempt-1.log"
-            second_failure.write_text(
-                "Change mode produced no tracked repository diff.\n",
-                encoding="utf-8",
-            )
-            agent.change_repair_prompt(
-                argparse.Namespace(
-                    artifact_dir=str(artifacts),
-                    attempt=2,
-                    failure_log=str(second_failure),
-                )
-            )
-
-            prompt = (
-                artifacts / "change-repair-prompt-2.md"
-            ).read_text(encoding="utf-8")
-            history = json.loads(
-                (artifacts / "change-failure-history.json").read_text(
-                    encoding="utf-8"
-                )
-            )
-            self.assertIn("Printing pseudo-calls", prompt)
-            self.assertIn("<function=read>", prompt)
-            self.assertIn("Earlier failures", prompt)
-            self.assertIn("did not end with a Citations section", prompt)
-            self.assertIn("produced no tracked repository diff", prompt)
-            self.assertEqual([1, 2], [item["attempt"] for item in history])
-
     def test_benchmark_accepts_completed_low_quality_result_as_evidence(self) -> None:
         result = {
             "outcome": "failed",
@@ -374,7 +241,7 @@ class WyrmGridAiAgentTests(unittest.TestCase):
         self.assertEqual("deny", permission["edit"]["*"])
         self.assertEqual("allow", permission["edit"]["docs/**"])
         self.assertEqual(
-            self.policy["job"]["agent_steps"]["FEATURE"],
+            self.policy["job"]["phase_steps"]["BUILDER_FEATURE"],
             config["agent"]["build"]["steps"],
         )
         self.assertEqual(0, config["agent"]["build"]["temperature"])
@@ -383,11 +250,162 @@ class WyrmGridAiAgentTests(unittest.TestCase):
         )
         self.assertTrue(config["agent"]["title"]["disable"])
         models = config["provider"]["hoardmind-gate"]["models"]
-        self.assertEqual("low", models["qwen3.6:35b"]["options"]["reasoningEffort"])
+        self.assertEqual({}, models["qwen3.6:35b"]["options"])
         self.assertEqual({}, models["qwen3-coder:30b"]["options"])
         for model in models.values():
             self.assertEqual(12288, model["limit"]["context"])
             self.assertEqual(4096, model["limit"]["output"])
+        self.assertEqual(
+            {
+                "auto": True,
+                "prune": False,
+                "tail_turns": 1,
+                "preserve_recent_tokens": 2000,
+                "reserved": 4096,
+            },
+            config["compaction"],
+        )
+
+    def test_specialist_phases_route_reasoning_only_to_qwen36(self) -> None:
+        parameters = {
+            "mode": "PATCH",
+            "allowed_paths": ["docs"],
+            "reasoning_effort": "HIGH",
+        }
+        planner = agent.local_phase_spec("PLANNER", parameters, self.policy)
+        builder = agent.local_phase_spec("BUILDER", parameters, self.policy)
+        repair = agent.local_phase_spec("REPAIR", parameters, self.policy)
+        reviewer = agent.local_phase_spec("REVIEW", parameters, self.policy)
+        self.assertEqual(("qwen3.6:35b", "HIGH"), (planner["model"], planner["reasoning_effort"]))
+        self.assertEqual(("qwen3-coder:30b", "NONE"), (builder["model"], builder["reasoning_effort"]))
+        self.assertEqual(("qwen3-coder:30b", "NONE"), (repair["model"], repair["reasoning_effort"]))
+        self.assertEqual(("qwen3.6:35b", "HIGH"), (reviewer["model"], reviewer["reasoning_effort"]))
+        override = agent.local_phase_spec(
+            "PLANNER",
+            {
+                **parameters,
+                "requested_local_model_profile": "SCOPED_BUILDER_LOCAL",
+            },
+            self.policy,
+        )
+        self.assertEqual(
+            ("qwen3-coder:30b", "NONE"),
+            (override["model"], override["reasoning_effort"]),
+        )
+
+    def test_checkpoint_is_bounded_and_keeps_only_latest_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary) / "repository"
+            root.mkdir()
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(
+                ["git", "config", "user.email", "test@example.invalid"],
+                cwd=root,
+                check=True,
+            )
+            subprocess.run(
+                ["git", "config", "user.name", "Test"], cwd=root, check=True
+            )
+            (root / "README.md").write_text("base\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-qm", "base"], cwd=root, check=True)
+            revision = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=root, text=True
+            ).strip()
+            (root / "README.md").write_text("base\nchange\n", encoding="utf-8")
+            artifacts = pathlib.Path(temporary) / "artifacts"
+            artifacts.mkdir()
+            (artifacts / "planner-response.md").write_text(
+                "Plan the bounded README update.\n", encoding="utf-8"
+            )
+            latest = artifacts / "latest.log"
+            latest.write_text("LATEST_FAILURE\n", encoding="utf-8")
+            checkpoint = agent.compact_checkpoint(
+                root,
+                artifacts,
+                {
+                    "mode": "PATCH",
+                    "source_revision": revision,
+                    "request": "Update README.",
+                    "allowed_paths": ["README.md"],
+                },
+                self.policy,
+                latest,
+            )
+            encoded = json.dumps(checkpoint).encode("utf-8")
+            self.assertLessEqual(
+                len(encoded),
+                self.policy["job"]["phase_limits"]["maximum_checkpoint_bytes"],
+            )
+            self.assertEqual("LATEST_FAILURE\n", checkpoint["latest_failure"])
+            self.assertNotIn("failure-history", json.dumps(checkpoint))
+
+    def test_prepare_phase_creates_fresh_specialist_packets(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary) / "repository"
+            root.mkdir()
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(
+                ["git", "config", "user.email", "test@example.invalid"],
+                cwd=root,
+                check=True,
+            )
+            subprocess.run(
+                ["git", "config", "user.name", "Test"], cwd=root, check=True
+            )
+            (root / "README.md").write_text("base\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-qm", "base"], cwd=root, check=True)
+            revision = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=root, text=True
+            ).strip()
+            (root / ".agent-output").mkdir()
+            artifacts = pathlib.Path(temporary) / "artifacts"
+            artifacts.mkdir()
+            (artifacts / "parameters.json").write_text(
+                json.dumps(
+                    {
+                        "mode": "PATCH",
+                        "source_revision": revision,
+                        "request": "Update README.",
+                        "allowed_paths": ["README.md"],
+                        "reasoning_effort": "MEDIUM",
+                        "requested_local_model_profile": "AUTO",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            base_args = {
+                "policy": str(POLICY_PATH),
+                "artifact_dir": str(artifacts),
+                "agent_worktree": str(root),
+                "failure_log": "",
+            }
+            agent.prepare_phase(
+                argparse.Namespace(
+                    **base_args, phase="PLANNER", sequence=1
+                )
+            )
+            (artifacts / "planner-response.md").write_text(
+                "Plan the requested README update.\n", encoding="utf-8"
+            )
+            agent.prepare_phase(
+                argparse.Namespace(
+                    **base_args, phase="BUILDER", sequence=2
+                )
+            )
+            planner_dir = artifacts / "phases" / "01-planner"
+            builder_dir = artifacts / "phases" / "02-builder"
+            self.assertEqual(
+                "qwen3.6:35b\n",
+                (planner_dir / "model.txt").read_text(encoding="utf-8"),
+            )
+            self.assertEqual(
+                "qwen3-coder:30b\n",
+                (builder_dir / "model.txt").read_text(encoding="utf-8"),
+            )
+            self.assertTrue((builder_dir / "checkpoint.json").is_file())
+            self.assertNotEqual(planner_dir, builder_dir)
 
     def test_opencode_config_rejects_unregistered_reasoning_effort(self) -> None:
         parameters = {
@@ -414,17 +432,12 @@ class WyrmGridAiAgentTests(unittest.TestCase):
                 "qwen3-coder:30b", "LOW", self.policy
             )
 
-    def test_read_only_system_prompt_forbids_unrequested_summary(self) -> None:
-        prompt = agent.render_agent_system_prompt("ASK")
-        self.assertIn("machine-validated", prompt)
-        self.assertIn("Never summarize a whole file", prompt)
-        self.assertIn("records its immutable revision, hash, and line", prompt)
-        self.assertIn("Before citing\nany other file, you MUST make", prompt)
-        self.assertIn("never invent, translate, abbreviate, uppercase", prompt)
-        self.assertIn("numbered immutable root guidance", prompt)
-        self.assertIn("not literally\npresent there", prompt)
-        self.assertIn("Citations:", prompt)
-        self.assertIn("final section", prompt)
+    def test_read_only_phase_system_prompt_is_short_and_citation_bound(self) -> None:
+        prompt = agent.render_phase_system_prompt("READ_ONLY", "ASK")
+        self.assertIn("minimum repository evidence", prompt)
+        self.assertIn("Do not edit files", prompt)
+        self.assertIn("commit-bound path:line citations", prompt)
+        self.assertNotIn("AGENTS.md", prompt)
 
     def test_prompt_exposes_recorded_answer_word_limit(self) -> None:
         prompt = agent.render_prompt(
@@ -445,30 +458,11 @@ class WyrmGridAiAgentTests(unittest.TestCase):
         ):
             agent.validate_answer_word_limit("one two three four", "ASK", 3)
 
-    def test_change_system_prompt_preserves_jenkins_test_authority(self) -> None:
-        prompt = agent.render_agent_system_prompt("FEATURE")
-        self.assertIn("permitted edit tools", prompt)
-        self.assertIn("Jenkins does that", prompt)
-        self.assertIn("Citations:", prompt)
-
-    def test_system_prompt_numbers_the_hash_bound_root_guidance(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            repository = pathlib.Path(temporary)
-            (repository / "AGENTS.md").write_text(
-                "# Guidance\n\nRust application services own WyrmGrid business rules.\n",
-                encoding="utf-8",
-            )
-            evidence = agent.record_injected_guidance_evidence(
-                repository, "a" * 40
-            )
-            context = agent.render_numbered_root_guidance(repository, evidence)
-            prompt = agent.render_agent_system_prompt("ASK", context)
-            self.assertIn('path="AGENTS.md"', prompt)
-            self.assertIn(evidence["files"][0]["sha256"], prompt)
-            self.assertIn("1 | # Guidance", prompt)
-            self.assertIn(
-                "3 | Rust application services own WyrmGrid business rules.", prompt
-            )
+    def test_change_phase_system_prompt_preserves_jenkins_authority(self) -> None:
+        prompt = agent.render_phase_system_prompt("BUILDER", "FEATURE")
+        self.assertIn("scoped coding specialist", prompt)
+        self.assertIn("Jenkins owns formatting, safety checks, and tests", prompt)
+        self.assertIn("the diff, not your prose, is authoritative", prompt)
 
     def test_prompt_delegates_artifacts_to_jenkins_and_requires_citations(self) -> None:
         prompt = agent.render_prompt(
@@ -486,8 +480,8 @@ class WyrmGridAiAgentTests(unittest.TestCase):
         self.assertIn("path:start-end", prompt)
         self.assertIn("nonempty answer", prompt)
         self.assertIn("never synthesize an alias", prompt)
-        self.assertIn("answer directly without reading", prompt)
-        self.assertIn("the inventory\nis an index", prompt)
+        self.assertIn("read any exact range that you\nwill cite", prompt)
+        self.assertIn("the inventory is an index", prompt)
         self.assertNotIn("Local profile:", prompt)
         self.assertNotIn("docs/example.md", prompt)
 
@@ -506,6 +500,225 @@ class WyrmGridAiAgentTests(unittest.TestCase):
                 "Rust application services own WyrmGrid business rules.\n\n"
                 "Citations:\n- AGENTS.md:19-19\nextra text"
             )
+
+    def test_build_13_inline_backtick_citation_is_canonicalized(self) -> None:
+        response = (
+            "The Linux worker package note is recorded.\n\n"
+            "Citations: `- docs/operations/jenkins.md:35-37`"
+        )
+        answer = agent.answer_from_text(response)
+        citations = agent.citations_from_text(response)
+        self.assertEqual("The Linux worker package note is recorded.", answer)
+        self.assertEqual(
+            [
+                {
+                    "path": "docs/operations/jenkins.md",
+                    "line_start": 35,
+                    "line_end": 37,
+                }
+            ],
+            citations,
+        )
+        self.assertEqual(
+            "The Linux worker package note is recorded.\n\n"
+            "Citations:\n- docs/operations/jenkins.md:35-37",
+            agent.render_canonical_response(answer, citations),
+        )
+
+    def test_safe_change_survives_malformed_narrative(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary) / "repository"
+            root.mkdir()
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(
+                ["git", "config", "user.email", "test@example.invalid"],
+                cwd=root,
+                check=True,
+            )
+            subprocess.run(
+                ["git", "config", "user.name", "Test"], cwd=root, check=True
+            )
+            (root / "README.md").write_text("before\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-qm", "base"], cwd=root, check=True)
+            revision = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=root, text=True
+            ).strip()
+            (root / "README.md").write_text(
+                "before\nafter\n", encoding="utf-8"
+            )
+            artifacts = pathlib.Path(temporary) / "artifacts"
+            artifacts.mkdir()
+            (artifacts / "parameters.json").write_text(
+                json.dumps(
+                    {
+                        "mode": "PATCH",
+                        "source_revision": revision,
+                        "allowed_paths": ["README.md"],
+                        "max_changed_files": 1,
+                        "max_changed_lines": 10,
+                        "answer_word_limit": 250,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            event_log = artifacts / "events.jsonl"
+            event_log.write_text(
+                json.dumps(
+                    {
+                        "type": "text",
+                        "part": {"text": "Useful edit, malformed report."},
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            agent.collect_agent_output(
+                argparse.Namespace(
+                    artifact_dir=str(artifacts),
+                    agent_worktree=str(root),
+                    event_log=str(event_log),
+                    policy=str(POLICY_PATH),
+                )
+            )
+            report = json.loads(
+                (artifacts / "agent-output.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual("fallback", report["narrative_status"])
+            self.assertEqual(["README.md"], report["changed_paths"])
+            self.assertTrue((artifacts / "proposed.patch").is_file())
+
+    def test_unsafe_change_removes_any_archivable_patch(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary) / "repository"
+            root.mkdir()
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(
+                ["git", "config", "user.email", "test@example.invalid"],
+                cwd=root,
+                check=True,
+            )
+            subprocess.run(
+                ["git", "config", "user.name", "Test"], cwd=root, check=True
+            )
+            (root / "README.md").write_text("before\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-qm", "base"], cwd=root, check=True)
+            revision = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=root, text=True
+            ).strip()
+            (root / "README.md").write_text(
+                "sk-proj-0123456789abcdefghijklmnop\n", encoding="utf-8"
+            )
+            artifacts = pathlib.Path(temporary) / "artifacts"
+            artifacts.mkdir()
+            (artifacts / "proposed.patch").write_text(
+                "stale safe patch\n", encoding="utf-8"
+            )
+            (artifacts / "parameters.json").write_text(
+                json.dumps(
+                    {
+                        "mode": "PATCH",
+                        "source_revision": revision,
+                        "allowed_paths": ["README.md"],
+                        "max_changed_files": 1,
+                        "max_changed_lines": 10,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            event_log = artifacts / "events.jsonl"
+            event_log.write_text(
+                json.dumps({"type": "text", "part": {"text": "changed"}})
+                + "\n",
+                encoding="utf-8",
+            )
+            phase_response = event_log.parent / "response.md"
+            phase_response.write_text(
+                "unsafe raw response\n", encoding="utf-8"
+            )
+            with self.assertRaisesRegex(
+                agent.PolicyError, "credential pattern"
+            ):
+                agent.collect_agent_output(
+                    argparse.Namespace(
+                        artifact_dir=str(artifacts),
+                        agent_worktree=str(root),
+                        event_log=str(event_log),
+                        policy=str(POLICY_PATH),
+                    )
+                )
+            self.assertFalse((artifacts / "proposed.patch").exists())
+            self.assertFalse(event_log.exists())
+            self.assertFalse(phase_response.exists())
+            rejection = json.loads(
+                (artifacts / "unsafe-change-rejection.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertFalse(rejection["raw_transcript_retained"])
+            self.assertFalse(rejection["patch_retained"])
+
+    def test_deterministic_formatter_repairs_supported_changed_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary) / "repository"
+            root.mkdir()
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(
+                ["git", "config", "user.email", "test@example.invalid"],
+                cwd=root,
+                check=True,
+            )
+            subprocess.run(
+                ["git", "config", "user.name", "Test"], cwd=root, check=True
+            )
+            (root / "data.json").write_text('{"value":1}\n', encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-qm", "base"], cwd=root, check=True)
+            revision = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=root, text=True
+            ).strip()
+            (root / "data.json").write_text(
+                '{"value":2,"items":[1,2]}\n', encoding="utf-8"
+            )
+            artifacts = pathlib.Path(temporary) / "artifacts"
+            artifacts.mkdir()
+            (artifacts / "parameters.json").write_text(
+                json.dumps(
+                    {
+                        "mode": "PATCH",
+                        "source_revision": revision,
+                        "allowed_paths": ["data.json"],
+                        "max_changed_files": 1,
+                        "max_changed_lines": 20,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            policy = json.loads(POLICY_PATH.read_text(encoding="utf-8"))
+            policy["formatters"]["prettier_command"] = [
+                sys.executable,
+                "-c",
+                (
+                    "import json,pathlib,sys; p=pathlib.Path(sys.argv[-1]); "
+                    "p.write_text(json.dumps(json.loads(p.read_text()), "
+                    "indent=2)+'\\n')"
+                ),
+            ]
+            policy_path = pathlib.Path(temporary) / "policy.json"
+            policy_path.write_text(json.dumps(policy), encoding="utf-8")
+            agent.format_changes(
+                argparse.Namespace(
+                    repository=str(root),
+                    policy=str(policy_path),
+                    artifact_dir=str(artifacts),
+                )
+            )
+            self.assertEqual(
+                '{\n  "value": 2,\n  "items": [\n    1,\n    2\n  ]\n}\n',
+                (root / "data.json").read_text(encoding="utf-8"),
+            )
+            self.assertTrue((artifacts / "proposed.patch").is_file())
 
     def test_absolute_citations_are_canonicalized_only_inside_worktree(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -636,7 +849,7 @@ class WyrmGridAiAgentTests(unittest.TestCase):
                 [{"path": "AGENTS.md", "line_start": 3, "line_end": 3}],
                 report["citations"],
             )
-            self.assertFalse(event_log.exists())
+            self.assertTrue(event_log.exists())
 
     def test_citation_must_be_covered_by_read_and_ground_the_answer(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -959,10 +1172,7 @@ class WyrmGridAiAgentTests(unittest.TestCase):
                 self.assertEqual(revision, guidance["source_revision"])
                 self.assertEqual("AGENTS.md", guidance["files"][0]["path"])
                 self.assertEqual(64, len(guidance["files"][0]["sha256"]))
-                system_prompt = (artifacts / "agent-system.md").read_text(
-                    encoding="utf-8"
-                )
-                self.assertIn("1 | # Rules", system_prompt)
+                self.assertFalse((artifacts / "agent-system.md").exists())
             finally:
                 subprocess.run(
                     ["git", "worktree", "remove", "--force", str(worktree)],

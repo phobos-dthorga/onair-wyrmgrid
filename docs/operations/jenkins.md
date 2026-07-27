@@ -205,11 +205,45 @@ generated binaries, root-wide scopes, wildcards, traversal, symlink escapes,
 secrets, excess files, excess lines, and changes outside the declared scope are
 rejected before publication.
 
-The local model receives at most two bounded correction passes for an invalid
-answer or missing/invalid diff. Jenkins then runs the selected checked-in test
-profile outside the model and may return bounded, redacted failures for at most
-two test-and-repair passes. A persistent failure releases the executor before
-asking whether to archive the patch or open a clearly marked failing draft.
+Read-only modes use one fresh Repository Scholar invocation and retain strict
+citation evidence. Change modes deliberately reset conversation history between
+specialist phases:
+
+1. `qwen3.6:35b` plans with the selected `REASONING_EFFORT`;
+2. `qwen3-coder:30b` implements with thinking disabled;
+3. Jenkins formats, revalidates, and runs the selected test profile;
+4. up to two fresh Qwen3-Coder invocations repair the latest bounded failure;
+5. `qwen3.6:35b` performs a short, advisory review.
+
+Each invocation has a separate OpenCode state directory and appears as a
+separate Jenkins AI Agent conversation card. A compact, size-limited checkpoint
+carries the immutable revision, request hash, plan, current safe-diff hash and
+summary, latest bounded failure, and remaining work. Full earlier conversations
+and failures remain artifacts instead of being repeatedly returned to the
+model. OpenCode automatic compaction is only an emergency fallback.
+OpenCode's normal repository guidance supplies `AGENTS.md`; Jenkins records its
+immutable hash but does not inject a second complete copy. Any cited range,
+including an `AGENTS.md` range, still requires a completed targeted read.
+
+Jenkins derives changed paths and line counts from Git. Malformed change-mode
+prose therefore produces a minimal Jenkins technical report rather than
+discarding an otherwise safe patch. Read-only citations remain mandatory.
+Harmless citation forms such as backticks, whitespace, or an inline first bullet
+are canonicalized before the existing path, line, scope, and completed-read
+checks.
+
+Before tests, Jenkins runs Prettier only on changed supported files and runs the
+repository Rust formatter when Rust files changed. The complete scope, secret,
+binary, symlink, file-count, and line-count checks run again after formatting
+and every repair. A formatting-only defect does not consume a model repair.
+Ruff is intentionally absent because WyrmGrid has no checked-in Ruff formatting
+contract.
+
+A safe candidate patch is archived even when narrative reporting or tests fail.
+A patch rejected for secret material, binary content, traversal, symlink escape,
+or another unsafe scope violation is never archived or published; only sanitized
+failure metadata remains. A persistent test failure releases the executor before
+asking whether to archive the safe patch or open a clearly marked failing draft.
 No response within 24 hours defaults to archive-only.
 
 A passing change becomes one namespaced branch and one draft pull request.
@@ -251,24 +285,26 @@ into model context. An exact oversized write target fails before inference.
 
 These file ceilings are separate from the local model's 12,288-token context and
 4,096-token response limits. Repository Scholar and Scoped Builder are friendly
-profile names; their current exact local model IDs and provisional selection
-status remain visible in the policy.
+profile names; their current exact local model IDs, phase assignments, and
+selection status remain visible in the policy.
 
 The adjacent `local_model_inventory` records live, inference-free Ollama
-capabilities and advertised context. `qwen3.6:35b` supports tools and thinking;
-`qwen3-coder:30b` supports tools but not thinking. A reasoning-enabled run fails
-before contacting Gate when its selected model lacks the `thinking` capability.
-During thinking-mode commissioning, both friendly profiles select
-`qwen3.6:35b`; the coder remains inventoried for a later no-thinking profile.
+capabilities, advertised context, and exact model-weight quantization.
+`qwen3.6:35b` supports tools and thinking; `qwen3-coder:30b` supports tools but
+not thinking. Planner, reviewer, and read-only phases use Qwen3.6. Builder and
+repair phases use Qwen3-Coder and never receive a reasoning option. A
+reasoning-enabled invocation fails before contacting Gate when its selected
+model lacks the `thinking` capability.
+This is the `AUTO` specialist route. An explicitly selected friendly profile
+remains an operator override for comparative canaries; phase permissions and
+reasoning applicability remain unchanged.
 
-Every manual build also exposes `REASONING_EFFORT` with `LOW`, `MEDIUM`, and
-`HIGH` choices. `LOW` is the default: it permits a small amount of local-model
-deliberation without taking on the latency of the deeper settings. The allowed
-values are the checked-in `job.local_reasoning_efforts` list in
-`ci/ai-agent-policy.yml`; Jenkins records the selected value with the immutable
-run parameters and rejects unregistered values before inference. The 4,096-token
-response allowance gives thinking-enabled models room to finish, while the
-answer, citation, diff, and test validators continue to bound accepted output.
+Every manual build exposes `REASONING_EFFORT` with `LOW`, `MEDIUM`, and `HIGH`
+choices. `LOW` is the default. The choice applies only to thinking-capable
+Qwen3.6 phases; it is never sent to Qwen3-Coder. The allowed values are the
+checked-in `job.local_reasoning_efforts` list. Jenkins records the selected
+value with the immutable parameters and rejects unregistered values before
+inference.
 
 Final summaries are independently compacted by the editable
 `job.answer_word_limits` map in `ci/ai-agent-policy.yml`. The initial limits are
@@ -276,6 +312,33 @@ Final summaries are independently compacted by the editable
 consistency audits, 250 for patch summaries, and 400 for feature summaries.
 Thinking may use the model's internal response budget, but only the bounded
 answer plus necessary citations is accepted and archived.
+
+### Editable phase and memory policy
+
+The `phase_routing`, `job.phase_steps`, `job.phase_limits`,
+`job.opencode_compaction`, and `formatters` sections in
+`ci/ai-agent-policy.yml` are the operator-editable controls for phase models,
+reasoning applicability, step ceilings, checkpoint/prompt/failure sizes,
+emergency compaction, formatter extensions and commands, and repair limits.
+The context ceiling remains 12,288 tokens. Smaller step ceilings end work at a
+safe phase boundary; Jenkins does not terminate a running inference solely
+because it approaches that ceiling.
+
+Both installed local models currently use `Q4_K_M` model-weight quantization,
+which reduces loaded model size. This is distinct from KV-cache quantization,
+which reduces long-context memory; context compaction, which shortens retained
+conversation history; and a fresh phase invocation, which starts a new
+conversation. No model package, Flash Attention, KV-cache, Ollama, hardware, or
+runtime setting changes as part of this workflow update. A future `q8_0`
+KV-cache canary remains uncommissioned.
+
+[TurboQuant](https://research.google/blog/turboquant-redefining-ai-efficiency-with-extreme-compression/)
+is promising Google compression research, but Ollama does not currently expose
+it as a supported runtime feature; the upstream Ollama work remains an open
+implementation request. Use Ollama's current
+[KV-cache guidance](https://github.com/ollama/ollama/blob/main/docs/faq.mdx)
+for supported settings, and do not confuse those settings with model weights or
+conversation resets.
 
 ### Worker and pinned tools
 
@@ -366,8 +429,19 @@ checked-in `ci/ai-agent-policy.yml`, documentation roots, test registry,
 context tiers, Hoardmind Gate client, and repository-restricted contributor
 App. Never add a second repository to the WyrmGrid App installation or reuse
 the WyrmGrid Gateway secret. The same draft-only, no-merge lifecycle applies,
-but model selection and file ceilings are commissioned independently against
-that repository's actual corpus.
+but phase routing, model selection, file ceilings, formatter profiles, and
+tests are commissioned independently against that repository's actual corpus.
+
+### AI Agent technical references
+
+- [Jenkins AI Agent plugin](https://plugins.jenkins.io/ai-agent/) for the
+  conversation cards and OpenCode/Codex execution interface;
+- [OpenCode configuration](https://opencode.ai/docs/config/) for pinned local
+  agent configuration and emergency compaction controls;
+- [Google TurboQuant research](https://research.google/blog/turboquant-redefining-ai-efficiency-with-extreme-compression/)
+  for the uncommissioned compression research note; and
+- [Ollama FAQ](https://github.com/ollama/ollama/blob/main/docs/faq.mdx) for
+  currently supported context and KV-cache behavior.
 
 ## Trusted release job
 
