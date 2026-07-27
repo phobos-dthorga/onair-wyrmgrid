@@ -98,7 +98,7 @@
       "selected_model": "qwen3.6:35b",
       "selection_status": "pending_wyrmgrid_canary",
       "context_tokens": 12288,
-      "maximum_output_tokens": 1200,
+      "maximum_output_tokens": 4096,
       "candidate_models": [
         "qwen3.6:35b",
         "qwen3-coder:30b"
@@ -111,7 +111,7 @@
       "selected_model": "qwen3-coder:30b",
       "selection_status": "pending_small_file_patch_canary",
       "context_tokens": 12288,
-      "maximum_output_tokens": 1200,
+      "maximum_output_tokens": 4096,
       "candidate_models": [
         "qwen3-coder:30b",
         "qwen3.6:35b"

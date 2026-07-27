@@ -250,7 +250,7 @@ with their path, size, line count, and hash, but their contents are not copied
 into model context. An exact oversized write target fails before inference.
 
 These file ceilings are separate from the local model's 12,288-token context and
-1,200-token response limits. Repository Scholar and Scoped Builder are friendly
+4,096-token response limits. Repository Scholar and Scoped Builder are friendly
 profile names; their current exact local model IDs and provisional selection
 status remain visible in the policy.
 
@@ -259,7 +259,9 @@ Every manual build also exposes `REASONING_EFFORT` with `LOW`, `MEDIUM`, and
 deliberation without taking on the latency of the deeper settings. The allowed
 values are the checked-in `job.local_reasoning_efforts` list in
 `ci/ai-agent-policy.yml`; Jenkins records the selected value with the immutable
-run parameters and rejects unregistered values before inference.
+run parameters and rejects unregistered values before inference. The 4,096-token
+response allowance gives thinking-enabled models room to finish, while the
+answer, citation, diff, and test validators continue to bound accepted output.
 
 ### Worker and pinned tools
 

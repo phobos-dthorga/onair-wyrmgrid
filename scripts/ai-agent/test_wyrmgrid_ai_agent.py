@@ -364,7 +364,7 @@ class WyrmGridAiAgentTests(unittest.TestCase):
         for model in config["provider"]["hoardmind-gate"]["models"].values():
             self.assertEqual("low", model["options"]["reasoningEffort"])
             self.assertEqual(12288, model["limit"]["context"])
-            self.assertEqual(1200, model["limit"]["output"])
+            self.assertEqual(4096, model["limit"]["output"])
 
     def test_opencode_config_rejects_unregistered_reasoning_effort(self) -> None:
         parameters = {
