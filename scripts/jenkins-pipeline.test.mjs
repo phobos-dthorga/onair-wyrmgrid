@@ -95,6 +95,8 @@ test("manual AI Agent is bounded, repairable, and draft-only", () => {
     aiAgentPipeline,
     /cannot access WyrmGrid or negotiate a[\s\S]*namespaced dry-run push/,
   );
+  assert.match(aiAgentPipeline, /\.replaceAll\(\/\[\\r\\n\\t\]\+\/, ' '\)/);
+  assert.doesNotMatch(aiAgentPipeline, /\[\\\\r\\\\n\\\\t\]/);
   assert.match(
     aiAgentPipeline,
     /install -m 0700 scripts\/ai-agent\/github_git_askpass\.sh/,

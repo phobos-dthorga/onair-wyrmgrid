@@ -52,6 +52,8 @@ major application version.
   installation-scope discovery and a namespaced, non-mutating Git dry-run before
   local inference, and recorded the separate workflow-file permission required
   by explicitly scoped CI edits.
+- Corrected draft-title whitespace normalization so it no longer removes every
+  lowercase `r`, `n`, and `t` from the bounded operator request.
 - Recorded local-model capabilities and made reasoning compatibility fail
   before inference. Both local models use Q4_K_M weights; Qwen3-Coder remains
   explicitly no-thinking.

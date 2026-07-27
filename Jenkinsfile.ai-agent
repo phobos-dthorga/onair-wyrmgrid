@@ -649,7 +649,7 @@ pipeline {
                     def titlePrefix = env.AI_TEST_RESULT == 'passed' ?
                         '[AI Agent]' : '[AI Agent][FAILING]'
                     def safeRequest = params.REQUEST
-                        .replaceAll(/[\\r\\n\\t]+/, ' ')
+                        .replaceAll(/[\r\n\t]+/, ' ')
                         .trim()
                     if (safeRequest.length() > 72) {
                         safeRequest = safeRequest.substring(0, 72).trim()
