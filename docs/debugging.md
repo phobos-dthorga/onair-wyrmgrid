@@ -100,7 +100,12 @@ The useful distinction is:
 - narrative-only failure: inspect `agent-output.json` and its Jenkins fallback;
 - scope or secret rejection: use sanitized console metadata only, because no
   patch artifact is retained;
-- formatter failure: inspect `formatter-summary.json`;
+- dependency-bootstrap reconciliation: inspect `bootstrap-side-effects.json`
+  for path/status metadata without file contents;
+- formatter failure: inspect `formatter-summary.json` and
+  `deterministic-change-rejection.json`; a previously validated
+  `proposed.patch` may remain available even though the contaminated worktree
+  was rejected;
 - test failure: inspect only the latest bounded `tests/output.txt`, with full
   earlier output retained in prior build/phase artifacts.
 

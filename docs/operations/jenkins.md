@@ -265,6 +265,10 @@ checked-in `dependency_bootstrap.command` against `package-lock.json`. Its
 disposable npm cache lives under the Jenkins workspace rather than the agent
 service account's home directory. Prettier then runs offline and only on changed
 supported files; the repository Rust formatter runs when Rust files changed.
+The formatting worktree records any tracked bootstrap side effects, restores
+the immutable checkout, and reapplies the already validated candidate patch
+byte-for-byte before a formatter runs. Package-manager permission normalization
+or another bootstrap-only change therefore cannot enter the candidate diff.
 The complete scope, secret, binary, symlink, file-count, and line-count checks
 run again after formatting and every repair. A formatting-only defect does not
 consume a model repair, and a dependency-bootstrap failure is treated as
@@ -272,6 +276,9 @@ infrastructure rather than returned to the coding model. Ruff is intentionally
 absent because WyrmGrid has no checked-in Ruff formatting contract.
 
 A safe candidate patch is archived even when narrative reporting or tests fail.
+A later bootstrap or formatter rejection retains that last validated patch and
+adds `bootstrap-side-effects.json`, `formatter-summary.json`, and
+`deterministic-change-rejection.json` as bounded diagnostic evidence.
 A patch rejected for secret material, binary content, traversal, symlink escape,
 or another unsafe scope violation is never archived or published; only sanitized
 failure metadata remains. A persistent test failure releases the executor before

@@ -967,6 +967,176 @@ class WyrmGridAiAgentTests(unittest.TestCase):
             )
             self.assertEqual(0, formatter_summary["commands"][0]["return_code"])
 
+    def test_dependency_bootstrap_side_effect_is_removed_before_formatting(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary) / "repository"
+            root.mkdir()
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(
+                ["git", "config", "user.email", "test@example.invalid"],
+                cwd=root,
+                check=True,
+            )
+            subprocess.run(
+                ["git", "config", "user.name", "Test"], cwd=root, check=True
+            )
+            documentation = root / "docs.md"
+            executable = root / "packages" / "tool" / "bin" / "tool.mjs"
+            executable.parent.mkdir(parents=True)
+            documentation.write_text("# Before\n", encoding="utf-8")
+            executable.write_text("original\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-qm", "base"], cwd=root, check=True)
+            revision = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=root, text=True
+            ).strip()
+            documentation.write_text("# After\n", encoding="utf-8")
+            artifacts = pathlib.Path(temporary) / "artifacts"
+            artifacts.mkdir()
+            (artifacts / "parameters.json").write_text(
+                json.dumps(
+                    {
+                        "mode": "PATCH",
+                        "source_revision": revision,
+                        "allowed_paths": ["docs.md"],
+                        "max_changed_files": 1,
+                        "max_changed_lines": 10,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            policy = json.loads(POLICY_PATH.read_text(encoding="utf-8"))
+            policy["dependency_bootstrap"]["command"] = [
+                sys.executable,
+                "-c",
+                (
+                    "from pathlib import Path; "
+                    "Path('packages/tool/bin/tool.mjs').write_text("
+                    "'bootstrap changed this\\n')"
+                ),
+            ]
+            policy["formatters"]["prettier_command"] = [
+                sys.executable,
+                "-c",
+                "pass",
+            ]
+            policy_path = pathlib.Path(temporary) / "policy.json"
+            policy_path.write_text(json.dumps(policy), encoding="utf-8")
+
+            agent.format_changes(
+                argparse.Namespace(
+                    repository=str(root),
+                    policy=str(policy_path),
+                    artifact_dir=str(artifacts),
+                )
+            )
+
+            self.assertEqual(
+                "original\n", executable.read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                [(" M", "docs.md")],
+                agent.status_paths(root),
+            )
+            evidence = json.loads(
+                (artifacts / "bootstrap-side-effects.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertTrue(evidence["candidate_patch_changed"])
+            self.assertTrue(evidence["candidate_restored"])
+            self.assertEqual(
+                ["packages/tool/bin/tool.mjs"],
+                evidence["side_effect_paths"],
+            )
+
+    def test_formatter_rejection_retains_last_safe_candidate_patch(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary) / "repository"
+            root.mkdir()
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(
+                ["git", "config", "user.email", "test@example.invalid"],
+                cwd=root,
+                check=True,
+            )
+            subprocess.run(
+                ["git", "config", "user.name", "Test"], cwd=root, check=True
+            )
+            candidate = root / "data.json"
+            outside = root / "outside.txt"
+            candidate.write_text('{"value":1}\n', encoding="utf-8")
+            outside.write_text("original\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-qm", "base"], cwd=root, check=True)
+            revision = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=root, text=True
+            ).strip()
+            candidate.write_text('{"value":2}\n', encoding="utf-8")
+            safe_patch = agent.worktree_patch(root)
+            artifacts = pathlib.Path(temporary) / "artifacts"
+            artifacts.mkdir()
+            (artifacts / "parameters.json").write_text(
+                json.dumps(
+                    {
+                        "mode": "PATCH",
+                        "source_revision": revision,
+                        "allowed_paths": ["data.json"],
+                        "max_changed_files": 1,
+                        "max_changed_lines": 10,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            policy = json.loads(POLICY_PATH.read_text(encoding="utf-8"))
+            policy["dependency_bootstrap"]["command"] = [
+                sys.executable,
+                "-c",
+                "pass",
+            ]
+            policy["formatters"]["prettier_command"] = [
+                sys.executable,
+                "-c",
+                (
+                    "from pathlib import Path; "
+                    "Path('outside.txt').write_text('formatter changed this\\n')"
+                ),
+            ]
+            policy_path = pathlib.Path(temporary) / "policy.json"
+            policy_path.write_text(json.dumps(policy), encoding="utf-8")
+
+            with self.assertRaisesRegex(
+                agent.PolicyError, "Out-of-scope change: outside.txt"
+            ):
+                agent.format_changes(
+                    argparse.Namespace(
+                        repository=str(root),
+                        policy=str(policy_path),
+                        artifact_dir=str(artifacts),
+                    )
+                )
+
+            self.assertEqual(
+                safe_patch,
+                (artifacts / "proposed.patch").read_bytes(),
+            )
+            summary = json.loads(
+                (artifacts / "formatter-summary.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual("failed", summary["outcome"])
+            self.assertEqual("post_format_validation", summary["stage"])
+            self.assertTrue(summary["safe_candidate_patch_retained"])
+            rejection = json.loads(
+                (
+                    artifacts / "deterministic-change-rejection.json"
+                ).read_text(encoding="utf-8")
+            )
+            self.assertTrue(rejection["safe_candidate_patch_retained"])
+
     def test_absolute_citations_are_canonicalized_only_inside_worktree(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             repository = pathlib.Path(temporary) / "repository"

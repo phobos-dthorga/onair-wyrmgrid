@@ -2050,6 +2050,92 @@ def run_dependency_bootstrap(
     }
 
 
+def reconcile_dependency_bootstrap(
+    repository: pathlib.Path,
+    artifact_dir: pathlib.Path,
+    candidate_patch: bytes,
+    status_before: list[tuple[str, str]],
+) -> dict[str, Any]:
+    patch_after = worktree_patch(repository)
+    status_after = status_paths(repository)
+    before_paths = {path for _, path in status_before}
+    after_paths = {path for _, path in status_after}
+    side_effect_paths = sorted(after_paths - before_paths)
+    candidate_changed = patch_after != candidate_patch
+
+    run_git(
+        repository,
+        ["restore", "--source=HEAD", "--staged", "--worktree", "--", "."],
+    )
+    run_git(repository, ["clean", "-fd", "--", "."])
+    applied = subprocess.run(
+        ["git", "apply", "--binary", "--whitespace=nowarn", "-"],
+        cwd=repository,
+        input=candidate_patch,
+        capture_output=True,
+        check=False,
+    )
+    if applied.returncode != 0:
+        raise PolicyError(
+            "The validated candidate patch could not be restored after "
+            "dependency bootstrap."
+        )
+    restored_patch = worktree_patch(repository)
+    candidate_restored = restored_patch == candidate_patch
+    evidence = {
+        "schema_version": 1,
+        "candidate_patch_changed": candidate_changed,
+        "candidate_restored": candidate_restored,
+        "side_effect_paths": side_effect_paths,
+        "status_before": [
+            {"status": status, "path": path}
+            for status, path in status_before
+        ],
+        "status_after": [
+            {"status": status, "path": path}
+            for status, path in status_after
+        ],
+        "completed_utc": utc_now(),
+    }
+    write_json(artifact_dir / "bootstrap-side-effects.json", evidence)
+    if not candidate_restored:
+        raise PolicyError(
+            "Dependency bootstrap changed the candidate patch and Jenkins "
+            "could not restore it exactly."
+        )
+    return evidence
+
+
+def write_formatter_failure(
+    artifact_dir: pathlib.Path,
+    results: list[dict[str, Any]],
+    stage: str,
+    reason: str,
+) -> None:
+    safe_patch = artifact_dir / "proposed.patch"
+    write_json(
+        artifact_dir / "formatter-summary.json",
+        {
+            "schema_version": 1,
+            "outcome": "failed",
+            "stage": stage,
+            "commands": results,
+            "safe_candidate_patch_retained": safe_patch.is_file(),
+            "completed_utc": utc_now(),
+        },
+    )
+    write_json(
+        artifact_dir / "deterministic-change-rejection.json",
+        {
+            "schema_version": 1,
+            "stage": stage,
+            "reason": redact(reason),
+            "safe_candidate_patch_retained": safe_patch.is_file(),
+            "rejected_utc": utc_now(),
+        },
+    )
+
+
 def format_changes(args: argparse.Namespace) -> None:
     repository = pathlib.Path(args.repository).resolve()
     policy = load_policy(pathlib.Path(args.policy))
@@ -2058,6 +2144,11 @@ def format_changes(args: argparse.Namespace) -> None:
         (artifact_dir / "parameters.json").read_text(encoding="utf-8")
     )
     before = inspect_changes(repository, parameters, policy, "HEAD")
+    candidate_patch = worktree_patch(repository)
+    if not candidate_patch:
+        raise PolicyError("There is no validated candidate patch to format.")
+    (artifact_dir / "proposed.patch").write_bytes(candidate_patch)
+    status_before = status_paths(repository)
     formatter = policy["formatters"]
     results: list[dict[str, Any]] = []
     prettier_extensions = set(formatter["prettier_extensions"])
@@ -2079,8 +2170,28 @@ def format_changes(args: argparse.Namespace) -> None:
             environment,
         )
         results.append(bootstrap_result)
+        try:
+            reconcile_dependency_bootstrap(
+                repository,
+                artifact_dir,
+                candidate_patch,
+                status_before,
+            )
+        except PolicyError as exc:
+            write_formatter_failure(
+                artifact_dir,
+                results,
+                "dependency_bootstrap_reconciliation",
+                str(exc),
+            )
+            raise
         if bootstrap_result["return_code"] != 0:
-            write_json(artifact_dir / "formatter-summary.json", results)
+            write_formatter_failure(
+                artifact_dir,
+                results,
+                "dependency_bootstrap",
+                "The checked-in deterministic dependency bootstrap failed.",
+            )
             raise PolicyError(
                 "The checked-in deterministic dependency bootstrap failed."
             )
@@ -2109,12 +2220,22 @@ def format_changes(args: argparse.Namespace) -> None:
             }
         )
         if completed.returncode != 0:
-            write_json(artifact_dir / "formatter-summary.json", results)
+            write_formatter_failure(
+                artifact_dir,
+                results,
+                "formatter_command",
+                "A checked-in deterministic formatter failed.",
+            )
             raise PolicyError("A checked-in deterministic formatter failed.")
     try:
         after = inspect_changes(repository, parameters, policy, "HEAD")
-    except PolicyError:
-        (artifact_dir / "proposed.patch").unlink(missing_ok=True)
+    except PolicyError as exc:
+        write_formatter_failure(
+            artifact_dir,
+            results,
+            "post_format_validation",
+            str(exc),
+        )
         raise
     patch = worktree_patch(repository)
     if not patch:

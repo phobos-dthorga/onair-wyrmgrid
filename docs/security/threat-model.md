@@ -469,16 +469,20 @@
   release, or repository-administration authority;
 - Jenkins runs only checked-in formatters and test profiles outside the model
   and revalidates the complete diff after formatting and each of at most two
-  fresh Qwen3-Coder test-repair passes. Qwen3.6 planning/review phases are
-  read-only, and Qwen3-Coder receives no unsupported reasoning option. Every
-  change-phase checkpoint retains the bounded operator request as authoritative;
-  planner output is advisory and cannot replace or redirect that request. A
-  plain model-facing packet presents the exact task before its hard editable
-  paths and advisory plan notes, while documentation-only scopes forbid
-  invented implementation files. A safe diff may survive malformed narrative
-  output, but an unsafe diff is removed from patch artifacts before the run
-  fails. A persistent test failure waits without an executor and defaults to
-  archive-only.
+  fresh Qwen3-Coder test-repair passes. Before formatting, Jenkins records
+  tracked dependency-bootstrap side effects, restores the immutable checkout,
+  and reapplies the previously validated candidate patch exactly. This prevents
+  package-manager permission normalization or other bootstrap-only changes from
+  entering the published diff. Qwen3.6 planning/review phases are read-only,
+  and Qwen3-Coder receives no unsupported reasoning option. Every change-phase
+  checkpoint retains the bounded operator request as authoritative; planner
+  output is advisory and cannot replace or redirect that request. A plain
+  model-facing packet presents the exact task before its hard editable paths and
+  advisory plan notes, while documentation-only scopes forbid invented
+  implementation files. A safe diff may survive malformed narrative,
+  bootstrap, formatter, or test failure; an unsafe model diff is removed from
+  patch artifacts before the run fails. A persistent test failure waits without
+  an executor and defaults to archive-only.
   Passing or explicitly accepted failing work can create only a labelled draft
   through the WyrmGrid-only contributor App. The App receives Contents and Pull
   requests write access but no merge, approval, release, Actions, workflow,
