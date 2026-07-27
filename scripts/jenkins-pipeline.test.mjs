@@ -10,6 +10,7 @@ const [
   releasePipeline,
   aiAgentPipeline,
   aiAgentWrapper,
+  aiAgentRuntimeTests,
   aiAgentPolicy,
   packageMetadata,
   tauriConfig,
@@ -19,6 +20,10 @@ const [
   readFile(resolve(repositoryRoot, "Jenkinsfile.ai-agent"), "utf8"),
   readFile(
     resolve(repositoryRoot, "scripts/ai-agent/run_opencode_phase.sh"),
+    "utf8",
+  ),
+  readFile(
+    resolve(repositoryRoot, "scripts/ai-agent-runtime.test.mjs"),
     "utf8",
   ),
   readFile(resolve(repositoryRoot, "ci/ai-agent-policy.yml"), "utf8").then(
@@ -90,6 +95,10 @@ test("manual AI Agent is bounded, repairable, and draft-only", () => {
   );
   assert.match(aiAgentWrapper, /"\$prompt" \|/);
   assert.doesNotMatch(aiAgentWrapper, /eval|AI_AGENT_PROMPT[^_]/);
+  assert.match(
+    aiAgentRuntimeTests,
+    /process\.platform === "win32" \? "python" : "python3"/,
+  );
   assert.match(
     aiAgentPipeline,
     /def runLocalPhase[\s\S]*failOnAgentError: false/,

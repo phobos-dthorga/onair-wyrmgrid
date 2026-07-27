@@ -6,10 +6,11 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const pythonExecutable = process.platform === "win32" ? "python" : "python3";
 
 test("WyrmGrid AI Agent Python contracts pass", () => {
   const result = spawnSync(
-    "python",
+    pythonExecutable,
     ["-m", "unittest", "scripts/ai-agent/test_wyrmgrid_ai_agent.py", "-v"],
     {
       cwd: repositoryRoot,
@@ -17,6 +18,7 @@ test("WyrmGrid AI Agent Python contracts pass", () => {
       windowsHide: true,
     },
   );
+  assert.ifError(result.error);
   assert.equal(result.status, 0, result.stderr || result.stdout);
 });
 
