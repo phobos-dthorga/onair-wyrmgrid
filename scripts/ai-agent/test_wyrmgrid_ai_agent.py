@@ -69,8 +69,18 @@ class WyrmGridAiAgentTests(unittest.TestCase):
             profiles["REPOSITORY_SCHOLAR_LOCAL"]["selected_model"],
         )
         self.assertEqual(
-            "qwen3-coder:30b",
+            "qwen3.6:35b",
             profiles["SCOPED_BUILDER_LOCAL"]["selected_model"],
+        )
+        self.assertIn(
+            "thinking",
+            self.policy["local_model_inventory"]["qwen3.6:35b"]["capabilities"],
+        )
+        self.assertNotIn(
+            "thinking",
+            self.policy["local_model_inventory"]["qwen3-coder:30b"][
+                "capabilities"
+            ],
         )
         self.assertEqual(
             "SMALL_FILES",
@@ -372,8 +382,10 @@ class WyrmGridAiAgentTests(unittest.TestCase):
             "{file:./agent-system.md}", config["agent"]["build"]["prompt"]
         )
         self.assertTrue(config["agent"]["title"]["disable"])
-        for model in config["provider"]["hoardmind-gate"]["models"].values():
-            self.assertEqual("low", model["options"]["reasoningEffort"])
+        models = config["provider"]["hoardmind-gate"]["models"]
+        self.assertEqual("low", models["qwen3.6:35b"]["options"]["reasoningEffort"])
+        self.assertEqual({}, models["qwen3-coder:30b"]["options"])
+        for model in models.values():
             self.assertEqual(12288, model["limit"]["context"])
             self.assertEqual(4096, model["limit"]["output"])
 
@@ -391,6 +403,15 @@ class WyrmGridAiAgentTests(unittest.TestCase):
                 ROOT / "ci-artifacts" / "ai-agent",
                 parameters,
                 self.policy,
+            )
+
+    def test_nonthinking_model_rejects_reasoning_before_inference(self) -> None:
+        with self.assertRaisesRegex(
+            agent.PolicyError,
+            "qwen3-coder:30b does not support REASONING_EFFORT=LOW",
+        ):
+            agent.validate_model_reasoning(
+                "qwen3-coder:30b", "LOW", self.policy
             )
 
     def test_read_only_system_prompt_forbids_unrequested_summary(self) -> None:

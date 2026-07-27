@@ -318,6 +318,20 @@ def choose_model_profile(mode: str, requested: str) -> str:
     return "REPOSITORY_SCHOLAR_LOCAL" if mode in READ_ONLY_MODES else "SCOPED_BUILDER_LOCAL"
 
 
+def validate_model_reasoning(
+    model: str, reasoning_effort: str, policy: dict[str, Any]
+) -> None:
+    inventory = policy["local_model_inventory"]
+    if model not in inventory:
+        raise PolicyError(f"Local model is absent from technical inventory: {model}")
+    capabilities = set(inventory[model]["capabilities"])
+    if reasoning_effort != "NONE" and "thinking" not in capabilities:
+        raise PolicyError(
+            f"Local model {model} does not support REASONING_EFFORT="
+            f"{reasoning_effort}."
+        )
+
+
 def validate_parameters(args: argparse.Namespace) -> None:
     repository = pathlib.Path(args.repository).resolve()
     policy = load_policy(pathlib.Path(args.policy))
@@ -375,6 +389,7 @@ def validate_parameters(args: argparse.Namespace) -> None:
     resolved = resolve_revision(repository, args.source_revision)
     selected_profile = choose_model_profile(mode, args.local_model_profile)
     selected_model = policy["model_profiles"][selected_profile]["selected_model"]
+    validate_model_reasoning(selected_model, reasoning_effort, policy)
     answer_word_limit = int(policy["job"]["answer_word_limits"][mode])
     if answer_word_limit < 1:
         raise PolicyError(f"Answer word limit for {mode} must be positive.")
@@ -540,6 +555,14 @@ def build_opencode_config(
         context_tokens = int(profile["context_tokens"])
         maximum_output_tokens = int(profile["maximum_output_tokens"])
         for model in profile["candidate_models"]:
+            capabilities = set(
+                policy["local_model_inventory"][model]["capabilities"]
+            )
+            options = (
+                {"reasoningEffort": reasoning_effort}
+                if "thinking" in capabilities
+                else {}
+            )
             models.setdefault(
                 model,
                 {
@@ -548,7 +571,7 @@ def build_opencode_config(
                         "context": context_tokens,
                         "output": maximum_output_tokens,
                     },
-                    "options": {"reasoningEffort": reasoning_effort},
+                    "options": options,
                 },
             )
     scopes = parameters["allowed_paths"] if parameters["mode"] in CHANGE_MODES else []

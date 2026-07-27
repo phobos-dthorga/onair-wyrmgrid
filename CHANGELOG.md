@@ -32,6 +32,10 @@ major application version.
   budget.
 - Reused the existing tested Jenkins credential ID for the repository-restricted
   WyrmGrid contributor App, avoiding a needless private-key rotation.
+- Recorded local-model capabilities and made reasoning compatibility fail
+  before inference. Scoped Builder temporarily uses thinking-capable
+  `qwen3.6:35b`; `qwen3-coder:30b` remains inventoried as a tool-capable
+  no-thinking candidate.
 
 ### Removed
 

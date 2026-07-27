@@ -44,7 +44,17 @@ test("WyrmGrid AI Agent policy starts with a bounded visible context", async () 
   assert.equal(policy.toolchain.codex_cli_version, "0.145.0");
   assert.equal(
     policy.model_profiles.SCOPED_BUILDER_LOCAL.selected_model,
-    "qwen3-coder:30b",
+    "qwen3.6:35b",
+  );
+  assert.ok(
+    policy.local_model_inventory["qwen3.6:35b"].capabilities.includes(
+      "thinking",
+    ),
+  );
+  assert.ok(
+    !policy.local_model_inventory["qwen3-coder:30b"].capabilities.includes(
+      "thinking",
+    ),
   );
   assert.deepEqual(policy.job.local_reasoning_efforts, [
     "LOW",

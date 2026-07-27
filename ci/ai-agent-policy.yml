@@ -116,14 +116,32 @@
       "display_name": "WyrmGrid Scoped Builder — Local",
       "role": "bounded repository implementation",
       "provider": "hoardmind-gate",
-      "selected_model": "qwen3-coder:30b",
-      "selection_status": "pending_small_file_patch_canary",
+      "selected_model": "qwen3.6:35b",
+      "selection_status": "pending_thinking_enabled_patch_canary",
       "context_tokens": 12288,
       "maximum_output_tokens": 4096,
       "candidate_models": [
         "qwen3-coder:30b",
         "qwen3.6:35b"
       ]
+    }
+  },
+  "local_model_inventory": {
+    "qwen3.6:35b": {
+      "capabilities": [
+        "completion",
+        "vision",
+        "tools",
+        "thinking"
+      ],
+      "advertised_context_tokens": 262144
+    },
+    "qwen3-coder:30b": {
+      "capabilities": [
+        "completion",
+        "tools"
+      ],
+      "advertised_context_tokens": 262144
     }
   },
   "toolchain": {

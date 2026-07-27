@@ -254,6 +254,13 @@ These file ceilings are separate from the local model's 12,288-token context and
 profile names; their current exact local model IDs and provisional selection
 status remain visible in the policy.
 
+The adjacent `local_model_inventory` records live, inference-free Ollama
+capabilities and advertised context. `qwen3.6:35b` supports tools and thinking;
+`qwen3-coder:30b` supports tools but not thinking. A reasoning-enabled run fails
+before contacting Gate when its selected model lacks the `thinking` capability.
+During thinking-mode commissioning, both friendly profiles select
+`qwen3.6:35b`; the coder remains inventoried for a later no-thinking profile.
+
 Every manual build also exposes `REASONING_EFFORT` with `LOW`, `MEDIUM`, and
 `HIGH` choices. `LOW` is the default: it permits a small amount of local-model
 deliberation without taking on the latency of the deeper settings. The allowed
