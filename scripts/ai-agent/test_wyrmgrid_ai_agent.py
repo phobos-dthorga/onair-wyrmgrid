@@ -818,11 +818,23 @@ class WyrmGridAiAgentTests(unittest.TestCase):
                 encoding="utf-8",
             )
             policy = json.loads(POLICY_PATH.read_text(encoding="utf-8"))
+            bootstrap_marker = pathlib.Path(temporary) / "bootstrap.ready"
+            policy["dependency_bootstrap"]["command"] = [
+                sys.executable,
+                "-c",
+                (
+                    "from pathlib import Path; "
+                    f"Path({str(bootstrap_marker)!r}).write_text('yes')"
+                ),
+            ]
             policy["formatters"]["prettier_command"] = [
                 sys.executable,
                 "-c",
                 (
-                    "import json,pathlib,sys; p=pathlib.Path(sys.argv[-1]); "
+                    "import json,pathlib,sys; "
+                    f"assert pathlib.Path({str(bootstrap_marker)!r}).read_text() "
+                    "== 'yes'; "
+                    "p=pathlib.Path(sys.argv[-1]); "
                     "p.write_text(json.dumps(json.loads(p.read_text()), "
                     "indent=2)+'\\n')"
                 ),
@@ -841,6 +853,14 @@ class WyrmGridAiAgentTests(unittest.TestCase):
                 (root / "data.json").read_text(encoding="utf-8"),
             )
             self.assertTrue((artifacts / "proposed.patch").is_file())
+            formatter_summary = json.loads(
+                (artifacts / "formatter-summary.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                "dependency_bootstrap",
+                formatter_summary["commands"][0]["kind"],
+            )
+            self.assertEqual(0, formatter_summary["commands"][0]["return_code"])
 
     def test_absolute_citations_are_canonicalized_only_inside_worktree(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -1530,16 +1550,20 @@ class WyrmGridAiAgentTests(unittest.TestCase):
             artifacts = pathlib.Path(temporary) / "artifacts"
             artifacts.mkdir()
             policy = json.loads(POLICY_PATH.read_text(encoding="utf-8"))
+            bootstrap_marker = pathlib.Path(temporary) / "bootstrap.ready"
             policy["test_profiles"] = {
                 "VERIFY_REPAIR": {
                     "description": "Check the complete draft and repair.",
                     "timeout_seconds": 30,
+                    "bootstrap_dependencies": True,
                     "commands": [
                         [
                             "python",
                             "-c",
                             (
                                 "from pathlib import Path; "
+                                f"assert Path({str(bootstrap_marker)!r}).read_text() == "
+                                "'yes'; "
                                 "assert Path('feature.txt').read_text() == "
                                 "'base\\ndraft\\nrepair\\n'"
                             ),
@@ -1547,6 +1571,14 @@ class WyrmGridAiAgentTests(unittest.TestCase):
                     ],
                 }
             }
+            policy["dependency_bootstrap"]["command"] = [
+                sys.executable,
+                "-c",
+                (
+                    "from pathlib import Path; "
+                    f"Path({str(bootstrap_marker)!r}).write_text('yes')"
+                ),
+            ]
             policy_path = pathlib.Path(temporary) / "policy.json"
             policy_path.write_text(json.dumps(policy), encoding="utf-8")
             (artifacts / "parameters.json").write_text(
@@ -1573,6 +1605,10 @@ class WyrmGridAiAgentTests(unittest.TestCase):
             )
             self.assertEqual("passed", summary["outcome"])
             self.assertEqual(draft_revision, summary["base_revision"])
+            self.assertEqual(
+                "dependency_bootstrap",
+                summary["commands"][0]["kind"],
+            )
 
 
 if __name__ == "__main__":

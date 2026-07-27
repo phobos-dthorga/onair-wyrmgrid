@@ -1926,6 +1926,67 @@ def redact(text: str) -> str:
     return value
 
 
+def deterministic_command_environment(
+    repository: pathlib.Path,
+    policy: dict[str, Any],
+) -> dict[str, str]:
+    environment = os.environ.copy()
+    bootstrap = policy["dependency_bootstrap"]
+    cache_relative = pathlib.PurePosixPath(bootstrap["cache_directory"])
+    if (
+        cache_relative.is_absolute()
+        or ".." in cache_relative.parts
+        or not cache_relative.parts
+    ):
+        raise PolicyError(
+            "The deterministic dependency cache must be a repository-workspace-relative path."
+        )
+    cache_directory = (repository.parent / pathlib.Path(*cache_relative.parts)).resolve()
+    if repository.parent.resolve() not in cache_directory.parents:
+        raise PolicyError("The deterministic dependency cache escapes the workspace.")
+    cache_directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+    environment["NPM_CONFIG_CACHE"] = str(cache_directory)
+    return environment
+
+
+def run_dependency_bootstrap(
+    repository: pathlib.Path,
+    policy: dict[str, Any],
+    environment: dict[str, str],
+) -> dict[str, Any]:
+    bootstrap = policy["dependency_bootstrap"]
+    command = [str(value) for value in bootstrap["command"]]
+    started = dt.datetime.now(dt.timezone.utc)
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=repository,
+            capture_output=True,
+            text=True,
+            timeout=int(bootstrap["timeout_seconds"]),
+            check=False,
+            env=environment,
+        )
+        output = (completed.stdout or "") + (completed.stderr or "")
+        return_code = completed.returncode
+    except subprocess.TimeoutExpired as exc:
+        output = (exc.stdout or "") + (exc.stderr or "")
+        output += f"\nTimed out after {bootstrap['timeout_seconds']} seconds.\n"
+        return_code = 124
+    maximum_output = int(bootstrap["maximum_output_bytes"])
+    output = redact(output)
+    if len(output) > maximum_output:
+        output = "[earlier bootstrap output omitted]\n" + output[-maximum_output:]
+    duration = (dt.datetime.now(dt.timezone.utc) - started).total_seconds()
+    return {
+        "kind": "dependency_bootstrap",
+        "command": command,
+        "return_code": return_code,
+        "duration_seconds": round(duration, 3),
+        "output": output,
+    }
+
+
 def format_changes(args: argparse.Namespace) -> None:
     repository = pathlib.Path(args.repository).resolve()
     policy = load_policy(pathlib.Path(args.policy))
@@ -1943,6 +2004,23 @@ def format_changes(args: argparse.Namespace) -> None:
         if pathlib.Path(item.path).suffix.lower() in prettier_extensions
     ]
     commands: list[list[str]] = []
+    environment = deterministic_command_environment(repository, policy)
+    if (
+        formatter["enabled"]
+        and formatter["bootstrap_dependencies"]
+        and prettier_paths
+    ):
+        bootstrap_result = run_dependency_bootstrap(
+            repository,
+            policy,
+            environment,
+        )
+        results.append(bootstrap_result)
+        if bootstrap_result["return_code"] != 0:
+            write_json(artifact_dir / "formatter-summary.json", results)
+            raise PolicyError(
+                "The checked-in deterministic dependency bootstrap failed."
+            )
     if formatter["enabled"] and prettier_paths:
         commands.append([*formatter["prettier_command"], "--", *prettier_paths])
     rust_extensions = set(formatter["rust_extensions"])
@@ -1958,6 +2036,7 @@ def format_changes(args: argparse.Namespace) -> None:
             capture_output=True,
             text=True,
             check=False,
+            env=environment,
         )
         results.append(
             {
@@ -2034,7 +2113,24 @@ def run_tests(args: argparse.Namespace) -> None:
             raise PolicyError(
                 "Validated patch could not be applied to the isolated test worktree."
             )
+        environment = deterministic_command_environment(test_worktree, policy)
+        if profile.get("bootstrap_dependencies", False):
+            bootstrap_result = run_dependency_bootstrap(
+                test_worktree,
+                policy,
+                environment,
+            )
+            bootstrap_result["index"] = 0
+            results.append(bootstrap_result)
+            combined.append(
+                f"$ {shlex.join(bootstrap_result['command'])}\n"
+                f"{bootstrap_result['output']}"
+            )
+            if bootstrap_result["return_code"] != 0:
+                outcome = "dependency_bootstrap_failed"
         for index, raw_command in enumerate(profile["commands"], start=1):
+            if outcome != "passed":
+                break
             command = [
                 str(value).replace("{artifact_dir}", artifact_dir.as_posix())
                 for value in raw_command
@@ -2048,6 +2144,7 @@ def run_tests(args: argparse.Namespace) -> None:
                     text=True,
                     timeout=int(profile["timeout_seconds"]),
                     check=False,
+                    env=environment,
                 )
                 output = redact((completed.stdout or "") + (completed.stderr or ""))
                 return_code = completed.returncode
@@ -2086,6 +2183,8 @@ def run_tests(args: argparse.Namespace) -> None:
         },
     )
     print(f"Test profile {profile_name}: {outcome}")
+    if outcome == "dependency_bootstrap_failed":
+        raise SystemExit(2)
     if outcome != "passed":
         raise SystemExit(1)
 

@@ -171,6 +171,7 @@
     "DOCUMENTATION": {
       "description": "Repository formatting and AI Agent policy contracts.",
       "timeout_seconds": 600,
+      "bootstrap_dependencies": true,
       "commands": [
         [
           "npm",
@@ -187,6 +188,7 @@
     "TOOLING": {
       "description": "Complete JavaScript tooling and AI Agent unit tests.",
       "timeout_seconds": 1200,
+      "bootstrap_dependencies": true,
       "commands": [
         [
           "npm",
@@ -198,6 +200,7 @@
     "REPOSITORY": {
       "description": "Complete deterministic Linux repository validation.",
       "timeout_seconds": 10800,
+      "bootstrap_dependencies": true,
       "commands": [
         [
           "npm",
@@ -251,6 +254,7 @@
   },
   "formatters": {
     "enabled": true,
+    "bootstrap_dependencies": true,
     "prettier_extensions": [
       ".css",
       ".html",
@@ -265,7 +269,10 @@
       ".yml"
     ],
     "prettier_command": [
-      "npx",
+      "npm",
+      "exec",
+      "--offline",
+      "--",
       "prettier",
       "--write"
     ],
@@ -278,6 +285,18 @@
       "--all",
       "--"
     ]
+  },
+  "dependency_bootstrap": {
+    "command": [
+      "npm",
+      "ci",
+      "--ignore-scripts",
+      "--no-audit",
+      "--no-fund"
+    ],
+    "timeout_seconds": 1200,
+    "cache_directory": ".jenkins-ai-npm-cache",
+    "maximum_output_bytes": 8192
   },
   "scope": {
     "forbidden_roots": [

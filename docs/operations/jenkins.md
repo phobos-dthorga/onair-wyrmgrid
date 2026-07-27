@@ -252,12 +252,16 @@ against missing ranges, URLs, and narrative text being mistaken for evidence.
 Add a newly observed harmless syntax variation to this corpus before changing
 the parser.
 
-Before tests, Jenkins runs Prettier only on changed supported files and runs the
-repository Rust formatter when Rust files changed. The complete scope, secret,
-binary, symlink, file-count, and line-count checks run again after formatting
-and every repair. A formatting-only defect does not consume a model repair.
-Ruff is intentionally absent because WyrmGrid has no checked-in Ruff formatting
-contract.
+Before formatting and within each isolated test worktree, Jenkins runs the
+checked-in `dependency_bootstrap.command` against `package-lock.json`. Its
+disposable npm cache lives under the Jenkins workspace rather than the agent
+service account's home directory. Prettier then runs offline and only on changed
+supported files; the repository Rust formatter runs when Rust files changed.
+The complete scope, secret, binary, symlink, file-count, and line-count checks
+run again after formatting and every repair. A formatting-only defect does not
+consume a model repair, and a dependency-bootstrap failure is treated as
+infrastructure rather than returned to the coding model. Ruff is intentionally
+absent because WyrmGrid has no checked-in Ruff formatting contract.
 
 A safe candidate patch is archived even when narrative reporting or tests fail.
 A patch rejected for secret material, binary content, traversal, symlink escape,
@@ -336,10 +340,11 @@ answer plus necessary citations is accepted and archived.
 ### Editable phase and memory policy
 
 The `phase_routing`, `job.phase_steps`, `job.phase_limits`,
-`job.opencode_compaction`, and `formatters` sections in
+`job.opencode_compaction`, `formatters`, and `dependency_bootstrap` sections in
 `ci/ai-agent-policy.yml` are the operator-editable controls for phase models,
 reasoning applicability, step ceilings, checkpoint/prompt/failure sizes,
-emergency compaction, formatter extensions and commands, and repair limits.
+emergency compaction, formatter extensions and commands, locked dependency
+preparation, its disposable cache, and repair limits.
 The context ceiling remains 12,288 tokens. Smaller step ceilings end work at a
 safe phase boundary; Jenkins does not terminate a running inference solely
 because it approaches that ceiling.

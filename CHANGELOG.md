@@ -49,6 +49,9 @@ major application version.
 - Recorded local-model capabilities and made reasoning compatibility fail
   before inference. Both local models use Q4_K_M weights; Qwen3-Coder remains
   explicitly no-thinking.
+- Bootstrap lockfile-pinned JavaScript tooling before AI Agent formatting and
+  isolated tests, use a disposable workspace npm cache, and keep Prettier
+  offline so missing dependencies cannot trigger an unpinned formatter fetch.
 
 ### Removed
 

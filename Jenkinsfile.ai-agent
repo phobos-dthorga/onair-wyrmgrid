@@ -452,6 +452,12 @@ pipeline {
                         'ci-artifacts/ai-agent/local-repair-limit.txt'
                     ).trim().toInteger()
                     int testStatus = runRegisteredTests()
+                    if (testStatus == 2) {
+                        error(
+                            'The checked-in dependency bootstrap failed; ' +
+                            'no model repair was attempted.'
+                        )
+                    }
                     while (testStatus != 0 && repairs < repairLimit) {
                         repairs += 1
                         sh '''
@@ -486,6 +492,12 @@ pipeline {
                               --base HEAD
                         '''
                         testStatus = runRegisteredTests()
+                        if (testStatus == 2) {
+                            error(
+                                'The checked-in dependency bootstrap failed; ' +
+                                'no model repair was attempted.'
+                            )
+                        }
                     }
                     env.AI_TEST_RESULT = testStatus == 0 ? 'passed' : 'failed'
                     sh '''
