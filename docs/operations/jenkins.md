@@ -417,6 +417,13 @@ test-profile preflight and fails before inference when a required command,
 path, npm script, or pinned version is unavailable. Upgrades require their own
 reviewed source change and commissioning canary.
 
+The AI Agent runtime and its branch contract tests invoke Python as `python3`
+on Linux and `python` on Windows. The heavier `REPOSITORY` test profile also
+requires the Linux worker's documented `python` alias because the existing
+repository `ci:python` script uses it. The command inventory checks that alias
+only when that profile is selected; the documentation and tooling profiles do
+not inherit an unrelated requirement.
+
 ### Credentials and manual job creation
 
 Provision three separately scoped Jenkins credentials:

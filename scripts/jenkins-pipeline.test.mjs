@@ -91,8 +91,9 @@ test("manual AI Agent is bounded, repairable, and draft-only", () => {
   assert.match(aiAgentPipeline, /--repository \. \\\s+--policy/);
   assert.match(
     aiAgentWrapper,
-    /prompt="\$\(cat -- "\$AI_AGENT_PROMPT_FILE"\)"/,
+    /prompt="\$\(cat -- "\$AI_AGENT_PROMPT_FILE"; printf '%s' "\$prompt_sentinel"\)"/,
   );
+  assert.match(aiAgentWrapper, /prompt="\$\{prompt%\$prompt_sentinel\}"/);
   assert.match(aiAgentWrapper, /"\$prompt" \|/);
   assert.doesNotMatch(aiAgentWrapper, /eval|AI_AGENT_PROMPT[^_]/);
   assert.match(

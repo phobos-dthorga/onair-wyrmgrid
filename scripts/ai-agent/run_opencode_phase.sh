@@ -12,7 +12,9 @@ if [[ ! -f "$AI_AGENT_PROMPT_FILE" ]]; then
   exit 2
 fi
 
-prompt="$(cat -- "$AI_AGENT_PROMPT_FILE")"
+prompt_sentinel=$'\x1e'
+prompt="$(cat -- "$AI_AGENT_PROMPT_FILE"; printf '%s' "$prompt_sentinel")"
+prompt="${prompt%$prompt_sentinel}"
 opencode run \
   --format json \
   --model "$AI_AGENT_MODEL" \

@@ -190,8 +190,8 @@ class WyrmGridAiAgentTests(unittest.TestCase):
             fake_opencode.write_text(
                 "#!/usr/bin/env python3\n"
                 "import os, pathlib, sys\n"
-                "pathlib.Path(os.environ['CAPTURE']).write_text("
-                "sys.argv[-1], encoding='utf-8')\n"
+                "pathlib.Path(os.environ['CAPTURE']).write_bytes("
+                "sys.argv[-1].encode('utf-8'))\n"
                 "print('{\"type\":\"text\",\"text\":\"ok\"}')\n",
                 encoding="utf-8",
             )
@@ -202,10 +202,10 @@ class WyrmGridAiAgentTests(unittest.TestCase):
                 "```diff\n"
                 "diff --git a/file b/file\n"
                 "> onair-wyrmgrid@0.4.0 format:frontend:check\n"
-                "```\n"
+                "```\n\n"
             )
             prompt_path = root / "prompt.md"
-            prompt_path.write_text(prompt, encoding="utf-8")
+            prompt_path.write_bytes(prompt.encode("utf-8"))
             environment = os.environ.copy()
             environment.update(
                 {
@@ -229,7 +229,7 @@ class WyrmGridAiAgentTests(unittest.TestCase):
                 check=False,
             )
             self.assertEqual(0, completed.returncode, completed.stderr)
-            self.assertEqual(prompt, captured.read_text(encoding="utf-8"))
+            self.assertEqual(prompt, captured.read_bytes().decode("utf-8"))
             self.assertFalse((root / "command-substitution-created").exists())
             self.assertFalse((root / "dollar-substitution-created").exists())
             self.assertFalse((root / "onair-wyrmgrid@0.4.0").exists())
@@ -1923,7 +1923,7 @@ class WyrmGridAiAgentTests(unittest.TestCase):
                     "bootstrap_dependencies": True,
                     "commands": [
                         [
-                            "python",
+                            sys.executable,
                             "-c",
                             (
                                 "from pathlib import Path; "
