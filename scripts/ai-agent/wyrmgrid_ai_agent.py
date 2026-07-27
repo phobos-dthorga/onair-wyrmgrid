@@ -35,9 +35,11 @@ CITATION_LINE_RE = re.compile(
     r"^\s*-\s*`?(?P<path>[^`:\r\n]+?):(?P<start>[1-9][0-9]*)"
     r"(?:-(?P<end>[1-9][0-9]*))?`?\s*$"
 )
-CITATION_ENTRY_RE = re.compile(
-    r"(?:^|\n|\s)`?-\s*`?(?P<path>[A-Za-z0-9_. /\\-]+?):"
+CITATION_DETAIL_LINE_RE = re.compile(
+    r"^\s*`?-\s*`?(?P<path>[A-Za-z0-9_. /\\-]+?):"
     r"(?P<start>[1-9][0-9]*)(?:-(?P<end>[1-9][0-9]*))?`?"
+    r"(?P<detail>[ \t]*(?:(?:\([^()\r\n]{1,500}\))|"
+    r"(?:[-\u2013\u2014:][ \t]+[^\r\n]{1,500}))?)$"
 )
 LOCAL_PHASES = {"READ_ONLY", "PLANNER", "BUILDER", "REPAIR", "REVIEW"}
 GROUNDING_STOP_WORDS = {
@@ -1283,12 +1285,29 @@ def extract_final_agent_text(
     return final
 
 
+def citation_matches_from_text(text: str) -> list[re.Match[str]]:
+    markers = list(re.finditer(r"(?:^|\n)Citations:\s*", text))
+    if not markers:
+        raise PolicyError("Agent response did not end with a Citations section.")
+    citation_tail = text[markers[-1].end() :]
+    lines = [line for line in citation_tail.splitlines() if line.strip()]
+    if not lines:
+        raise PolicyError("Agent response citation section is malformed.")
+    matches: list[re.Match[str]] = []
+    for line in lines:
+        match = CITATION_DETAIL_LINE_RE.fullmatch(line)
+        if match is None:
+            raise PolicyError(
+                "Agent response citation section contains a malformed line."
+            )
+        matches.append(match)
+    return matches
+
+
 def citations_from_text(text: str) -> list[dict[str, Any]]:
     citations: list[dict[str, Any]] = []
     seen: set[tuple[str, int, int]] = set()
-    marker = re.search(r"(?:^|\n)Citations:\s*", text)
-    citation_text = text[marker.end() :] if marker else text
-    for match in CITATION_ENTRY_RE.finditer(citation_text):
+    for match in citation_matches_from_text(text):
         path = match.group("path").strip()
         start = int(match.group("start"))
         end = int(match.group("end") or start)
@@ -1298,10 +1317,6 @@ def citations_from_text(text: str) -> list[dict[str, Any]]:
         seen.add(key)
         citations.append(
             {"path": path, "line_start": start, "line_end": end}
-        )
-    if not citations:
-        raise PolicyError(
-            "Agent response did not end with parseable path:start-end citations."
         )
     return citations
 
@@ -1360,24 +1375,7 @@ def answer_from_text(text: str) -> str:
     answer = text[: marker.start()].strip()
     if not answer:
         raise PolicyError("Agent response did not contain an answer before citations.")
-    citation_tail = text[marker.end() :]
-    matches = list(CITATION_ENTRY_RE.finditer(citation_tail))
-    if not matches:
-        raise PolicyError("Agent response citation section is malformed.")
-    position = 0
-    for match in matches:
-        prefix = citation_tail[position : match.start()]
-        if re.sub(r"[`\s]+", "", prefix):
-            raise PolicyError("Agent response citation section is malformed.")
-        position = match.end()
-        annotation = re.match(
-            r"[ \t]*(?:\([^()\r\n]{1,240}\))?",
-            citation_tail[position:],
-        )
-        assert annotation is not None
-        position += annotation.end()
-    if re.sub(r"[`\s]+", "", citation_tail[position:]):
-        raise PolicyError("Agent response citation section is malformed.")
+    citation_matches_from_text(text)
     return answer
 
 
@@ -1551,6 +1549,20 @@ def collect_agent_output(args: argparse.Namespace) -> None:
         )
         response = render_canonical_response(answer, citations)
         read_ranges = read_ranges_from_event_log(event_log, agent_worktree)
+        write_json(
+            artifact_dir / "read-evidence.json",
+            {
+                "schema_version": 1,
+                "source_revision": parameters["source_revision"],
+                "completed_reads": {
+                    path: [
+                        {"line_start": start, "line_end": end}
+                        for start, end in ranges
+                    ]
+                    for path, ranges in sorted(read_ranges.items())
+                },
+            },
+        )
         validate_injected_guidance_evidence(
             agent_worktree,
             artifact_dir,

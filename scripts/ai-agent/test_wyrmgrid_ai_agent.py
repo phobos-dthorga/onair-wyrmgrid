@@ -551,6 +551,62 @@ class WyrmGridAiAgentTests(unittest.TestCase):
             agent.render_canonical_response(answer, citations),
         )
 
+    def test_build_16_quoted_citation_excerpts_are_canonicalized(self) -> None:
+        response = (
+            "UI rules stay in Rust services and Tauri commands remain thin.\n\n"
+            "Citations:\n"
+            '- `AGENTS.md:23-24` - "Keep UI code presentational."\n'
+            '- `AGENTS.md:25` - "Keep Tauri commands thin and delegate to '
+            '`wyrmgrid-application`."'
+        )
+        answer = agent.answer_from_text(response)
+        citations = agent.citations_from_text(response)
+        self.assertEqual(
+            "UI rules stay in Rust services and Tauri commands remain thin.",
+            answer,
+        )
+        self.assertEqual(
+            [
+                {"path": "AGENTS.md", "line_start": 23, "line_end": 24},
+                {"path": "AGENTS.md", "line_start": 25, "line_end": 25},
+            ],
+            citations,
+        )
+        self.assertEqual(
+            "UI rules stay in Rust services and Tauri commands remain thin.\n\n"
+            "Citations:\n- AGENTS.md:23-24\n- AGENTS.md:25",
+            agent.render_canonical_response(answer, citations),
+        )
+
+    def test_bounded_same_line_citation_details_are_discarded(self) -> None:
+        response = (
+            "UI rules stay in Rust services.\n\n"
+            "Citations:\n"
+            "- AGENTS.md:23-24: unquoted supporting detail\n"
+            "- AGENTS.md:25 — another supporting detail"
+        )
+        self.assertEqual(
+            "UI rules stay in Rust services.",
+            agent.answer_from_text(response),
+        )
+        self.assertEqual(
+            [
+                {"path": "AGENTS.md", "line_start": 23, "line_end": 24},
+                {"path": "AGENTS.md", "line_start": 25, "line_end": 25},
+            ],
+            agent.citations_from_text(response),
+        )
+        with self.assertRaises(agent.PolicyError):
+            agent.answer_from_text(
+                "UI rules stay in Rust services.\n\n"
+                "Citations:\n- AGENTS.md:23-24 trailing text"
+            )
+        with self.assertRaises(agent.PolicyError):
+            agent.answer_from_text(
+                "UI rules stay in Rust services.\n\n"
+                "Citations:\n- AGENTS.md:23-24\nUnstructured second line"
+            )
+
     def test_safe_change_survives_malformed_narrative(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary) / "repository"
@@ -874,6 +930,20 @@ class WyrmGridAiAgentTests(unittest.TestCase):
             self.assertEqual(
                 [{"path": "AGENTS.md", "line_start": 3, "line_end": 3}],
                 report["citations"],
+            )
+            self.assertEqual(
+                {
+                    "schema_version": 1,
+                    "source_revision": revision,
+                    "completed_reads": {
+                        "AGENTS.md": [{"line_start": 1, "line_end": 3}]
+                    },
+                },
+                json.loads(
+                    (artifacts / "read-evidence.json").read_text(
+                        encoding="utf-8"
+                    )
+                ),
             )
             self.assertTrue(event_log.exists())
 

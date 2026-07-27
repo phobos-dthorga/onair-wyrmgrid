@@ -228,9 +228,17 @@ including an `AGENTS.md` range, still requires a completed targeted read.
 Jenkins derives changed paths and line counts from Git. Malformed change-mode
 prose therefore produces a minimal Jenkins technical report rather than
 discarding an otherwise safe patch. Read-only citations remain mandatory.
-Harmless citation forms such as backticks, whitespace, or an inline first bullet
-are canonicalized before the existing path, line, scope, and completed-read
-checks.
+Harmless citation forms such as backticks, whitespace, an inline first bullet,
+parenthetical notes, or bounded same-line details introduced by a colon,
+hyphen, or dash are canonicalized before the existing path, line, scope,
+completed-read, and answer-grounding checks. Commentary is discarded; it never
+becomes citation evidence. Every nonempty line after `Citations:` must still
+start with a parseable repository-relative citation. Jenkins archives a
+`read-evidence.json` receipt containing only the normalized completed-read
+paths and line ranges used by that validation. When OpenCode and Jenkins report
+the same immutable worktree through different mount aliases, the path is
+accepted only after its worktree-relative suffix resolves to a real file inside
+that immutable worktree.
 
 Before tests, Jenkins runs Prettier only on changed supported files and runs the
 repository Rust formatter when Rust files changed. The complete scope, secret,

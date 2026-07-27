@@ -194,9 +194,9 @@ and human review.
 
 The AI Agent runtime tests cover immutable revisions, read-only citations,
 specialist model/reasoning routing, fresh phase state, bounded checkpoints,
-build #13 and #14 citation canonicalization, build #15 worktree-alias read
-evidence, safe-patch survival after narrative failure, deterministic formatting,
-path normalization, root-wide and traversal
+build #13, #14, and #16 citation canonicalization, build #15 worktree-alias
+read evidence, safe-patch survival after narrative failure, deterministic
+formatting, path normalization, root-wide and traversal
 refusal, sparse context ceilings, oversized exact targets, symlinks, binary
 changes, secret-like added lines, file and line budgets, registered test
 execution, repair limits, hosted packet contents, unsafe-patch non-retention,
