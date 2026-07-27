@@ -10,6 +10,7 @@ const [
   releasePipeline,
   aiAgentPipeline,
   aiAgentWrapper,
+  aiAgentGitAskpass,
   aiAgentRuntimeTests,
   aiAgentPolicy,
   packageMetadata,
@@ -20,6 +21,10 @@ const [
   readFile(resolve(repositoryRoot, "Jenkinsfile.ai-agent"), "utf8"),
   readFile(
     resolve(repositoryRoot, "scripts/ai-agent/run_opencode_phase.sh"),
+    "utf8",
+  ),
+  readFile(
+    resolve(repositoryRoot, "scripts/ai-agent/github_git_askpass.sh"),
     "utf8",
   ),
   readFile(
@@ -67,6 +72,20 @@ test("manual AI Agent is bounded, repairable, and draft-only", () => {
   assert.match(aiAgentPipeline, /wyrmgrid-ai-agent-gateway/);
   assert.match(aiAgentPipeline, /params\.REASONING_EFFORT \?: 'LOW'/);
   assert.match(aiAgentPipeline, /hoardmind-jenkins-ai-contributor/);
+  assert.match(
+    aiAgentPipeline,
+    /GIT_ASKPASS=\$\{env\.WORKSPACE\}\/\.jenkins-ai-runtime\/github_git_askpass\.sh/,
+  );
+  assert.match(aiAgentPipeline, /GIT_TERMINAL_PROMPT=0/);
+  assert.match(
+    aiAgentPipeline,
+    /install -m 0700 scripts\/ai-agent\/github_git_askpass\.sh/,
+  );
+  assert.doesNotMatch(aiAgentPipeline, /gh auth setup-git/);
+  assert.match(aiAgentGitAskpass, /'x-access-token'/);
+  assert.match(aiAgentGitAskpass, /\$\{GH_TOKEN:\?/);
+  assert.match(aiAgentGitAskpass, /Unsupported Git credential prompt/);
+  assert.doesNotMatch(aiAgentGitAskpass, /set -x|echo/);
   assert.match(aiAgentPipeline, /Codex-Jenkins-Tauryk-Gk-Io/);
   assert.match(aiAgentPipeline, /phobos-dthorga\/onair-wyrmgrid/);
   assert.match(aiAgentPipeline, /validate-toolchain/);

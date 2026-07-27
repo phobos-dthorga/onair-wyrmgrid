@@ -135,7 +135,12 @@ def withContributorCredential(Closure body) {
             usernameVariable: 'WYRMGRID_GITHUB_APP_USER'
         )
     ]) {
-        body()
+        withEnv([
+            "GIT_ASKPASS=${env.WORKSPACE}/.jenkins-ai-runtime/github_git_askpass.sh",
+            'GIT_TERMINAL_PROMPT=0'
+        ]) {
+            body()
+        }
     }
 }
 
@@ -295,6 +300,8 @@ pipeline {
                       .jenkins-ai-runtime/wyrmgrid_ai_agent.py
                     cp scripts/ai-agent/run_opencode_phase.sh \
                       .jenkins-ai-runtime/run_opencode_phase.sh
+                    install -m 0700 scripts/ai-agent/github_git_askpass.sh \
+                      .jenkins-ai-runtime/github_git_askpass.sh
                     cp ci/ai-agent-policy.yml \
                       .jenkins-ai-runtime/ai-agent-policy.yml
                     node --test scripts/ai-agent-runtime.test.mjs
@@ -645,7 +652,6 @@ diff, citations, test evidence, and conversation before promoting it.
                                 git add -A
                                 git diff --cached --check
                                 git commit -m "$AI_PR_TITLE"
-                                gh auth setup-git
                                 git push --set-upstream origin "$AI_BRANCH"
                                 gh pr create \
                                   --repo phobos-dthorga/onair-wyrmgrid \
@@ -743,7 +749,6 @@ diff, citations, test evidence, and conversation before promoting it.
                                         git diff --cached --check
                                         git commit -m \
                                           'fix: address bounded hosted review'
-                                        gh auth setup-git
                                         git push origin "$AI_BRANCH"
                                     '''
                                 }

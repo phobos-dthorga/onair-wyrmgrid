@@ -114,6 +114,11 @@ The useful distinction is:
   was rejected;
 - test failure: inspect only the latest bounded `tests/output.txt`, with full
   earlier output retained in prior build/phase artifacts.
+- publication failure: inspect the **Publish draft PR** console section. The
+  worker home is intentionally read-only; current jobs use
+  `.jenkins-ai-runtime/github_git_askpass.sh` with terminal prompting disabled
+  and never run `gh auth setup-git`. A `.gitconfig` write error identifies a
+  stale job definition. Do not make the Jenkins home writable.
 
 Pipeline/runtime contract tests intentionally run from the job's SCM revision
 before the immutable target checkout. Registered product tests run only against

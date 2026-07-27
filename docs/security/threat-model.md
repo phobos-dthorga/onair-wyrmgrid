@@ -938,6 +938,10 @@ absence of merge/administration permissions limit but do not eliminate harm if
 Jenkins or the App key is compromised. Keep its credentials separate from
 routine CI, releases, Hoardmind, and other repositories. Rotate or revoke the
 App and Gateway client independently if either boundary is uncertain.
+The contributor token is bound only around publication operations. Git receives
+it through an ephemeral workspace-local askpass helper with terminal prompting
+disabled; Jenkins does not persist the token in a global Git credential helper
+or require a writable service-account home.
 
 The Jenkins controller and plugin configuration remain administrative state
 outside repository history. An administrator can change the installed plugin,

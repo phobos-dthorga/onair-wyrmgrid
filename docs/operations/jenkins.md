@@ -310,6 +310,11 @@ A passing change becomes one namespaced branch and one draft pull request.
 Jenkins commits and publishes only the exact revalidated diff. The local model
 does not receive GitHub credentials and cannot approve, merge, publish a
 release, modify repository settings, or make a draft ready for review.
+Git push authentication uses a protected workspace-local askpass helper only
+while the repository-restricted contributor credential is bound. It does not
+run `gh auth setup-git`, persist a credential helper, or require a writable
+Jenkins home. GitHub CLI draft-PR and comment operations consume the same
+short-lived bound token directly.
 
 ### Editable context tiers
 

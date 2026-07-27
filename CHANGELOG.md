@@ -46,6 +46,8 @@ major application version.
   behaviour and explicit malformed counterexamples.
 - Reused the existing tested Jenkins credential ID for the repository-restricted
   WyrmGrid contributor App, avoiding a needless private-key rotation.
+- Kept draft-PR Git authentication ephemeral and workspace-local so publication
+  works with the Jenkins service account's deliberately read-only home.
 - Recorded local-model capabilities and made reasoning compatibility fail
   before inference. Both local models use Q4_K_M weights; Qwen3-Coder remains
   explicitly no-thinking.
