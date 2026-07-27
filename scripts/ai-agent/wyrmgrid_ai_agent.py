@@ -1364,14 +1364,19 @@ def answer_from_text(text: str) -> str:
     matches = list(CITATION_ENTRY_RE.finditer(citation_tail))
     if not matches:
         raise PolicyError("Agent response citation section is malformed.")
-    remainder_parts: list[str] = []
     position = 0
     for match in matches:
-        remainder_parts.append(citation_tail[position : match.start()])
+        prefix = citation_tail[position : match.start()]
+        if re.sub(r"[`\s]+", "", prefix):
+            raise PolicyError("Agent response citation section is malformed.")
         position = match.end()
-    remainder_parts.append(citation_tail[position:])
-    remainder = "".join(remainder_parts)
-    if re.sub(r"[`\s]+", "", remainder):
+        annotation = re.match(
+            r"[ \t]*(?:\([^()\r\n]{1,240}\))?",
+            citation_tail[position:],
+        )
+        assert annotation is not None
+        position += annotation.end()
+    if re.sub(r"[`\s]+", "", citation_tail[position:]):
         raise PolicyError("Agent response citation section is malformed.")
     return answer
 

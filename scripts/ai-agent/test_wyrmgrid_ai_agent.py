@@ -525,6 +525,32 @@ class WyrmGridAiAgentTests(unittest.TestCase):
             agent.render_canonical_response(answer, citations),
         )
 
+    def test_build_14_parenthetical_citations_are_canonicalized(self) -> None:
+        response = (
+            "UI rules stay in Rust services and Tauri commands remain thin.\n\n"
+            "Citations:\n"
+            "- AGENTS.md:23-24 (UI business-rule ownership)\n"
+            "- AGENTS.md:25 (thin Tauri command delegation)"
+        )
+        answer = agent.answer_from_text(response)
+        citations = agent.citations_from_text(response)
+        self.assertEqual(
+            "UI rules stay in Rust services and Tauri commands remain thin.",
+            answer,
+        )
+        self.assertEqual(
+            [
+                {"path": "AGENTS.md", "line_start": 23, "line_end": 24},
+                {"path": "AGENTS.md", "line_start": 25, "line_end": 25},
+            ],
+            citations,
+        )
+        self.assertEqual(
+            "UI rules stay in Rust services and Tauri commands remain thin.\n\n"
+            "Citations:\n- AGENTS.md:23-24\n- AGENTS.md:25",
+            agent.render_canonical_response(answer, citations),
+        )
+
     def test_safe_change_survives_malformed_narrative(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary) / "repository"
