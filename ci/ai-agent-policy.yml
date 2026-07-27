@@ -9,6 +9,11 @@
     "failure_decision_hours": 24,
     "local_test_repair_attempts": 2,
     "hosted_repair_attempts": 1,
+    "local_reasoning_efforts": [
+      "LOW",
+      "MEDIUM",
+      "HIGH"
+    ],
     "agent_steps": {
       "ASK": 8,
       "DECISION_TRACE": 16,

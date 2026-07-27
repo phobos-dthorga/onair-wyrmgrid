@@ -238,6 +238,11 @@ pipeline {
             description: 'Friendly local workload profile. AUTO selects by mode.'
         )
         choice(
+            name: 'REASONING_EFFORT',
+            choices: ['LOW', 'MEDIUM', 'HIGH'],
+            description: 'Local-model thinking depth. LOW is the default and fastest option.'
+        )
+        choice(
             name: 'HOSTED_REVIEW',
             choices: ['NONE', 'OPENAI_AFTER_DRAFT_PR'],
             description: 'Explicit consent for one bounded OpenAI review after a passing draft PR.'
@@ -281,6 +286,7 @@ pipeline {
                     "AI_MAX_LINES_VALUE=${params.MAX_CHANGED_LINES ?: ''}",
                     "AI_TEST_PROFILE_VALUE=${params.TEST_PROFILE}",
                     "AI_LOCAL_PROFILE_VALUE=${params.LOCAL_MODEL_PROFILE}",
+                    "AI_REASONING_EFFORT_VALUE=${params.REASONING_EFFORT}",
                     "AI_HOSTED_REVIEW_VALUE=${params.HOSTED_REVIEW}"
                 ]) {
                     sh '''#!/usr/bin/env bash
@@ -307,6 +313,7 @@ pipeline {
                           "${line_limit[@]}" \
                           --test-profile "$AI_TEST_PROFILE_VALUE" \
                           --local-model-profile "$AI_LOCAL_PROFILE_VALUE" \
+                          --reasoning-effort "$AI_REASONING_EFFORT_VALUE" \
                           --hosted-review "$AI_HOSTED_REVIEW_VALUE"
                         python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
                           validate-toolchain \

@@ -254,6 +254,13 @@ These file ceilings are separate from the local model's 12,288-token context and
 profile names; their current exact local model IDs and provisional selection
 status remain visible in the policy.
 
+Every manual build also exposes `REASONING_EFFORT` with `LOW`, `MEDIUM`, and
+`HIGH` choices. `LOW` is the default: it permits a small amount of local-model
+deliberation without taking on the latency of the deeper settings. The allowed
+values are the checked-in `job.local_reasoning_efforts` list in
+`ci/ai-agent-policy.yml`; Jenkins records the selected value with the immutable
+run parameters and rejects unregistered values before inference.
+
 ### Worker and pinned tools
 
 Run the job on the dedicated unprivileged VLAN 20 LXC with label `ai-agent` and

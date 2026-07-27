@@ -46,6 +46,10 @@ class WyrmGridAiAgentTests(unittest.TestCase):
         self.assertEqual(["PATCH", "FEATURE"], modes["change"])
         self.assertEqual(20, self.policy["job"]["retention_builds"])
         self.assertEqual(30, self.policy["job"]["retention_days"])
+        self.assertEqual(
+            ["LOW", "MEDIUM", "HIGH"],
+            self.policy["job"]["local_reasoning_efforts"],
+        )
 
     def test_policy_exposes_editable_context_profiles(self) -> None:
         profiles = self.policy["model_profiles"]
@@ -337,6 +341,7 @@ class WyrmGridAiAgentTests(unittest.TestCase):
             parameters = {
                 "mode": "FEATURE",
                 "allowed_paths": ["docs", "scripts/ci/example.py"],
+                "reasoning_effort": "LOW",
             }
             config = agent.build_opencode_config(
                 root, artifacts, parameters, self.policy
@@ -357,9 +362,25 @@ class WyrmGridAiAgentTests(unittest.TestCase):
         )
         self.assertTrue(config["agent"]["title"]["disable"])
         for model in config["provider"]["hoardmind-gate"]["models"].values():
-            self.assertEqual("none", model["options"]["reasoningEffort"])
+            self.assertEqual("low", model["options"]["reasoningEffort"])
             self.assertEqual(12288, model["limit"]["context"])
             self.assertEqual(1200, model["limit"]["output"])
+
+    def test_opencode_config_rejects_unregistered_reasoning_effort(self) -> None:
+        parameters = {
+            "mode": "ASK",
+            "allowed_paths": [],
+            "reasoning_effort": "EXTREME",
+        }
+        with self.assertRaisesRegex(
+            agent.PolicyError, "Unsupported REASONING_EFFORT"
+        ):
+            agent.build_opencode_config(
+                ROOT,
+                ROOT / "ci-artifacts" / "ai-agent",
+                parameters,
+                self.policy,
+            )
 
     def test_read_only_system_prompt_forbids_unrequested_summary(self) -> None:
         prompt = agent.render_agent_system_prompt("ASK")

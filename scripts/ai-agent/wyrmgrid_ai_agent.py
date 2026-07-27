@@ -345,6 +345,10 @@ def validate_parameters(args: argparse.Namespace) -> None:
         raise PolicyError("Read-only modes do not accept ALLOWED_PATHS.")
     if args.local_model_profile not in LOCAL_MODEL_VALUES:
         raise PolicyError("Unsupported LOCAL_MODEL_PROFILE.")
+    reasoning_effort = args.reasoning_effort.strip().upper()
+    allowed_reasoning_efforts = set(policy["job"]["local_reasoning_efforts"])
+    if reasoning_effort not in allowed_reasoning_efforts:
+        raise PolicyError("Unsupported REASONING_EFFORT.")
     if args.hosted_review not in HOSTED_REVIEW_VALUES:
         raise PolicyError("Unsupported HOSTED_REVIEW.")
     if not is_change and args.hosted_review != "NONE":
@@ -385,6 +389,7 @@ def validate_parameters(args: argparse.Namespace) -> None:
         "test_profile": args.test_profile,
         "local_model_profile": selected_profile,
         "local_model": selected_model,
+        "reasoning_effort": reasoning_effort,
         "hosted_review": args.hosted_review,
         "created_utc": utc_now(),
     }
@@ -521,6 +526,12 @@ def build_opencode_config(
     excluded_files: Sequence[str] = (),
 ) -> dict[str, Any]:
     models: dict[str, Any] = {}
+    reasoning_effort = str(parameters.get("reasoning_effort", "LOW")).lower()
+    allowed_reasoning_efforts = {
+        value.lower() for value in policy["job"]["local_reasoning_efforts"]
+    }
+    if reasoning_effort not in allowed_reasoning_efforts:
+        raise PolicyError("Unsupported REASONING_EFFORT.")
     for profile in policy["model_profiles"].values():
         context_tokens = int(profile["context_tokens"])
         maximum_output_tokens = int(profile["maximum_output_tokens"])
@@ -533,7 +544,7 @@ def build_opencode_config(
                         "context": context_tokens,
                         "output": maximum_output_tokens,
                     },
-                    "options": {"reasoningEffort": "none"},
+                    "options": {"reasoningEffort": reasoning_effort},
                 },
             )
     scopes = parameters["allowed_paths"] if parameters["mode"] in CHANGE_MODES else []
@@ -2191,6 +2202,7 @@ def build_parser() -> argparse.ArgumentParser:
     validate.add_argument("--max-changed-lines", type=int, default=0)
     validate.add_argument("--test-profile", required=True)
     validate.add_argument("--local-model-profile", required=True)
+    validate.add_argument("--reasoning-effort", required=True)
     validate.add_argument("--hosted-review", required=True)
     validate.set_defaults(func=validate_parameters)
 

@@ -46,6 +46,7 @@ test("manual AI Agent is bounded, repairable, and draft-only", () => {
     "MAX_CHANGED_LINES",
     "TEST_PROFILE",
     "LOCAL_MODEL_PROFILE",
+    "REASONING_EFFORT",
     "HOSTED_REVIEW",
   ]) {
     assert.match(aiAgentPipeline, new RegExp(`name: '${parameter}'`));
@@ -79,6 +80,11 @@ test("manual AI Agent is bounded, repairable, and draft-only", () => {
   assert.equal(aiAgentPolicy.toolchain.codex_cli_version, "0.145.0");
   assert.equal(aiAgentPolicy.job.local_test_repair_attempts, 2);
   assert.equal(aiAgentPolicy.job.hosted_repair_attempts, 1);
+  assert.deepEqual(aiAgentPolicy.job.local_reasoning_efforts, [
+    "LOW",
+    "MEDIUM",
+    "HIGH",
+  ]);
 });
 
 test("multibranch pipeline runs the complete credential-free Linux and Windows gates", () => {

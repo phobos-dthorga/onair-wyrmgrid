@@ -23,6 +23,8 @@ major application version.
   cycle instead of being accepted as grounded research.
 - Increased the local AI Agent context window to 12,288 tokens after the 4K
   commissioning canary displaced early repository guidance before inference.
+- Added a per-run local reasoning control with operator-selectable `LOW`,
+  `MEDIUM`, and `HIGH` effort; `LOW` remains the default.
 
 ### Removed
 

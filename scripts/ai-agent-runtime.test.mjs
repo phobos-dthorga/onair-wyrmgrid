@@ -46,4 +46,9 @@ test("WyrmGrid AI Agent policy starts with a bounded visible context", async () 
     policy.model_profiles.SCOPED_BUILDER_LOCAL.selected_model,
     "qwen3-coder:30b",
   );
+  assert.deepEqual(policy.job.local_reasoning_efforts, [
+    "LOW",
+    "MEDIUM",
+    "HIGH",
+  ]);
 });
