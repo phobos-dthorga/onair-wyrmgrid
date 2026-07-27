@@ -16,5 +16,5 @@ wyrmgrid-domain = { path = "../../crates/domain" }
 cpal.workspace = true
 # CPAL 0.18 permits either Windows bindings line; keep its macro and interface
 # crates on the same line until CPAL tightens that upstream constraint.
-windows = "=0.61.3"
+windows = "=0.62.2"
 windows-core = "=0.61.2"
