@@ -55,6 +55,9 @@ major application version.
 - Preserve the exact bounded operator request as the authoritative input to
   every change phase so a generic local-planner response cannot erase or
   redirect the implementation task.
+- Present change phases with plain task, editable-path, and advisory-plan
+  sections so internal receipt names or quoted document fragments are not
+  mistaken for source APIs.
 
 ### Removed
 

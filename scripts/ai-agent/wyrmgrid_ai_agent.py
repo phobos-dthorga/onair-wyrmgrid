@@ -798,8 +798,8 @@ constraints, and ordered work. Repository guidance must be read where needed."""
         return """You are WyrmGrid's scoped coding specialist. Work only inside
 the declared paths using repository read, search, and edit tools. Do not use
 shell, web, package installation, or subagents. Preserve valid existing edits.
-The checkpoint's operator_request is the authoritative task; planner advice is
-only advisory and must not replace, narrow, or redirect it.
+The TASK section is authoritative. PLAN NOTES are optional advice and must not
+replace, narrow, redirect, or rename the task.
 Jenkins owns formatting, safety checks, and tests. Finish with a brief summary;
 the diff, not your prose, is authoritative."""
     return """You are WyrmGrid's advisory local reviewer. Read the bounded
@@ -909,34 +909,90 @@ Return only a compact plan with acceptance criteria, exact relevant
 repository paths/ranges, constraints, and ordered implementation steps. Do not
 edit files."""
     assert checkpoint is not None
-    packet = json.dumps(checkpoint, indent=2, ensure_ascii=False)
+    task = str(checkpoint["operator_request"]).strip()
+    plan_notes = str(checkpoint["acceptance_plan"]).strip()
+    if not plan_notes:
+        plan_notes = "(No planner notes were produced. Follow the task.)"
+    editable_paths = "\n".join(
+        f"- {item}" for item in checkpoint["allowed_paths"]
+    )
+    documentation_suffixes = {".md", ".mdx", ".rst", ".txt"}
+    documentation_only = bool(checkpoint["allowed_paths"]) and all(
+        pathlib.PurePosixPath(path).suffix.lower() in documentation_suffixes
+        for path in checkpoint["allowed_paths"]
+    )
+    task_type = (
+        "DOCUMENTATION-ONLY. Edit only the listed document files. Do not "
+        "create source code, modules, APIs, types, or implementation files."
+        if documentation_only
+        else (
+            "SCOPED REPOSITORY CHANGE. Create or edit only files covered by "
+            "the editable paths."
+        )
+    )
+    current_diff = str(checkpoint["current_diff"])
+    if not current_diff:
+        current_diff = "(No current diff.)"
+    latest_failure = str(checkpoint["latest_failure"])
+    if not latest_failure:
+        latest_failure = "(No deterministic failure yet.)"
+    resolved_regressions = json.dumps(
+        checkpoint["resolved_regressions"],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
     if phase == "BUILDER":
         instruction = (
-            "Implement the authoritative operator_request now. Treat the "
-            "acceptance_plan as advisory only. Preserve scope and make the "
-            "smallest complete change."
+            "Implement the TASK now. Preserve scope and make the smallest "
+            "complete change."
         )
     elif phase == "REPAIR":
         instruction = (
             "Repair the current safe diff for the latest deterministic failure "
-            "while still satisfying the authoritative operator_request. Treat "
-            "the acceptance_plan as advisory only. Do not undo already-correct "
-            "work."
+            "while still satisfying the TASK. Do not undo already-correct work."
         )
     else:
         instruction = (
-            "Review the current safe diff against the authoritative "
-            "operator_request, using the acceptance_plan only as advisory "
-            "context. This review is advisory and must not edit files."
+            "Review the current safe diff against the TASK. PLAN NOTES are "
+            "advisory context. This review must not edit files."
         )
     return f"""{instruction}
 
-Compact checkpoint:
-```json
-{packet}
+TASK — AUTHORITATIVE (verbatim)
+{task}
+
+EDITABLE PATHS — HARD LIMIT
+{editable_paths}
+
+TASK TYPE
+{task_type}
+
+PLAN NOTES — ADVISORY
+{plan_notes}
+
+Quoted words and punctuation in PLAN NOTES are source-location hints, not new
+API names, type names, file names, or requirements. When notes are ambiguous,
+follow TASK and EDITABLE PATHS.
+
+CURRENT SAFE DIFF
+```diff
+{current_diff}
 ```
 
-Return a short focused result. Do not repeat the checkpoint."""
+LATEST DETERMINISTIC FAILURE
+```text
+{latest_failure}
+```
+
+RESOLVED REGRESSION NOTES
+{resolved_regressions}
+
+IMMUTABLE SOURCE
+- revision: {checkpoint["source_revision"]}
+- task hash: {checkpoint["request_sha256"]}
+- current diff hash: {checkpoint["safe_diff_sha256"]}
+
+Return a short focused result. Do not repeat this packet."""
 
 
 def prepare_phase(args: argparse.Namespace) -> None:

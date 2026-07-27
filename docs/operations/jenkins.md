@@ -224,6 +224,11 @@ repair, and review phase; an incomplete or generic planner response cannot
 replace, narrow, or redirect it. Full earlier conversations and failures remain
 artifacts instead of being repeatedly returned to the model. OpenCode automatic
 compaction is only an emergency fallback.
+The checkpoint remains structured for audit, but model-facing change packets
+use plain sections headed **TASK**, **EDITABLE PATHS**, and **PLAN NOTES**.
+Internal receipt field names are not presented as implementation concepts.
+Documentation-only scopes explicitly forbid inventing source modules, APIs, or
+types from nearby quoted words or punctuation in advisory plan notes.
 OpenCode's normal repository guidance supplies `AGENTS.md`; Jenkins records its
 immutable hash but does not inject a second complete copy. Any cited range,
 including an `AGENTS.md` range, still requires a completed targeted read.

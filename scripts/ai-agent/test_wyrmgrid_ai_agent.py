@@ -396,8 +396,49 @@ class WyrmGridAiAgentTests(unittest.TestCase):
             self.assertEqual(request, checkpoint["operator_request"])
             self.assertEqual(generic_plan + "\n", checkpoint["acceptance_plan"])
             self.assertIn(request, prompt)
-            self.assertIn("authoritative operator_request", prompt)
-            self.assertIn("operator_request is the authoritative task", system_prompt)
+            self.assertIn("TASK — AUTHORITATIVE (verbatim)", prompt)
+            self.assertNotIn("operator_request", prompt)
+            self.assertNotIn("acceptance_plan", prompt)
+            self.assertIn("The TASK section is authoritative", system_prompt)
+
+    def test_build_22_doc_plan_cannot_be_invented_as_source_api(self) -> None:
+        request = (
+            "Update docs/operations/jenkins.md only. Document that xdg-utils "
+            "and desktop-file-utils must be preinstalled and that the UTF-8 "
+            "locale must be generated. Make no other changes."
+        )
+        plan = (
+            "Insert the sentence between `installed.` and `Builds` on line 34."
+        )
+        checkpoint = {
+            "source_revision": "a" * 40,
+            "request_sha256": "b" * 64,
+            "operator_request": request,
+            "allowed_paths": ["docs/operations/jenkins.md"],
+            "acceptance_plan": plan,
+            "safe_diff_sha256": "c" * 64,
+            "current_diff": "",
+            "latest_failure": "",
+            "resolved_regressions": [],
+        }
+        prompt = agent.render_phase_prompt(
+            "BUILDER",
+            {
+                "mode": "PATCH",
+                "allowed_paths": ["docs/operations/jenkins.md"],
+            },
+            checkpoint,
+        )
+        self.assertLess(prompt.index(request), prompt.index(plan))
+        self.assertIn("DOCUMENTATION-ONLY", prompt)
+        self.assertIn("Do not create source code, modules, APIs, types", prompt)
+        self.assertIn(
+            "Quoted words and punctuation in PLAN NOTES are source-location "
+            "hints",
+            prompt,
+        )
+        self.assertNotIn("operator_request", prompt)
+        self.assertNotIn("acceptance_plan", prompt)
 
     def test_prepare_phase_creates_fresh_specialist_packets(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

@@ -473,9 +473,12 @@
   read-only, and Qwen3-Coder receives no unsupported reasoning option. Every
   change-phase checkpoint retains the bounded operator request as authoritative;
   planner output is advisory and cannot replace or redirect that request. A
-  safe diff may survive malformed narrative output, but an unsafe diff is
-  removed from patch artifacts before the run fails. A persistent test failure
-  waits without an executor and defaults to archive-only.
+  plain model-facing packet presents the exact task before its hard editable
+  paths and advisory plan notes, while documentation-only scopes forbid
+  invented implementation files. A safe diff may survive malformed narrative
+  output, but an unsafe diff is removed from patch artifacts before the run
+  fails. A persistent test failure waits without an executor and defaults to
+  archive-only.
   Passing or explicitly accepted failing work can create only a labelled draft
   through the WyrmGrid-only contributor App. The App receives Contents and Pull
   requests write access but no merge, approval, release, Actions, workflow,
