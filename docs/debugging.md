@@ -118,7 +118,11 @@ The useful distinction is:
   worker home is intentionally read-only; current jobs use
   `.jenkins-ai-runtime/github_git_askpass.sh` with terminal prompting disabled
   and never run `gh auth setup-git`. A `.gitconfig` write error identifies a
-  stale job definition. Do not make the Jenkins home writable.
+  stale job definition. A GitHub `403` naming the contributor bot means the
+  credential authenticated but its installation token lacks Contents
+  read/write. Check the App permissions, accept the installation update, and
+  select **All permissions available to the App installation** in Jenkins. Do
+  not make the Jenkins home writable or rotate a valid key for either failure.
 
 Pipeline/runtime contract tests intentionally run from the job's SCM revision
 before the immutable target checkout. Registered product tests run only against

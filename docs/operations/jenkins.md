@@ -477,9 +477,12 @@ the standalone job to read `Jenkinsfile.ai-agent`; it does not add another
 repository or any write permission.
 
 The job validates that the local Gateway credential exists for every run, the
-contributor credential exists before a change-making run, and the hosted key
-exists only when hosted review is selected. Reports, conversations, policy
-evidence, tests, and patches are retained for 30 days and at most 20 builds.
+contributor credential can write WyrmGrid repository contents before a
+change-making run, and the hosted key exists only when hosted review is
+selected. This push-authority preflight is read-only and occurs before local
+inference; draft-PR comment authority is still exercised only after publication.
+Reports, conversations, policy evidence, tests, and patches are retained for 30
+days and at most 20 builds.
 
 ### Optional hosted review
 

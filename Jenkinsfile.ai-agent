@@ -394,7 +394,28 @@ pipeline {
                 script {
                     if (params.MODE in ['PATCH', 'FEATURE']) {
                         withContributorCredential {
-                            sh 'test -n "$GH_TOKEN"'
+                            int contributorPermissionStatus = sh(
+                                script: '''
+                                    set -eu
+                                    test -n "$GH_TOKEN"
+                                    test "$(
+                                      gh api --method GET \
+                                        repos/phobos-dthorga/onair-wyrmgrid \
+                                        --jq '.permissions.push'
+                                    )" = true
+                                ''',
+                                returnStatus: true
+                            )
+                            if (contributorPermissionStatus != 0) {
+                                error(
+                                    'The WyrmGrid Jenkins AI Contributor App ' +
+                                    'cannot write repository contents. Grant ' +
+                                    'Contents read/write in GitHub, accept the ' +
+                                    'installation update, and select all App ' +
+                                    'installation permissions in its Jenkins ' +
+                                    'credential.'
+                                )
+                            }
                         }
                     }
                     if (params.HOSTED_REVIEW == 'OPENAI_AFTER_DRAFT_PR') {

@@ -77,6 +77,11 @@ test("manual AI Agent is bounded, repairable, and draft-only", () => {
     /GIT_ASKPASS=\$\{env\.WORKSPACE\}\/\.jenkins-ai-runtime\/github_git_askpass\.sh/,
   );
   assert.match(aiAgentPipeline, /GIT_TERMINAL_PROMPT=0/);
+  assert.match(aiAgentPipeline, /--jq '\.permissions\.push'/);
+  assert.match(
+    aiAgentPipeline,
+    /cannot write repository contents[\s\S]*Contents read\/write/,
+  );
   assert.match(
     aiAgentPipeline,
     /install -m 0700 scripts\/ai-agent\/github_git_askpass\.sh/,
