@@ -228,12 +228,13 @@ including an `AGENTS.md` range, still requires a completed targeted read.
 Jenkins derives changed paths and line counts from Git. Malformed change-mode
 prose therefore produces a minimal Jenkins technical report rather than
 discarding an otherwise safe patch. Read-only citations remain mandatory.
-Harmless citation forms such as backticks, whitespace, an inline first bullet,
-parenthetical notes, or bounded same-line details introduced by a colon,
-hyphen, or dash are canonicalized before the existing path, line, scope,
-completed-read, and answer-grounding checks. Commentary is discarded; it never
-becomes citation evidence. Every nonempty line after `Citations:` must still
-start with a parseable repository-relative citation. Jenkins archives a
+Harmless citation forms such as backticks, whitespace, an optional citation
+bullet, an inline first citation, parenthetical notes, or bounded same-line
+details introduced by a colon, hyphen, or dash are canonicalized before the
+existing path, line, scope, completed-read, and answer-grounding checks.
+Commentary is discarded; it never becomes citation evidence. Every nonempty
+line after `Citations:` must still start with a parseable repository-relative
+citation. Jenkins archives a
 `read-evidence.json` receipt containing only the normalized completed-read
 paths and line ranges used by that validation, plus counts for completed,
 accepted, and ignored read events. When OpenCode and Jenkins report the same
@@ -243,6 +244,13 @@ to a real file inside the immutable worktree. If OpenCode omits its line-range
 metadata, Jenkins may recover the range from the numbered lines in the completed
 read result; the cited file and range still undergo the normal immutable-source
 and grounding checks.
+
+Sanitized citation responses observed during commissioning are retained in
+`scripts/ai-agent/fixtures/citation-output-cases.json`. Its accepted cases
+canonicalize to the strict archived form, while its rejected cases protect
+against missing ranges, URLs, and narrative text being mistaken for evidence.
+Add a newly observed harmless syntax variation to this corpus before changing
+the parser.
 
 Before tests, Jenkins runs Prettier only on changed supported files and runs the
 repository Rust formatter when Rust files changed. The complete scope, secret,

@@ -36,7 +36,7 @@ CITATION_LINE_RE = re.compile(
     r"(?:-(?P<end>[1-9][0-9]*))?`?\s*$"
 )
 CITATION_DETAIL_LINE_RE = re.compile(
-    r"^\s*`?-\s*`?(?P<path>[A-Za-z0-9_. /\\-]+?):"
+    r"^\s*`?(?:-\s*)?`?(?P<path>[A-Za-z0-9_. /\\-]+?):"
     r"(?P<start>[1-9][0-9]*)(?:-(?P<end>[1-9][0-9]*))?`?"
     r"(?P<detail>[ \t]*(?:(?:\([^()\r\n]{1,500}\))|"
     r"(?:[-\u2013\u2014:][ \t]+[^\r\n]{1,500}))?)$"

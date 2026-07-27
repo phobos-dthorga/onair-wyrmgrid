@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "accepted": [
+    {
+      "name": "build-13-inline-backticked-bullet",
+      "response": "The Linux worker package note is recorded.\n\nCitations: `- docs/operations/jenkins.md:35-37`",
+      "canonical": "The Linux worker package note is recorded.\n\nCitations:\n- docs/operations/jenkins.md:35-37"
+    },
+    {
+      "name": "build-14-parenthetical-details",
+      "response": "UI rules stay in Rust services and Tauri commands remain thin.\n\nCitations:\n- AGENTS.md:23-24 (UI business-rule ownership)\n- AGENTS.md:25 (thin Tauri command delegation)",
+      "canonical": "UI rules stay in Rust services and Tauri commands remain thin.\n\nCitations:\n- AGENTS.md:23-24\n- AGENTS.md:25"
+    },
+    {
+      "name": "build-16-quoted-details",
+      "response": "UI rules stay in Rust services and Tauri commands remain thin.\n\nCitations:\n- `AGENTS.md:23-24` - \"Keep UI code presentational.\"\n- `AGENTS.md:25` - \"Keep Tauri commands thin.\"",
+      "canonical": "UI rules stay in Rust services and Tauri commands remain thin.\n\nCitations:\n- AGENTS.md:23-24\n- AGENTS.md:25"
+    },
+    {
+      "name": "build-17-parenthetical-details",
+      "response": "UI business rules belong in Rust application or domain services. Tauri commands remain thin and delegate to wyrmgrid-application.\n\nCitations:\n- AGENTS.md:23-24 (UI business rules belong in Rust application or domain services)\n- AGENTS.md:25 (Tauri commands delegate to wyrmgrid-application)",
+      "canonical": "UI business rules belong in Rust application or domain services. Tauri commands remain thin and delegate to wyrmgrid-application.\n\nCitations:\n- AGENTS.md:23-24\n- AGENTS.md:25"
+    },
+    {
+      "name": "build-18-inline-unbulleted-citation",
+      "response": "UI business rules must live in Rust application or domain services, never in Svelte event handlers. Tauri commands should be thin and delegate all logic to wyrmgrid-application.\n\nCitations: AGENTS.md:23-25",
+      "canonical": "UI business rules must live in Rust application or domain services, never in Svelte event handlers. Tauri commands should be thin and delegate all logic to wyrmgrid-application.\n\nCitations:\n- AGENTS.md:23-25"
+    }
+  ],
+  "rejected": [
+    {
+      "name": "missing-citation",
+      "response": "UI rules stay in Rust services."
+    },
+    {
+      "name": "citation-followed-by-narrative",
+      "response": "UI rules stay in Rust services.\n\nCitations:\n- AGENTS.md:23-24\nThis line is not evidence."
+    },
+    {
+      "name": "citation-without-line-number",
+      "response": "UI rules stay in Rust services.\n\nCitations: AGENTS.md"
+    },
+    {
+      "name": "non-repository-url",
+      "response": "UI rules stay in Rust services.\n\nCitations: https://example.invalid/source:23"
+    }
+  ]
+}

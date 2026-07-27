@@ -39,6 +39,11 @@ major application version.
 - Canonicalize completed AI Agent reads against the immutable worktree and
   archive read-event audit counts so valid citations survive workspace aliases
   and compatible OpenCode metadata variations.
+- Accept an otherwise valid first citation directly after the `Citations:`
+  marker without requiring the local model to emit a Markdown bullet.
+- Added a table-driven compatibility corpus from sanitized commissioning
+  outputs so future citation handling is tested against observed model
+  behaviour and explicit malformed counterexamples.
 - Reused the existing tested Jenkins credential ID for the repository-restricted
   WyrmGrid contributor App, avoiding a needless private-key rotation.
 - Recorded local-model capabilities and made reasoning compatibility fail

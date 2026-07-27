@@ -14,6 +14,9 @@ from unittest import mock
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 POLICY_PATH = ROOT / "ci" / "ai-agent-policy.yml"
+CITATION_CASES_PATH = (
+    ROOT / "scripts" / "ai-agent" / "fixtures" / "citation-output-cases.json"
+)
 
 
 def load_local_module(name: str, path: pathlib.Path):
@@ -501,6 +504,22 @@ class WyrmGridAiAgentTests(unittest.TestCase):
                 "Citations:\n- AGENTS.md:19-19\nextra text"
             )
 
+    def test_observed_citation_compatibility_corpus(self) -> None:
+        corpus = json.loads(CITATION_CASES_PATH.read_text(encoding="utf-8"))
+        self.assertEqual(1, corpus["schema_version"])
+        for case in corpus["accepted"]:
+            with self.subTest(case=case["name"]):
+                answer = agent.answer_from_text(case["response"])
+                citations = agent.citations_from_text(case["response"])
+                self.assertEqual(
+                    case["canonical"],
+                    agent.render_canonical_response(answer, citations),
+                )
+        for case in corpus["rejected"]:
+            with self.subTest(case=case["name"]):
+                with self.assertRaises(agent.PolicyError):
+                    agent.answer_from_text(case["response"])
+
     def test_build_13_inline_backtick_citation_is_canonicalized(self) -> None:
         response = (
             "The Linux worker package note is recorded.\n\n"
@@ -522,6 +541,27 @@ class WyrmGridAiAgentTests(unittest.TestCase):
         self.assertEqual(
             "The Linux worker package note is recorded.\n\n"
             "Citations:\n- docs/operations/jenkins.md:35-37",
+            agent.render_canonical_response(answer, citations),
+        )
+
+    def test_build_18_inline_unbulleted_citation_is_canonicalized(self) -> None:
+        response = (
+            "UI rules stay in Rust services and Tauri commands remain thin.\n\n"
+            "Citations: AGENTS.md:23-25"
+        )
+        answer = agent.answer_from_text(response)
+        citations = agent.citations_from_text(response)
+        self.assertEqual(
+            "UI rules stay in Rust services and Tauri commands remain thin.",
+            answer,
+        )
+        self.assertEqual(
+            [{"path": "AGENTS.md", "line_start": 23, "line_end": 25}],
+            citations,
+        )
+        self.assertEqual(
+            "UI rules stay in Rust services and Tauri commands remain thin.\n\n"
+            "Citations:\n- AGENTS.md:23-25",
             agent.render_canonical_response(answer, citations),
         )
 
