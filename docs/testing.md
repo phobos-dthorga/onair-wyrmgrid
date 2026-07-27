@@ -181,6 +181,23 @@ The separate landing guard is tested with simulated GitHub evidence and must
 verify the exact App-bot head, one-commit PR, protected merge state, explicit
 squash message, absence of administrative bypass, and merged-commit provenance.
 
+The manually launched Jenkins AI Agent has a different, checked-in test
+contract. A `PATCH` or `FEATURE` run selects `DOCUMENTATION`, `TOOLING`, or
+`REPOSITORY` from `ci/ai-agent-policy.yml`; it cannot supply an arbitrary
+command. Jenkins runs that profile outside the model after validating the
+complete diff. It may return bounded failures for two local repair passes, then
+revalidates the scope and reruns the same profile. A passing result opens only a
+draft PR and still requires ordinary protected pull-request CI and human
+review.
+
+The AI Agent runtime tests cover immutable revisions, read-only citations,
+path normalization, root-wide and traversal refusal, sparse context ceilings,
+oversized exact targets, symlinks, binary changes, secret-like added lines,
+file and line budgets, registered test execution, repair limits, hosted packet
+contents, and draft-only publication. Commissioning adds attended canaries for
+all four read-only modes, a small repair, a multi-file feature, a test-failure
+repair, hosted review, and policy reuse in a second repository.
+
 Do not delegate interpretation of live provider behaviour, security or privacy
 boundaries, protocol compatibility decisions, or assertions that could
 silently redefine a business rule. Test-only pull requests should not change

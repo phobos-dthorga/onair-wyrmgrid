@@ -1,0 +1,723 @@
+def runLocalAgent(
+    String promptPath,
+    String eventLogPath = '.jenkins-ai-opencode/last-events.jsonl'
+) {
+    def selectedModel = readFile(
+        'ci-artifacts/ai-agent/selected-model.txt'
+    ).trim()
+    def promptText = readFile(promptPath)
+    dir('.jenkins-ai-agent-worktree') {
+        withEnv([
+            "OPENCODE_CONFIG=${env.WORKSPACE}/ci-artifacts/ai-agent/opencode.json",
+            "XDG_CACHE_HOME=${env.WORKSPACE}/.jenkins-ai-opencode/cache",
+            "XDG_CONFIG_HOME=${env.WORKSPACE}/.jenkins-ai-opencode/config",
+            "XDG_DATA_HOME=${env.WORKSPACE}/.jenkins-ai-opencode/data",
+            "XDG_STATE_HOME=${env.WORKSPACE}/.jenkins-ai-opencode/state",
+            "AI_AGENT_EVENT_LOG=${eventLogPath}"
+        ]) {
+            sh '''
+                set -eu
+                install -d -m 0700 \
+                  "$XDG_CACHE_HOME" \
+                  "$XDG_CONFIG_HOME" \
+                  "$XDG_DATA_HOME" \
+                  "$XDG_STATE_HOME"
+            '''
+            timeout(time: 20, unit: 'MINUTES') {
+                aiAgent(
+                    agent: openCode(),
+                    apiCredentialsId: 'wyrmgrid-ai-agent-gateway',
+                    apiEnvVarName: 'HOARDMIND_GATE_API_KEY',
+                    commandOverride: '''bash -o pipefail -c 'opencode run --format json --model "$AI_AGENT_MODEL" "$AI_AGENT_PROMPT" | tee "$WORKSPACE/$AI_AGENT_EVENT_LOG"' ''',
+                    disableInteractive: true,
+                    failOnAgentError: true,
+                    model: "hoardmind-gate/${selectedModel}",
+                    prompt: promptText,
+                    requireApprovals: false,
+                    workingDirectory: '.',
+                    yoloMode: false
+                )
+            }
+        }
+    }
+}
+
+def collectAndValidateAgentResult(
+    String eventLogPath = '.jenkins-ai-opencode/last-events.jsonl',
+    String validationLogPath = 'ci-artifacts/ai-agent/validation-attempt-0.log'
+) {
+    int validationStatus = 1
+    withEnv([
+        "AI_AGENT_EVENT_LOG=${eventLogPath}",
+        "AI_AGENT_VALIDATION_LOG=${validationLogPath}"
+    ]) {
+        validationStatus = sh(
+            script: '''#!/usr/bin/env bash
+                set -euo pipefail
+                {
+                    python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
+                      collect-agent-output \
+                      --artifact-dir ci-artifacts/ai-agent \
+                      --agent-worktree .jenkins-ai-agent-worktree \
+                      --event-log "$AI_AGENT_EVENT_LOG" \
+                      --policy .jenkins-ai-runtime/ai-agent-policy.yml
+                    python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
+                      validate-output \
+                      --repository .jenkins-ai-agent-worktree \
+                      --artifact-dir ci-artifacts/ai-agent
+                    python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
+                      validate-diff \
+                      --repository .jenkins-ai-agent-worktree \
+                      --policy .jenkins-ai-runtime/ai-agent-policy.yml \
+                      --artifact-dir ci-artifacts/ai-agent \
+                      --base HEAD
+                } 2>&1 | tee "$AI_AGENT_VALIDATION_LOG"
+            ''',
+            returnStatus: true
+        )
+    }
+    return validationStatus
+}
+
+def runRegisteredTests() {
+    return sh(
+        script: '''
+            set -eu
+            python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
+              run-tests \
+              --repository .jenkins-ai-agent-worktree \
+              --policy .jenkins-ai-runtime/ai-agent-policy.yml \
+              --artifact-dir ci-artifacts/ai-agent \
+              --test-worktree .jenkins-ai-test-worktree
+        ''',
+        returnStatus: true
+    )
+}
+
+def withContributorCredential(Closure body) {
+    withCredentials([
+        usernamePassword(
+            credentialsId: 'wyrmgrid-jenkins-ai-contributor',
+            passwordVariable: 'GH_TOKEN',
+            usernameVariable: 'WYRMGRID_GITHUB_APP_USER'
+        )
+    ]) {
+        body()
+    }
+}
+
+def postDraftComment(String bodyFile) {
+    withContributorCredential {
+        withEnv(["AI_COMMENT_FILE=${bodyFile}"]) {
+            sh '''
+                set -eu
+                gh pr review "$AI_PR_URL" \
+                  --repo phobos-dthorga/onair-wyrmgrid \
+                  --comment \
+                  --body-file "$AI_COMMENT_FILE"
+            '''
+        }
+    }
+}
+
+def runHostedReview() {
+    sh '''
+        set -eu
+        python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
+          build-hosted-packet \
+          --repository .jenkins-ai-agent-worktree \
+          --policy .jenkins-ai-runtime/ai-agent-policy.yml \
+          --artifact-dir ci-artifacts/ai-agent \
+          --head-sha "$AI_HEAD_SHA" \
+          --pr-url "$AI_PR_URL"
+    '''
+    dir('ci-artifacts/ai-agent/hosted-packet') {
+        aiAgent(
+            agent: codex(
+                additionalExecArgs: '--ephemeral --ignore-user-config --ignore-rules --color never --output-schema hosted-review-schema.json -o hosted-review.json',
+                customConfigEnabled: true,
+                customConfigToml: '''
+                    model = "gpt-5.6-sol"
+                    model_reasoning_effort = "xhigh"
+                    web_search = "disabled"
+                '''.stripIndent()
+            ),
+            apiCredentialsId: 'Codex-Jenkins-Tauryk-Gk-Io',
+            apiEnvVarName: 'OPENAI_API_KEY',
+            disableInteractive: true,
+            failOnAgentError: true,
+            model: 'gpt-5.6-sol',
+            prompt: readFile('hosted-review-prompt.md'),
+            reasoningEffort: 'xhigh',
+            requireApprovals: false,
+            workingDirectory: '.',
+            yoloMode: false
+        )
+    }
+    sh '''
+        set -eu
+        python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
+          validate-hosted-review \
+          --repository .jenkins-ai-agent-worktree \
+          --policy .jenkins-ai-runtime/ai-agent-policy.yml \
+          --artifact-dir ci-artifacts/ai-agent
+    '''
+    postDraftComment('ci-artifacts/ai-agent/hosted-review.md')
+}
+
+pipeline {
+    agent none
+
+    options {
+        skipDefaultCheckout(true)
+        disableConcurrentBuilds()
+        timeout(time: 30, unit: 'HOURS')
+        buildDiscarder(logRotator(
+            daysToKeepStr: '30',
+            numToKeepStr: '20',
+            artifactDaysToKeepStr: '30',
+            artifactNumToKeepStr: '20'
+        ))
+    }
+
+    parameters {
+        choice(
+            name: 'MODE',
+            choices: [
+                'ASK',
+                'DECISION_TRACE',
+                'CONSISTENCY_AUDIT',
+                'ROADMAP_STATUS',
+                'PATCH',
+                'FEATURE'
+            ],
+            description: 'Read-only inquiry or scoped draft-PR implementation.'
+        )
+        string(
+            name: 'SOURCE_REVISION',
+            defaultValue: 'main',
+            description: 'main or a full commit SHA reachable from current main.'
+        )
+        text(
+            name: 'REQUEST',
+            defaultValue: '',
+            description: 'Required task or question; maximum 8,000 characters.'
+        )
+        text(
+            name: 'READ_SCOPE',
+            defaultValue: '',
+            description: 'Optional newline-separated documentation paths. Blank uses the canonical defaults.'
+        )
+        text(
+            name: 'ALLOWED_PATHS',
+            defaultValue: '',
+            description: 'PATCH/FEATURE only: up to 32 repository-relative files or directory prefixes.'
+        )
+        string(
+            name: 'MAX_CHANGED_FILES',
+            defaultValue: '',
+            description: 'Blank uses the mode default. PATCH maximum 20; FEATURE maximum 75.'
+        )
+        string(
+            name: 'MAX_CHANGED_LINES',
+            defaultValue: '',
+            description: 'Blank uses the mode default. PATCH maximum 2,000; FEATURE maximum 10,000.'
+        )
+        choice(
+            name: 'TEST_PROFILE',
+            choices: ['NONE', 'DOCUMENTATION', 'TOOLING', 'REPOSITORY'],
+            description: 'Checked-in deterministic test profile. PATCH/FEATURE cannot use NONE.'
+        )
+        choice(
+            name: 'LOCAL_MODEL_PROFILE',
+            choices: [
+                'AUTO',
+                'REPOSITORY_SCHOLAR_LOCAL',
+                'SCOPED_BUILDER_LOCAL'
+            ],
+            description: 'Friendly local workload profile. AUTO selects by mode.'
+        )
+        choice(
+            name: 'HOSTED_REVIEW',
+            choices: ['NONE', 'OPENAI_AFTER_DRAFT_PR'],
+            description: 'Explicit consent for one bounded OpenAI review after a passing draft PR.'
+        )
+    }
+
+    stages {
+        stage('Resolve immutable request') {
+            agent { label 'ai-agent' }
+            steps {
+                deleteDir()
+                checkout scm
+                sh '''
+                    set -eu
+                    mkdir -p .jenkins-ai-runtime ci-artifacts/ai-agent
+                    cp scripts/ai-agent/wyrmgrid_ai_agent.py \
+                      .jenkins-ai-runtime/wyrmgrid_ai_agent.py
+                    cp ci/ai-agent-policy.yml \
+                      .jenkins-ai-runtime/ai-agent-policy.yml
+                    git checkout --detach refs/remotes/origin/main
+                    printf '%s\\n' '.jenkins-ai-runtime/' \
+                      '.jenkins-ai-agent-worktree/' \
+                      '.jenkins-ai-test-worktree/' >> .git/info/exclude
+                '''
+                writeFile(
+                    file: 'ci-artifacts/ai-agent/request.txt',
+                    text: params.REQUEST ?: ''
+                )
+                writeFile(
+                    file: 'ci-artifacts/ai-agent/read-scope.txt',
+                    text: params.READ_SCOPE ?: ''
+                )
+                writeFile(
+                    file: 'ci-artifacts/ai-agent/allowed-paths.txt',
+                    text: params.ALLOWED_PATHS ?: ''
+                )
+                withEnv([
+                    "AI_MODE_VALUE=${params.MODE}",
+                    "AI_SOURCE_REVISION_VALUE=${params.SOURCE_REVISION}",
+                    "AI_MAX_FILES_VALUE=${params.MAX_CHANGED_FILES ?: ''}",
+                    "AI_MAX_LINES_VALUE=${params.MAX_CHANGED_LINES ?: ''}",
+                    "AI_TEST_PROFILE_VALUE=${params.TEST_PROFILE}",
+                    "AI_LOCAL_PROFILE_VALUE=${params.LOCAL_MODEL_PROFILE}",
+                    "AI_HOSTED_REVIEW_VALUE=${params.HOSTED_REVIEW}"
+                ]) {
+                    sh '''#!/usr/bin/env bash
+                        set -euo pipefail
+                        file_limit=()
+                        line_limit=()
+                        if [[ -n "${AI_MAX_FILES_VALUE:-}" ]]; then
+                          file_limit=(--max-changed-files "$AI_MAX_FILES_VALUE")
+                        fi
+                        if [[ -n "${AI_MAX_LINES_VALUE:-}" ]]; then
+                          line_limit=(--max-changed-lines "$AI_MAX_LINES_VALUE")
+                        fi
+                        python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
+                          validate-parameters \
+                          --repository . \
+                          --policy .jenkins-ai-runtime/ai-agent-policy.yml \
+                          --artifact-dir ci-artifacts/ai-agent \
+                          --mode "$AI_MODE_VALUE" \
+                          --source-revision "$AI_SOURCE_REVISION_VALUE" \
+                          --request-file ci-artifacts/ai-agent/request.txt \
+                          --read-scope-file ci-artifacts/ai-agent/read-scope.txt \
+                          --allowed-paths-file ci-artifacts/ai-agent/allowed-paths.txt \
+                          "${file_limit[@]}" \
+                          "${line_limit[@]}" \
+                          --test-profile "$AI_TEST_PROFILE_VALUE" \
+                          --local-model-profile "$AI_LOCAL_PROFILE_VALUE" \
+                          --hosted-review "$AI_HOSTED_REVIEW_VALUE"
+                        python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
+                          validate-toolchain \
+                          --policy .jenkins-ai-runtime/ai-agent-policy.yml \
+                          --artifact-dir ci-artifacts/ai-agent
+                    '''
+                }
+                script {
+                    env.AI_SOURCE_SHA = readFile(
+                        'ci-artifacts/ai-agent/resolved-revision.txt'
+                    ).trim()
+                    env.AI_TEST_RESULT = 'not-run'
+                    env.AI_PUBLISH_DECISION = 'archive'
+                }
+                sh '''
+                    set -eu
+                    git checkout --detach "$AI_SOURCE_SHA"
+                    test "$(git rev-parse HEAD)" = "$AI_SOURCE_SHA"
+                    python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
+                      prepare-workspace \
+                      --repository . \
+                      --policy .jenkins-ai-runtime/ai-agent-policy.yml \
+                      --artifact-dir ci-artifacts/ai-agent \
+                      --agent-worktree .jenkins-ai-agent-worktree
+                '''
+                withCredentials([
+                    string(
+                        credentialsId: 'wyrmgrid-ai-agent-gateway',
+                        variable: 'AI_GATEWAY_CANARY'
+                    )
+                ]) {
+                    sh 'test -n "$AI_GATEWAY_CANARY"'
+                }
+                script {
+                    if (params.MODE in ['PATCH', 'FEATURE']) {
+                        withContributorCredential {
+                            sh 'test -n "$GH_TOKEN"'
+                        }
+                    }
+                    if (params.HOSTED_REVIEW == 'OPENAI_AFTER_DRAFT_PR') {
+                        withCredentials([
+                            string(
+                                credentialsId: 'Codex-Jenkins-Tauryk-Gk-Io',
+                                variable: 'AI_HOSTED_CANARY'
+                            )
+                        ]) {
+                            sh 'test -n "$AI_HOSTED_CANARY"'
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Local repository agent') {
+            agent { label 'ai-agent' }
+            steps {
+                script {
+                    runLocalAgent('ci-artifacts/ai-agent/prompt.md')
+                    int validationStatus = collectAndValidateAgentResult()
+                    if (params.MODE in [
+                        'ASK',
+                        'DECISION_TRACE',
+                        'CONSISTENCY_AUDIT',
+                        'ROADMAP_STATUS'
+                    ]) {
+                        int corrections = 0
+                        while (validationStatus != 0 && corrections < 2) {
+                            corrections += 1
+                            def validationLog =
+                                "ci-artifacts/ai-agent/validation-attempt-${corrections - 1}.log"
+                            def correctionPrompt =
+                                "ci-artifacts/ai-agent/read-only-repair-prompt-${corrections}.md"
+                            def correctionEvents =
+                                ".jenkins-ai-opencode/read-only-repair-${corrections}.jsonl"
+                            def correctionValidation =
+                                "ci-artifacts/ai-agent/validation-attempt-${corrections}.log"
+                            withEnv([
+                                "AI_READ_ONLY_REPAIR_ATTEMPT=${corrections}",
+                                "AI_READ_ONLY_FAILURE_LOG=${validationLog}"
+                            ]) {
+                                sh '''
+                                    set -eu
+                                    python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
+                                      read-only-repair-prompt \
+                                      --artifact-dir ci-artifacts/ai-agent \
+                                      --attempt "$AI_READ_ONLY_REPAIR_ATTEMPT" \
+                                      --failure-log "$AI_READ_ONLY_FAILURE_LOG"
+                                '''
+                            }
+                            runLocalAgent(correctionPrompt, correctionEvents)
+                            validationStatus = collectAndValidateAgentResult(
+                                correctionEvents,
+                                correctionValidation
+                            )
+                        }
+                    }
+                    if (params.MODE in ['PATCH', 'FEATURE']) {
+                        int corrections = 0
+                        while (validationStatus != 0 && corrections < 2) {
+                            corrections += 1
+                            def validationLog =
+                                "ci-artifacts/ai-agent/validation-attempt-${corrections - 1}.log"
+                            def correctionPrompt =
+                                "ci-artifacts/ai-agent/change-repair-prompt-${corrections}.md"
+                            def correctionEvents =
+                                ".jenkins-ai-opencode/change-repair-${corrections}.jsonl"
+                            def correctionValidation =
+                                "ci-artifacts/ai-agent/validation-attempt-${corrections}.log"
+                            withEnv([
+                                "AI_CHANGE_REPAIR_ATTEMPT=${corrections}",
+                                "AI_CHANGE_FAILURE_LOG=${validationLog}"
+                            ]) {
+                                sh '''
+                                    set -eu
+                                    python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
+                                      change-repair-prompt \
+                                      --artifact-dir ci-artifacts/ai-agent \
+                                      --attempt "$AI_CHANGE_REPAIR_ATTEMPT" \
+                                      --failure-log "$AI_CHANGE_FAILURE_LOG"
+                                '''
+                            }
+                            runLocalAgent(correctionPrompt, correctionEvents)
+                            validationStatus = collectAndValidateAgentResult(
+                                correctionEvents,
+                                correctionValidation
+                            )
+                        }
+                    }
+                    if (validationStatus != 0) {
+                        error(
+                            'The local agent did not satisfy the bounded output ' +
+                            'contract after the permitted correction passes.'
+                        )
+                    }
+                }
+            }
+        }
+
+        stage('Deterministic tests and local repair') {
+            when {
+                expression { params.MODE in ['PATCH', 'FEATURE'] }
+            }
+            agent { label 'ai-agent' }
+            steps {
+                script {
+                    int repairs = 0
+                    int testStatus = runRegisteredTests()
+                    while (testStatus != 0 && repairs < 2) {
+                        repairs += 1
+                        withEnv(["AI_REPAIR_ATTEMPT=${repairs}"]) {
+                            sh '''
+                                set -eu
+                                python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
+                                  repair-prompt \
+                                  --artifact-dir ci-artifacts/ai-agent \
+                                  --attempt "$AI_REPAIR_ATTEMPT"
+                            '''
+                        }
+                        runLocalAgent(
+                            "ci-artifacts/ai-agent/repair-prompt-${repairs}.md"
+                        )
+                        collectAndValidateAgentResult()
+                        testStatus = runRegisteredTests()
+                    }
+                    env.AI_TEST_RESULT = testStatus == 0 ? 'passed' : 'failed'
+                    sh '''
+                        set -eu
+                        python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
+                          create-patch \
+                          --repository .jenkins-ai-agent-worktree \
+                          --artifact-dir ci-artifacts/ai-agent
+                    '''
+                }
+            }
+        }
+
+        stage('Persistent test failure decision') {
+            when {
+                expression {
+                    params.MODE in ['PATCH', 'FEATURE'] &&
+                    env.AI_TEST_RESULT == 'failed'
+                }
+            }
+            agent none
+            steps {
+                script {
+                    try {
+                        timeout(time: 24, unit: 'HOURS') {
+                            env.AI_PUBLISH_DECISION = input(
+                                message: 'The scoped patch still fails after two repair passes.',
+                                ok: 'Continue',
+                                parameters: [
+                                    choice(
+                                        name: 'OUTCOME',
+                                        choices: [
+                                            'ARCHIVE_ONLY',
+                                            'OPEN_FAILING_DRAFT_PR'
+                                        ],
+                                        description: 'Archive safely or publish a clearly marked failing draft PR.'
+                                    )
+                                ]
+                            )
+                        }
+                    } catch (Throwable ignored) {
+                        env.AI_PUBLISH_DECISION = 'ARCHIVE_ONLY'
+                    }
+                    unstable(
+                        'Registered tests still fail after two bounded local repair passes.'
+                    )
+                }
+            }
+        }
+
+        stage('Publish draft PR') {
+            when {
+                expression {
+                    params.MODE in ['PATCH', 'FEATURE'] &&
+                    (env.AI_TEST_RESULT == 'passed' ||
+                     env.AI_PUBLISH_DECISION == 'OPEN_FAILING_DRAFT_PR')
+                }
+            }
+            agent { label 'ai-agent' }
+            steps {
+                script {
+                    sh '''
+                        set -eu
+                        python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
+                          expand-worktree \
+                          --agent-worktree .jenkins-ai-agent-worktree
+                    '''
+                    def titlePrefix = env.AI_TEST_RESULT == 'passed' ?
+                        '[AI Agent]' : '[AI Agent][FAILING]'
+                    def safeRequest = params.REQUEST
+                        .replaceAll(/[\\r\\n\\t]+/, ' ')
+                        .trim()
+                    if (safeRequest.length() > 72) {
+                        safeRequest = safeRequest.substring(0, 72).trim()
+                    }
+                    env.AI_PR_TITLE = "${titlePrefix} ${safeRequest}"
+                    env.AI_BRANCH = "jenkins-ai/${env.BUILD_NUMBER}-${env.AI_SOURCE_SHA.take(12)}"
+                    writeFile(
+                        file: 'ci-artifacts/ai-agent/draft-pr-body.md',
+                        text: """# Jenkins AI Agent draft
+
+Mode: `${params.MODE}`
+Immutable source: `${env.AI_SOURCE_SHA}`
+Local model profile: `${params.LOCAL_MODEL_PROFILE}`
+Test result: `${env.AI_TEST_RESULT}`
+Hosted review consent: `${params.HOSTED_REVIEW}`
+
+This draft was produced by the manually launched, repository-scoped Jenkins AI
+Agent workflow. It cannot approve or merge itself. Review the archived policy,
+diff, citations, test evidence, and conversation before promoting it.
+"""
+                    )
+                    withContributorCredential {
+                        env.AI_PR_URL = sh(
+                            script: '''
+                                set -eu
+                                cd .jenkins-ai-agent-worktree
+                                git switch -c "$AI_BRANCH"
+                                git config user.name 'WyrmGrid Jenkins AI Agent'
+                                git config user.email \
+                                  'wyrmgrid-jenkins-ai-agent@users.noreply.github.com'
+                                git add -A
+                                git diff --cached --check
+                                git commit -m "$AI_PR_TITLE"
+                                gh auth setup-git
+                                git push --set-upstream origin "$AI_BRANCH"
+                                gh pr create \
+                                  --repo phobos-dthorga/onair-wyrmgrid \
+                                  --base main \
+                                  --head "$AI_BRANCH" \
+                                  --draft \
+                                  --title "$AI_PR_TITLE" \
+                                  --body-file \
+                                  "$WORKSPACE/ci-artifacts/ai-agent/draft-pr-body.md"
+                            ''',
+                            returnStdout: true
+                        ).trim().readLines().last()
+                    }
+                    env.AI_HEAD_SHA = sh(
+                        script: 'git -C .jenkins-ai-agent-worktree rev-parse HEAD',
+                        returnStdout: true
+                    ).trim()
+                    writeFile(
+                        file: 'ci-artifacts/ai-agent/draft-pr.txt',
+                        text: "${env.AI_PR_URL}\n${env.AI_HEAD_SHA}\n"
+                    )
+                }
+            }
+        }
+
+        stage('Optional hosted OpenAI review') {
+            when {
+                expression {
+                    params.HOSTED_REVIEW == 'OPENAI_AFTER_DRAFT_PR' &&
+                    env.AI_TEST_RESULT == 'passed' &&
+                    env.AI_PR_URL?.trim()
+                }
+            }
+            agent { label 'ai-agent' }
+            steps {
+                script {
+                    try {
+                        runHostedReview()
+                        int actionable = readFile(
+                            'ci-artifacts/ai-agent/hosted-actionable-count.txt'
+                        ).trim().toInteger()
+                        if (actionable > 0) {
+                            sh '''
+                                set -eu
+                                cp ci-artifacts/ai-agent/hosted-packet/hosted-review.json \
+                                  ci-artifacts/ai-agent/hosted-review-initial.json
+                                cp ci-artifacts/ai-agent/hosted-review.md \
+                                  ci-artifacts/ai-agent/hosted-review-initial.md
+                                python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
+                                  hosted-repair-prompt \
+                                  --artifact-dir ci-artifacts/ai-agent
+                                python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
+                                  set-sparse-worktree \
+                                  --artifact-dir ci-artifacts/ai-agent \
+                                  --agent-worktree .jenkins-ai-agent-worktree
+                            '''
+                            runLocalAgent(
+                                'ci-artifacts/ai-agent/hosted-repair-prompt.md'
+                            )
+                            collectAndValidateAgentResult()
+                            int repairStatus = runRegisteredTests()
+                            if (repairStatus == 0) {
+                                sh '''
+                                    set -eu
+                                    python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
+                                      expand-worktree \
+                                      --agent-worktree .jenkins-ai-agent-worktree
+                                '''
+                                withContributorCredential {
+                                    sh '''
+                                        set -eu
+                                        cd .jenkins-ai-agent-worktree
+                                        git add -A
+                                        git diff --cached --check
+                                        git commit -m \
+                                          'fix: address bounded hosted review'
+                                        gh auth setup-git
+                                        git push origin "$AI_BRANCH"
+                                    '''
+                                }
+                                env.AI_HEAD_SHA = sh(
+                                    script: 'git -C .jenkins-ai-agent-worktree rev-parse HEAD',
+                                    returnStdout: true
+                                ).trim()
+                                runHostedReview()
+                            } else {
+                                sh '''
+                                    set -eu
+                                    git -C .jenkins-ai-agent-worktree diff \
+                                      --binary --full-index HEAD -- \
+                                      > ci-artifacts/ai-agent/hosted-repair-failed.patch
+                                    cp -R ci-artifacts/ai-agent/tests \
+                                      ci-artifacts/ai-agent/hosted-repair-tests
+                                    git -C .jenkins-ai-agent-worktree restore \
+                                      --source=HEAD --staged --worktree -- .
+                                    git -C .jenkins-ai-agent-worktree clean -fd
+                                '''
+                                unstable(
+                                    'Hosted repair failed; draft PR remains at its last passing commit.'
+                                )
+                            }
+                        }
+                    } catch (Throwable failure) {
+                        sh(
+                            script: '''
+                                set +e
+                                git -C .jenkins-ai-agent-worktree diff \
+                                  --binary --full-index HEAD -- \
+                                  > ci-artifacts/ai-agent/hosted-repair-failed.patch
+                                git -C .jenkins-ai-agent-worktree restore \
+                                  --source=HEAD --staged --worktree -- .
+                                git -C .jenkins-ai-agent-worktree clean -fd
+                                exit 0
+                            ''',
+                            returnStatus: true
+                        )
+                        unstable(
+                            "Hosted review remained advisory: ${failure.message}"
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            node('ai-agent') {
+                archiveArtifacts(
+                    artifacts: 'ci-artifacts/ai-agent/**',
+                    allowEmptyArchive: true,
+                    fingerprint: true
+                )
+                sh '''
+                    set +e
+                    git worktree remove --force \
+                      .jenkins-ai-test-worktree >/dev/null 2>&1
+                    git worktree remove --force \
+                      .jenkins-ai-agent-worktree >/dev/null 2>&1
+                    exit 0
+                '''
+                deleteDir()
+            }
+        }
+    }
+}

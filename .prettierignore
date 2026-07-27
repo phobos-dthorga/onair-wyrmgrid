@@ -1,6 +1,7 @@
 Cargo.lock
 target/
 node_modules/
+ci/ai-agent-policy.yml
 apps/desktop/build/
 apps/desktop/.svelte-kit/
 apps/desktop/src-tauri/gen/

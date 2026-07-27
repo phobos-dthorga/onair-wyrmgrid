@@ -1,0 +1,240 @@
+{
+  "schema_version": 1,
+  "repository": "phobos-dthorga/onair-wyrmgrid",
+  "job": {
+    "request_max_characters": 8000,
+    "maximum_scope_entries": 32,
+    "retention_days": 30,
+    "retention_builds": 20,
+    "failure_decision_hours": 24,
+    "local_test_repair_attempts": 2,
+    "hosted_repair_attempts": 1,
+    "agent_steps": {
+      "ASK": 8,
+      "DECISION_TRACE": 16,
+      "CONSISTENCY_AUDIT": 24,
+      "ROADMAP_STATUS": 16,
+      "PATCH": 48,
+      "FEATURE": 96
+    }
+  },
+  "modes": {
+    "read_only": [
+      "ASK",
+      "DECISION_TRACE",
+      "CONSISTENCY_AUDIT",
+      "ROADMAP_STATUS"
+    ],
+    "change": [
+      "PATCH",
+      "FEATURE"
+    ]
+  },
+  "documentation": {
+    "default_paths": [
+      "AGENTS.md",
+      "README.md",
+      "docs/README.md",
+      "docs/project-brief.md",
+      "docs/roadmap.md"
+    ],
+    "maximum_inventory_bytes": 3145728,
+    "maximum_hosted_packet_bytes": 524288,
+    "maximum_hosted_document_bytes": 131072
+  },
+  "context_limits": {
+    "active_profile": "SMALL_FILES",
+    "promotion_order": [
+      "SMALL_FILES",
+      "MEDIUM_FILES",
+      "LARGE_FILES_RESEARCH"
+    ],
+    "operator_note": "Change active_profile to promote every run. Edit the three numeric ceilings inside a named profile only after reviewed canary evidence.",
+    "profiles": {
+      "SMALL_FILES": {
+        "description": "Initial small-file commissioning tier.",
+        "maximum_visible_file_bytes": 32768,
+        "maximum_visible_file_lines": 800,
+        "maximum_visible_total_bytes": 524288
+      },
+      "MEDIUM_FILES": {
+        "description": "Promote after small-file PATCH and FEATURE canaries pass.",
+        "maximum_visible_file_bytes": 65536,
+        "maximum_visible_file_lines": 1200,
+        "maximum_visible_total_bytes": 1048576
+      },
+      "LARGE_FILES_RESEARCH": {
+        "description": "Attended research tier for selected large source files.",
+        "maximum_visible_file_bytes": 131072,
+        "maximum_visible_file_lines": 2500,
+        "maximum_visible_total_bytes": 2097152
+      }
+    }
+  },
+  "change_limits": {
+    "PATCH": {
+      "default_files": 8,
+      "maximum_files": 20,
+      "default_lines": 500,
+      "maximum_lines": 2000
+    },
+    "FEATURE": {
+      "default_files": 30,
+      "maximum_files": 75,
+      "default_lines": 3000,
+      "maximum_lines": 10000
+    }
+  },
+  "model_profiles": {
+    "REPOSITORY_SCHOLAR_LOCAL": {
+      "display_name": "WyrmGrid Repository Scholar — Local",
+      "role": "documentation analysis",
+      "provider": "hoardmind-gate",
+      "selected_model": "qwen3.6:35b",
+      "selection_status": "pending_wyrmgrid_canary",
+      "context_tokens": 4096,
+      "maximum_output_tokens": 1200,
+      "candidate_models": [
+        "qwen3.6:35b",
+        "qwen3-coder:30b"
+      ]
+    },
+    "SCOPED_BUILDER_LOCAL": {
+      "display_name": "WyrmGrid Scoped Builder — Local",
+      "role": "bounded repository implementation",
+      "provider": "hoardmind-gate",
+      "selected_model": "qwen3-coder:30b",
+      "selection_status": "pending_small_file_patch_canary",
+      "context_tokens": 4096,
+      "maximum_output_tokens": 1200,
+      "candidate_models": [
+        "qwen3-coder:30b",
+        "qwen3.6:35b"
+      ]
+    }
+  },
+  "toolchain": {
+    "execution_interface": "Jenkins AI Agent plugin",
+    "opencode_version": "1.18.5",
+    "codex_cli_version": "0.145.0"
+  },
+  "test_profiles": {
+    "DOCUMENTATION": {
+      "description": "Repository formatting and AI Agent policy contracts.",
+      "timeout_seconds": 600,
+      "commands": [
+        [
+          "npm",
+          "run",
+          "format:frontend:check"
+        ],
+        [
+          "node",
+          "--test",
+          "scripts/ai-agent-runtime.test.mjs"
+        ]
+      ]
+    },
+    "TOOLING": {
+      "description": "Complete JavaScript tooling and AI Agent unit tests.",
+      "timeout_seconds": 1200,
+      "commands": [
+        [
+          "npm",
+          "run",
+          "test:tooling"
+        ]
+      ]
+    },
+    "REPOSITORY": {
+      "description": "Complete deterministic Linux repository validation.",
+      "timeout_seconds": 10800,
+      "commands": [
+        [
+          "npm",
+          "run",
+          "ci:frontend"
+        ],
+        [
+          "npm",
+          "run",
+          "ci:python"
+        ],
+        [
+          "npm",
+          "run",
+          "ci:prepare"
+        ],
+        [
+          "npm",
+          "run",
+          "ci:rust"
+        ],
+        [
+          "npm",
+          "run",
+          "ci:dependencies"
+        ]
+      ]
+    }
+  },
+  "scope": {
+    "forbidden_roots": [
+      "",
+      ".",
+      "/",
+      "*",
+      "**",
+      ".git"
+    ],
+    "binary_extensions": [
+      ".7z",
+      ".avi",
+      ".bin",
+      ".bmp",
+      ".class",
+      ".dll",
+      ".doc",
+      ".docx",
+      ".exe",
+      ".gif",
+      ".gz",
+      ".ico",
+      ".jar",
+      ".jpeg",
+      ".jpg",
+      ".mp3",
+      ".mp4",
+      ".pdf",
+      ".png",
+      ".so",
+      ".tar",
+      ".wav",
+      ".webm",
+      ".webp",
+      ".woff",
+      ".woff2",
+      ".xls",
+      ".xlsx",
+      ".zip"
+    ]
+  },
+  "credentials": {
+    "local_gateway": "wyrmgrid-ai-agent-gateway",
+    "github_contributor": "wyrmgrid-jenkins-ai-contributor",
+    "hosted_openai_review": "Codex-Jenkins-Tauryk-Gk-Io"
+  },
+  "hosted_review": {
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "xhigh",
+    "review_event": "COMMENT"
+  },
+  "artifacts": {
+    "directory": "ci-artifacts/ai-agent",
+    "report_markdown": "agent-output.md",
+    "report_json": "agent-output.json",
+    "patch": "proposed.patch",
+    "maximum_event_log_bytes": 16777216,
+    "maximum_final_response_bytes": 65536
+  }
+}

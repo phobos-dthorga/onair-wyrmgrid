@@ -5,16 +5,81 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const [multibranchPipeline, releasePipeline, packageMetadata, tauriConfig] =
-  await Promise.all([
-    readFile(resolve(repositoryRoot, "Jenkinsfile"), "utf8"),
-    readFile(resolve(repositoryRoot, "Jenkinsfile.release"), "utf8"),
-    readFile(resolve(repositoryRoot, "package.json"), "utf8").then(JSON.parse),
-    readFile(
-      resolve(repositoryRoot, "apps/desktop/src-tauri/tauri.conf.json"),
-      "utf8",
-    ).then(JSON.parse),
-  ]);
+const [
+  multibranchPipeline,
+  releasePipeline,
+  aiAgentPipeline,
+  aiAgentPolicy,
+  packageMetadata,
+  tauriConfig,
+] = await Promise.all([
+  readFile(resolve(repositoryRoot, "Jenkinsfile"), "utf8"),
+  readFile(resolve(repositoryRoot, "Jenkinsfile.release"), "utf8"),
+  readFile(resolve(repositoryRoot, "Jenkinsfile.ai-agent"), "utf8"),
+  readFile(resolve(repositoryRoot, "ci/ai-agent-policy.yml"), "utf8").then(
+    JSON.parse,
+  ),
+  readFile(resolve(repositoryRoot, "package.json"), "utf8").then(JSON.parse),
+  readFile(
+    resolve(repositoryRoot, "apps/desktop/src-tauri/tauri.conf.json"),
+    "utf8",
+  ).then(JSON.parse),
+]);
+
+test("manual AI Agent is bounded, repairable, and draft-only", () => {
+  for (const mode of [
+    "ASK",
+    "DECISION_TRACE",
+    "CONSISTENCY_AUDIT",
+    "ROADMAP_STATUS",
+    "PATCH",
+    "FEATURE",
+  ]) {
+    assert.match(aiAgentPipeline, new RegExp(`'${mode}'`));
+  }
+  for (const parameter of [
+    "SOURCE_REVISION",
+    "REQUEST",
+    "READ_SCOPE",
+    "ALLOWED_PATHS",
+    "MAX_CHANGED_FILES",
+    "MAX_CHANGED_LINES",
+    "TEST_PROFILE",
+    "LOCAL_MODEL_PROFILE",
+    "HOSTED_REVIEW",
+  ]) {
+    assert.match(aiAgentPipeline, new RegExp(`name: '${parameter}'`));
+  }
+  assert.match(aiAgentPipeline, /agent \{ label 'ai-agent' \}/);
+  assert.match(aiAgentPipeline, /disableConcurrentBuilds\(\)/);
+  assert.match(aiAgentPipeline, /buildDiscarder\(logRotator\(/);
+  assert.match(aiAgentPipeline, /wyrmgrid-ai-agent-gateway/);
+  assert.match(aiAgentPipeline, /wyrmgrid-jenkins-ai-contributor/);
+  assert.match(aiAgentPipeline, /Codex-Jenkins-Tauryk-Gk-Io/);
+  assert.match(aiAgentPipeline, /phobos-dthorga\/onair-wyrmgrid/);
+  assert.match(aiAgentPipeline, /validate-toolchain/);
+  assert.match(
+    aiAgentPipeline,
+    /while \(validationStatus != 0 && corrections < 2\)/,
+  );
+  assert.match(aiAgentPipeline, /while \(testStatus != 0 && repairs < 2\)/);
+  assert.match(aiAgentPipeline, /timeout\(time: 24, unit: 'HOURS'\)/);
+  assert.match(aiAgentPipeline, /'ARCHIVE_ONLY'/);
+  assert.match(aiAgentPipeline, /'OPEN_FAILING_DRAFT_PR'/);
+  assert.match(aiAgentPipeline, /gh pr create/);
+  assert.match(aiAgentPipeline, /--draft/);
+  assert.doesNotMatch(
+    aiAgentPipeline,
+    /gh pr (?:merge|approve)|gh release|--admin|--auto|mark-ready/,
+  );
+  assert.doesNotMatch(aiAgentPipeline, /forgeAI\(/);
+  assert.equal(aiAgentPolicy.repository, "phobos-dthorga/onair-wyrmgrid");
+  assert.equal(aiAgentPolicy.context_limits.active_profile, "SMALL_FILES");
+  assert.equal(aiAgentPolicy.toolchain.opencode_version, "1.18.5");
+  assert.equal(aiAgentPolicy.toolchain.codex_cli_version, "0.145.0");
+  assert.equal(aiAgentPolicy.job.local_test_repair_attempts, 2);
+  assert.equal(aiAgentPolicy.job.hosted_repair_attempts, 1);
+});
 
 test("multibranch pipeline runs the complete credential-free Linux and Windows gates", () => {
   assert.match(multibranchPipeline, /agent \{ label 'linux' \}/);

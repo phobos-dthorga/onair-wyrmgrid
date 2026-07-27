@@ -171,6 +171,159 @@ valid analyzer evidence. Partial and malformed reports are still archived for
 diagnosis. Because this advisory stage is last, it cannot prevent deterministic
 validation or snapshot creation.
 
+## Manual Jenkins AI Agent job
+
+`Jenkinsfile.ai-agent` defines a separate, manually launched research and
+implementation job. It is not a branch-discovery pipeline, does not replace
+ForgeAI, and never runs in the exact-tag release job. The installed
+[Jenkins AI Agent plugin](https://plugins.jenkins.io/ai-agent/) remains the
+conversation, execution, and usage-statistics interface for both local
+OpenCode and an explicitly selected hosted review.
+
+The six modes are:
+
+- `ASK`, for a cited question against the selected immutable revision;
+- `DECISION_TRACE`, for following an architectural or operational decision
+  through its sources;
+- `CONSISTENCY_AUDIT`, for evidence-backed contradictions or drift;
+- `ROADMAP_STATUS`, for implemented, remaining, and uncertain roadmap work;
+- `PATCH`, for a small bounded correction; and
+- `FEATURE`, for a larger but still explicitly scoped implementation.
+
+Read-only modes archive Markdown and structured JSON with exact commit-bound
+`path:line` citations and must leave no tracked diff. `PATCH` and `FEATURE`
+require `ALLOWED_PATHS`, may create, modify, rename, or delete textual files in
+those paths, and must select a test profile from
+[`ci/ai-agent-policy.yml`](../../ci/ai-agent-policy.yml). Dependency
+manifests, migrations, CI files, and security-policy files are not categorically
+forbidden; their exact path must be explicitly included. Opaque binary changes,
+generated binaries, root-wide scopes, wildcards, traversal, symlink escapes,
+secrets, excess files, excess lines, and changes outside the declared scope are
+rejected before publication.
+
+The local model receives at most two bounded correction passes for an invalid
+answer or missing/invalid diff. Jenkins then runs the selected checked-in test
+profile outside the model and may return bounded, redacted failures for at most
+two test-and-repair passes. A persistent failure releases the executor before
+asking whether to archive the patch or open a clearly marked failing draft.
+No response within 24 hours defaults to archive-only.
+
+A passing change becomes one namespaced branch and one draft pull request.
+Jenkins commits and publishes only the exact revalidated diff. The local model
+does not receive GitHub credentials and cannot approve, merge, publish a
+release, modify repository settings, or make a draft ready for review.
+
+### Editable context tiers
+
+The model-visible file limits are intentionally ordinary checked-in policy, not
+hard-coded Jenkins parameters. Open
+[`ci/ai-agent-policy.yml`](../../ci/ai-agent-policy.yml) and find:
+
+```json
+"context_limits": {
+  "active_profile": "SMALL_FILES",
+  "profiles": {
+    "SMALL_FILES": { "...": "initial ceilings" },
+    "MEDIUM_FILES": { "...": "next commissioning tier" },
+    "LARGE_FILES_RESEARCH": { "...": "attended research tier" }
+  }
+}
+```
+
+Change only `active_profile` to promote every run to an already reviewed tier.
+To tune a tier, edit its three nearby values:
+`maximum_visible_file_bytes`, `maximum_visible_file_lines`, and
+`maximum_visible_total_bytes`. The file uses JSON-compatible YAML so the
+dependency-free Python policy runtime can parse it. Keep the syntax as strict
+JSON.
+
+Initial `SMALL_FILES` commissioning allows 32 KiB or 800 lines per file and
+512 KiB across the complete sparse worktree. `MEDIUM_FILES` permits 64 KiB,
+1,200 lines, and 1 MiB. `LARGE_FILES_RESEARCH` permits 128 KiB, 2,500 lines,
+and 2 MiB. Promote only after reviewed `ASK`, `PATCH`, and `FEATURE` canaries at
+the current tier. Oversized paths remain visible in the documentation inventory
+with their path, size, line count, and hash, but their contents are not copied
+into model context. An exact oversized write target fails before inference.
+
+These file ceilings are separate from the local model's 4,096-token context and
+1,200-token response limits. Repository Scholar and Scoped Builder are friendly
+profile names; their current exact local model IDs and provisional selection
+status remain visible in the policy.
+
+### Worker and pinned tools
+
+Run the job on the dedicated unprivileged VLAN 20 LXC with label `ai-agent` and
+one executor. It may share that single research executor sequentially with the
+Hoardmind commissioning job, but it must not share repository workspaces,
+Gateway clients, GitHub Apps, or Jenkins credentials. Keep the controller at
+zero executors. OpenCode sends inference to Hoardmind Gate; it does not require
+GPU access inside the container.
+
+The policy pins OpenCode `1.18.5` and OpenAI Codex CLI `0.145.0`. Every run
+records a privacy-reduced toolchain report and fails before inference if the
+worker reports another version. Upgrades require their own reviewed source
+change and commissioning canary.
+
+### Credentials and manual job creation
+
+Provision three separately scoped Jenkins credentials:
+
+- `wyrmgrid-ai-agent-gateway`: Secret Text for a concurrency-one Hoardmind Gate
+  client named `jenkins-wyrmgrid-ai-agent`;
+- `wyrmgrid-jenkins-ai-contributor`: GitHub App credential for the
+  repository-restricted `WyrmGrid Jenkins AI Contributor` App; and
+- `Codex-Jenkins-Tauryk-Gk-Io`: the existing global Secret Text OpenAI API key,
+  used only when `OPENAI_AFTER_DRAFT_PR` is selected.
+
+Install the contributor App only on `phobos-dthorga/onair-wyrmgrid`. Grant
+Metadata read-only, Contents read/write, and Pull requests read/write. Grant no
+Administration, Actions, Checks, Environments, Issues, Members, Secrets,
+Workflows, merge-queue, or organization authority. A client secret is not
+needed. Private-key generation, rotation, conversion, and Jenkins credential
+entry are manual maintainer actions; never paste a key into a job parameter,
+prompt, artifact, build log, or repository file.
+
+Create a manually triggered Pipeline from SCM named `wyrmgrid-ai-agent`:
+
+- repository: `https://github.com/phobos-dthorga/onair-wyrmgrid.git`;
+- script path: `Jenkinsfile.ai-agent`;
+- Jenkins credential for source checkout: the existing read-only
+  `wyrmgrid-github-ci`;
+- no SCM polling, webhook trigger, timer, or automatic upstream trigger; and
+- branch: the commissioning source branch until the implementation is merged,
+  then `main`.
+
+The job validates that the local Gateway credential exists for every run, the
+contributor credential exists before a change-making run, and the hosted key
+exists only when hosted review is selected. Reports, conversations, policy
+evidence, tests, and patches are retained for 30 days and at most 20 builds.
+
+### Optional hosted review
+
+`OPENAI_AFTER_DRAFT_PR` is per-run consent for hosted processing. Jenkins first
+opens a passing draft PR, records an outbound manifest, and constructs a
+separate packet directory containing only the exact diff, test results,
+relevant excerpts from the declared documentation scope, and the repository
+rules required to review that change. OpenAI Codex runs in that directory with
+ephemeral state, no web search, `gpt-5.6-sol`, and `xhigh` reasoning.
+
+The structured result is archived and posted as a non-approving `COMMENT`
+review. Actionable findings inside the original scope may receive one local
+repair pass. If the same tests pass, Jenkins pushes one follow-up commit and
+runs one hosted verification review against the new exact SHA. It does not
+continue beyond that cycle. A failed hosted repair is archived and discarded,
+leaving the draft PR at its last passing commit.
+
+### Reuse by another owned repository
+
+Another owned repository adopts this pattern through its own manual Pipeline,
+checked-in `ci/ai-agent-policy.yml`, documentation roots, test registry,
+context tiers, Hoardmind Gate client, and repository-restricted contributor
+App. Never add a second repository to the WyrmGrid App installation or reuse
+the WyrmGrid Gateway secret. The same draft-only, no-merge lifecycle applies,
+but model selection and file ceilings are commissioned independently against
+that repository's actual corpus.
+
 ## Trusted release job
 
 Create a separate locked Jenkins folder containing one Pipeline job sourced

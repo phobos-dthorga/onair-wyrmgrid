@@ -8,11 +8,16 @@ major application version.
 
 ### New features
 
-- None.
+- Added a manually launched six-mode Jenkins AI Agent for immutable cited
+  repository research and bounded `PATCH` or `FEATURE` work. Passing changes
+  open draft-only pull requests after checked-in tests, with an explicitly
+  selected packet-only OpenAI review available after publication.
 
 ### Changes
 
-- None.
+- Added operator-editable small, medium, and attended large-file context tiers
+  for local-agent commissioning. Oversized files remain inventory-visible but
+  content-hidden and cannot be changed by a run that could not inspect them.
 
 ### Removed
 
