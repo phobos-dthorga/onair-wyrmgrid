@@ -165,23 +165,50 @@
   "toolchain": {
     "execution_interface": "Jenkins AI Agent plugin",
     "opencode_version": "1.18.5",
-    "codex_cli_version": "0.145.0"
+    "codex_cli_version": "0.145.0",
+    "required_commands": [
+      "bash",
+      "cat",
+      "cp",
+      "git",
+      "install",
+      "mkdir",
+      "node",
+      "npm",
+      "opencode",
+      "python3",
+      "tee"
+    ],
+    "change_commands": [
+      "gh"
+    ],
+    "hosted_review_commands": [
+      "codex"
+    ],
+    "test_profile_commands": {
+      "DOCUMENTATION": [],
+      "TOOLING": [],
+      "REPOSITORY": [
+        "cargo",
+        "cargo-deny",
+        "python",
+        "rustfmt"
+      ]
+    }
   },
   "test_profiles": {
     "DOCUMENTATION": {
-      "description": "Repository formatting and AI Agent policy contracts.",
+      "description": "Repository formatting for documentation-only changes.",
       "timeout_seconds": 600,
       "bootstrap_dependencies": true,
+      "required_paths": [
+        "package.json"
+      ],
       "commands": [
         [
           "npm",
           "run",
           "format:frontend:check"
-        ],
-        [
-          "node",
-          "--test",
-          "scripts/ai-agent-runtime.test.mjs"
         ]
       ]
     },
@@ -189,6 +216,9 @@
       "description": "Complete JavaScript tooling and AI Agent unit tests.",
       "timeout_seconds": 1200,
       "bootstrap_dependencies": true,
+      "required_paths": [
+        "package.json"
+      ],
       "commands": [
         [
           "npm",
@@ -201,6 +231,11 @@
       "description": "Complete deterministic Linux repository validation.",
       "timeout_seconds": 10800,
       "bootstrap_dependencies": true,
+      "required_paths": [
+        "Cargo.toml",
+        "package.json",
+        "rust-toolchain.toml"
+      ],
       "commands": [
         [
           "npm",

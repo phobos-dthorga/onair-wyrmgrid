@@ -9,6 +9,7 @@ const [
   multibranchPipeline,
   releasePipeline,
   aiAgentPipeline,
+  aiAgentWrapper,
   aiAgentPolicy,
   packageMetadata,
   tauriConfig,
@@ -16,6 +17,10 @@ const [
   readFile(resolve(repositoryRoot, "Jenkinsfile"), "utf8"),
   readFile(resolve(repositoryRoot, "Jenkinsfile.release"), "utf8"),
   readFile(resolve(repositoryRoot, "Jenkinsfile.ai-agent"), "utf8"),
+  readFile(
+    resolve(repositoryRoot, "scripts/ai-agent/run_opencode_phase.sh"),
+    "utf8",
+  ),
   readFile(resolve(repositoryRoot, "ci/ai-agent-policy.yml"), "utf8").then(
     JSON.parse,
   ),
@@ -68,16 +73,35 @@ test("manual AI Agent is bounded, repairable, and draft-only", () => {
   assert.match(aiAgentPipeline, /\.jenkins-ai-opencode\/\$\{phaseSlug\}/);
   assert.match(
     aiAgentPipeline,
+    /commandOverride: '''bash "\$WORKSPACE\/\.jenkins-ai-runtime\/run_opencode_phase\.sh"'''/,
+  );
+  assert.doesNotMatch(
+    aiAgentPipeline.match(/commandOverride:[^\n]+/)?.[0] ?? "",
+    /AI_AGENT_PROMPT/,
+  );
+  assert.match(
+    aiAgentPipeline,
+    /node --test scripts\/ai-agent-runtime\.test\.mjs/,
+  );
+  assert.match(aiAgentPipeline, /--repository \. \\\s+--policy/);
+  assert.match(
+    aiAgentWrapper,
+    /prompt="\$\(cat -- "\$AI_AGENT_PROMPT_FILE"\)"/,
+  );
+  assert.match(aiAgentWrapper, /"\$prompt" \|/);
+  assert.doesNotMatch(aiAgentWrapper, /eval|AI_AGENT_PROMPT[^_]/);
+  assert.match(
+    aiAgentPipeline,
     /def runLocalPhase[\s\S]*failOnAgentError: false/,
   );
   assert.match(
     aiAgentPipeline,
-    /while \(testStatus != 0 && repairs < repairLimit\)/,
+    /while \(testStatus == 1 && repairs < repairLimit\)/,
   );
   assert.equal(
     [
       ...aiAgentPipeline.matchAll(
-        /while \(testStatus != 0 && repairs < repairLimit\)/g,
+        /while \(testStatus == 1 && repairs < repairLimit\)/g,
       ),
     ].length,
     1,
@@ -97,6 +121,12 @@ test("manual AI Agent is bounded, repairable, and draft-only", () => {
   assert.equal(aiAgentPolicy.context_limits.active_profile, "SMALL_FILES");
   assert.equal(aiAgentPolicy.toolchain.opencode_version, "1.18.5");
   assert.equal(aiAgentPolicy.toolchain.codex_cli_version, "0.145.0");
+  assert.ok(aiAgentPolicy.toolchain.required_commands.includes("bash"));
+  assert.ok(aiAgentPolicy.toolchain.required_commands.includes("install"));
+  assert.ok(aiAgentPolicy.toolchain.required_commands.includes("tee"));
+  assert.deepEqual(aiAgentPolicy.test_profiles.DOCUMENTATION.commands, [
+    ["npm", "run", "format:frontend:check"],
+  ]);
   assert.equal(aiAgentPolicy.job.local_test_repair_attempts, 2);
   assert.equal(aiAgentPolicy.job.hosted_repair_attempts, 1);
   assert.equal(aiAgentPolicy.phase_routing.BUILDER.model, "qwen3-coder:30b");

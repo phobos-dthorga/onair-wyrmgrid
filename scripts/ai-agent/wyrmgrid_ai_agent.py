@@ -134,44 +134,172 @@ def active_context_limits(policy: dict[str, Any]) -> dict[str, Any]:
     return limits
 
 
+def selected_toolchain_commands(
+    policy: dict[str, Any],
+    parameters: dict[str, Any],
+) -> list[str]:
+    toolchain = policy["toolchain"]
+    commands = list(toolchain["required_commands"])
+    if parameters["mode"] in CHANGE_MODES:
+        commands.extend(toolchain["change_commands"])
+    if parameters["hosted_review"] == "OPENAI_AFTER_DRAFT_PR":
+        commands.extend(toolchain["hosted_review_commands"])
+    profile_name = parameters["test_profile"]
+    if profile_name != "NONE":
+        commands.extend(toolchain["test_profile_commands"][profile_name])
+        commands.extend(
+            str(command[0])
+            for command in policy["test_profiles"][profile_name]["commands"]
+            if command
+        )
+    return sorted(set(str(command) for command in commands))
+
+
+def preflight_test_profile(
+    repository: pathlib.Path,
+    policy: dict[str, Any],
+    parameters: dict[str, Any],
+) -> dict[str, Any]:
+    profile_name = parameters["test_profile"]
+    if profile_name == "NONE":
+        return {
+            "schema_version": 1,
+            "profile": "NONE",
+            "outcome": "not_required",
+            "required_paths": [],
+            "npm_scripts": [],
+        }
+    profile = policy["test_profiles"][profile_name]
+    missing_paths: list[str] = []
+    for raw_path in profile.get("required_paths", []):
+        relative = normalize_relative_path(
+            str(raw_path),
+            set(policy["scope"]["forbidden_roots"]),
+        )
+        target = repository / relative
+        if not target.is_file() or target.is_symlink():
+            missing_paths.append(relative)
+
+    npm_scripts: list[str] = []
+    missing_scripts: list[str] = []
+    package_path = repository / "package.json"
+    package_scripts: dict[str, Any] = {}
+    if package_path.is_file():
+        try:
+            package = json.loads(package_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise PolicyError(
+                f"Unable to read package scripts for test preflight: {exc}"
+            ) from exc
+        if isinstance(package.get("scripts"), dict):
+            package_scripts = package["scripts"]
+    for raw_command in profile["commands"]:
+        command = [str(value) for value in raw_command]
+        if len(command) >= 3 and command[:2] in (
+            ["npm", "run"],
+            ["npm", "run-script"],
+        ):
+            script_name = command[2]
+            npm_scripts.append(script_name)
+            if script_name not in package_scripts:
+                missing_scripts.append(script_name)
+
+    outcome = "passed" if not missing_paths and not missing_scripts else "failed"
+    return {
+        "schema_version": 1,
+        "profile": profile_name,
+        "outcome": outcome,
+        "required_paths": [str(value) for value in profile.get("required_paths", [])],
+        "npm_scripts": npm_scripts,
+        "missing_paths": missing_paths,
+        "missing_npm_scripts": missing_scripts,
+    }
+
+
 def validate_toolchain(args: argparse.Namespace) -> None:
+    repository = pathlib.Path(args.repository).resolve()
     policy = load_policy(pathlib.Path(args.policy))
     artifact_dir = pathlib.Path(args.artifact_dir)
+    parameters = json.loads(
+        (artifact_dir / "parameters.json").read_text(encoding="utf-8")
+    )
     toolchain = policy.get("toolchain")
     if not isinstance(toolchain, dict):
         raise PolicyError("The AI Agent toolchain policy is missing.")
 
-    checks = (
-        ("opencode", "--version", "opencode_version"),
-        ("codex", "--version", "codex_cli_version"),
-    )
+    required_commands = selected_toolchain_commands(policy, parameters)
+    pinned_versions = {
+        "opencode": ("--version", "opencode_version"),
+        "codex": ("--version", "codex_cli_version"),
+    }
     evidence: dict[str, Any] = {
+        "schema_version": 1,
         "execution_interface": toolchain.get("execution_interface"),
+        "selected_test_profile": parameters["test_profile"],
         "tools": {},
     }
-    for executable, version_argument, policy_key in checks:
-        expected = toolchain.get(policy_key)
-        if not isinstance(expected, str) or not expected.strip():
-            raise PolicyError(f"The {policy_key} toolchain pin is invalid.")
-        if shutil.which(executable) is None:
-            raise PolicyError(f"The pinned {executable} executable is unavailable.")
-        completed = subprocess.run(
-            [executable, version_argument],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        reported = f"{completed.stdout}\n{completed.stderr}".strip()
-        if re.search(rf"(?<![0-9.]){re.escape(expected)}(?![0-9.])", reported) is None:
-            raise PolicyError(
-                f"{executable} reported {reported!r}; expected version {expected}."
-            )
-        evidence["tools"][executable] = {
-            "expected_version": expected,
-            "reported_version": expected,
-        }
+    errors: list[str] = []
+    for executable in required_commands:
+        available = shutil.which(executable) is not None
+        tool_evidence: dict[str, Any] = {"available": available}
+        if not available:
+            errors.append(f"required executable is unavailable: {executable}")
+        elif executable in pinned_versions:
+            version_argument, policy_key = pinned_versions[executable]
+            expected = toolchain.get(policy_key)
+            if not isinstance(expected, str) or not expected.strip():
+                errors.append(f"invalid toolchain version pin: {policy_key}")
+            else:
+                completed = subprocess.run(
+                    [executable, version_argument],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+                reported = redact(
+                    f"{completed.stdout}\n{completed.stderr}".strip()
+                )[:512]
+                matches = (
+                    completed.returncode == 0
+                    and re.search(
+                        rf"(?<![0-9.]){re.escape(expected)}(?![0-9.])",
+                        reported,
+                    )
+                    is not None
+                )
+                tool_evidence.update(
+                    {
+                        "expected_version": expected,
+                        "reported_version": expected if matches else reported,
+                        "version_matches": matches,
+                    }
+                )
+                if not matches:
+                    errors.append(
+                        f"{executable} does not match pinned version {expected}"
+                    )
+        evidence["tools"][executable] = tool_evidence
 
+    preflight = preflight_test_profile(repository, policy, parameters)
+    write_json(artifact_dir / "test-preflight.json", preflight)
+    if preflight["outcome"] == "failed":
+        if preflight["missing_paths"]:
+            errors.append(
+                "missing test-profile paths: "
+                + ", ".join(preflight["missing_paths"])
+            )
+        if preflight["missing_npm_scripts"]:
+            errors.append(
+                "missing npm test-profile scripts: "
+                + ", ".join(preflight["missing_npm_scripts"])
+            )
+    evidence["outcome"] = "passed" if not errors else "failed"
     write_json(artifact_dir / "toolchain.json", evidence)
+    if errors:
+        raise PolicyError(
+            "Selected AI Agent toolchain or test profile is not runnable: "
+            + "; ".join(errors)
+        )
 
 
 def run_git(
@@ -2332,6 +2460,12 @@ def run_tests(args: argparse.Namespace) -> None:
                 )
                 output = redact((completed.stdout or "") + (completed.stderr or ""))
                 return_code = completed.returncode
+            except FileNotFoundError:
+                output = redact(
+                    f"Configured test executable was not found: {command[0]}\n"
+                )
+                return_code = 127
+                outcome = "configuration_failed"
             except subprocess.TimeoutExpired as exc:
                 output = redact((exc.stdout or "") + (exc.stderr or ""))
                 output += f"\nTimed out after {profile['timeout_seconds']} seconds.\n"
@@ -2347,7 +2481,8 @@ def run_tests(args: argparse.Namespace) -> None:
                 }
             )
             if return_code != 0:
-                outcome = "failed"
+                if outcome == "passed":
+                    outcome = "failed"
                 break
     finally:
         run_git(repository, ["worktree", "remove", "--force", str(test_worktree)], check=False)
@@ -2369,6 +2504,8 @@ def run_tests(args: argparse.Namespace) -> None:
     print(f"Test profile {profile_name}: {outcome}")
     if outcome == "dependency_bootstrap_failed":
         raise SystemExit(2)
+    if outcome == "configuration_failed":
+        raise SystemExit(3)
     if outcome != "passed":
         raise SystemExit(1)
 
@@ -2794,6 +2931,7 @@ def build_parser() -> argparse.ArgumentParser:
     validate.set_defaults(func=validate_parameters)
 
     toolchain = subparsers.add_parser("validate-toolchain")
+    toolchain.add_argument("--repository", required=True)
     toolchain.add_argument("--policy", required=True)
     toolchain.add_argument("--artifact-dir", required=True)
     toolchain.set_defaults(func=validate_toolchain)

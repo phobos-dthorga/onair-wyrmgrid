@@ -483,6 +483,12 @@
   bootstrap, formatter, or test failure; an unsafe model diff is removed from
   patch artifacts before the run fails. A persistent test failure waits without
   an executor and defaults to archive-only.
+  Local prompts are transported through a fixed checked-in wrapper and read
+  from files as one quoted OpenCode argument, so shell-like request or failure
+  text cannot become command syntax. Pipeline contract tests run from the job
+  SCM revision, while required commands, paths, npm scripts, and product tests
+  are preflighted against the immutable source revision. Configuration
+  failures stop without being offered to the coding model as a repair task.
   Passing or explicitly accepted failing work can create only a labelled draft
   through the WyrmGrid-only contributor App. The App receives Contents and Pull
   requests write access but no merge, approval, release, Actions, workflow,
@@ -936,7 +942,8 @@ App and Gateway client independently if either boundary is uncertain.
 The Jenkins controller and plugin configuration remain administrative state
 outside repository history. An administrator can change the installed plugin,
 worker, credential binding, or job definition. The job's pinned OpenCode and
-Codex CLI preflight makes executable drift visible, but cannot attest the
+Codex CLI preflight and its mode/profile-specific command inventory make
+executable and registered-test drift visible, but cannot attest the
 controller plugin binary, Hoardmind Gate route, local model weights, GPU host,
 or operating-system state. Commissioning evidence must name the exact model IDs
 and source commit and must not be generalized to another repository.

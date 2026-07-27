@@ -4,6 +4,7 @@ import argparse
 import importlib.util
 import io
 import json
+import os
 import pathlib
 import subprocess
 import sys
@@ -106,19 +107,27 @@ class WyrmGridAiAgentTests(unittest.TestCase):
         self.assertEqual(800, limits["maximum_visible_file_lines"])
         self.assertEqual(524288, limits["maximum_visible_total_bytes"])
 
-    def test_validate_toolchain_records_only_pinned_versions(self) -> None:
+    def test_validate_toolchain_records_required_commands_and_pins(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             artifact_dir = pathlib.Path(temp)
+            (artifact_dir / "parameters.json").write_text(
+                json.dumps(
+                    {
+                        "mode": "ASK",
+                        "hosted_review": "NONE",
+                        "test_profile": "NONE",
+                    }
+                ),
+                encoding="utf-8",
+            )
             args = argparse.Namespace(
+                repository=str(ROOT),
                 policy=str(POLICY_PATH),
                 artifact_dir=str(artifact_dir),
             )
             outputs = {
                 "opencode": subprocess.CompletedProcess(
                     ["opencode", "--version"], 0, "1.18.5\n", ""
-                ),
-                "codex": subprocess.CompletedProcess(
-                    ["codex", "--version"], 0, "codex-cli 0.145.0\n", ""
                 ),
             }
             with (
@@ -140,9 +149,90 @@ class WyrmGridAiAgentTests(unittest.TestCase):
             self.assertEqual(
                 "1.18.5", evidence["tools"]["opencode"]["reported_version"]
             )
-            self.assertEqual(
-                "0.145.0", evidence["tools"]["codex"]["reported_version"]
+            self.assertTrue(evidence["tools"]["bash"]["available"])
+            self.assertNotIn("codex", evidence["tools"])
+            preflight = json.loads(
+                (artifact_dir / "test-preflight.json").read_text(encoding="utf-8")
             )
+            self.assertEqual("not_required", preflight["outcome"])
+
+    def test_test_profile_preflight_rejects_missing_revision_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository = pathlib.Path(temporary)
+            (repository / "package.json").write_text(
+                json.dumps({"scripts": {"format:frontend:check": "prettier"}}),
+                encoding="utf-8",
+            )
+            policy = json.loads(POLICY_PATH.read_text(encoding="utf-8"))
+            policy["test_profiles"]["DOCUMENTATION"]["required_paths"] = [
+                "package.json",
+                "scripts/branch-only-contract.test.mjs",
+            ]
+            evidence = agent.preflight_test_profile(
+                repository,
+                policy,
+                {"test_profile": "DOCUMENTATION"},
+            )
+            self.assertEqual("failed", evidence["outcome"])
+            self.assertEqual(
+                ["scripts/branch-only-contract.test.mjs"],
+                evidence["missing_paths"],
+            )
+
+    @unittest.skipIf(os.name == "nt", "The production wrapper runs on Linux.")
+    def test_prompt_file_transport_does_not_execute_shell_like_text(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            fake_bin = root / "bin"
+            fake_bin.mkdir()
+            captured = root / "captured.txt"
+            fake_opencode = fake_bin / "opencode"
+            fake_opencode.write_text(
+                "#!/usr/bin/env python3\n"
+                "import os, pathlib, sys\n"
+                "pathlib.Path(os.environ['CAPTURE']).write_text("
+                "sys.argv[-1], encoding='utf-8')\n"
+                "print('{\"type\":\"text\",\"text\":\"ok\"}')\n",
+                encoding="utf-8",
+            )
+            fake_opencode.chmod(0o755)
+            prompt = (
+                "`touch command-substitution-created`\n"
+                "$(touch dollar-substitution-created)\n"
+                "```diff\n"
+                "diff --git a/file b/file\n"
+                "> onair-wyrmgrid@0.4.0 format:frontend:check\n"
+                "```\n"
+            )
+            prompt_path = root / "prompt.md"
+            prompt_path.write_text(prompt, encoding="utf-8")
+            environment = os.environ.copy()
+            environment.update(
+                {
+                    "AI_AGENT_MODEL": "test-model",
+                    "AI_AGENT_PROMPT_FILE": str(prompt_path),
+                    "AI_AGENT_EVENT_LOG": "events.jsonl",
+                    "CAPTURE": str(captured),
+                    "PATH": str(fake_bin) + os.pathsep + environment["PATH"],
+                    "WORKSPACE": str(root),
+                }
+            )
+            completed = subprocess.run(
+                [
+                    "bash",
+                    str(ROOT / "scripts" / "ai-agent" / "run_opencode_phase.sh"),
+                ],
+                cwd=root,
+                capture_output=True,
+                text=True,
+                env=environment,
+                check=False,
+            )
+            self.assertEqual(0, completed.returncode, completed.stderr)
+            self.assertEqual(prompt, captured.read_text(encoding="utf-8"))
+            self.assertFalse((root / "command-substitution-created").exists())
+            self.assertFalse((root / "dollar-substitution-created").exists())
+            self.assertFalse((root / "onair-wyrmgrid@0.4.0").exists())
 
     def test_benchmark_records_http_status_without_error_body(self) -> None:
         failure = urllib.error.HTTPError(
@@ -1884,6 +1974,63 @@ class WyrmGridAiAgentTests(unittest.TestCase):
                 "dependency_bootstrap",
                 summary["commands"][0]["kind"],
             )
+
+    def test_missing_test_executable_is_a_configuration_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository = pathlib.Path(temporary) / "repository"
+            repository.mkdir()
+            subprocess.run(["git", "init", "-q"], cwd=repository, check=True)
+            subprocess.run(
+                ["git", "config", "user.email", "test@example.invalid"],
+                cwd=repository,
+                check=True,
+            )
+            subprocess.run(
+                ["git", "config", "user.name", "Test"],
+                cwd=repository,
+                check=True,
+            )
+            (repository / "tracked.txt").write_text("base\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=repository, check=True)
+            subprocess.run(["git", "commit", "-qm", "base"], cwd=repository, check=True)
+            (repository / "tracked.txt").write_text(
+                "base\ncandidate\n",
+                encoding="utf-8",
+            )
+
+            artifacts = pathlib.Path(temporary) / "artifacts"
+            artifacts.mkdir()
+            policy = json.loads(POLICY_PATH.read_text(encoding="utf-8"))
+            policy["test_profiles"] = {
+                "MISSING_COMMAND": {
+                    "description": "Exercise configuration failure handling.",
+                    "timeout_seconds": 30,
+                    "bootstrap_dependencies": False,
+                    "commands": [["wyrmgrid-command-that-does-not-exist"]],
+                }
+            }
+            policy_path = pathlib.Path(temporary) / "policy.json"
+            policy_path.write_text(json.dumps(policy), encoding="utf-8")
+            (artifacts / "parameters.json").write_text(
+                json.dumps({"test_profile": "MISSING_COMMAND"}),
+                encoding="utf-8",
+            )
+            args = argparse.Namespace(
+                repository=str(repository),
+                policy=str(policy_path),
+                artifact_dir=str(artifacts),
+                test_worktree=str(pathlib.Path(temporary) / "test-worktree"),
+            )
+
+            with self.assertRaises(SystemExit) as raised:
+                agent.run_tests(args)
+
+            self.assertEqual(3, raised.exception.code)
+            summary = json.loads(
+                (artifacts / "tests" / "summary.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual("configuration_failed", summary["outcome"])
+            self.assertEqual(127, summary["commands"][0]["return_code"])
 
 
 if __name__ == "__main__":

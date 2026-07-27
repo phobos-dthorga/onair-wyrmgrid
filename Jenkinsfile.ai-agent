@@ -43,7 +43,8 @@ def runLocalPhase(String phaseDir) {
             "XDG_CONFIG_HOME=${env.WORKSPACE}/.jenkins-ai-opencode/${phaseSlug}/config",
             "XDG_DATA_HOME=${env.WORKSPACE}/.jenkins-ai-opencode/${phaseSlug}/data",
             "XDG_STATE_HOME=${env.WORKSPACE}/.jenkins-ai-opencode/${phaseSlug}/state",
-            "AI_AGENT_EVENT_LOG=${eventLogPath}"
+            "AI_AGENT_EVENT_LOG=${eventLogPath}",
+            "AI_AGENT_PROMPT_FILE=${env.WORKSPACE}/${phaseDir}/prompt.md"
         ]) {
             sh '''
                 set -eu
@@ -58,7 +59,7 @@ def runLocalPhase(String phaseDir) {
                     agent: openCode(),
                     apiCredentialsId: 'wyrmgrid-ai-agent-gateway',
                     apiEnvVarName: 'HOARDMIND_GATE_API_KEY',
-                    commandOverride: '''bash -o pipefail -c 'opencode run --format json --model "$AI_AGENT_MODEL" "$AI_AGENT_PROMPT" | tee "$WORKSPACE/$AI_AGENT_EVENT_LOG"' ''',
+                    commandOverride: '''bash "$WORKSPACE/.jenkins-ai-runtime/run_opencode_phase.sh"''',
                     disableInteractive: true,
                     failOnAgentError: false,
                     model: "hoardmind-gate/${selectedModel}",
@@ -292,8 +293,11 @@ pipeline {
                     mkdir -p .jenkins-ai-runtime ci-artifacts/ai-agent
                     cp scripts/ai-agent/wyrmgrid_ai_agent.py \
                       .jenkins-ai-runtime/wyrmgrid_ai_agent.py
+                    cp scripts/ai-agent/run_opencode_phase.sh \
+                      .jenkins-ai-runtime/run_opencode_phase.sh
                     cp ci/ai-agent-policy.yml \
                       .jenkins-ai-runtime/ai-agent-policy.yml
+                    node --test scripts/ai-agent-runtime.test.mjs
                     git checkout --detach refs/remotes/origin/main
                     printf '%s\\n' '.jenkins-ai-runtime/' \
                       '.jenkins-ai-agent-worktree/' \
@@ -347,10 +351,6 @@ pipeline {
                           --local-model-profile "$AI_LOCAL_PROFILE_VALUE" \
                           --reasoning-effort "$AI_REASONING_EFFORT_VALUE" \
                           --hosted-review "$AI_HOSTED_REVIEW_VALUE"
-                        python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
-                          validate-toolchain \
-                          --policy .jenkins-ai-runtime/ai-agent-policy.yml \
-                          --artifact-dir ci-artifacts/ai-agent
                     '''
                 }
                 script {
@@ -364,6 +364,11 @@ pipeline {
                     set -eu
                     git checkout --detach "$AI_SOURCE_SHA"
                     test "$(git rev-parse HEAD)" = "$AI_SOURCE_SHA"
+                    python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
+                      validate-toolchain \
+                      --repository . \
+                      --policy .jenkins-ai-runtime/ai-agent-policy.yml \
+                      --artifact-dir ci-artifacts/ai-agent
                     python3 .jenkins-ai-runtime/wyrmgrid_ai_agent.py \
                       prepare-workspace \
                       --repository . \
@@ -458,7 +463,13 @@ pipeline {
                             'no model repair was attempted.'
                         )
                     }
-                    while (testStatus != 0 && repairs < repairLimit) {
+                    if (testStatus == 3) {
+                        error(
+                            'The selected test profile is not runnable at the ' +
+                            'immutable source revision; no model repair was attempted.'
+                        )
+                    }
+                    while (testStatus == 1 && repairs < repairLimit) {
                         repairs += 1
                         sh '''
                             set -eu
@@ -495,7 +506,14 @@ pipeline {
                         if (testStatus == 2) {
                             error(
                                 'The checked-in dependency bootstrap failed; ' +
-                                'no model repair was attempted.'
+                                'no further model repair was attempted.'
+                            )
+                        }
+                        if (testStatus == 3) {
+                            error(
+                                'The selected test profile is not runnable at the ' +
+                                'immutable source revision; no further model repair ' +
+                                'was attempted.'
                             )
                         }
                     }

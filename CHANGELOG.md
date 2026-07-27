@@ -61,6 +61,11 @@ major application version.
 - Present change phases with plain task, editable-path, and advisory-plan
   sections so internal receipt names or quoted document fragments are not
   mistaken for source APIs.
+- Transport local-agent prompts through a fixed file-reading wrapper rather
+  than interpolating model instructions into a shell command. Validate each
+  immutable revision's registered test paths, scripts, and required executables
+  before inference, and do not spend model repair passes on configuration
+  failures.
 
 ### Removed
 

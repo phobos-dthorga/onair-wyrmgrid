@@ -232,6 +232,12 @@ types from nearby quoted words or punctuation in advisory plan notes.
 OpenCode's normal repository guidance supplies `AGENTS.md`; Jenkins records its
 immutable hash but does not inject a second complete copy. Any cited range,
 including an `AGENTS.md` range, still requires a completed targeted read.
+The Jenkins plugin command override is a fixed checked-in Bash wrapper. Jenkins
+passes only the prompt file path, model ID, and event-log path as environment
+data; the wrapper reads the prompt and supplies it as one quoted OpenCode
+argument. Backticks, command substitutions, redirections, code fences, and
+other shell-like text in a request or repair packet therefore never become
+shell syntax.
 
 Jenkins derives changed paths and line counts from Git. Malformed change-mode
 prose therefore produces a minimal Jenkins technical report rather than
@@ -274,6 +280,21 @@ run again after formatting and every repair. A formatting-only defect does not
 consume a model repair, and a dependency-bootstrap failure is treated as
 infrastructure rather than returned to the coding model. Ruff is intentionally
 absent because WyrmGrid has no checked-in Ruff formatting contract.
+
+Before the first model phase, Jenkins validates two separate contracts:
+
+- pipeline/runtime contract tests run from the job's checked-out SCM revision,
+  before Jenkins detaches to the operator-selected source revision; and
+- the selected test profile is preflighted against that immutable source
+  revision, including its required paths, registered npm scripts, and required
+  worker commands.
+
+This separation lets a commissioning branch test its own pipeline changes
+without assuming that branch-only test files exist on `main`. A missing
+registered path, npm script, or executable is a configuration failure. Jenkins
+archives `test-preflight.json` and `toolchain.json`, stops before inference
+where possible, and never returns that failure to Qwen3-Coder as if source edits
+could repair the worker or job definition.
 
 A safe candidate patch is archived even when narrative reporting or tests fail.
 A later bootstrap or formatter rejection retains that last validated patch and
@@ -390,9 +411,11 @@ zero executors. OpenCode sends inference to Hoardmind Gate; it does not require
 GPU access inside the container.
 
 The policy pins OpenCode `1.18.5` and OpenAI Codex CLI `0.145.0`. Every run
-records a privacy-reduced toolchain report and fails before inference if the
-worker reports another version. Upgrades require their own reviewed source
-change and commissioning canary.
+records a privacy-reduced toolchain report for the commands selected by its
+mode, test profile, and hosted-review choice. It also records the immutable
+test-profile preflight and fails before inference when a required command,
+path, npm script, or pinned version is unavailable. Upgrades require their own
+reviewed source change and commissioning canary.
 
 ### Credentials and manual job creation
 

@@ -86,7 +86,9 @@ application dependency. Its change workflow uses fresh specialist phases:
 Qwen3.6 plans and reviews, Qwen3-Coder implements and repairs without thinking,
 and Jenkins alone formats, validates, tests, commits, and opens a draft pull
 request. Compact checkpoints cross phase boundaries; model conversation history
-does not.
+does not. Prompts cross the plugin boundary as data through a fixed file-reading
+wrapper, while pipeline self-tests and immutable-revision product tests remain
+separate contracts.
 
 ## Localization boundary
 

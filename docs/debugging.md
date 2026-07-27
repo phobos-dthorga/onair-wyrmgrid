@@ -97,6 +97,12 @@ the first boundary that failed.
 The useful distinction is:
 
 - conversation failure: inspect the matching phase card and phase artifacts;
+- prompt-transport failure: inspect the fixed wrapper invocation and
+  `prompt.md`; prompt text must never appear as shell words or commands in the
+  console;
+- test-profile preflight failure: inspect `test-preflight.json` for a missing
+  immutable path or npm script and `toolchain.json` for a missing executable;
+  this is configuration evidence and must not consume a model repair;
 - narrative-only failure: inspect `agent-output.json` and its Jenkins fallback;
 - scope or secret rejection: use sanitized console metadata only, because no
   patch artifact is retained;
@@ -108,6 +114,11 @@ The useful distinction is:
   was rejected;
 - test failure: inspect only the latest bounded `tests/output.txt`, with full
   earlier output retained in prior build/phase artifacts.
+
+Pipeline/runtime contract tests intentionally run from the job's SCM revision
+before the immutable target checkout. Registered product tests run only against
+the resolved `SOURCE_REVISION`. Do not add a branch-only runtime test to a
+target-revision test profile merely to validate a commissioning Jenkinsfile.
 
 Do not enable arbitrary shell, web access, verbose provider bodies, or secret
 logging to diagnose a model run. Do not infer a Qwen3-Coder reasoning failure:

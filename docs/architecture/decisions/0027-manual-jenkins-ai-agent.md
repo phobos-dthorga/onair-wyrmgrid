@@ -57,6 +57,14 @@ is advisory. `REASONING_EFFORT` applies only to Qwen3.6. Each phase receives a
 compact checkpoint rather than prior conversation history, and each uses a
 separate OpenCode state directory.
 
+The plugin command override invokes one checked-in wrapper. Phase prompts remain
+files and are read into one quoted OpenCode argument inside that wrapper; model
+or operator text is never interpolated into shell command syntax. Jenkins runs
+pipeline/runtime contract tests from the job SCM revision, then preflights the
+registered product-test contract against the resolved immutable source
+revision. Missing paths, scripts, or worker commands are configuration failures,
+not coding failures, and cannot consume a local repair pass.
+
 The model receives a sparse worktree containing only eligible files. The
 authoritative limits live in [`ci/ai-agent-policy.yml`](../../../ci/ai-agent-policy.yml)
 under `context_limits`. Initial commissioning uses `SMALL_FILES`: no visible
@@ -114,6 +122,12 @@ repeated prompt cost, specialist routing, and a clean token budget. Safe diffs
 survive malformed change summaries and ordinary test failure; unsafe diffs
 never become patch artifacts. Read-only citation failures still reject the
 answer.
+
+Separating pipeline self-tests from immutable product tests permits a
+commissioning branch to validate new orchestration without pretending its
+branch-only files exist in an older selected revision. The preflight adds an
+early failure mode, but makes missing worker tools and stale test-profile
+registrations visible before model time is spent.
 
 The conservative file limits deliberately exclude some high-value large files.
 That is a feature of the first research tier, not a claim that those files can
