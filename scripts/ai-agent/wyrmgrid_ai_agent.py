@@ -1106,9 +1106,12 @@ def validate_citation_evidence(
             r"[A-Za-z0-9][A-Za-z0-9_-]{2,}", "\n".join(cited_text)
         )
     }
-    if answer_terms and not answer_terms.intersection(cited_terms):
+    matching_terms = answer_terms.intersection(cited_terms)
+    required_matches = min(3, max(1, (len(answer_terms) + 3) // 4))
+    if answer_terms and len(matching_terms) < required_matches:
         raise PolicyError(
-            "Cited source lines do not contain any distinctive answer terms."
+            "Cited source lines do not contain enough distinctive answer terms "
+            f"({len(matching_terms)} found; {required_matches} required)."
         )
 
 

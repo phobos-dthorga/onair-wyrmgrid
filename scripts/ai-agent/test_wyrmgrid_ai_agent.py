@@ -596,6 +596,16 @@ class WyrmGridAiAgentTests(unittest.TestCase):
                     citation,
                     {"AGENTS.md": [(1, 4)]},
                 )
+            with self.assertRaises(agent.PolicyError):
+                agent.validate_citation_evidence(
+                    repository,
+                    (
+                        "UI business rules must live in Svelte components, and "
+                        "Tauri commands delegate business logic to the frontend."
+                    ),
+                    [{"path": "AGENTS.md", "line_start": 1, "line_end": 1}],
+                    {"AGENTS.md": [(1, 4)]},
+                )
 
     def test_root_guidance_requires_matching_immutable_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

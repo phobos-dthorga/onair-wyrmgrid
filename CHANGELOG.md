@@ -18,6 +18,9 @@ major application version.
 - Added operator-editable small, medium, and attended large-file context tiers
   for local-agent commissioning. Oversized files remain inventory-visible but
   content-hidden and cannot be changed by a run that could not inspect them.
+- Require cited passages to contain several distinctive answer terms so a
+  citation-shaped but unsupported local-model answer enters the bounded repair
+  cycle instead of being accepted as grounded research.
 
 ### Removed
 

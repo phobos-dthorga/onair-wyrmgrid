@@ -41,7 +41,9 @@ It also supports two change-making modes:
 
 Every run resolves `main` or a full commit reachable from `main` to one
 immutable commit. Read-only results require commit-bound `path:line` citations
-and cannot produce a tracked diff. Change modes require explicit repository-
+whose passages contain several distinctive answer terms, and cannot produce a
+tracked diff. This deterministic grounding check catches obvious mismatches but
+does not replace semantic review. Change modes require explicit repository-
 relative path scopes, select a checked-in test profile, enforce file and line
 ceilings, and may create, edit, rename, or delete textual files within that
 scope. Jenkins—not the model—runs registered tests and may return bounded,

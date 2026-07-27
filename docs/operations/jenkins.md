@@ -191,9 +191,13 @@ The six modes are:
 - `FEATURE`, for a larger but still explicitly scoped implementation.
 
 Read-only modes archive Markdown and structured JSON with exact commit-bound
-`path:line` citations and must leave no tracked diff. `PATCH` and `FEATURE`
-require `ALLOWED_PATHS`, may create, modify, rename, or delete textual files in
-those paths, and must select a test profile from
+`path:line` citations and must leave no tracked diff. Jenkins also requires
+several distinctive answer terms to occur in the cited source passage; a
+citation-shaped but weakly grounded answer enters the bounded local correction
+cycle. This mechanical check reduces obvious mismatches but does not establish
+semantic correctness, so commissioning canaries and human review remain
+necessary. `PATCH` and `FEATURE` require `ALLOWED_PATHS`, may create, modify,
+rename, or delete textual files in those paths, and must select a test profile from
 [`ci/ai-agent-policy.yml`](../../ci/ai-agent-policy.yml). Dependency
 manifests, migrations, CI files, and security-policy files are not categorically
 forbidden; their exact path must be explicitly included. Opaque binary changes,
