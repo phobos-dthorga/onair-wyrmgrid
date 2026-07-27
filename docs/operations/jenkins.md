@@ -283,6 +283,15 @@ needed. Private-key generation, rotation, conversion, and Jenkins credential
 entry are manual maintainer actions; never paste a key into a job parameter,
 prompt, artifact, build log, or repository file.
 
+Configure `wyrmgrid-jenkins-ai-contributor` with **Specify accessible
+repositories**, owner `phobos-dthorga`, and repository `onair-wyrmgrid`.
+Select **All permissions available to the App installation** as the default
+permissions strategy. The narrower Jenkins **Read and write access to
+repository contents** strategy would remove the Pull requests permission that
+the job needs to create and comment on a draft. This remains bounded because
+the App installation itself has only the three permissions above and access to
+only WyrmGrid.
+
 Create a manually triggered Pipeline from SCM named `wyrmgrid-ai-agent`:
 
 - repository: `https://github.com/phobos-dthorga/onair-wyrmgrid.git`;
@@ -292,6 +301,15 @@ Create a manually triggered Pipeline from SCM named `wyrmgrid-ai-agent`:
 - no SCM polling, webhook trigger, timer, or automatic upstream trigger; and
 - branch: the commissioning source branch until the implementation is merged,
   then `main`.
+
+Jenkins does not support inference-based GitHub App repository strategies for a
+standalone Pipeline-from-SCM checkout. Reconfigure the existing read-only
+`wyrmgrid-github-ci` credential to **Specify accessible repositories** with
+owner `phobos-dthorga` and repository `onair-wyrmgrid`, while retaining its
+**Read-only access to repository contents** permissions strategy. That explicit
+scope remains valid for the existing WyrmGrid Organization Folder and permits
+the standalone job to read `Jenkinsfile.ai-agent`; it does not add another
+repository or any write permission.
 
 The job validates that the local Gateway credential exists for every run, the
 contributor credential exists before a change-making run, and the hosted key
