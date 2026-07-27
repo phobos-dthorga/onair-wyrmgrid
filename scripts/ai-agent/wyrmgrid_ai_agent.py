@@ -1387,14 +1387,26 @@ def validate_answer_word_limit(answer: str, mode: str, limit: int) -> None:
         )
 
 
-def read_ranges_from_event_log(
+def read_evidence_from_event_log(
     event_log: pathlib.Path, repository: pathlib.Path
-) -> dict[str, list[tuple[int, int]]]:
+) -> tuple[dict[str, list[tuple[int, int]]], dict[str, Any]]:
     ranges: dict[str, list[tuple[int, int]]] = {}
     repository = repository.resolve()
+    audit: dict[str, Any] = {
+        "events_seen": 0,
+        "completed_read_events": 0,
+        "accepted_read_events": 0,
+        "ignored_read_events": {},
+    }
+
+    def ignore(reason: str) -> None:
+        ignored = audit["ignored_read_events"]
+        ignored[reason] = int(ignored.get(reason, 0)) + 1
+
     for line in event_log.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
+        audit["events_seen"] += 1
         try:
             event = json.loads(line)
         except json.JSONDecodeError:
@@ -1407,41 +1419,72 @@ def read_ranges_from_event_log(
         state = part.get("state")
         if not isinstance(state, dict) or state.get("status") != "completed":
             continue
+        audit["completed_read_events"] += 1
         inputs = state.get("input")
         metadata = state.get("metadata")
-        if not isinstance(inputs, dict) or not isinstance(metadata, dict):
+        if not isinstance(inputs, dict):
+            ignore("missing_input")
             continue
         raw_path = inputs.get("filePath")
         if not isinstance(raw_path, str):
+            ignore("missing_path")
             continue
         try:
-            resolved_path = pathlib.Path(raw_path).resolve()
-            try:
-                relative_path = resolved_path.relative_to(repository)
-            except ValueError:
-                raw_parts = pathlib.PurePath(raw_path).parts
-                worktree_indexes = [
-                    index
-                    for index, part in enumerate(raw_parts)
-                    if part == repository.name
-                ]
-                if not worktree_indexes:
-                    continue
+            raw_parts = pathlib.PurePosixPath(raw_path.replace("\\", "/")).parts
+            worktree_indexes = [
+                index
+                for index, path_part in enumerate(raw_parts)
+                if path_part == repository.name
+            ]
+            if worktree_indexes:
                 relative_path = pathlib.Path(
                     *raw_parts[worktree_indexes[-1] + 1 :]
                 )
-                resolved_path = (repository / relative_path).resolve()
-                relative_path = resolved_path.relative_to(repository)
+            else:
+                relative_path = pathlib.Path(raw_path).resolve().relative_to(
+                    repository
+                )
+            resolved_path = (repository / relative_path).resolve()
+            relative_path = resolved_path.relative_to(repository)
             if not resolved_path.is_file():
+                ignore("missing_repository_file")
                 continue
             relative = relative_path.as_posix()
-            start = int(metadata.get("lineStart", 0))
-            end = int(metadata.get("lineEnd", 0))
         except (OSError, ValueError, TypeError):
+            ignore("outside_repository")
             continue
+
+        start = 0
+        end = 0
+        if isinstance(metadata, dict):
+            try:
+                start = int(metadata.get("lineStart", 0))
+                end = int(metadata.get("lineEnd", 0))
+            except (ValueError, TypeError):
+                start = 0
+                end = 0
         if start < 1 or end < start:
+            output = state.get("output")
+            if isinstance(output, str):
+                numbered_lines = [
+                    int(match.group(1))
+                    for match in re.finditer(r"(?m)^(\d+):(?: |$)", output)
+                ]
+                if numbered_lines:
+                    start = min(numbered_lines)
+                    end = max(numbered_lines)
+        if start < 1 or end < start:
+            ignore("invalid_line_range")
             continue
         ranges.setdefault(relative, []).append((start, end))
+        audit["accepted_read_events"] += 1
+    return ranges, audit
+
+
+def read_ranges_from_event_log(
+    event_log: pathlib.Path, repository: pathlib.Path
+) -> dict[str, list[tuple[int, int]]]:
+    ranges, _ = read_evidence_from_event_log(event_log, repository)
     return ranges
 
 
@@ -1548,12 +1591,15 @@ def collect_agent_output(args: argparse.Namespace) -> None:
             citations_from_text(response), agent_worktree
         )
         response = render_canonical_response(answer, citations)
-        read_ranges = read_ranges_from_event_log(event_log, agent_worktree)
+        read_ranges, read_event_audit = read_evidence_from_event_log(
+            event_log, agent_worktree
+        )
         write_json(
             artifact_dir / "read-evidence.json",
             {
                 "schema_version": 1,
                 "source_revision": parameters["source_revision"],
+                "event_audit": read_event_audit,
                 "completed_reads": {
                     path: [
                         {"line_start": start, "line_end": end}

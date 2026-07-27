@@ -235,10 +235,14 @@ completed-read, and answer-grounding checks. Commentary is discarded; it never
 becomes citation evidence. Every nonempty line after `Citations:` must still
 start with a parseable repository-relative citation. Jenkins archives a
 `read-evidence.json` receipt containing only the normalized completed-read
-paths and line ranges used by that validation. When OpenCode and Jenkins report
-the same immutable worktree through different mount aliases, the path is
-accepted only after its worktree-relative suffix resolves to a real file inside
-that immutable worktree.
+paths and line ranges used by that validation, plus counts for completed,
+accepted, and ignored read events. When OpenCode and Jenkins report the same
+immutable worktree through different mount aliases, the path is canonicalized
+from its worktree-relative suffix and accepted only after that suffix resolves
+to a real file inside the immutable worktree. If OpenCode omits its line-range
+metadata, Jenkins may recover the range from the numbered lines in the completed
+read result; the cited file and range still undergo the normal immutable-source
+and grounding checks.
 
 Before tests, Jenkins runs Prettier only on changed supported files and runs the
 repository Rust formatter when Rust files changed. The complete scope, secret,

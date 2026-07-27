@@ -935,6 +935,12 @@ class WyrmGridAiAgentTests(unittest.TestCase):
                 {
                     "schema_version": 1,
                     "source_revision": revision,
+                    "event_audit": {
+                        "events_seen": 2,
+                        "completed_read_events": 1,
+                        "accepted_read_events": 1,
+                        "ignored_read_events": {},
+                    },
                     "completed_reads": {
                         "AGENTS.md": [{"line_start": 1, "line_end": 3}]
                     },
@@ -1028,6 +1034,107 @@ class WyrmGridAiAgentTests(unittest.TestCase):
                 {"AGENTS.md": [(1, 154)]},
                 agent.read_ranges_from_event_log(event_log, repository),
             )
+
+    def test_build_17_completed_read_is_auditable_and_bound_to_worktree(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            repository = root / ".jenkins-ai-agent-worktree"
+            repository.mkdir()
+            (repository / "AGENTS.md").write_text(
+                "\n".join(f"line {number}" for number in range(1, 155)) + "\n",
+                encoding="utf-8",
+            )
+            event_log = root / "events.jsonl"
+            event_log.write_text(
+                json.dumps(
+                    {
+                        "type": "tool_use",
+                        "part": {
+                            "type": "tool",
+                            "tool": "read",
+                            "state": {
+                                "status": "completed",
+                                "input": {
+                                    "filePath": (
+                                        "/var/lib/jenkins/agent/workspace/"
+                                        "wyrmgrid-ai-agent/"
+                                        ".jenkins-ai-agent-worktree/AGENTS.md"
+                                    )
+                                },
+                                "output": (
+                                    "<content>\n"
+                                    "23: - Keep UI code presentational.\n"
+                                    "24: domain services own business rules.\n"
+                                    "25: - Keep Tauri commands thin.\n"
+                                    "</content>"
+                                ),
+                                "metadata": {
+                                    "lineStart": 1,
+                                    "lineEnd": 154,
+                                },
+                            },
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            ranges, audit = agent.read_evidence_from_event_log(
+                event_log, repository
+            )
+            self.assertEqual({"AGENTS.md": [(1, 154)]}, ranges)
+            self.assertEqual(1, audit["completed_read_events"])
+            self.assertEqual(1, audit["accepted_read_events"])
+            self.assertEqual({}, audit["ignored_read_events"])
+
+    def test_completed_read_uses_numbered_output_when_metadata_is_absent(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            repository = root / ".jenkins-ai-agent-worktree"
+            repository.mkdir()
+            (repository / "AGENTS.md").write_text(
+                "\n".join(f"line {number}" for number in range(1, 30)) + "\n",
+                encoding="utf-8",
+            )
+            event_log = root / "events.jsonl"
+            event_log.write_text(
+                json.dumps(
+                    {
+                        "type": "tool_use",
+                        "part": {
+                            "type": "tool",
+                            "tool": "read",
+                            "state": {
+                                "status": "completed",
+                                "input": {
+                                    "filePath": (
+                                        "/alternate/workspace/"
+                                        ".jenkins-ai-agent-worktree/AGENTS.md"
+                                    )
+                                },
+                                "output": (
+                                    "<content>\n"
+                                    "23: - Keep UI code presentational.\n"
+                                    "24: domain services own business rules.\n"
+                                    "25: - Keep Tauri commands thin.\n"
+                                    "</content>"
+                                ),
+                            },
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            ranges, audit = agent.read_evidence_from_event_log(
+                event_log, repository
+            )
+            self.assertEqual({"AGENTS.md": [(23, 25)]}, ranges)
+            self.assertEqual(1, audit["accepted_read_events"])
 
     def test_root_guidance_requires_matching_immutable_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

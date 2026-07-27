@@ -36,6 +36,9 @@ major application version.
   between phases.
 - Preserve safe candidate patches when model prose or tests fail, canonicalize
   harmless read-only citation variations, and withhold unsafe patch artifacts.
+- Canonicalize completed AI Agent reads against the immutable worktree and
+  archive read-event audit counts so valid citations survive workspace aliases
+  and compatible OpenCode metadata variations.
 - Reused the existing tested Jenkins credential ID for the repository-restricted
   WyrmGrid contributor App, avoiding a needless private-key rotation.
 - Recorded local-model capabilities and made reasoning compatibility fail
