@@ -1417,7 +1417,26 @@ def read_ranges_from_event_log(
         if not isinstance(raw_path, str):
             continue
         try:
-            relative = pathlib.Path(raw_path).resolve().relative_to(repository).as_posix()
+            resolved_path = pathlib.Path(raw_path).resolve()
+            try:
+                relative_path = resolved_path.relative_to(repository)
+            except ValueError:
+                raw_parts = pathlib.PurePath(raw_path).parts
+                worktree_indexes = [
+                    index
+                    for index, part in enumerate(raw_parts)
+                    if part == repository.name
+                ]
+                if not worktree_indexes:
+                    continue
+                relative_path = pathlib.Path(
+                    *raw_parts[worktree_indexes[-1] + 1 :]
+                )
+                resolved_path = (repository / relative_path).resolve()
+                relative_path = resolved_path.relative_to(repository)
+            if not resolved_path.is_file():
+                continue
+            relative = relative_path.as_posix()
             start = int(metadata.get("lineStart", 0))
             end = int(metadata.get("lineEnd", 0))
         except (OSError, ValueError, TypeError):

@@ -918,6 +918,47 @@ class WyrmGridAiAgentTests(unittest.TestCase):
                     {"AGENTS.md": [(1, 4)]},
                 )
 
+    def test_build_15_read_path_alias_is_bound_to_worktree(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            repository = root / ".jenkins-ai-agent-worktree"
+            repository.mkdir()
+            (repository / "AGENTS.md").write_text(
+                "\n".join(f"line {number}" for number in range(1, 155)) + "\n",
+                encoding="utf-8",
+            )
+            event_log = root / "events.jsonl"
+            event_log.write_text(
+                json.dumps(
+                    {
+                        "type": "tool_use",
+                        "part": {
+                            "type": "tool",
+                            "tool": "read",
+                            "state": {
+                                "status": "completed",
+                                "input": {
+                                    "filePath": (
+                                        "/alternate/jenkins/workspace/"
+                                        ".jenkins-ai-agent-worktree/AGENTS.md"
+                                    )
+                                },
+                                "metadata": {
+                                    "lineStart": 1,
+                                    "lineEnd": 154,
+                                },
+                            },
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                {"AGENTS.md": [(1, 154)]},
+                agent.read_ranges_from_event_log(event_log, repository),
+            )
+
     def test_root_guidance_requires_matching_immutable_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary)
