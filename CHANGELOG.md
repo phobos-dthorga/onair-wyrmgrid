@@ -21,7 +21,7 @@ major application version.
 - Require cited passages to contain several distinctive answer terms so a
   citation-shaped but unsupported local-model answer enters the bounded repair
   cycle instead of being accepted as grounded research.
-- Increased the local AI Agent context window to 8,192 tokens after the 4K
+- Increased the local AI Agent context window to 12,288 tokens after the 4K
   commissioning canary displaced early repository guidance before inference.
 
 ### Removed
