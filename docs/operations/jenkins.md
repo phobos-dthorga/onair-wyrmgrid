@@ -249,7 +249,7 @@ the current tier. Oversized paths remain visible in the documentation inventory
 with their path, size, line count, and hash, but their contents are not copied
 into model context. An exact oversized write target fails before inference.
 
-These file ceilings are separate from the local model's 4,096-token context and
+These file ceilings are separate from the local model's 8,192-token context and
 1,200-token response limits. Repository Scholar and Scoped Builder are friendly
 profile names; their current exact local model IDs and provisional selection
 status remain visible in the policy.

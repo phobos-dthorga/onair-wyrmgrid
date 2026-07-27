@@ -358,7 +358,7 @@ class WyrmGridAiAgentTests(unittest.TestCase):
         self.assertTrue(config["agent"]["title"]["disable"])
         for model in config["provider"]["hoardmind-gate"]["models"].values():
             self.assertEqual("none", model["options"]["reasoningEffort"])
-            self.assertEqual(4096, model["limit"]["context"])
+            self.assertEqual(8192, model["limit"]["context"])
             self.assertEqual(1200, model["limit"]["output"])
 
     def test_read_only_system_prompt_forbids_unrequested_summary(self) -> None:
