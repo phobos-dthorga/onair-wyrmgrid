@@ -86,6 +86,8 @@ test("manual AI Agent is bounded, repairable, and draft-only", () => {
     "MEDIUM",
     "HIGH",
   ]);
+  assert.equal(aiAgentPolicy.job.answer_word_limits.ASK, 200);
+  assert.equal(aiAgentPolicy.job.answer_word_limits.FEATURE, 400);
 });
 
 test("multibranch pipeline runs the complete credential-free Linux and Windows gates", () => {

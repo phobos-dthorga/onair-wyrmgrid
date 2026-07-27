@@ -14,6 +14,14 @@
       "MEDIUM",
       "HIGH"
     ],
+    "answer_word_limits": {
+      "ASK": 200,
+      "DECISION_TRACE": 500,
+      "CONSISTENCY_AUDIT": 650,
+      "ROADMAP_STATUS": 500,
+      "PATCH": 250,
+      "FEATURE": 400
+    },
     "agent_steps": {
       "ASK": 8,
       "DECISION_TRACE": 16,

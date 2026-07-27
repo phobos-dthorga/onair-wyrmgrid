@@ -51,4 +51,12 @@ test("WyrmGrid AI Agent policy starts with a bounded visible context", async () 
     "MEDIUM",
     "HIGH",
   ]);
+  assert.deepEqual(policy.job.answer_word_limits, {
+    ASK: 200,
+    DECISION_TRACE: 500,
+    CONSISTENCY_AUDIT: 650,
+    ROADMAP_STATUS: 500,
+    PATCH: 250,
+    FEATURE: 400,
+  });
 });

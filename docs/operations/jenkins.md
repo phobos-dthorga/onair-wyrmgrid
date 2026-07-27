@@ -263,6 +263,13 @@ run parameters and rejects unregistered values before inference. The 4,096-token
 response allowance gives thinking-enabled models room to finish, while the
 answer, citation, diff, and test validators continue to bound accepted output.
 
+Final summaries are independently compacted by the editable
+`job.answer_word_limits` map in `ci/ai-agent-policy.yml`. The initial limits are
+200 words for `ASK`, 500 for decision traces and roadmap status, 650 for
+consistency audits, 250 for patch summaries, and 400 for feature summaries.
+Thinking may use the model's internal response budget, but only the bounded
+answer plus necessary citations is accepted and archived.
+
 ### Worker and pinned tools
 
 Run the job on the dedicated unprivileged VLAN 20 LXC with label `ai-agent` and

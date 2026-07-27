@@ -375,6 +375,9 @@ def validate_parameters(args: argparse.Namespace) -> None:
     resolved = resolve_revision(repository, args.source_revision)
     selected_profile = choose_model_profile(mode, args.local_model_profile)
     selected_model = policy["model_profiles"][selected_profile]["selected_model"]
+    answer_word_limit = int(policy["job"]["answer_word_limits"][mode])
+    if answer_word_limit < 1:
+        raise PolicyError(f"Answer word limit for {mode} must be positive.")
     artifact_dir.mkdir(parents=True, exist_ok=True)
     payload = {
         "schema_version": 1,
@@ -390,6 +393,7 @@ def validate_parameters(args: argparse.Namespace) -> None:
         "local_model_profile": selected_profile,
         "local_model": selected_model,
         "reasoning_effort": reasoning_effort,
+        "answer_word_limit": answer_word_limit,
         "hosted_review": args.hosted_review,
         "created_utc": utc_now(),
     }
@@ -736,7 +740,8 @@ numbers, never placeholders or invented example values. Cite only files you
 actually read. Do not summarize unrequested material. If evidence is missing,
 say so rather than inventing it. For read-only modes, reuse canonical names and
 identifiers exactly as written in the cited source; never synthesize an alias or
-internal-looking identifier.
+internal-looking identifier. Keep the answer before `Citations:` within
+{parameters.get('answer_word_limit', 650)} words.
 """
 
 
@@ -1039,6 +1044,14 @@ def answer_from_text(text: str) -> str:
     return answer
 
 
+def validate_answer_word_limit(answer: str, mode: str, limit: int) -> None:
+    word_count = len(re.findall(r"\b[\w'-]+\b", answer))
+    if word_count > limit:
+        raise PolicyError(
+            f"Agent answer has {word_count} words; the {mode} limit is {limit}."
+        )
+
+
 def read_ranges_from_event_log(
     event_log: pathlib.Path, repository: pathlib.Path
 ) -> dict[str, list[tuple[int, int]]]:
@@ -1142,6 +1155,8 @@ def collect_agent_output(args: argparse.Namespace) -> None:
         )
     )
     answer = answer_from_text(response)
+    answer_word_limit = int(parameters.get("answer_word_limit", 650))
+    validate_answer_word_limit(answer, parameters["mode"], answer_word_limit)
     citations = normalize_citation_paths(
         citations_from_text(response), agent_worktree
     )
@@ -1727,7 +1742,8 @@ Return a nonempty corrected answer followed by the final `Citations:` section.
 Use only exact `- repository/relative/path:start-end` entries for ranges read
 successfully during this correction pass. If the evidence is insufficient,
 state that plainly using the evidence that is available. Do not create or edit
-`.agent-output` files.
+`.agent-output` files. Keep the corrected answer before `Citations:` within
+{parameters.get('answer_word_limit', 650)} words.
 """,
         encoding="utf-8",
     )

@@ -50,6 +50,17 @@ class WyrmGridAiAgentTests(unittest.TestCase):
             ["LOW", "MEDIUM", "HIGH"],
             self.policy["job"]["local_reasoning_efforts"],
         )
+        self.assertEqual(
+            {
+                "ASK": 200,
+                "DECISION_TRACE": 500,
+                "CONSISTENCY_AUDIT": 650,
+                "ROADMAP_STATUS": 500,
+                "PATCH": 250,
+                "FEATURE": 400,
+            },
+            self.policy["job"]["answer_word_limits"],
+        )
 
     def test_policy_exposes_editable_context_profiles(self) -> None:
         profiles = self.policy["model_profiles"]
@@ -393,6 +404,25 @@ class WyrmGridAiAgentTests(unittest.TestCase):
         self.assertIn("not literally\npresent there", prompt)
         self.assertIn("Citations:", prompt)
         self.assertIn("final section", prompt)
+
+    def test_prompt_exposes_recorded_answer_word_limit(self) -> None:
+        prompt = agent.render_prompt(
+            {
+                "mode": "ASK",
+                "source_revision": "a" * 40,
+                "request": "Answer the question.",
+                "allowed_paths": [],
+                "answer_word_limit": 200,
+            }
+        )
+        self.assertIn("within\n200 words", prompt)
+
+    def test_answer_word_limit_rejects_only_excess_words(self) -> None:
+        agent.validate_answer_word_limit("one two three", "ASK", 3)
+        with self.assertRaisesRegex(
+            agent.PolicyError, "Agent answer has 4 words; the ASK limit is 3"
+        ):
+            agent.validate_answer_word_limit("one two three four", "ASK", 3)
 
     def test_change_system_prompt_preserves_jenkins_test_authority(self) -> None:
         prompt = agent.render_agent_system_prompt("FEATURE")

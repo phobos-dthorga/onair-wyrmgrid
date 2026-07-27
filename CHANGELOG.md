@@ -27,6 +27,9 @@ major application version.
   `MEDIUM`, and `HIGH` effort; `LOW` remains the default. Increased the local
   response allowance to 4,096 tokens so thinking can finish before the bounded
   answer is validated.
+- Added editable per-mode word ceilings so archived local-agent answers and
+  change summaries remain focused even when the model has a larger thinking
+  budget.
 
 ### Removed
 
