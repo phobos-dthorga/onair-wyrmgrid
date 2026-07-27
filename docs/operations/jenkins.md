@@ -290,8 +290,8 @@ Provision three separately scoped Jenkins credentials:
 
 - `wyrmgrid-ai-agent-gateway`: Secret Text for a concurrency-one Hoardmind Gate
   client named `jenkins-wyrmgrid-ai-agent`;
-- `wyrmgrid-jenkins-ai-contributor`: GitHub App credential for the
-  repository-restricted `WyrmGrid Jenkins AI Contributor` App; and
+- `hoardmind-jenkins-ai-contributor`: legacy Jenkins credential ID containing
+  the repository-restricted **WyrmGrid Jenkins AI Contributor** GitHub App; and
 - `Codex-Jenkins-Tauryk-Gk-Io`: the existing global Secret Text OpenAI API key,
   used only when `OPENAI_AFTER_DRAFT_PR` is selected.
 
@@ -303,7 +303,7 @@ needed. Private-key generation, rotation, conversion, and Jenkins credential
 entry are manual maintainer actions; never paste a key into a job parameter,
 prompt, artifact, build log, or repository file.
 
-Configure `wyrmgrid-jenkins-ai-contributor` with **Specify accessible
+Configure `hoardmind-jenkins-ai-contributor` with **Specify accessible
 repositories**, owner `phobos-dthorga`, and repository `onair-wyrmgrid`.
 Select **All permissions available to the App installation** as the default
 permissions strategy. The narrower Jenkins **Read and write access to

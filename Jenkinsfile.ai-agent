@@ -97,7 +97,7 @@ def runRegisteredTests() {
 def withContributorCredential(Closure body) {
     withCredentials([
         usernamePassword(
-            credentialsId: 'wyrmgrid-jenkins-ai-contributor',
+            credentialsId: 'hoardmind-jenkins-ai-contributor',
             passwordVariable: 'GH_TOKEN',
             usernameVariable: 'WYRMGRID_GITHUB_APP_USER'
         )

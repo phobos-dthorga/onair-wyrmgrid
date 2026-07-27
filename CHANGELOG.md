@@ -30,6 +30,8 @@ major application version.
 - Added editable per-mode word ceilings so archived local-agent answers and
   change summaries remain focused even when the model has a larger thinking
   budget.
+- Reused the existing tested Jenkins credential ID for the repository-restricted
+  WyrmGrid contributor App, avoiding a needless private-key rotation.
 
 ### Removed
 

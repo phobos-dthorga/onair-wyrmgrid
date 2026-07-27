@@ -234,7 +234,7 @@
   },
   "credentials": {
     "local_gateway": "wyrmgrid-ai-agent-gateway",
-    "github_contributor": "wyrmgrid-jenkins-ai-contributor",
+    "github_contributor": "hoardmind-jenkins-ai-contributor",
     "hosted_openai_review": "Codex-Jenkins-Tauryk-Gk-Io"
   },
   "hosted_review": {
