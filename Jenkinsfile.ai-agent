@@ -286,7 +286,7 @@ pipeline {
                     "AI_MAX_LINES_VALUE=${params.MAX_CHANGED_LINES ?: ''}",
                     "AI_TEST_PROFILE_VALUE=${params.TEST_PROFILE}",
                     "AI_LOCAL_PROFILE_VALUE=${params.LOCAL_MODEL_PROFILE}",
-                    "AI_REASONING_EFFORT_VALUE=${params.REASONING_EFFORT}",
+                    "AI_REASONING_EFFORT_VALUE=${params.REASONING_EFFORT ?: 'LOW'}",
                     "AI_HOSTED_REVIEW_VALUE=${params.HOSTED_REVIEW}"
                 ]) {
                     sh '''#!/usr/bin/env bash

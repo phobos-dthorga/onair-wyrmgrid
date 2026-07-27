@@ -55,6 +55,7 @@ test("manual AI Agent is bounded, repairable, and draft-only", () => {
   assert.match(aiAgentPipeline, /disableConcurrentBuilds\(\)/);
   assert.match(aiAgentPipeline, /buildDiscarder\(logRotator\(/);
   assert.match(aiAgentPipeline, /wyrmgrid-ai-agent-gateway/);
+  assert.match(aiAgentPipeline, /params\.REASONING_EFFORT \?: 'LOW'/);
   assert.match(aiAgentPipeline, /wyrmgrid-jenkins-ai-contributor/);
   assert.match(aiAgentPipeline, /Codex-Jenkins-Tauryk-Gk-Io/);
   assert.match(aiAgentPipeline, /phobos-dthorga\/onair-wyrmgrid/);
