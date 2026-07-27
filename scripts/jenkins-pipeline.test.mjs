@@ -77,10 +77,23 @@ test("manual AI Agent is bounded, repairable, and draft-only", () => {
     /GIT_ASKPASS=\$\{env\.WORKSPACE\}\/\.jenkins-ai-runtime\/github_git_askpass\.sh/,
   );
   assert.match(aiAgentPipeline, /GIT_TERMINAL_PROMPT=0/);
-  assert.match(aiAgentPipeline, /--jq '\.permissions\.push'/);
+  assert.doesNotMatch(aiAgentPipeline, /\.permissions\.push/);
+  assert.match(aiAgentPipeline, /installation\/repositories/);
   assert.match(
     aiAgentPipeline,
-    /cannot write repository contents[\s\S]*Contents read\/write/,
+    /printf '%s\\n' "\$accessible_repositories"[\s\S]*grep -Fqx[\s\S]*phobos-dthorga\/onair-wyrmgrid/,
+  );
+  assert.match(
+    aiAgentPipeline,
+    /git -C \.jenkins-ai-agent-worktree push[\s\S]*--dry-run[\s\S]*--porcelain/,
+  );
+  assert.match(
+    aiAgentPipeline,
+    /HEAD:refs\/heads\/jenkins-ai-agent\/preflight-\$\{BUILD_NUMBER\}/,
+  );
+  assert.match(
+    aiAgentPipeline,
+    /cannot access WyrmGrid or negotiate a[\s\S]*namespaced dry-run push/,
   );
   assert.match(
     aiAgentPipeline,

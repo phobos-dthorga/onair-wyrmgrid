@@ -201,7 +201,8 @@ safe-patch survival after formatter rejection, path normalization, root-wide and
 refusal, sparse context ceilings, oversized exact targets, symlinks, binary
 changes, secret-like added lines, file and line budgets, registered test
 execution, repair limits, hosted packet contents, unsafe-patch non-retention,
-and draft-only publication. Commissioning runs an attended `ASK`, one-file
+installation-scope plus non-mutating Git publication preflight, and draft-only
+publication. Commissioning runs an attended `ASK`, one-file
 documentation `PATCH`, formatting-only code `PATCH`, one-repair code `PATCH`,
 and multi-file `FEATURE`, in that order. Hosted review and policy reuse in a
 second repository follow separately.

@@ -89,8 +89,11 @@ A passing change is committed by Jenkins on a namespaced branch and opened as
 one clearly labelled draft pull request. The model never receives GitHub
 credentials. Jenkins uses the repository-restricted `WyrmGrid Jenkins AI
 Contributor` App only after the complete diff and tests pass. The App can write
-repository contents and pull requests but cannot approve, merge, administer,
-publish a release, or alter repository settings.
+repository contents, pull requests, and explicitly scoped workflow files but
+cannot dispatch or rerun Actions, approve, merge, administer, publish a release,
+or alter repository settings. Before local inference, Jenkins confirms that the
+installation enumerates WyrmGrid and negotiates a namespaced `git push
+--dry-run`; it does not infer write authority from repository Metadata.
 
 If tests still fail after two repair passes, Jenkins releases the executor and
 offers archive-only or a clearly failing draft pull request. No response within

@@ -48,8 +48,10 @@ major application version.
   WyrmGrid contributor App, avoiding a needless private-key rotation.
 - Kept draft-PR Git authentication ephemeral and workspace-local so publication
   works with the Jenkins service account's deliberately read-only home.
-- Added a read-only contributor push-authority preflight so missing GitHub App
-  write permissions fail before local inference.
+- Replaced the contributor App's misleading repository-metadata write flag with
+  installation-scope discovery and a namespaced, non-mutating Git dry-run before
+  local inference, and recorded the separate workflow-file permission required
+  by explicitly scoped CI edits.
 - Recorded local-model capabilities and made reasoning compatibility fail
   before inference. Both local models use Q4_K_M weights; Qwen3-Coder remains
   explicitly no-thinking.

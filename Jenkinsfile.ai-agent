@@ -398,22 +398,32 @@ pipeline {
                                 script: '''
                                     set -eu
                                     test -n "$GH_TOKEN"
-                                    test "$(
+                                    accessible_repositories="$(
                                       gh api --method GET \
-                                        repos/phobos-dthorga/onair-wyrmgrid \
-                                        --jq '.permissions.push'
-                                    )" = true
+                                        installation/repositories \
+                                        --paginate \
+                                        --jq '.repositories[].full_name'
+                                    )"
+                                    printf '%s\n' "$accessible_repositories" |
+                                      grep -Fqx \
+                                        'phobos-dthorga/onair-wyrmgrid'
+                                    git -C .jenkins-ai-agent-worktree push \
+                                      --dry-run \
+                                      --porcelain \
+                                      origin \
+                                      "HEAD:refs/heads/jenkins-ai-agent/preflight-${BUILD_NUMBER}" \
+                                      > ci-artifacts/ai-agent/contributor-preflight.txt
                                 ''',
                                 returnStatus: true
                             )
                             if (contributorPermissionStatus != 0) {
                                 error(
                                     'The WyrmGrid Jenkins AI Contributor App ' +
-                                    'cannot write repository contents. Grant ' +
-                                    'Contents read/write in GitHub, accept the ' +
-                                    'installation update, and select all App ' +
-                                    'installation permissions in its Jenkins ' +
-                                    'credential.'
+                                    'cannot access WyrmGrid or negotiate a ' +
+                                    'namespaced dry-run push. Confirm the App ' +
+                                    'installation includes WyrmGrid, accept ' +
+                                    'pending permission updates, and select all ' +
+                                    'App installation permissions in Jenkins.'
                                 )
                             }
                         }

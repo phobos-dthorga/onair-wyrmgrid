@@ -441,12 +441,17 @@ Provision three separately scoped Jenkins credentials:
   used only when `OPENAI_AFTER_DRAFT_PR` is selected.
 
 Install the contributor App only on `phobos-dthorga/onair-wyrmgrid`. Grant
-Metadata read-only, Contents read/write, and Pull requests read/write. Grant no
-Administration, Actions, Checks, Environments, Issues, Members, Secrets,
-Workflows, merge-queue, or organization authority. A client secret is not
-needed. Private-key generation, rotation, conversion, and Jenkins credential
-entry are manual maintainer actions; never paste a key into a job parameter,
-prompt, artifact, build log, or repository file.
+Metadata read-only, Contents read/write, Pull requests read/write, and Workflows
+read/write. Workflows write is required only because the checked-in AI Agent
+contract permits an explicitly named `.github/workflows/*` path in
+`ALLOWED_PATHS`; it does not grant Actions dispatch, rerun, secrets, settings,
+or administration access. Grant no Administration, Actions, Checks,
+Environments, Issues, Members, Secrets, merge-queue, or organization authority.
+A repository that forbids AI Agent workflow edits may omit Workflows write only
+if its policy also rejects every workflow path. A client secret is not needed.
+Private-key generation, rotation, conversion, and Jenkins credential entry are
+manual maintainer actions; never paste a key into a job parameter, prompt,
+artifact, build log, or repository file.
 
 Configure `hoardmind-jenkins-ai-contributor` with **Specify accessible
 repositories**, owner `phobos-dthorga`, and repository `onair-wyrmgrid`.
@@ -477,12 +482,16 @@ the standalone job to read `Jenkinsfile.ai-agent`; it does not add another
 repository or any write permission.
 
 The job validates that the local Gateway credential exists for every run, the
-contributor credential can write WyrmGrid repository contents before a
-change-making run, and the hosted key exists only when hosted review is
-selected. This push-authority preflight is read-only and occurs before local
-inference; draft-PR comment authority is still exercised only after publication.
-Reports, conversations, policy evidence, tests, and patches are retained for 30
-days and at most 20 builds.
+contributor installation enumerates WyrmGrid, a namespaced Git push can be
+negotiated in `--dry-run` mode before a change-making run, and the hosted key
+exists only when hosted review is selected. The preflight does not trust
+`.permissions.push` from `GET /repos/{owner}/{repo}`: GitHub classifies that
+repository lookup as Metadata read, so the field is not authoritative evidence
+of an installation token's Contents permission. Git's dry-run sends no ref
+update; the actual validated branch push remains the final publication
+authority. Draft-PR comment authority is still exercised only after
+publication. Reports, conversations, policy evidence, tests, and patches are
+retained for 30 days and at most 20 builds.
 
 ### Optional hosted review
 
@@ -516,6 +525,10 @@ tests are commissioned independently against that repository's actual corpus.
   conversation cards and OpenCode/Codex execution interface;
 - [OpenCode configuration](https://opencode.ai/docs/config/) for pinned local
   agent configuration and emergency compaction controls;
+- [GitHub App endpoint permissions](https://docs.github.com/en/rest/authentication/permissions-required-for-github-apps?apiVersion=2026-03-10)
+  for the separate Metadata, Contents, Pull requests, and Workflows contracts;
+- [Git push](https://git-scm.com/docs/git-push) for the non-mutating
+  `--dry-run` publication preflight;
 - [Google TurboQuant research](https://research.google/blog/turboquant-redefining-ai-efficiency-with-extreme-compression/)
   for the uncommissioned compression research note; and
 - [Ollama FAQ](https://github.com/ollama/ollama/blob/main/docs/faq.mdx) for

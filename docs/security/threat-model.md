@@ -490,10 +490,12 @@
   are preflighted against the immutable source revision. Configuration
   failures stop without being offered to the coding model as a repair task.
   Passing or explicitly accepted failing work can create only a labelled draft
-  through the WyrmGrid-only contributor App. The App receives Contents and Pull
-  requests write access but no merge, approval, release, Actions, workflow,
-  secret, environment, or administration authority. Its private-key lifecycle
-  and Jenkins entry remain manual;
+  through the WyrmGrid-only contributor App. The App receives Contents, Pull
+  requests, and Workflows write access. Workflows write exists only so an
+  explicitly allowed `.github/workflows/*` path can be included in a draft; it
+  provides no Actions dispatch, rerun, secret, environment, merge, approval,
+  release, or administration authority. Its private-key lifecycle and Jenkins
+  entry remain manual;
 - hosted AI Agent review requires explicit per-run selection after a passing
   draft exists. Jenkins records the outbound manifest and exposes only the
   exact diff, tests, selected documentation excerpts, and required repository

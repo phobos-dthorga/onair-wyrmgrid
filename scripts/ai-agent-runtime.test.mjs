@@ -50,6 +50,14 @@ test("WyrmGrid AI Agent policy starts with a bounded visible context", async () 
   assert.deepEqual(policy.test_profiles.DOCUMENTATION.commands, [
     ["npm", "run", "format:frontend:check"],
   ]);
+  assert.equal(policy.publication.repository, "phobos-dthorga/onair-wyrmgrid");
+  assert.equal(policy.publication.branch_namespace, "jenkins-ai-agent");
+  assert.deepEqual(policy.publication.required_github_app_permissions, {
+    metadata: "read",
+    contents: "write",
+    pull_requests: "write",
+    workflows: "write",
+  });
   assert.equal(
     policy.model_profiles.SCOPED_BUILDER_LOCAL.selected_model,
     "qwen3-coder:30b",
