@@ -83,7 +83,10 @@ planning, and review work routes to `qwen3.6:35b`; implementation and repair
 route to `qwen3-coder:30b`. The coding model never receives a thinking option
 because the live Gateway contract does not support one. WyrmGrid canaries judge
 usefulness by reviewed answer and patch quality rather than speed or
-frontier-model perfection.
+frontier-model perfection. Read-only phases reserve 1,536 tokens for their
+bounded final answer rather than inheriting the 4,096-token change-phase output
+allowance. This keeps ordinary cited answers in their original task context
+longer while retaining automatic compaction as a fail-safe.
 
 A passing change is committed by Jenkins on a namespaced branch and opened as
 one clearly labelled draft pull request. The model never receives GitHub

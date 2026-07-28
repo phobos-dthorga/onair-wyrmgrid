@@ -920,7 +920,9 @@ Jenkins discards the completed checkpoint paired with that continuation marker
 and retains the first genuine non-synthetic response whose step stopped, rather
 than allowing compaction summaries or continuation noise to replace it. The
 ordinary citation, scope, diff, and test validators still decide whether that
-retained response is acceptable.
+retained response is acceptable. Read-only phases also use a smaller output
+reserve aligned with their checked answer ceilings, reducing unnecessary
+compaction without weakening the fail-closed response and citation checks.
 
 The active context tier hides large files from the model. Inventory metadata
 can show that a file exists, but cannot substitute for its content. A change may

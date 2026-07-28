@@ -760,10 +760,22 @@ def build_opencode_config(
         "READ_ONLY" if parameters["mode"] in READ_ONLY_MODES else "BUILDER"
     )
     phase_spec = local_phase_spec(phase, parameters, policy)
+    phase_reserve = policy["job"].get("phase_token_reserves", {}).get(phase)
+    compaction = dict(policy["job"]["opencode_compaction"])
+    if phase_reserve is not None:
+        phase_reserve = int(phase_reserve)
+        if phase_reserve <= 0:
+            raise PolicyError(f"{phase} token reserve must be positive.")
+        compaction["reserved"] = phase_reserve
+        compaction["preserve_recent_tokens"] = min(
+            int(compaction["preserve_recent_tokens"]), phase_reserve
+        )
     models: dict[str, Any] = {}
     for profile in policy["model_profiles"].values():
         context_tokens = int(profile["context_tokens"])
         maximum_output_tokens = int(profile["maximum_output_tokens"])
+        if phase_reserve is not None:
+            maximum_output_tokens = min(maximum_output_tokens, phase_reserve)
         for model in profile["candidate_models"]:
             capabilities = set(
                 policy["local_model_inventory"][model]["capabilities"]
@@ -795,7 +807,7 @@ def build_opencode_config(
         "share": "disabled",
         "plugin": [],
         "enabled_providers": ["hoardmind-gate"],
-        "compaction": dict(policy["job"]["opencode_compaction"]),
+        "compaction": compaction,
         "provider": {
             "hoardmind-gate": {
                 "npm": "@ai-sdk/openai-compatible",
