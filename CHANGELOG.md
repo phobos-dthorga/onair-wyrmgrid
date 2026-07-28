@@ -36,6 +36,9 @@ major application version.
   between phases.
 - Preserve safe candidate patches when model prose or tests fail, canonicalize
   harmless read-only citation variations, and withhold unsafe patch artifacts.
+- Preserve the first completed local-agent response when OpenCode auto-
+  compaction emits a synthetic continuation after the model has already
+  stopped, so later continuation noise cannot replace a valid cited answer.
 - Canonicalize completed AI Agent reads against the immutable worktree and
   archive read-event audit counts so valid citations survive workspace aliases
   and compatible OpenCode metadata variations.

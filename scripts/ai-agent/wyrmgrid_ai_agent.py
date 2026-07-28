@@ -1449,6 +1449,8 @@ def extract_final_agent_text(
     if event_log.stat().st_size > maximum_log_bytes:
         raise PolicyError("The bounded OpenCode event log exceeds its policy limit.")
     texts: list[str] = []
+    current_step_texts: list[str] = []
+    first_completed_response: str | None = None
     for line_number, line in enumerate(
         event_log.read_text(encoding="utf-8").splitlines(), start=1
     ):
@@ -1460,17 +1462,33 @@ def extract_final_agent_text(
             raise PolicyError(
                 f"OpenCode emitted malformed JSON on event line {line_number}."
             ) from exc
-        if event.get("type") != "text":
+        event_type = event.get("type")
+        if event_type == "step_start":
+            current_step_texts = []
             continue
         part = event.get("part")
         if not isinstance(part, dict):
             continue
-        text = part.get("text")
-        if isinstance(text, str) and text.strip():
-            texts.append(text.strip())
+        if event_type == "text":
+            text = part.get("text")
+            if (
+                not part.get("synthetic")
+                and isinstance(text, str)
+                and text.strip()
+            ):
+                normalized = text.strip()
+                texts.append(normalized)
+                current_step_texts.append(normalized)
+        elif (
+            event_type == "step_finish"
+            and part.get("reason") == "stop"
+            and current_step_texts
+            and first_completed_response is None
+        ):
+            first_completed_response = current_step_texts[-1]
     if not texts:
         raise PolicyError("OpenCode did not emit a final text response.")
-    final = texts[-1]
+    final = first_completed_response or texts[-1]
     if len(final.encode("utf-8")) > maximum_response_bytes:
         raise PolicyError("OpenCode's final response exceeds its policy limit.")
     return final
