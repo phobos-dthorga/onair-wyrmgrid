@@ -359,6 +359,30 @@ class WyrmGridAiAgentTests(unittest.TestCase):
             config["compaction"],
         )
 
+    def test_read_only_config_reserves_room_for_a_bounded_final_answer(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            artifacts = root / "ci-artifacts" / "ai-agent"
+            artifacts.mkdir(parents=True)
+            config = agent.build_opencode_config(
+                root,
+                artifacts,
+                {
+                    "mode": "ASK",
+                    "allowed_paths": [],
+                    "reasoning_effort": "LOW",
+                },
+                self.policy,
+            )
+
+        reserve = self.policy["job"]["phase_token_reserves"]["READ_ONLY"]
+        self.assertEqual(reserve, config["compaction"]["reserved"])
+        self.assertEqual(
+            reserve, config["compaction"]["preserve_recent_tokens"]
+        )
+        for model in config["provider"]["hoardmind-gate"]["models"].values():
+            self.assertEqual(reserve, model["limit"]["output"])
+
     def test_specialist_phases_route_reasoning_only_to_qwen36(self) -> None:
         parameters = {
             "mode": "PATCH",

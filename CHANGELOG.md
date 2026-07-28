@@ -39,6 +39,10 @@ major application version.
 - Discard OpenCode's auto-compaction summaries and preserve the first genuine
   completed local-agent response around a synthetic continuation, so checkpoint
   text or later continuation noise cannot replace a valid cited answer.
+- Give read-only phases a focused 1,536-token answer reserve so their bounded
+  responses can finish in the original task context instead of entering a
+  lossy automatic-compaction continuation merely to preserve the change-phase
+  output allowance.
 - Canonicalize completed AI Agent reads against the immutable worktree and
   archive read-event audit counts so valid citations survive workspace aliases
   and compatible OpenCode metadata variations.
