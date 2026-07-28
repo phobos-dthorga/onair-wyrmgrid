@@ -1704,6 +1704,62 @@ class WyrmGridAiAgentTests(unittest.TestCase):
                 text,
             )
 
+    def test_capture_discards_compaction_summary_before_final_response(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            event_log = pathlib.Path(temporary) / "events.jsonl"
+            events = [
+                {"type": "step_start", "part": {"type": "step-start"}},
+                {
+                    "type": "text",
+                    "part": {
+                        "type": "text",
+                        "text": "## Work State\nContinue researching the request.",
+                    },
+                },
+                {
+                    "type": "step_finish",
+                    "part": {"type": "step-finish", "reason": "stop"},
+                },
+                {
+                    "type": "text",
+                    "part": {
+                        "type": "text",
+                        "synthetic": True,
+                        "metadata": {"compaction_continue": True},
+                        "text": "Continue if you have next steps.",
+                    },
+                },
+                {"type": "step_start", "part": {"type": "step-start"}},
+                {
+                    "type": "text",
+                    "part": {
+                        "type": "text",
+                        "text": (
+                            "The worker needs the documented packages.\n\n"
+                            "Citations:\n- `docs/operations/jenkins.md:31-35`"
+                        ),
+                    },
+                },
+                {
+                    "type": "step_finish",
+                    "part": {"type": "step-finish", "reason": "stop"},
+                },
+            ]
+            event_log.write_text(
+                "\n".join(json.dumps(event) for event in events) + "\n",
+                encoding="utf-8",
+            )
+
+            text = agent.extract_final_agent_text(event_log, 8192, 1024)
+
+            self.assertEqual(
+                (
+                    "The worker needs the documented packages.\n\n"
+                    "Citations:\n- `docs/operations/jenkins.md:31-35`"
+                ),
+                text,
+            )
+
     def test_document_inventory_records_headings_hashes_and_lines(self) -> None:
         parameters = {
             "read_scope": ["AGENTS.md", "docs/architecture/decisions"]

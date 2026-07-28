@@ -1450,7 +1450,7 @@ def extract_final_agent_text(
         raise PolicyError("The bounded OpenCode event log exceeds its policy limit.")
     texts: list[str] = []
     current_step_texts: list[str] = []
-    first_completed_response: str | None = None
+    completed_responses: list[tuple[str, bool]] = []
     for line_number, line in enumerate(
         event_log.read_text(encoding="utf-8").splitlines(), start=1
     ):
@@ -1470,6 +1470,16 @@ def extract_final_agent_text(
         if not isinstance(part, dict):
             continue
         if event_type == "text":
+            metadata = part.get("metadata")
+            if (
+                part.get("synthetic")
+                and isinstance(metadata, dict)
+                and metadata.get("compaction_continue")
+            ):
+                if completed_responses:
+                    response, _ = completed_responses[-1]
+                    completed_responses[-1] = (response, True)
+                continue
             text = part.get("text")
             if (
                 not part.get("synthetic")
@@ -1483,12 +1493,18 @@ def extract_final_agent_text(
             event_type == "step_finish"
             and part.get("reason") == "stop"
             and current_step_texts
-            and first_completed_response is None
         ):
-            first_completed_response = current_step_texts[-1]
+            completed_responses.append((current_step_texts[-1], False))
     if not texts:
         raise PolicyError("OpenCode did not emit a final text response.")
-    final = first_completed_response or texts[-1]
+    final = next(
+        (
+            response
+            for response, is_compaction_summary in completed_responses
+            if not is_compaction_summary
+        ),
+        texts[-1],
+    )
     if len(final.encode("utf-8")) > maximum_response_bytes:
         raise PolicyError("OpenCode's final response exceeds its policy limit.")
     return final

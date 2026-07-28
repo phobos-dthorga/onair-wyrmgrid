@@ -915,9 +915,10 @@ generic planner response from erasing the task, but does not prove the request
 is complete or correctly implemented. Jenkins records phase model identity,
 reasoning mode, token high-water marks, and compaction events as diagnostic
 evidence, not correctness proof. OpenCode may emit a synthetic continuation
-after an already completed response while auto-compacting a phase. Jenkins
-retains the first non-synthetic response whose step stopped, rather than
-allowing later compaction summaries or continuation noise to replace it; the
+before or after an otherwise completed response while auto-compacting a phase.
+Jenkins discards the completed checkpoint paired with that continuation marker
+and retains the first genuine non-synthetic response whose step stopped, rather
+than allowing compaction summaries or continuation noise to replace it. The
 ordinary citation, scope, diff, and test validators still decide whether that
 retained response is acceptable.
 
