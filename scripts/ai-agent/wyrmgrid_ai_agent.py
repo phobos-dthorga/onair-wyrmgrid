@@ -760,22 +760,10 @@ def build_opencode_config(
         "READ_ONLY" if parameters["mode"] in READ_ONLY_MODES else "BUILDER"
     )
     phase_spec = local_phase_spec(phase, parameters, policy)
-    phase_reserve = policy["job"].get("phase_token_reserves", {}).get(phase)
-    compaction = dict(policy["job"]["opencode_compaction"])
-    if phase_reserve is not None:
-        phase_reserve = int(phase_reserve)
-        if phase_reserve <= 0:
-            raise PolicyError(f"{phase} token reserve must be positive.")
-        compaction["reserved"] = phase_reserve
-        compaction["preserve_recent_tokens"] = min(
-            int(compaction["preserve_recent_tokens"]), phase_reserve
-        )
     models: dict[str, Any] = {}
     for profile in policy["model_profiles"].values():
         context_tokens = int(profile["context_tokens"])
         maximum_output_tokens = int(profile["maximum_output_tokens"])
-        if phase_reserve is not None:
-            maximum_output_tokens = min(maximum_output_tokens, phase_reserve)
         for model in profile["candidate_models"]:
             capabilities = set(
                 policy["local_model_inventory"][model]["capabilities"]
@@ -807,7 +795,7 @@ def build_opencode_config(
         "share": "disabled",
         "plugin": [],
         "enabled_providers": ["hoardmind-gate"],
-        "compaction": compaction,
+        "compaction": dict(policy["job"]["opencode_compaction"]),
         "provider": {
             "hoardmind-gate": {
                 "npm": "@ai-sdk/openai-compatible",
@@ -1461,8 +1449,6 @@ def extract_final_agent_text(
     if event_log.stat().st_size > maximum_log_bytes:
         raise PolicyError("The bounded OpenCode event log exceeds its policy limit.")
     texts: list[str] = []
-    current_step_texts: list[str] = []
-    completed_responses: list[tuple[str, bool]] = []
     for line_number, line in enumerate(
         event_log.read_text(encoding="utf-8").splitlines(), start=1
     ):
@@ -1474,49 +1460,17 @@ def extract_final_agent_text(
             raise PolicyError(
                 f"OpenCode emitted malformed JSON on event line {line_number}."
             ) from exc
-        event_type = event.get("type")
-        if event_type == "step_start":
-            current_step_texts = []
+        if event.get("type") != "text":
             continue
         part = event.get("part")
         if not isinstance(part, dict):
             continue
-        if event_type == "text":
-            metadata = part.get("metadata")
-            if (
-                part.get("synthetic")
-                and isinstance(metadata, dict)
-                and metadata.get("compaction_continue")
-            ):
-                if completed_responses:
-                    response, _ = completed_responses[-1]
-                    completed_responses[-1] = (response, True)
-                continue
-            text = part.get("text")
-            if (
-                not part.get("synthetic")
-                and isinstance(text, str)
-                and text.strip()
-            ):
-                normalized = text.strip()
-                texts.append(normalized)
-                current_step_texts.append(normalized)
-        elif (
-            event_type == "step_finish"
-            and part.get("reason") == "stop"
-            and current_step_texts
-        ):
-            completed_responses.append((current_step_texts[-1], False))
+        text = part.get("text")
+        if isinstance(text, str) and text.strip():
+            texts.append(text.strip())
     if not texts:
         raise PolicyError("OpenCode did not emit a final text response.")
-    final = next(
-        (
-            response
-            for response, is_compaction_summary in completed_responses
-            if not is_compaction_summary
-        ),
-        texts[-1],
-    )
+    final = texts[-1]
     if len(final.encode("utf-8")) > maximum_response_bytes:
         raise PolicyError("OpenCode's final response exceeds its policy limit.")
     return final

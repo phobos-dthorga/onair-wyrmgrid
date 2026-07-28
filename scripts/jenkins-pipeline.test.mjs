@@ -188,7 +188,6 @@ test("manual AI Agent is bounded, repairable, and draft-only", () => {
     12288,
   );
   assert.equal(aiAgentPolicy.job.phase_limits.maximum_checkpoint_bytes, 24576);
-  assert.equal(aiAgentPolicy.job.phase_token_reserves.READ_ONLY, 1536);
   assert.equal(aiAgentPolicy.job.opencode_compaction.tail_turns, 1);
   assert.deepEqual(aiAgentPolicy.job.local_reasoning_efforts, [
     "LOW",

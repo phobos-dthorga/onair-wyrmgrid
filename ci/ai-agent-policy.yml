@@ -32,9 +32,6 @@
       "REPAIR": 16,
       "REVIEW": 8
     },
-    "phase_token_reserves": {
-      "READ_ONLY": 1536
-    },
     "phase_limits": {
       "maximum_checkpoint_bytes": 24576,
       "maximum_prompt_bytes": 49152,
