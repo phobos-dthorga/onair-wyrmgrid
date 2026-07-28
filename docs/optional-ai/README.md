@@ -6,11 +6,16 @@ release authority. Hoardmind is the maintainer's private profile; another user
 may select their own loopback Ollama or unauthenticated OpenAI-compatible local
 server. Manual work remains equally supported.
 
-Jenkins has one separately governed exception: the multibranch pipeline may
+Jenkins has two separately governed exceptions. The multibranch pipeline may
 send a bounded, sanitized change packet plus screened pipeline and dependency
 manifest inputs to its controller-configured ForgeAI service after deterministic
 work completes. That advisory path does not use these task contracts, cannot
-publish or decide release readiness, and is documented in
+publish or decide release readiness. A separate manually launched Jenkins AI
+Agent job can interrogate an immutable revision or prepare a scoped draft pull
+request through OpenCode and Hoardmind Gate. It uses its own policy, worker,
+Gateway client, GitHub App, registered tests, context tiers, and draft-only
+lifecycle. Neither Jenkins exception changes the generic local task contracts
+below, and neither enters the exact-tag release job. Both are documented in
 [Jenkins operations](../operations/jenkins.md).
 
 The generic runner is `scripts/run-optional-ai-task.mjs`. Every invocation

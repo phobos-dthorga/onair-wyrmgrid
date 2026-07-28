@@ -8,11 +8,79 @@ major application version.
 
 ### New features
 
-- None.
+- Added a manually launched six-mode Jenkins AI Agent for immutable cited
+  repository research and bounded `PATCH` or `FEATURE` work. Passing changes
+  open draft-only pull requests after checked-in tests, with an explicitly
+  selected packet-only OpenAI review available after publication.
 
 ### Changes
 
-- None.
+- Added operator-editable small, medium, and attended large-file context tiers
+  for local-agent commissioning. Oversized files remain inventory-visible but
+  content-hidden and cannot be changed by a run that could not inspect them.
+- Require cited passages to contain several distinctive answer terms so a
+  citation-shaped but unsupported local-model answer enters the bounded repair
+  cycle instead of being accepted as grounded research.
+- Increased the local AI Agent context window to 12,288 tokens after the 4K
+  commissioning canary displaced early repository guidance before inference.
+- Added a per-run local reasoning control with operator-selectable `LOW`,
+  `MEDIUM`, and `HIGH` effort; `LOW` remains the default. Increased the local
+  response allowance to 4,096 tokens so thinking can finish before the bounded
+  answer is validated.
+- Added editable per-mode word ceilings so archived local-agent answers and
+  change summaries remain focused even when the model has a larger thinking
+  budget.
+- Split change-making AI Agent runs into fresh specialist phases: Qwen3.6
+  planning and advisory review, no-thinking Qwen3-Coder implementation and
+  repair, Jenkins-controlled formatting and tests, and bounded checkpoints
+  between phases.
+- Preserve safe candidate patches when model prose or tests fail, canonicalize
+  harmless read-only citation variations, and withhold unsafe patch artifacts.
+- Discard OpenCode's auto-compaction summaries and preserve the first genuine
+  completed local-agent response around a synthetic continuation, so checkpoint
+  text or later continuation noise cannot replace a valid cited answer.
+- Give read-only phases a focused 1,536-token answer reserve so their bounded
+  responses can finish in the original task context instead of entering a
+  lossy automatic-compaction continuation merely to preserve the change-phase
+  output allowance.
+- Canonicalize completed AI Agent reads against the immutable worktree and
+  archive read-event audit counts so valid citations survive workspace aliases
+  and compatible OpenCode metadata variations.
+- Accept an otherwise valid first citation directly after the `Citations:`
+  marker without requiring the local model to emit a Markdown bullet.
+- Added a table-driven compatibility corpus from sanitized commissioning
+  outputs so future citation handling is tested against observed model
+  behaviour and explicit malformed counterexamples.
+- Reused the existing tested Jenkins credential ID for the repository-restricted
+  WyrmGrid contributor App, avoiding a needless private-key rotation.
+- Kept draft-PR Git authentication ephemeral and workspace-local so publication
+  works with the Jenkins service account's deliberately read-only home.
+- Replaced the contributor App's misleading repository-metadata write flag with
+  installation-scope discovery and a namespaced, non-mutating Git dry-run before
+  local inference, and recorded the separate workflow-file permission required
+  by explicitly scoped CI edits.
+- Corrected draft-title whitespace normalization so it no longer removes every
+  lowercase `r`, `n`, and `t` from the bounded operator request.
+- Recorded local-model capabilities and made reasoning compatibility fail
+  before inference. Both local models use Q4_K_M weights; Qwen3-Coder remains
+  explicitly no-thinking.
+- Bootstrap lockfile-pinned JavaScript tooling before AI Agent formatting and
+  isolated tests, use a disposable workspace npm cache, and keep Prettier
+  offline so missing dependencies cannot trigger an unpinned formatter fetch.
+- Reconcile dependency-bootstrap changes back to the immutable candidate before
+  formatting, retain the last safe patch when deterministic formatting is
+  rejected, and archive bounded side-effect and failure evidence.
+- Preserve the exact bounded operator request as the authoritative input to
+  every change phase so a generic local-planner response cannot erase or
+  redirect the implementation task.
+- Present change phases with plain task, editable-path, and advisory-plan
+  sections so internal receipt names or quoted document fragments are not
+  mistaken for source APIs.
+- Transport local-agent prompts through a fixed file-reading wrapper rather
+  than interpolating model instructions into a shell command. Validate each
+  immutable revision's registered test paths, scripts, and required executables
+  before inference, and do not spend model repair passes on configuration
+  failures.
 
 ### Removed
 

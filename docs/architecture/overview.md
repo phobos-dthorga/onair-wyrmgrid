@@ -81,6 +81,15 @@ maintainer's authenticated GitHub CLI creates the draft PR. The App is not a
 WyrmGrid plugin, runtime sidecar, build input, CI model call, or landing
 authority.
 
+The manual Jenkins AI Agent is another maintainer-side control plane, not an
+application dependency. Its change workflow uses fresh specialist phases:
+Qwen3.6 plans and reviews, Qwen3-Coder implements and repairs without thinking,
+and Jenkins alone formats, validates, tests, commits, and opens a draft pull
+request. Compact checkpoints cross phase boundaries; model conversation history
+does not. Prompts cross the plugin boundary as data through a fixed file-reading
+wrapper, while pipeline self-tests and immutable-revision product tests remain
+separate contracts.
+
 ## Localization boundary
 
 Domain models remain language-neutral. Application services return semantic

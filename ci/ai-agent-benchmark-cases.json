@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "documentation-business-logic-ownership",
+      "workload": "documentation",
+      "prompt": "Use only this excerpt: `AGENTS.md:23-25` says UI code is presentational, business rules belong in Rust application or domain services, and Tauri commands delegate to `wyrmgrid-application`. Answer where a new business rule belongs and cite the supplied path and line range.",
+      "required_terms": [
+        "Rust application or domain services",
+        "AGENTS.md:23-25"
+      ]
+    },
+    {
+      "id": "documentation-migration-decision",
+      "workload": "documentation",
+      "prompt": "Use only these excerpts: `AGENTS.md:26-27` says released SQLite migrations are append-only, while `AGENTS.md:50-52` requires regression and boundary tests for new rules. Explain how to correct a released migration defect without editing the shipped migration, and cite both supplied ranges.",
+      "required_terms": [
+        "new numbered migration",
+        "AGENTS.md:26-27",
+        "AGENTS.md:50-52",
+        "test"
+      ]
+    },
+    {
+      "id": "coding-scoped-path-repair",
+      "workload": "coding",
+      "prompt": "Review this Python path guard: `return raw.strip().replace('\\\\', '/')`. Propose a minimal replacement that rejects absolute paths, drive-qualified paths, empty/root-wide values, `.git`, and any `..` segment. Explain tests for `docs`, `../x`, `C:\\\\x`, `*`, and `.git/config`. Do not use shell commands.",
+      "required_terms": ["..", ".git", "absolute", "test"]
+    },
+    {
+      "id": "coding-feature-plan",
+      "workload": "coding",
+      "prompt": "Plan a scoped WyrmGrid feature limited to `crates/wyrmgrid-application/src/` and `crates/wyrmgrid-application/src/tests/`. It must add a parser, keep business logic out of the Svelte UI, add boundary and failure tests, and leave dependency manifests and CI unchanged. Return a concrete file list, invariants, and verification plan.",
+      "required_terms": [
+        "crates/wyrmgrid-application/src/",
+        "crates/wyrmgrid-application/src/tests/",
+        "dependency",
+        "CI"
+      ]
+    }
+  ]
+}

@@ -30,6 +30,7 @@ record rather than silently rewriting history.
 - [ADR-0024: Audio provider package format version 1](0024-audio-provider-package-format-v1.md)
 - [ADR-0025: Audio codec provider package format version 1](0025-audio-codec-package-format-v1.md)
 - [ADR-0026: Extension Developer Kit version 1](0026-extension-developer-kit-v1.md)
+- [ADR-0027: Manual scoped Jenkins AI Agent](0027-manual-jenkins-ai-agent.md)
 
 ## Proposed decisions
 

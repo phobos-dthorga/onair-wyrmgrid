@@ -1,0 +1,408 @@
+{
+  "schema_version": 1,
+  "repository": "phobos-dthorga/onair-wyrmgrid",
+  "job": {
+    "request_max_characters": 8000,
+    "maximum_scope_entries": 32,
+    "retention_days": 30,
+    "retention_builds": 20,
+    "failure_decision_hours": 24,
+    "local_test_repair_attempts": 2,
+    "hosted_repair_attempts": 1,
+    "local_review_is_advisory": true,
+    "local_reasoning_efforts": [
+      "LOW",
+      "MEDIUM",
+      "HIGH"
+    ],
+    "answer_word_limits": {
+      "ASK": 200,
+      "DECISION_TRACE": 500,
+      "CONSISTENCY_AUDIT": 650,
+      "ROADMAP_STATUS": 500,
+      "PATCH": 250,
+      "FEATURE": 400
+    },
+    "phase_steps": {
+      "READ_ONLY": 16,
+      "PLANNER_PATCH": 6,
+      "PLANNER_FEATURE": 10,
+      "BUILDER_PATCH": 24,
+      "BUILDER_FEATURE": 48,
+      "REPAIR": 16,
+      "REVIEW": 8
+    },
+    "phase_token_reserves": {
+      "READ_ONLY": 1536
+    },
+    "phase_limits": {
+      "maximum_checkpoint_bytes": 24576,
+      "maximum_prompt_bytes": 49152,
+      "maximum_failure_bytes": 8192,
+      "maximum_diff_bytes": 131072,
+      "resolved_regression_notes": 4
+    },
+    "opencode_compaction": {
+      "auto": true,
+      "prune": false,
+      "tail_turns": 1,
+      "preserve_recent_tokens": 2000,
+      "reserved": 4096
+    }
+  },
+  "modes": {
+    "read_only": [
+      "ASK",
+      "DECISION_TRACE",
+      "CONSISTENCY_AUDIT",
+      "ROADMAP_STATUS"
+    ],
+    "change": [
+      "PATCH",
+      "FEATURE"
+    ]
+  },
+  "documentation": {
+    "default_paths": [
+      "AGENTS.md",
+      "README.md",
+      "docs/README.md",
+      "docs/project-brief.md",
+      "docs/roadmap.md"
+    ],
+    "maximum_inventory_bytes": 3145728,
+    "maximum_hosted_packet_bytes": 524288,
+    "maximum_hosted_document_bytes": 131072
+  },
+  "context_limits": {
+    "active_profile": "SMALL_FILES",
+    "promotion_order": [
+      "SMALL_FILES",
+      "MEDIUM_FILES",
+      "LARGE_FILES_RESEARCH"
+    ],
+    "operator_note": "Change active_profile to promote every run. Edit the three numeric ceilings inside a named profile only after reviewed canary evidence.",
+    "profiles": {
+      "SMALL_FILES": {
+        "description": "Initial small-file commissioning tier.",
+        "maximum_visible_file_bytes": 32768,
+        "maximum_visible_file_lines": 800,
+        "maximum_visible_total_bytes": 524288
+      },
+      "MEDIUM_FILES": {
+        "description": "Promote after small-file PATCH and FEATURE canaries pass.",
+        "maximum_visible_file_bytes": 65536,
+        "maximum_visible_file_lines": 1200,
+        "maximum_visible_total_bytes": 1048576
+      },
+      "LARGE_FILES_RESEARCH": {
+        "description": "Attended research tier for selected large source files.",
+        "maximum_visible_file_bytes": 131072,
+        "maximum_visible_file_lines": 2500,
+        "maximum_visible_total_bytes": 2097152
+      }
+    }
+  },
+  "change_limits": {
+    "PATCH": {
+      "default_files": 8,
+      "maximum_files": 20,
+      "default_lines": 500,
+      "maximum_lines": 2000
+    },
+    "FEATURE": {
+      "default_files": 30,
+      "maximum_files": 75,
+      "default_lines": 3000,
+      "maximum_lines": 10000
+    }
+  },
+  "model_profiles": {
+    "REPOSITORY_SCHOLAR_LOCAL": {
+      "display_name": "WyrmGrid Repository Scholar — Local",
+      "role": "documentation analysis",
+      "provider": "hoardmind-gate",
+      "selected_model": "qwen3.6:35b",
+      "selection_status": "commissioned_for_reading_planning_and_review",
+      "context_tokens": 12288,
+      "maximum_output_tokens": 4096,
+      "candidate_models": [
+        "qwen3.6:35b",
+        "qwen3-coder:30b"
+      ]
+    },
+    "SCOPED_BUILDER_LOCAL": {
+      "display_name": "WyrmGrid Scoped Builder — Local",
+      "role": "bounded repository implementation",
+      "provider": "hoardmind-gate",
+      "selected_model": "qwen3-coder:30b",
+      "selection_status": "specialist_routing",
+      "context_tokens": 12288,
+      "maximum_output_tokens": 4096,
+      "candidate_models": [
+        "qwen3-coder:30b",
+        "qwen3.6:35b"
+      ]
+    }
+  },
+  "local_model_inventory": {
+    "qwen3.6:35b": {
+      "weight_quantization": "Q4_K_M",
+      "capabilities": [
+        "completion",
+        "vision",
+        "tools",
+        "thinking"
+      ],
+      "advertised_context_tokens": 262144
+    },
+    "qwen3-coder:30b": {
+      "weight_quantization": "Q4_K_M",
+      "capabilities": [
+        "completion",
+        "tools"
+      ],
+      "advertised_context_tokens": 262144
+    }
+  },
+  "toolchain": {
+    "execution_interface": "Jenkins AI Agent plugin",
+    "opencode_version": "1.18.5",
+    "codex_cli_version": "0.145.0",
+    "required_commands": [
+      "bash",
+      "cat",
+      "cp",
+      "git",
+      "install",
+      "mkdir",
+      "node",
+      "npm",
+      "opencode",
+      "python3",
+      "tee"
+    ],
+    "change_commands": [
+      "gh"
+    ],
+    "hosted_review_commands": [
+      "codex"
+    ],
+    "test_profile_commands": {
+      "DOCUMENTATION": [],
+      "TOOLING": [],
+      "REPOSITORY": [
+        "cargo",
+        "cargo-deny",
+        "python",
+        "rustfmt"
+      ]
+    }
+  },
+  "test_profiles": {
+    "DOCUMENTATION": {
+      "description": "Repository formatting for documentation-only changes.",
+      "timeout_seconds": 600,
+      "bootstrap_dependencies": true,
+      "required_paths": [
+        "package.json"
+      ],
+      "commands": [
+        [
+          "npm",
+          "run",
+          "format:frontend:check"
+        ]
+      ]
+    },
+    "TOOLING": {
+      "description": "Complete JavaScript tooling and AI Agent unit tests.",
+      "timeout_seconds": 1200,
+      "bootstrap_dependencies": true,
+      "required_paths": [
+        "package.json"
+      ],
+      "commands": [
+        [
+          "npm",
+          "run",
+          "test:tooling"
+        ]
+      ]
+    },
+    "REPOSITORY": {
+      "description": "Complete deterministic Linux repository validation.",
+      "timeout_seconds": 10800,
+      "bootstrap_dependencies": true,
+      "required_paths": [
+        "Cargo.toml",
+        "package.json",
+        "rust-toolchain.toml"
+      ],
+      "commands": [
+        [
+          "npm",
+          "run",
+          "ci:frontend"
+        ],
+        [
+          "npm",
+          "run",
+          "ci:python"
+        ],
+        [
+          "npm",
+          "run",
+          "ci:prepare"
+        ],
+        [
+          "npm",
+          "run",
+          "ci:rust"
+        ],
+        [
+          "npm",
+          "run",
+          "ci:dependencies"
+        ]
+      ]
+    }
+  },
+  "phase_routing": {
+    "READ_ONLY": {
+      "model": "qwen3.6:35b",
+      "reasoning": "PARAMETER"
+    },
+    "PLANNER": {
+      "model": "qwen3.6:35b",
+      "reasoning": "PARAMETER"
+    },
+    "BUILDER": {
+      "model": "qwen3-coder:30b",
+      "reasoning": "NONE"
+    },
+    "REPAIR": {
+      "model": "qwen3-coder:30b",
+      "reasoning": "NONE"
+    },
+    "REVIEW": {
+      "model": "qwen3.6:35b",
+      "reasoning": "PARAMETER"
+    }
+  },
+  "formatters": {
+    "enabled": true,
+    "bootstrap_dependencies": true,
+    "prettier_extensions": [
+      ".css",
+      ".html",
+      ".js",
+      ".json",
+      ".md",
+      ".mjs",
+      ".scss",
+      ".svelte",
+      ".ts",
+      ".yaml",
+      ".yml"
+    ],
+    "prettier_command": [
+      "npm",
+      "exec",
+      "--offline",
+      "--",
+      "prettier",
+      "--write"
+    ],
+    "rust_extensions": [
+      ".rs"
+    ],
+    "rust_command": [
+      "cargo",
+      "fmt",
+      "--all",
+      "--"
+    ]
+  },
+  "dependency_bootstrap": {
+    "command": [
+      "npm",
+      "ci",
+      "--ignore-scripts",
+      "--no-audit",
+      "--no-fund"
+    ],
+    "timeout_seconds": 1200,
+    "cache_directory": ".jenkins-ai-npm-cache",
+    "maximum_output_bytes": 8192
+  },
+  "scope": {
+    "forbidden_roots": [
+      "",
+      ".",
+      "/",
+      "*",
+      "**",
+      ".git"
+    ],
+    "binary_extensions": [
+      ".7z",
+      ".avi",
+      ".bin",
+      ".bmp",
+      ".class",
+      ".dll",
+      ".doc",
+      ".docx",
+      ".exe",
+      ".gif",
+      ".gz",
+      ".ico",
+      ".jar",
+      ".jpeg",
+      ".jpg",
+      ".mp3",
+      ".mp4",
+      ".pdf",
+      ".png",
+      ".so",
+      ".tar",
+      ".wav",
+      ".webm",
+      ".webp",
+      ".woff",
+      ".woff2",
+      ".xls",
+      ".xlsx",
+      ".zip"
+    ]
+  },
+  "credentials": {
+    "local_gateway": "wyrmgrid-ai-agent-gateway",
+    "github_contributor": "hoardmind-jenkins-ai-contributor",
+    "hosted_openai_review": "Codex-Jenkins-Tauryk-Gk-Io"
+  },
+  "publication": {
+    "repository": "phobos-dthorga/onair-wyrmgrid",
+    "branch_namespace": "jenkins-ai-agent",
+    "required_github_app_permissions": {
+      "metadata": "read",
+      "contents": "write",
+      "pull_requests": "write",
+      "workflows": "write"
+    }
+  },
+  "hosted_review": {
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "xhigh",
+    "review_event": "COMMENT"
+  },
+  "artifacts": {
+    "directory": "ci-artifacts/ai-agent",
+    "report_markdown": "agent-output.md",
+    "report_json": "agent-output.json",
+    "patch": "proposed.patch",
+    "maximum_event_log_bytes": 16777216,
+    "maximum_final_response_bytes": 65536
+  }
+}

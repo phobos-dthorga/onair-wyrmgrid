@@ -5,16 +5,199 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const [multibranchPipeline, releasePipeline, packageMetadata, tauriConfig] =
-  await Promise.all([
-    readFile(resolve(repositoryRoot, "Jenkinsfile"), "utf8"),
-    readFile(resolve(repositoryRoot, "Jenkinsfile.release"), "utf8"),
-    readFile(resolve(repositoryRoot, "package.json"), "utf8").then(JSON.parse),
-    readFile(
-      resolve(repositoryRoot, "apps/desktop/src-tauri/tauri.conf.json"),
-      "utf8",
-    ).then(JSON.parse),
+const [
+  multibranchPipeline,
+  releasePipeline,
+  aiAgentPipeline,
+  aiAgentWrapper,
+  aiAgentGitAskpass,
+  aiAgentRuntimeTests,
+  aiAgentPolicy,
+  packageMetadata,
+  tauriConfig,
+] = await Promise.all([
+  readFile(resolve(repositoryRoot, "Jenkinsfile"), "utf8"),
+  readFile(resolve(repositoryRoot, "Jenkinsfile.release"), "utf8"),
+  readFile(resolve(repositoryRoot, "Jenkinsfile.ai-agent"), "utf8"),
+  readFile(
+    resolve(repositoryRoot, "scripts/ai-agent/run_opencode_phase.sh"),
+    "utf8",
+  ),
+  readFile(
+    resolve(repositoryRoot, "scripts/ai-agent/github_git_askpass.sh"),
+    "utf8",
+  ),
+  readFile(
+    resolve(repositoryRoot, "scripts/ai-agent-runtime.test.mjs"),
+    "utf8",
+  ),
+  readFile(resolve(repositoryRoot, "ci/ai-agent-policy.yml"), "utf8").then(
+    JSON.parse,
+  ),
+  readFile(resolve(repositoryRoot, "package.json"), "utf8").then(JSON.parse),
+  readFile(
+    resolve(repositoryRoot, "apps/desktop/src-tauri/tauri.conf.json"),
+    "utf8",
+  ).then(JSON.parse),
+]);
+
+test("manual AI Agent is bounded, repairable, and draft-only", () => {
+  for (const mode of [
+    "ASK",
+    "DECISION_TRACE",
+    "CONSISTENCY_AUDIT",
+    "ROADMAP_STATUS",
+    "PATCH",
+    "FEATURE",
+  ]) {
+    assert.match(aiAgentPipeline, new RegExp(`'${mode}'`));
+  }
+  for (const parameter of [
+    "SOURCE_REVISION",
+    "REQUEST",
+    "READ_SCOPE",
+    "ALLOWED_PATHS",
+    "MAX_CHANGED_FILES",
+    "MAX_CHANGED_LINES",
+    "TEST_PROFILE",
+    "LOCAL_MODEL_PROFILE",
+    "REASONING_EFFORT",
+    "HOSTED_REVIEW",
+  ]) {
+    assert.match(aiAgentPipeline, new RegExp(`name: '${parameter}'`));
+  }
+  assert.match(aiAgentPipeline, /agent \{ label 'ai-agent' \}/);
+  assert.match(aiAgentPipeline, /disableConcurrentBuilds\(\)/);
+  assert.match(aiAgentPipeline, /buildDiscarder\(logRotator\(/);
+  assert.match(aiAgentPipeline, /wyrmgrid-ai-agent-gateway/);
+  assert.match(aiAgentPipeline, /params\.REASONING_EFFORT \?: 'LOW'/);
+  assert.match(aiAgentPipeline, /hoardmind-jenkins-ai-contributor/);
+  assert.match(
+    aiAgentPipeline,
+    /GIT_ASKPASS=\$\{env\.WORKSPACE\}\/\.jenkins-ai-runtime\/github_git_askpass\.sh/,
+  );
+  assert.match(aiAgentPipeline, /GIT_TERMINAL_PROMPT=0/);
+  assert.doesNotMatch(aiAgentPipeline, /\.permissions\.push/);
+  assert.match(aiAgentPipeline, /installation\/repositories/);
+  assert.match(
+    aiAgentPipeline,
+    /printf '%s\\n' "\$accessible_repositories"[\s\S]*grep -Fqx[\s\S]*phobos-dthorga\/onair-wyrmgrid/,
+  );
+  assert.match(
+    aiAgentPipeline,
+    /git -C \.jenkins-ai-agent-worktree push[\s\S]*--dry-run[\s\S]*--porcelain/,
+  );
+  assert.match(
+    aiAgentPipeline,
+    /HEAD:refs\/heads\/jenkins-ai-agent\/preflight-\$\{BUILD_NUMBER\}/,
+  );
+  assert.match(
+    aiAgentPipeline,
+    /cannot access WyrmGrid or negotiate a[\s\S]*namespaced dry-run push/,
+  );
+  assert.match(aiAgentPipeline, /\.replaceAll\(\/\[\\r\\n\\t\]\+\/, ' '\)/);
+  assert.doesNotMatch(aiAgentPipeline, /\[\\\\r\\\\n\\\\t\]/);
+  assert.match(
+    aiAgentPipeline,
+    /install -m 0700 scripts\/ai-agent\/github_git_askpass\.sh/,
+  );
+  assert.doesNotMatch(aiAgentPipeline, /gh auth setup-git/);
+  assert.match(aiAgentGitAskpass, /'x-access-token'/);
+  assert.match(aiAgentGitAskpass, /\$\{GH_TOKEN:\?/);
+  assert.match(aiAgentGitAskpass, /Unsupported Git credential prompt/);
+  assert.doesNotMatch(aiAgentGitAskpass, /set -x|echo/);
+  assert.match(aiAgentPipeline, /Codex-Jenkins-Tauryk-Gk-Io/);
+  assert.match(aiAgentPipeline, /phobos-dthorga\/onair-wyrmgrid/);
+  assert.match(aiAgentPipeline, /validate-toolchain/);
+  assert.match(aiAgentPipeline, /prepareLocalPhase\('PLANNER', 1\)/);
+  assert.match(aiAgentPipeline, /prepareLocalPhase\('BUILDER', 2\)/);
+  assert.match(aiAgentPipeline, /prepareLocalPhase\(\s*'REPAIR'/);
+  assert.match(aiAgentPipeline, /prepareLocalPhase\('REVIEW', 5\)/);
+  assert.match(aiAgentPipeline, /format-changes/);
+  assert.match(aiAgentPipeline, /\.jenkins-ai-opencode\/\$\{phaseSlug\}/);
+  assert.match(
+    aiAgentPipeline,
+    /commandOverride: '''bash "\$WORKSPACE\/\.jenkins-ai-runtime\/run_opencode_phase\.sh"'''/,
+  );
+  assert.doesNotMatch(
+    aiAgentPipeline.match(/commandOverride:[^\n]+/)?.[0] ?? "",
+    /AI_AGENT_PROMPT/,
+  );
+  assert.match(
+    aiAgentPipeline,
+    /node --test scripts\/ai-agent-runtime\.test\.mjs/,
+  );
+  assert.match(aiAgentPipeline, /--repository \. \\\s+--policy/);
+  assert.match(
+    aiAgentWrapper,
+    /prompt="\$\(cat -- "\$AI_AGENT_PROMPT_FILE"; printf '%s' "\$prompt_sentinel"\)"/,
+  );
+  assert.match(aiAgentWrapper, /prompt="\$\{prompt%\$prompt_sentinel\}"/);
+  assert.match(aiAgentWrapper, /"\$prompt" \|/);
+  assert.doesNotMatch(aiAgentWrapper, /eval|AI_AGENT_PROMPT[^_]/);
+  assert.match(
+    aiAgentRuntimeTests,
+    /process\.platform === "win32" \? "python" : "python3"/,
+  );
+  assert.match(
+    aiAgentPipeline,
+    /def runLocalPhase[\s\S]*failOnAgentError: false/,
+  );
+  assert.match(
+    aiAgentPipeline,
+    /while \(testStatus == 1 && repairs < repairLimit\)/,
+  );
+  assert.equal(
+    [
+      ...aiAgentPipeline.matchAll(
+        /while \(testStatus == 1 && repairs < repairLimit\)/g,
+      ),
+    ].length,
+    1,
+  );
+  assert.match(aiAgentPipeline, /local-repair-limit\.txt/);
+  assert.match(aiAgentPipeline, /timeout\(time: 24, unit: 'HOURS'\)/);
+  assert.match(aiAgentPipeline, /'ARCHIVE_ONLY'/);
+  assert.match(aiAgentPipeline, /'OPEN_FAILING_DRAFT_PR'/);
+  assert.match(aiAgentPipeline, /gh pr create/);
+  assert.match(aiAgentPipeline, /--draft/);
+  assert.doesNotMatch(
+    aiAgentPipeline,
+    /gh pr (?:merge|approve)|gh release|--admin|--auto|mark-ready/,
+  );
+  assert.doesNotMatch(aiAgentPipeline, /forgeAI\(/);
+  assert.equal(aiAgentPolicy.repository, "phobos-dthorga/onair-wyrmgrid");
+  assert.equal(aiAgentPolicy.context_limits.active_profile, "SMALL_FILES");
+  assert.equal(aiAgentPolicy.toolchain.opencode_version, "1.18.5");
+  assert.equal(aiAgentPolicy.toolchain.codex_cli_version, "0.145.0");
+  assert.ok(aiAgentPolicy.toolchain.required_commands.includes("bash"));
+  assert.ok(aiAgentPolicy.toolchain.required_commands.includes("install"));
+  assert.ok(aiAgentPolicy.toolchain.required_commands.includes("tee"));
+  assert.deepEqual(aiAgentPolicy.test_profiles.DOCUMENTATION.commands, [
+    ["npm", "run", "format:frontend:check"],
   ]);
+  assert.equal(aiAgentPolicy.job.local_test_repair_attempts, 2);
+  assert.equal(aiAgentPolicy.job.hosted_repair_attempts, 1);
+  assert.equal(aiAgentPolicy.phase_routing.BUILDER.model, "qwen3-coder:30b");
+  assert.equal(aiAgentPolicy.phase_routing.BUILDER.reasoning, "NONE");
+  assert.equal(aiAgentPolicy.phase_routing.REPAIR.reasoning, "NONE");
+  assert.equal(aiAgentPolicy.phase_routing.PLANNER.model, "qwen3.6:35b");
+  assert.equal(aiAgentPolicy.phase_routing.REVIEW.model, "qwen3.6:35b");
+  assert.equal(
+    aiAgentPolicy.model_profiles.REPOSITORY_SCHOLAR_LOCAL.context_tokens,
+    12288,
+  );
+  assert.equal(aiAgentPolicy.job.phase_limits.maximum_checkpoint_bytes, 24576);
+  assert.equal(aiAgentPolicy.job.phase_token_reserves.READ_ONLY, 1536);
+  assert.equal(aiAgentPolicy.job.opencode_compaction.tail_turns, 1);
+  assert.deepEqual(aiAgentPolicy.job.local_reasoning_efforts, [
+    "LOW",
+    "MEDIUM",
+    "HIGH",
+  ]);
+  assert.equal(aiAgentPolicy.job.answer_word_limits.ASK, 200);
+  assert.equal(aiAgentPolicy.job.answer_word_limits.FEATURE, 400);
+});
 
 test("multibranch pipeline runs the complete credential-free Linux and Windows gates", () => {
   assert.match(multibranchPipeline, /agent \{ label 'linux' \}/);

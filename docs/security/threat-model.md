@@ -30,6 +30,9 @@
   contribution manifests, patch hashes, bot identity, and attribution records;
 - the Jenkins ForgeAI endpoint credential, bounded review packets, inference
   capacity, and archived advisory reports;
+- the Jenkins AI Agent Gateway, GitHub contributor, and optional hosted-review
+  credentials; sparse worktrees, prompts, conversations, citations, diffs,
+  test evidence, hosted packets, draft branches, and archived reports;
 - live debugger state, watch expressions, memory views, and debug screenshots;
 - legal-document versions, acknowledgement records, and privacy preferences;
 - the SQLCipher device key, portable-backup passwords and files, pending
@@ -125,6 +128,13 @@
   response using prompt injection to distort ForgeAI findings, consume
   inference capacity, expose excluded repository content, or be mistaken for a
   deterministic Jenkins or security result;
+- repository guidance or source content inducing the Jenkins AI Agent to read
+  hidden files, escape its declared path scope, emit a secret, fabricate a
+  citation or tool call, weaken tests, exceed resource limits, publish a
+  misleading draft, or send unrelated private documentation to a hosted model;
+- a compromised or over-broad AI contributor App modifying another repository,
+  approving or merging its own work, changing repository settings, or reusing a
+  stale installation token outside the validated draft-publication step;
 - a release tag packaging untested code, a commit outside `main`, or application
   metadata whose version does not match the advertised release;
 - incomplete or misleading release notes hiding a removed capability or
@@ -447,6 +457,52 @@
   and report errors can make only the advisory stage unstable while the overall
   deterministic result remains successful. The protected exact-tag release job
   makes no model call;
+- the manual Jenkins AI Agent resolves only `main` or a full commit reachable
+  from `main`, copies only eligible declared files into a sparse worktree, and
+  treats repository instructions as untrusted task evidence beneath the root
+  guidance. Checked-in small, medium, and attended large-file profiles bound
+  per-file bytes, per-file lines, and total visible bytes. Oversized files are
+  inventory-only; exact oversized write targets, traversal, roots, wildcard-all
+  scope, symlink escape, binary changes, secret-like added lines, excess files,
+  excess lines, and out-of-scope diffs fail deterministic validation. The model
+  receives no shell, web, package-install, external-directory, GitHub, merge,
+  release, or repository-administration authority;
+- Jenkins runs only checked-in formatters and test profiles outside the model
+  and revalidates the complete diff after formatting and each of at most two
+  fresh Qwen3-Coder test-repair passes. Before formatting, Jenkins records
+  tracked dependency-bootstrap side effects, restores the immutable checkout,
+  and reapplies the previously validated candidate patch exactly. This prevents
+  package-manager permission normalization or other bootstrap-only changes from
+  entering the published diff. Qwen3.6 planning/review phases are read-only,
+  and Qwen3-Coder receives no unsupported reasoning option. Every change-phase
+  checkpoint retains the bounded operator request as authoritative; planner
+  output is advisory and cannot replace or redirect that request. A plain
+  model-facing packet presents the exact task before its hard editable paths and
+  advisory plan notes, while documentation-only scopes forbid invented
+  implementation files. A safe diff may survive malformed narrative,
+  bootstrap, formatter, or test failure; an unsafe model diff is removed from
+  patch artifacts before the run fails. A persistent test failure waits without
+  an executor and defaults to archive-only.
+  Local prompts are transported through a fixed checked-in wrapper and read
+  from files as one quoted OpenCode argument, so shell-like request or failure
+  text cannot become command syntax. Pipeline contract tests run from the job
+  SCM revision, while required commands, paths, npm scripts, and product tests
+  are preflighted against the immutable source revision. Configuration
+  failures stop without being offered to the coding model as a repair task.
+  Passing or explicitly accepted failing work can create only a labelled draft
+  through the WyrmGrid-only contributor App. The App receives Contents, Pull
+  requests, and Workflows write access. Workflows write exists only so an
+  explicitly allowed `.github/workflows/*` path can be included in a draft; it
+  provides no Actions dispatch, rerun, secret, environment, merge, approval,
+  release, or administration authority. Its private-key lifecycle and Jenkins
+  entry remain manual;
+- hosted AI Agent review requires explicit per-run selection after a passing
+  draft exists. Jenkins records the outbound manifest and exposes only the
+  exact diff, tests, selected documentation excerpts, and required repository
+  rules in an isolated packet directory. OpenAI Codex uses ephemeral state and
+  no web search, posts only a non-approving comment, and permits at most one
+  in-scope local repair and one verification review. A failed repair cannot
+  replace the last passing draft commit;
 - the Windows release runner silently installs the NSIS output and verifies that
   the desktop application and expected SimConnect sidecar were packaged;
 - the Windows installer identity and per-user scope are regression-tested,
@@ -841,6 +897,70 @@ plugin and controller upgrades, monitor inference capacity and endpoint logs,
 and revalidate the live configuration before claiming the advisory path is
 private. The packet's signature scan is deliberately narrow and cannot prove
 that arbitrary source contains no confidential value.
+
+## Residual Jenkins AI Agent risks
+
+A sparse worktree and deterministic diff checks constrain what a local model
+can see and publish; they do not make its reasoning correct. A model may
+misunderstand WyrmGrid architecture, omit an affected file, repeatedly make the
+same error, satisfy tests accidentally, or produce a plausible but incomplete
+answer. Two correction passes are a research opportunity, not proof of
+convergence. Human review and ordinary protected CI remain necessary.
+
+Fresh phase state limits accidental context accumulation but does not erase
+repository text already selected for that phase or make a compact checkpoint
+trustworthy. The planner can omit a dependency, the builder can misapply a
+plan, and the reviewer can miss both. Retaining the operator request prevents a
+generic planner response from erasing the task, but does not prove the request
+is complete or correctly implemented. Jenkins records phase model identity,
+reasoning mode, token high-water marks, and compaction events as diagnostic
+evidence, not correctness proof. OpenCode may emit a synthetic continuation
+before or after an otherwise completed response while auto-compacting a phase.
+Jenkins discards the completed checkpoint paired with that continuation marker
+and retains the first genuine non-synthetic response whose step stopped, rather
+than allowing compaction summaries or continuation noise to replace it. The
+ordinary citation, scope, diff, and test validators still decide whether that
+retained response is acceptable. Read-only phases also use a smaller output
+reserve aligned with their checked answer ceilings, reducing unnecessary
+compaction without weakening the fail-closed response and citation checks.
+
+The active context tier hides large files from the model. Inventory metadata
+can show that a file exists, but cannot substitute for its content. A change may
+therefore be internally valid inside the small visible corpus while missing an
+interaction with an excluded lockfile, map asset, large UI component, or Rust
+module. Exact hidden write targets fail before inference, but indirect
+dependencies still require human impact review. Promote context ceilings only
+after attended canaries; a larger window raises inference cost, prompt-
+injection surface, and omission risk as well as capability.
+
+Secret-pattern screening is intentionally conservative and cannot prove that
+arbitrary source, documentation, a diff, or a test failure contains no private
+value. Do not put OnAir credentials, raw provider payloads, databases, personal
+flight data, private operational notes, or unreviewed external material in
+`REQUEST`, `READ_SCOPE`, or `ALLOWED_PATHS`. The optional hosted manifest proves
+which files Jenkins selected, not that every selected sentence was safe to
+send.
+
+The contributor App can write repository contents and pull requests by design.
+Repository-only installation, the namespaced branch, draft status, exact-diff
+validation, short-lived installation tokens, protected branch rules, and the
+absence of merge/administration permissions limit but do not eliminate harm if
+Jenkins or the App key is compromised. Keep its credentials separate from
+routine CI, releases, Hoardmind, and other repositories. Rotate or revoke the
+App and Gateway client independently if either boundary is uncertain.
+The contributor token is bound only around publication operations. Git receives
+it through an ephemeral workspace-local askpass helper with terminal prompting
+disabled; Jenkins does not persist the token in a global Git credential helper
+or require a writable service-account home.
+
+The Jenkins controller and plugin configuration remain administrative state
+outside repository history. An administrator can change the installed plugin,
+worker, credential binding, or job definition. The job's pinned OpenCode and
+Codex CLI preflight and its mode/profile-specific command inventory make
+executable and registered-test drift visible, but cannot attest the
+controller plugin binary, Hoardmind Gate route, local model weights, GPU host,
+or operating-system state. Commissioning evidence must name the exact model IDs
+and source commit and must not be generalized to another repository.
 
 ## Residual localization risks
 

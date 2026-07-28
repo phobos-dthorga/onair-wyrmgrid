@@ -172,6 +172,369 @@ valid analyzer evidence. Partial and malformed reports are still archived for
 diagnosis. Because this advisory stage is last, it cannot prevent deterministic
 validation or snapshot creation.
 
+## Manual Jenkins AI Agent job
+
+`Jenkinsfile.ai-agent` defines a separate, manually launched research and
+implementation job. It is not a branch-discovery pipeline, does not replace
+ForgeAI, and never runs in the exact-tag release job. The installed
+[Jenkins AI Agent plugin](https://plugins.jenkins.io/ai-agent/) remains the
+conversation, execution, and usage-statistics interface for both local
+OpenCode and an explicitly selected hosted review.
+
+The six modes are:
+
+- `ASK`, for a cited question against the selected immutable revision;
+- `DECISION_TRACE`, for following an architectural or operational decision
+  through its sources;
+- `CONSISTENCY_AUDIT`, for evidence-backed contradictions or drift;
+- `ROADMAP_STATUS`, for implemented, remaining, and uncertain roadmap work;
+- `PATCH`, for a small bounded correction; and
+- `FEATURE`, for a larger but still explicitly scoped implementation.
+
+Read-only modes archive Markdown and structured JSON with exact commit-bound
+`path:line` citations and must leave no tracked diff. Jenkins also requires
+several distinctive answer terms to occur in the cited source passage; a
+citation-shaped but weakly grounded answer enters the bounded local correction
+cycle. This mechanical check reduces obvious mismatches but does not establish
+semantic correctness, so commissioning canaries and human review remain
+necessary. `PATCH` and `FEATURE` require `ALLOWED_PATHS`, may create, modify,
+rename, or delete textual files in those paths, and must select a test profile from
+[`ci/ai-agent-policy.yml`](../../ci/ai-agent-policy.yml). Dependency
+manifests, migrations, CI files, and security-policy files are not categorically
+forbidden; their exact path must be explicitly included. Opaque binary changes,
+generated binaries, root-wide scopes, wildcards, traversal, symlink escapes,
+secrets, excess files, excess lines, and changes outside the declared scope are
+rejected before publication.
+
+Read-only modes use one fresh Repository Scholar invocation and retain strict
+citation evidence. Change modes deliberately reset conversation history between
+specialist phases:
+
+1. `qwen3.6:35b` plans with the selected `REASONING_EFFORT`;
+2. `qwen3-coder:30b` implements with thinking disabled;
+3. Jenkins formats, revalidates, and runs the selected test profile;
+4. up to two fresh Qwen3-Coder invocations repair the latest bounded failure;
+5. `qwen3.6:35b` performs a short, advisory review.
+
+Each invocation has a separate OpenCode state directory and appears as a
+separate Jenkins AI Agent conversation card. A compact, size-limited checkpoint
+carries the immutable revision, request hash, original bounded operator request,
+advisory plan, current safe-diff hash and summary, latest bounded failure, and
+remaining work. The original request is authoritative in every implementation,
+repair, and review phase; an incomplete or generic planner response cannot
+replace, narrow, or redirect it. Full earlier conversations and failures remain
+artifacts instead of being repeatedly returned to the model. OpenCode automatic
+compaction is only an emergency fallback.
+The checkpoint remains structured for audit, but model-facing change packets
+use plain sections headed **TASK**, **EDITABLE PATHS**, and **PLAN NOTES**.
+Internal receipt field names are not presented as implementation concepts.
+Documentation-only scopes explicitly forbid inventing source modules, APIs, or
+types from nearby quoted words or punctuation in advisory plan notes.
+OpenCode's normal repository guidance supplies `AGENTS.md`; Jenkins records its
+immutable hash but does not inject a second complete copy. Any cited range,
+including an `AGENTS.md` range, still requires a completed targeted read.
+The Jenkins plugin command override is a fixed checked-in Bash wrapper. Jenkins
+passes only the prompt file path, model ID, and event-log path as environment
+data; the wrapper reads the prompt and supplies it as one quoted OpenCode
+argument. Backticks, command substitutions, redirections, code fences, and
+other shell-like text in a request or repair packet therefore never become
+shell syntax.
+
+Jenkins derives changed paths and line counts from Git. Malformed change-mode
+prose therefore produces a minimal Jenkins technical report rather than
+discarding an otherwise safe patch. Read-only citations remain mandatory.
+Harmless citation forms such as backticks, whitespace, an optional citation
+bullet, an inline first citation, parenthetical notes, or bounded same-line
+details introduced by a colon, hyphen, or dash are canonicalized before the
+existing path, line, scope, completed-read, and answer-grounding checks.
+Commentary is discarded; it never becomes citation evidence. Every nonempty
+line after `Citations:` must still start with a parseable repository-relative
+citation. Jenkins archives a
+`read-evidence.json` receipt containing only the normalized completed-read
+paths and line ranges used by that validation, plus counts for completed,
+accepted, and ignored read events. When OpenCode and Jenkins report the same
+immutable worktree through different mount aliases, the path is canonicalized
+from its worktree-relative suffix and accepted only after that suffix resolves
+to a real file inside the immutable worktree. If OpenCode omits its line-range
+metadata, Jenkins may recover the range from the numbered lines in the completed
+read result; the cited file and range still undergo the normal immutable-source
+and grounding checks.
+
+Sanitized citation responses observed during commissioning are retained in
+`scripts/ai-agent/fixtures/citation-output-cases.json`. Its accepted cases
+canonicalize to the strict archived form, while its rejected cases protect
+against missing ranges, URLs, and narrative text being mistaken for evidence.
+Add a newly observed harmless syntax variation to this corpus before changing
+the parser.
+
+Before formatting and within each isolated test worktree, Jenkins runs the
+checked-in `dependency_bootstrap.command` against `package-lock.json`. Its
+disposable npm cache lives under the Jenkins workspace rather than the agent
+service account's home directory. Prettier then runs offline and only on changed
+supported files; the repository Rust formatter runs when Rust files changed.
+The formatting worktree records any tracked bootstrap side effects, restores
+the immutable checkout, and reapplies the already validated candidate patch
+byte-for-byte before a formatter runs. Package-manager permission normalization
+or another bootstrap-only change therefore cannot enter the candidate diff.
+The complete scope, secret, binary, symlink, file-count, and line-count checks
+run again after formatting and every repair. A formatting-only defect does not
+consume a model repair, and a dependency-bootstrap failure is treated as
+infrastructure rather than returned to the coding model. Ruff is intentionally
+absent because WyrmGrid has no checked-in Ruff formatting contract.
+
+Before the first model phase, Jenkins validates two separate contracts:
+
+- pipeline/runtime contract tests run from the job's checked-out SCM revision,
+  before Jenkins detaches to the operator-selected source revision; and
+- the selected test profile is preflighted against that immutable source
+  revision, including its required paths, registered npm scripts, and required
+  worker commands.
+
+This separation lets a commissioning branch test its own pipeline changes
+without assuming that branch-only test files exist on `main`. A missing
+registered path, npm script, or executable is a configuration failure. Jenkins
+archives `test-preflight.json` and `toolchain.json`, stops before inference
+where possible, and never returns that failure to Qwen3-Coder as if source edits
+could repair the worker or job definition.
+
+A safe candidate patch is archived even when narrative reporting or tests fail.
+A later bootstrap or formatter rejection retains that last validated patch and
+adds `bootstrap-side-effects.json`, `formatter-summary.json`, and
+`deterministic-change-rejection.json` as bounded diagnostic evidence.
+A patch rejected for secret material, binary content, traversal, symlink escape,
+or another unsafe scope violation is never archived or published; only sanitized
+failure metadata remains. A persistent test failure releases the executor before
+asking whether to archive the safe patch or open a clearly marked failing draft.
+No response within 24 hours defaults to archive-only.
+
+A passing change becomes one namespaced branch and one draft pull request.
+Jenkins commits and publishes only the exact revalidated diff. The local model
+does not receive GitHub credentials and cannot approve, merge, publish a
+release, modify repository settings, or make a draft ready for review.
+Git push authentication uses a protected workspace-local askpass helper only
+while the repository-restricted contributor credential is bound. It does not
+run `gh auth setup-git`, persist a credential helper, or require a writable
+Jenkins home. GitHub CLI draft-PR and comment operations consume the same
+short-lived bound token directly.
+
+### Editable context tiers
+
+The model-visible file limits are intentionally ordinary checked-in policy, not
+hard-coded Jenkins parameters. Open
+[`ci/ai-agent-policy.yml`](../../ci/ai-agent-policy.yml) and find:
+
+```json
+"context_limits": {
+  "active_profile": "SMALL_FILES",
+  "profiles": {
+    "SMALL_FILES": { "...": "initial ceilings" },
+    "MEDIUM_FILES": { "...": "next commissioning tier" },
+    "LARGE_FILES_RESEARCH": { "...": "attended research tier" }
+  }
+}
+```
+
+Change only `active_profile` to promote every run to an already reviewed tier.
+To tune a tier, edit its three nearby values:
+`maximum_visible_file_bytes`, `maximum_visible_file_lines`, and
+`maximum_visible_total_bytes`. The file uses JSON-compatible YAML so the
+dependency-free Python policy runtime can parse it. Keep the syntax as strict
+JSON.
+
+Initial `SMALL_FILES` commissioning allows 32 KiB or 800 lines per file and
+512 KiB across the complete sparse worktree. `MEDIUM_FILES` permits 64 KiB,
+1,200 lines, and 1 MiB. `LARGE_FILES_RESEARCH` permits 128 KiB, 2,500 lines,
+and 2 MiB. Promote only after reviewed `ASK`, `PATCH`, and `FEATURE` canaries at
+the current tier. Oversized paths remain visible in the documentation inventory
+with their path, size, line count, and hash, but their contents are not copied
+into model context. An exact oversized write target fails before inference.
+
+These file ceilings are separate from the local model's 12,288-token context and
+4,096-token response limits. Repository Scholar and Scoped Builder are friendly
+profile names; their current exact local model IDs, phase assignments, and
+selection status remain visible in the policy.
+
+The adjacent `local_model_inventory` records live, inference-free Ollama
+capabilities, advertised context, and exact model-weight quantization.
+`qwen3.6:35b` supports tools and thinking; `qwen3-coder:30b` supports tools but
+not thinking. Planner, reviewer, and read-only phases use Qwen3.6. Builder and
+repair phases use Qwen3-Coder and never receive a reasoning option. A
+reasoning-enabled invocation fails before contacting Gate when its selected
+model lacks the `thinking` capability.
+This is the `AUTO` specialist route. An explicitly selected friendly profile
+remains an operator override for comparative canaries; phase permissions and
+reasoning applicability remain unchanged.
+
+Every manual build exposes `REASONING_EFFORT` with `LOW`, `MEDIUM`, and `HIGH`
+choices. `LOW` is the default. The choice applies only to thinking-capable
+Qwen3.6 phases; it is never sent to Qwen3-Coder. The allowed values are the
+checked-in `job.local_reasoning_efforts` list. Jenkins records the selected
+value with the immutable parameters and rejects unregistered values before
+inference.
+
+Final summaries are independently compacted by the editable
+`job.answer_word_limits` map in `ci/ai-agent-policy.yml`. The initial limits are
+200 words for `ASK`, 500 for decision traces and roadmap status, 650 for
+consistency audits, 250 for patch summaries, and 400 for feature summaries.
+Thinking may use the model's internal response budget, but only the bounded
+answer plus necessary citations is accepted and archived.
+
+### Editable phase and memory policy
+
+The `phase_routing`, `job.phase_steps`, `job.phase_limits`,
+`job.opencode_compaction`, `formatters`, and `dependency_bootstrap` sections in
+`ci/ai-agent-policy.yml` are the operator-editable controls for phase models,
+reasoning applicability, step ceilings, checkpoint/prompt/failure sizes,
+emergency compaction, formatter extensions and commands, locked dependency
+preparation, its disposable cache, and repair limits.
+The context ceiling remains 12,288 tokens. Smaller step ceilings end work at a
+safe phase boundary; Jenkins does not terminate a running inference solely
+because it approaches that ceiling.
+
+Both installed local models currently use `Q4_K_M` model-weight quantization,
+which reduces loaded model size. This is distinct from KV-cache quantization,
+which reduces long-context memory; context compaction, which shortens retained
+conversation history; and a fresh phase invocation, which starts a new
+conversation. No model package, Flash Attention, KV-cache, Ollama, hardware, or
+runtime setting changes as part of this workflow update. A future `q8_0`
+KV-cache canary remains uncommissioned.
+
+[TurboQuant](https://research.google/blog/turboquant-redefining-ai-efficiency-with-extreme-compression/)
+is promising Google compression research, but Ollama does not currently expose
+it as a supported runtime feature; the upstream Ollama work remains an open
+implementation request. Use Ollama's current
+[KV-cache guidance](https://github.com/ollama/ollama/blob/main/docs/faq.mdx)
+for supported settings, and do not confuse those settings with model weights or
+conversation resets.
+
+### Worker and pinned tools
+
+Run the job on the dedicated unprivileged VLAN 20 LXC with label `ai-agent` and
+one executor. It may share that single research executor sequentially with the
+Hoardmind commissioning job, but it must not share repository workspaces,
+Gateway clients, GitHub Apps, or Jenkins credentials. Keep the controller at
+zero executors. OpenCode sends inference to Hoardmind Gate; it does not require
+GPU access inside the container.
+
+The policy pins OpenCode `1.18.5` and OpenAI Codex CLI `0.145.0`. Every run
+records a privacy-reduced toolchain report for the commands selected by its
+mode, test profile, and hosted-review choice. It also records the immutable
+test-profile preflight and fails before inference when a required command,
+path, npm script, or pinned version is unavailable. Upgrades require their own
+reviewed source change and commissioning canary.
+
+The AI Agent runtime and its branch contract tests invoke Python as `python3`
+on Linux and `python` on Windows. The heavier `REPOSITORY` test profile also
+requires the Linux worker's documented `python` alias because the existing
+repository `ci:python` script uses it. The command inventory checks that alias
+only when that profile is selected; the documentation and tooling profiles do
+not inherit an unrelated requirement.
+
+### Credentials and manual job creation
+
+Provision three separately scoped Jenkins credentials:
+
+- `wyrmgrid-ai-agent-gateway`: Secret Text for a concurrency-one Hoardmind Gate
+  client named `jenkins-wyrmgrid-ai-agent`;
+- `hoardmind-jenkins-ai-contributor`: legacy Jenkins credential ID containing
+  the repository-restricted **WyrmGrid Jenkins AI Contributor** GitHub App; and
+- `Codex-Jenkins-Tauryk-Gk-Io`: the existing global Secret Text OpenAI API key,
+  used only when `OPENAI_AFTER_DRAFT_PR` is selected.
+
+Install the contributor App only on `phobos-dthorga/onair-wyrmgrid`. Grant
+Metadata read-only, Contents read/write, Pull requests read/write, and Workflows
+read/write. Workflows write is required only because the checked-in AI Agent
+contract permits an explicitly named `.github/workflows/*` path in
+`ALLOWED_PATHS`; it does not grant Actions dispatch, rerun, secrets, settings,
+or administration access. Grant no Administration, Actions, Checks,
+Environments, Issues, Members, Secrets, merge-queue, or organization authority.
+A repository that forbids AI Agent workflow edits may omit Workflows write only
+if its policy also rejects every workflow path. A client secret is not needed.
+Private-key generation, rotation, conversion, and Jenkins credential entry are
+manual maintainer actions; never paste a key into a job parameter, prompt,
+artifact, build log, or repository file.
+
+Configure `hoardmind-jenkins-ai-contributor` with **Specify accessible
+repositories**, owner `phobos-dthorga`, and repository `onair-wyrmgrid`.
+Select **All permissions available to the App installation** as the default
+permissions strategy. The narrower Jenkins **Read and write access to
+repository contents** strategy would remove the Pull requests permission that
+the job needs to create and comment on a draft. This remains bounded because
+the App installation itself has only the three permissions above and access to
+only WyrmGrid.
+
+Create a manually triggered Pipeline from SCM named `wyrmgrid-ai-agent`:
+
+- repository: `https://github.com/phobos-dthorga/onair-wyrmgrid.git`;
+- script path: `Jenkinsfile.ai-agent`;
+- Jenkins credential for source checkout: the existing read-only
+  `wyrmgrid-github-ci`;
+- no SCM polling, webhook trigger, timer, or automatic upstream trigger; and
+- branch: the commissioning source branch until the implementation is merged,
+  then `main`.
+
+Jenkins does not support inference-based GitHub App repository strategies for a
+standalone Pipeline-from-SCM checkout. Reconfigure the existing read-only
+`wyrmgrid-github-ci` credential to **Specify accessible repositories** with
+owner `phobos-dthorga` and repository `onair-wyrmgrid`, while retaining its
+**Read-only access to repository contents** permissions strategy. That explicit
+scope remains valid for the existing WyrmGrid Organization Folder and permits
+the standalone job to read `Jenkinsfile.ai-agent`; it does not add another
+repository or any write permission.
+
+The job validates that the local Gateway credential exists for every run, the
+contributor installation enumerates WyrmGrid, a namespaced Git push can be
+negotiated in `--dry-run` mode before a change-making run, and the hosted key
+exists only when hosted review is selected. The preflight does not trust
+`.permissions.push` from `GET /repos/{owner}/{repo}`: GitHub classifies that
+repository lookup as Metadata read, so the field is not authoritative evidence
+of an installation token's Contents permission. Git's dry-run sends no ref
+update; the actual validated branch push remains the final publication
+authority. Draft-PR comment authority is still exercised only after
+publication. Reports, conversations, policy evidence, tests, and patches are
+retained for 30 days and at most 20 builds.
+
+### Optional hosted review
+
+`OPENAI_AFTER_DRAFT_PR` is per-run consent for hosted processing. Jenkins first
+opens a passing draft PR, records an outbound manifest, and constructs a
+separate packet directory containing only the exact diff, test results,
+relevant excerpts from the declared documentation scope, and the repository
+rules required to review that change. OpenAI Codex runs in that directory with
+ephemeral state, no web search, `gpt-5.6-sol`, and `xhigh` reasoning.
+
+The structured result is archived and posted as a non-approving `COMMENT`
+review. Actionable findings inside the original scope may receive one local
+repair pass. If the same tests pass, Jenkins pushes one follow-up commit and
+runs one hosted verification review against the new exact SHA. It does not
+continue beyond that cycle. A failed hosted repair is archived and discarded,
+leaving the draft PR at its last passing commit.
+
+### Reuse by another owned repository
+
+Another owned repository adopts this pattern through its own manual Pipeline,
+checked-in `ci/ai-agent-policy.yml`, documentation roots, test registry,
+context tiers, Hoardmind Gate client, and repository-restricted contributor
+App. Never add a second repository to the WyrmGrid App installation or reuse
+the WyrmGrid Gateway secret. The same draft-only, no-merge lifecycle applies,
+but phase routing, model selection, file ceilings, formatter profiles, and
+tests are commissioned independently against that repository's actual corpus.
+
+### AI Agent technical references
+
+- [Jenkins AI Agent plugin](https://plugins.jenkins.io/ai-agent/) for the
+  conversation cards and OpenCode/Codex execution interface;
+- [OpenCode configuration](https://opencode.ai/docs/config/) for pinned local
+  agent configuration and emergency compaction controls;
+- [GitHub App endpoint permissions](https://docs.github.com/en/rest/authentication/permissions-required-for-github-apps?apiVersion=2026-03-10)
+  for the separate Metadata, Contents, Pull requests, and Workflows contracts;
+- [Git push](https://git-scm.com/docs/git-push) for the non-mutating
+  `--dry-run` publication preflight;
+- [Google TurboQuant research](https://research.google/blog/turboquant-redefining-ai-efficiency-with-extreme-compression/)
+  for the uncommissioned compression research note; and
+- [Ollama FAQ](https://github.com/ollama/ollama/blob/main/docs/faq.mdx) for
+  currently supported context and KV-cache behavior.
+
 ## Trusted release job
 
 Create a separate locked Jenkins folder containing one Pipeline job sourced

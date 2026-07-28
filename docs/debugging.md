@@ -84,3 +84,55 @@ decoder behavior with a sanitized fixture.
 `RUST_BACKTRACE=1` is enabled for the checked-in launch configurations. More
 verbose logging must be enabled only for a specific investigation and must
 continue to obey the same credential and raw-response restrictions.
+
+## Inspect a Jenkins AI Agent run
+
+Use the archived `ci-artifacts/ai-agent/phases/` records before adding a new
+probe. Every local invocation has its own prompt, system prompt, compact
+checkpoint where applicable, redacted response, event stream, model identity,
+reasoning mode, token high-water mark, and compaction count. Compare these with
+`diff-summary.json`, `formatter-summary.json`, and `tests/summary.json` to locate
+the first boundary that failed.
+
+The useful distinction is:
+
+- conversation failure: inspect the matching phase card and phase artifacts;
+- prompt-transport failure: inspect the fixed wrapper invocation and
+  `prompt.md`; prompt text must never appear as shell words or commands in the
+  console;
+- test-profile preflight failure: inspect `test-preflight.json` for a missing
+  immutable path or npm script and `toolchain.json` for a missing executable;
+  this is configuration evidence and must not consume a model repair;
+- narrative-only failure: inspect `agent-output.json` and its Jenkins fallback;
+- scope or secret rejection: use sanitized console metadata only, because no
+  patch artifact is retained;
+- dependency-bootstrap reconciliation: inspect `bootstrap-side-effects.json`
+  for path/status metadata without file contents;
+- formatter failure: inspect `formatter-summary.json` and
+  `deterministic-change-rejection.json`; a previously validated
+  `proposed.patch` may remain available even though the contaminated worktree
+  was rejected;
+- test failure: inspect only the latest bounded `tests/output.txt`, with full
+  earlier output retained in prior build/phase artifacts.
+- publication failure: inspect the **Publish draft PR** console section. The
+  worker home is intentionally read-only; current jobs use
+  `.jenkins-ai-runtime/github_git_askpass.sh` with terminal prompting disabled
+  and never run `gh auth setup-git`. A `.gitconfig` write error identifies a
+  stale job definition. The earlier `.permissions.push` repository-metadata
+  check was not authoritative because that endpoint requires only Metadata
+  read. Current jobs instead enumerate the installation repositories and
+  negotiate a unique namespaced `git push --dry-run`. If that preflight or the
+  actual publication returns `403`, verify the App installation includes
+  WyrmGrid, accept pending Contents/Pull requests/Workflows permission updates,
+  and select **All permissions available to the App installation** in Jenkins.
+  Do not make the Jenkins home writable or rotate a valid key for either
+  failure.
+
+Pipeline/runtime contract tests intentionally run from the job's SCM revision
+before the immutable target checkout. Registered product tests run only against
+the resolved `SOURCE_REVISION`. Do not add a branch-only runtime test to a
+target-revision test profile merely to validate a commissioning Jenkinsfile.
+
+Do not enable arbitrary shell, web access, verbose provider bodies, or secret
+logging to diagnose a model run. Do not infer a Qwen3-Coder reasoning failure:
+the coding model intentionally receives no reasoning option.
