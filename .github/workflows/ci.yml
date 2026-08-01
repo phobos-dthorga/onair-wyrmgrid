@@ -28,7 +28,7 @@ jobs:
         with:
           toolchain: 1.97.0
           components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Check core crates
@@ -78,7 +78,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
         with:
           toolchain: 1.97.0
-      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
       - name: Prepare the bundled simulator provider
         run: npm run provider:prepare
       - name: Check Tauri backend
@@ -104,7 +104,7 @@ jobs:
           toolchain: 1.97.0
           components: llvm-tools-preview
       - uses: taiki-e/install-action@9458fed45835344deb5e69e06e831be047c96abf # cargo-llvm-cov
-      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
       - name: Measure core test coverage
         run: cargo llvm-cov --workspace --exclude wyrmgrid-desktop --lcov --output-path rust-lcov.info
       - name: Upload coverage report
